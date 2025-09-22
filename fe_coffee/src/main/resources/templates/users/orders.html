@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+
+<head>
+    <th:block th:replace="~{fragments/header :: head('My Orders')}"></th:block>
+</head>
+
+<body>
+    <header th:replace="~{fragments/header :: header}"></header>
+
+    <section class="home-slider owl-carousel">
+        <div class="slider-item" th:style="|background-image: url('@{/images/bg_1.jpg}')|"
+            data-stellar-background-ratio="0.5">
+            <div class="overlay"></div>
+            <div class="container">
+                <div class="row slider-text justify-content-center align-items-center">
+                    <div class="col-md-7 col-sm-12 text-center ftco-animate">
+                        <h1 class="mb-3 mt-5 bread">My Orders</h1>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="ftco-section ftco-cart">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-12 ftco-animate">
+                    <div class="cart-list">
+                        <table class="table">
+                            <thead class="thead-primary">
+                                <tr class="text-center">
+                                    <th>First Name</th>
+                                    <th>Last Name</th>
+                                    <th>Address</th>
+                                    <th>Zip Code</th>
+                                    <th>Phone</th>
+                                    <th>Email</th>
+                                    <th>Status</th>
+                                    <th>Total Price</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr th:if="${#lists.isEmpty(orders)}">
+                                    <td colspan="8">
+                                        <h5>Your don't have any Orders !</h5>
+                                    </td>
+                                </tr>
+                                <tr class="text-center" th:each="o : ${orders}">
+                                    <td th:text="${o.firstName}"></td>
+                                    <td th:text="${o.lastName}"></td>
+                                    <td th:text="${o.streetAddress + ', ' + o.country + ', ' + o.town}"></td>
+                                    <td th:text="${o.zipCode}"></td>
+                                    <td th:text="${o.phone}"></td>
+                                    <td th:text="${o.email}"></td>
+                                    <td th:text="${o.status}"></td>
+                                    <td th:text="${'$' + o.totalPrice}"></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer th:replace="~{fragments/footer :: footer}"></footer>
+</body>
+
+</html>
