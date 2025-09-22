@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+
+<head>
+    <th:block th:replace="~{fragments/header :: head('User Dashboard')}"></th:block>
+</head>
+
+<body>
+    <header th:replace="~{fragments/header :: header}"></header>
+
+    <section class="home-slider owl-carousel">
+        <div class="slider-item" th:style="|background-image: url('@{/images/bg_1.jpg}')|"
+            data-stellar-background-ratio="0.5">
+            <div class="overlay"></div>
+            <div class="container">
+                <div class="row slider-text justify-content-center align-items-center">
+                    <div class="col-md-7 col-sm-12 text-center ftco-animate">
+                        <h1 class="mb-3 mt-5 bread">User Dashboard</h1>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="ftco-section">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-12 ftco-animate">
+                    <p>Welcome, <span th:text="${session['username']}">User</span>!</p>
+                    <ul>
+                        <li><a th:href="@{/users/bookings}">My Bookings</a></li>
+                        <li><a th:href="@{/users/orders}">My Orders</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer th:replace="~{fragments/footer :: footer}"></footer>
+</body>
+
+</html>

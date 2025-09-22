@@ -1,0 +1,80 @@
+<th:block xmlns:th="http://www.thymeleaf.org">
+    <!-- Head fragment: meta, favicon, Google Fonts, and CSS like PHP header.php -->
+    <th:block th:fragment="head(pageTitle)">
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta name="description"
+            content="NS Coffee Delicious Taste, offers a delicious taste of freshly brewed coffee, a variety of menu options, and excellent services. Visit us to enjoy a great coffee experience. Made with love by Nikhil Singh" />
+        <title th:text="${pageTitle} ?: 'NS Coffee | Delicious Taste'"></title>
+        <link rel="icon" type="image/x-icon" th:href="@{/images/logo.png}" />
+        <!-- Google Fonts -->
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
+            rel="stylesheet" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;700&display=swap" rel="stylesheet" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap" rel="stylesheet" />
+        <!-- CSS assets (icons, animations, components, main) -->
+        <link rel="stylesheet" th:href="@{/css/open-iconic-bootstrap.min.css}" />
+        <link rel="stylesheet" th:href="@{/css/animate.css}" />
+        <link rel="stylesheet" th:href="@{/css/owl.carousel.min.css}" />
+        <link rel="stylesheet" th:href="@{/css/owl.theme.default.min.css}" />
+        <link rel="stylesheet" th:href="@{/css/magnific-popup.css}" />
+        <link rel="stylesheet" th:href="@{/css/aos.css}" />
+        <link rel="stylesheet" th:href="@{/css/ionicons.min.css}" />
+        <link rel="stylesheet" th:href="@{/css/bootstrap-datepicker.css}" />
+        <link rel="stylesheet" th:href="@{/css/jquery.timepicker.css}" />
+        <link rel="stylesheet" th:href="@{/css/flaticon.css}" />
+        <link rel="stylesheet" th:href="@{/css/icomoon.css}" />
+        <link rel="stylesheet" th:href="@{/css/style.css}" />
+    </th:block>
+
+    <!-- Header (navbar) fragment -->
+    <th:block th:fragment="header">
+        <nav class="navbar navbar-expand-lg navbar-dark ftco_navbar bg-dark ftco-navbar-light" id="ftco-navbar">
+            <div class="container">
+                <a class="navbar-brand" th:href="@{/coffee}">N.S &nbsp;&nbsp;Coffee<small>Delicious Taste</small></a>
+                <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#ftco-nav"
+                    aria-controls="ftco-nav" aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="oi oi-menu"></span> Menu
+                </button>
+                <div class="collapse navbar-collapse" id="ftco-nav">
+                    <ul class="navbar-nav ml-auto">
+                        <li class="nav-item active"><a th:href="@{/coffee}" class="nav-link">Home</a></li>
+                        <li class="nav-item"><a th:href="@{/coffee/menu}" class="nav-link">Menu</a></li>
+                        <li class="nav-item"><a th:href="@{/coffee/services}" class="nav-link">Services</a></li>
+                        <li class="nav-item"><a th:href="@{/coffee/about}" class="nav-link">About</a></li>
+                        <li class="nav-item"><a th:href="@{/coffee/contact}" class="nav-link">Contact</a></li>
+
+                        <th:block th:if="${session['username'] != null}">
+                            <li class="nav-item cart">
+                                <a th:href="@{/products/cart}" class="nav-link"><span
+                                        class="icon icon-shopping_cart"></span></a>
+                            </li>
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown"
+                                    aria-expanded="false" th:text="${session['username']}"></a>
+                                <ul class="dropdown-menu">
+                                    <li><a class="dropdown-item" th:href="@{/users/bookings}">My Bookings</a></li>
+                                    <li><a class="dropdown-item" th:href="@{/users/orders}">My Orders</a></li>
+                                    <li>
+                                        <hr class="dropdown-divider" />
+                                    </li>
+                                    <li><a class="dropdown-item" th:href="@{/auth/logout}">Log Out</a></li>
+                                </ul>
+                            </li>
+                        </th:block>
+                        <th:block th:unless="${session['username'] != null}">
+                            <li class="nav-item"><a th:href="@{/auth/login}" class="nav-link">login</a></li>
+                            <li class="nav-item"><a th:href="@{/auth/register}" class="nav-link">register</a></li>
+                        </th:block>
+                    </ul>
+                </div>
+            </div>
+        </nav>
+    </th:block>
+</th:block>
