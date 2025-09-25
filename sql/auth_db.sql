@@ -31,5 +31,23 @@ ALTER TABLE users
   FOREIGN KEY (role_id) REFERENCES roles(role_id)
   ON UPDATE NO ACTION ON DELETE NO ACTION;
 
+-- Invalidated tokens table
+DROP TABLE IF EXISTS invalidated_tokens;
+CREATE TABLE invalidated_tokens (
+  id VARCHAR(255) NOT NULL, -- JWT ID (jti) hoặc token string
+  expiry_time DATETIME NOT NULL,
+  PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
 -- Example seed
 INSERT INTO roles (name) VALUES ('ADMIN'), ('MANAGER'), ('STAFF'), ('CUSTOMER');
+
+-- Event: tự động xóa token hết hạn lúc 00:00 hằng ngày
+DROP EVENT IF EXISTS ev_clean_invalidated_tokens;
+CREATE EVENT ev_clean_invalidated_tokens
+ON SCHEDULE EVERY 1 DAY
+STARTS TIMESTAMP(CURRENT_DATE, '00:00:00')
+DO
+  DELETE FROM invalidated_tokens
+  WHERE expiry_time < NOW();
