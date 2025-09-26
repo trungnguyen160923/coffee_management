@@ -31,7 +31,7 @@ public class ManagerProfileCreationRequest {
     String fullname;
 
     @NotBlank(message = "EMPTY_PHONE_NUMBER")
-    String phone_number;
+    String phoneNumber;
 
     @NotBlank(message = "EMPTY_ROLE")
     @RoleConstraint(message = "INVALID_ROLE")
@@ -46,9 +46,4 @@ public class ManagerProfileCreationRequest {
     @NotNull(message = "EMPTY_HIRE_DATE")
     private LocalDate hireDate;
     
-    @NotNull(message = "EMPTY_POSITION")
-    private String position;
-    
-    @NotNull(message = "EMPTY_SALARY")
-    private Double salary;
 }

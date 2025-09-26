@@ -30,7 +30,7 @@ public class StaffProfileCreationRequest {
     String fullname;
 
     @NotBlank(message = "EMPTY_PHONE_NUMBER")
-    String phone_number;
+    String phoneNumber;
 
     @NotBlank(message = "EMPTY_ROLE")
     @RoleConstraint(message = "INVALID_ROLE")
