@@ -13,9 +13,6 @@ import lombok.experimental.FieldDefaults;
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class AddressCreationRequest {
-    @JsonProperty(required = true)
-    @NotNull(message = "EMPTY_USER_ID")
-    Integer user_id;
 
     @JsonProperty(required = true)
     @NotBlank(message = "EMPTY_LABEL")
@@ -24,5 +21,5 @@ public class AddressCreationRequest {
 
     @NotBlank(message = "EMPTY_FULL_ADDRESS")
     @Size(max = 255, message = "INVALID_FULL_ADDRESS")
-    String full_address;
+    String fullAddress;
 }

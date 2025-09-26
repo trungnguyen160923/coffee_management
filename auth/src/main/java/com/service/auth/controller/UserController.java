@@ -4,9 +4,13 @@ import java.util.List;
 
 import org.springframework.web.bind.annotation.*;
 
+import com.service.auth.dto.request.ManagerProfileCreationRequest;
+import com.service.auth.dto.request.StaffProfileCreationRequest;
 import com.service.auth.dto.request.UserCreationRequest;
 import com.service.auth.dto.request.UserUpdateRequest;
 import com.service.auth.dto.response.ApiResponse;
+import com.service.auth.dto.response.ManagerProfileResponse;
+import com.service.auth.dto.response.StaffProfileResponse;
 import com.service.auth.dto.response.UserResponse;
 import com.service.auth.service.UserService;
 
@@ -30,11 +34,6 @@ public class UserController {
         return ApiResponse.<UserResponse>builder().result(result).build();
     }
 
-    @PostMapping("/create-user")
-    ApiResponse<UserResponse> createUser(@Valid @RequestBody UserCreationRequest request) {
-        var result = userService.createUser(request);
-        return ApiResponse.<UserResponse>builder().result(result).build();
-    }
 
     @GetMapping("/staffs")
     ApiResponse<List<UserResponse>> getAllStaffs() {
@@ -53,5 +52,25 @@ public class UserController {
                                         @Valid @RequestBody UserUpdateRequest request) {
         var result = userService.updateUser(userId, request);
         return ApiResponse.<UserResponse>builder().result(result).build();
+    }
+
+    @PostMapping("/create-manager")
+    ApiResponse<ManagerProfileResponse> createManager(@Valid @RequestBody ManagerProfileCreationRequest request) {
+        
+        // Call Profile Service to create manager profile
+        ApiResponse<ManagerProfileResponse> response = userService.createManagerProfile(request);
+        
+        log.info("Manager profile created successfully: {}", response.getResult());
+        return response;
+    }
+
+    @PostMapping("/create-staff")
+    ApiResponse<StaffProfileResponse> createStaff(@Valid @RequestBody StaffProfileCreationRequest request) {
+        
+        // Call Profile Service to create staff profile
+        ApiResponse<StaffProfileResponse> response = userService.createStaffProfile(request);
+        
+        log.info("Staff profile created successfully: {}", response.getResult());
+        return response;
     }
 }

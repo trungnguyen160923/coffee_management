@@ -1,5 +1,7 @@
 package com.service.profile.service;
 
+import java.time.LocalDateTime;
+
 import com.service.profile.dto.request.AddressCreationRequest;
 import com.service.profile.dto.response.AddressResponse;
 import com.service.profile.entity.Address;
@@ -41,6 +43,9 @@ public class AddressService {
         // map request -> entity
         Address address = addressMapper.toAddress(request);
 
+        address.setCreateAt(LocalDateTime.now());
+        address.setUpdateAt(LocalDateTime.now());
+
         // save address trước (nếu không có cascade)
         addressRepository.save(address);
 
@@ -52,6 +57,9 @@ public class AddressService {
         CustomerAddress customerAddress = CustomerAddress.builder()
             .address(address)
             .customer(customer)
+            .isDefault(false)
+            .createAt(LocalDateTime.now())
+            .updateAt(LocalDateTime.now())
             .build();
 
         customerAddressRepository.save(customerAddress);

@@ -1,4 +1,4 @@
-package com.service.profile.exception;
+package com.caffee_management.api_gateway.exception;
 
 public class AppException extends RuntimeException {
 

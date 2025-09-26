@@ -7,6 +7,8 @@ app:
 spring:
   application:
     name: api-gateway
+  webflux:
+    static-path-pattern: /static/**
   cloud:
     gateway:
       server:
@@ -19,8 +21,28 @@ spring:
             filters:
               - StripPrefix=1
           - id: profile_service
-            uri: http://localhost:8002
+            uri: http://localhost:8003
             predicates:
-              - Path=${app.api-prefix}/profile/users/**
+              - Path=${app.api-prefix}/profiles/**
             filters:
               - StripPrefix=1
+          - id: fallback_route
+            uri: http://localhost:8000
+            predicates:
+              - Path=/**
+            filters:
+              - RewritePath=/.*, /api/fallback
+  # kafka:
+  #   bootstrap-servers: localhost:9094
+  #   consumer:
+  #     group-id: api-gateway-group
+  #     auto-offset-reset: earliest
+  #     key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+  #     value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+  #     properties:
+  #       spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
+  #       spring.json.trusted.packages: "com.caffee_management.api_gateway.events"
+  #       spring.json.value.default.type: com.caffee_management.api_gateway.events.ProfileCreatedEvent
+  #   producer:
+  #     key-serializer: org.apache.kafka.common.serialization.StringSerializer
+  #     value-serializer: org.springframework.kafka.support.serializer.JsonSerializer

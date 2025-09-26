@@ -1,9 +1,16 @@
 package com.service.auth.service;
 
 import com.service.auth.dto.request.CustomerProfileCreationRequest;
+import com.service.auth.dto.request.ManagerProfileCreationRequest;
+import com.service.auth.dto.request.StaffProfileCreationRequest;
 import com.service.auth.dto.request.UserCreationRequest;
 import com.service.auth.dto.request.UserUpdateRequest;
+import com.service.auth.dto.response.ApiResponse;
+import com.service.auth.dto.response.CustomerProfileResponse;
+import com.service.auth.dto.response.ManagerProfileResponse;
+import com.service.auth.dto.response.StaffProfileResponse;
 import com.service.auth.dto.response.UserResponse;
+import com.service.auth.entity.User;
 import com.service.auth.exception.AppException;
 import com.service.auth.exception.ErrorCode;
 import com.service.auth.mapper.UserMapper;
@@ -17,9 +24,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 
-import java.time.LocalDate;
 import java.util.List;
 
+    import org.springframework.context.annotation.Lazy;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -38,8 +45,9 @@ public class UserService {
     RoleRepository roleRepository;
     ProfileClient profileClient;
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
-    public UserResponse createUser(UserCreationRequest request){
+    @PreAuthorize("hasRole('ADMIN')")
+    @Transactional
+    public ApiResponse<ManagerProfileResponse> createManagerProfile(ManagerProfileCreationRequest request){
         if (userRepository.existsByEmail(request.getEmail())) throw new AppException(ErrorCode.EMAIL_EXISTED);
 
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -51,24 +59,90 @@ public class UserService {
         String targetRoleName = request.getRole();
 
         // Authorization matrix for creating users
-        boolean allowed = switch (currentUserRole) {
+        boolean allowed = canCreateStaff(currentUserRole, targetRoleName);
+
+        if (!allowed) {
+            throw new AppException(ErrorCode.ACCESS_DENIED);
+        }
+
+        // Create user first
+        User user = userMapper.toUser_Manager(request);
+        user.setPassword(passwordEncoder.encode(request.getPassword()));
+        user.setRole(roleRepository.findByName(targetRoleName).orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_FOUND)));
+        userRepository.save(user);
+
+        // Create manager profile
+        ManagerProfileResponse managerProfile = ManagerProfileResponse.builder()
+                .userId(user.getUserId())
+                .email(user.getEmail())
+                .fullname(user.getFullname())
+                .phone_number(user.getPhoneNumber())
+                .role(user.getRole())
+                .identityCard(request.getIdentityCard())
+                .branchId(request.getBranchId())
+                .hireDate(request.getHireDate())
+                .position(request.getPosition())
+                .salary(request.getSalary())
+                .build();
+
+        return ApiResponse.<ManagerProfileResponse>builder()
+                .result(managerProfile)
+                .build();
+    }
+
+    @PreAuthorize("hasRole('MANAGER')")
+    @Transactional
+    public ApiResponse<StaffProfileResponse> createStaffProfile(StaffProfileCreationRequest request){
+        if (userRepository.existsByEmail(request.getEmail())) throw new AppException(ErrorCode.EMAIL_EXISTED);
+
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || auth.getAuthorities() == null || auth.getAuthorities().isEmpty()) {
+            throw new AppException(ErrorCode.ACCESS_DENIED);
+        }
+
+        String currentUserRole = auth.getAuthorities().iterator().next().getAuthority().replace("ROLE_", "");
+        String targetRoleName = request.getRole();
+
+        // Authorization matrix for creating users
+        boolean allowed = canCreateStaff(currentUserRole, targetRoleName);
+
+        if (!allowed) {
+            throw new AppException(ErrorCode.ACCESS_DENIED);
+        }
+
+        // Create user first
+        var user = userMapper.toUser_Staff(request);
+        user.setPassword(passwordEncoder.encode(request.getPassword()));
+        user.setRole(roleRepository.findByName(targetRoleName).orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_FOUND)));
+        userRepository.save(user);
+
+        // Create staff profile
+        StaffProfileResponse staffProfile = StaffProfileResponse.builder()
+                .userId(user.getUserId())
+                .email(user.getEmail())
+                .fullname(user.getFullname())
+                .phone_number(user.getPhoneNumber())
+                .role(user.getRole())
+                .identityCard(request.getIdentityCard())
+                .branchId(request.getBranchId())
+                .hireDate(request.getHireDate())
+                .position(request.getPosition())
+                .salary(request.getSalary())
+                .build();
+
+        return ApiResponse.<StaffProfileResponse>builder()
+                .result(staffProfile)
+                .build();
+    }
+
+    private boolean canCreateStaff(String currentUserRole, String targetRoleName) {
+        return switch (currentUserRole) {
             case PredefinedRole.ADMIN_ROLE ->
                     PredefinedRole.MANAGER_ROLE.equals(targetRoleName) || PredefinedRole.STAFF_ROLE.equals(targetRoleName);
             case PredefinedRole.MANAGER_ROLE ->
                     PredefinedRole.STAFF_ROLE.equals(targetRoleName);
             default -> false;
         };
-
-        if (!allowed) {
-            throw new AppException(ErrorCode.ACCESS_DENIED);
-        }
-
-        var user = userMapper.toUser(request);
-        user.setPassword(passwordEncoder.encode(request.getPassword()));
-        user.setRole(roleRepository.findByName(targetRoleName).orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_FOUND)));
-        userRepository.save(user);
-
-        return userMapper.toUserCreationResponse(user);
     }
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
@@ -160,15 +234,20 @@ public class UserService {
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         user.setRole(roleRepository.findByName(PredefinedRole.CUSTOMER_ROLE).orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_FOUND)));
         userRepository.save(user);
-        
+               
         CustomerProfileCreationRequest customerProfileCreationRequest = CustomerProfileCreationRequest.builder()
                 .userId(user.getUserId())
                 .dob(request.getDob())
                 .avatarUrl(request.getAvatarUrl())
                 .bio(request.getBio())
                 .build();
-        profileClient.createProfile(customerProfileCreationRequest);
-        return userMapper.toUserCreationResponse(user);
+        ApiResponse<CustomerProfileResponse> profileResp = profileClient.createProfile(customerProfileCreationRequest);
+        CustomerProfileResponse profile = profileResp.getResult();
+        UserResponse userResponse = userMapper.toUserCreationResponse(user);
+        userResponse.setDob(profile.getDob());
+        userResponse.setAvatarUrl(profile.getAvatarUrl());
+        userResponse.setBio(profile.getBio());
+        return userResponse;
     }
 
 }

@@ -7,4 +7,5 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface CustomerProfileRepository extends JpaRepository<CustomerProfile, Integer> {
     boolean existsByUserId(Integer userId);
+    void deleteByUserId(Integer userId);
 }

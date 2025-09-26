@@ -27,6 +27,11 @@ public enum ErrorCode {
     PHONE_NUMBER_SIZE(1014, "Phone number must be at least {min} characters", HttpStatus.BAD_REQUEST),
     ACCESS_DENIED(1015, "Access denied", HttpStatus.FORBIDDEN),
     EMPTY_DOB(1016, "Dob is required", HttpStatus.BAD_REQUEST),
+    EMPTY_IDENTITY_CARD(1017, "Identity card is required", HttpStatus.BAD_REQUEST),
+    EMPTY_BRANCH_ID(1018, "Branch id is required", HttpStatus.BAD_REQUEST),
+    EMPTY_HIRE_DATE(1019, "Hire date is required", HttpStatus.BAD_REQUEST),
+    EMPTY_POSITION(1020, "Position is required", HttpStatus.BAD_REQUEST),
+    EMPTY_SALARY(1021, "Salary is required", HttpStatus.BAD_REQUEST),
     ;
 
     ErrorCode(int code, String message, HttpStatusCode statusCode) {
@@ -38,4 +43,8 @@ public enum ErrorCode {
     private final int code;
     private final String message;
     private final HttpStatusCode statusCode;
+    
+    public HttpStatus getHttpStatus() {
+        return (HttpStatus) statusCode;
+    }
 }
