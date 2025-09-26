@@ -33,6 +33,12 @@ public enum ErrorCode {
     EMPTY_USER_ID(1021, "User id is required", HttpStatus.BAD_REQUEST),
     EMPTY_DOB(1022, "Dob is required", HttpStatus.BAD_REQUEST),
     USER_ID_EXISTED(1023, "User id existed", HttpStatus.BAD_REQUEST),
+    EMPTY_BRANCH_ID(1024, "Branch id is required", HttpStatus.BAD_REQUEST),
+    EMPTY_IDENTITY_CARD(1025, "Identity card is required", HttpStatus.BAD_REQUEST),
+    EMPTY_POSITION(1026, "Position is required", HttpStatus.BAD_REQUEST),
+    EMPTY_HIRE_DATE(1027, "Hire date is required", HttpStatus.BAD_REQUEST),
+    EMPTY_SALARY(1028, "Salary is required", HttpStatus.BAD_REQUEST),
+    VALIDATION_FAILED(4000, "Validation failed", HttpStatus.BAD_REQUEST),
     ;
 
     ErrorCode(int code, String message, HttpStatusCode statusCode) {
@@ -44,4 +50,8 @@ public enum ErrorCode {
     private final int code;
     private final String message;
     private final HttpStatusCode statusCode;
+    
+    public HttpStatus getHttpStatus() {
+        return (HttpStatus) statusCode;
+    }
 }

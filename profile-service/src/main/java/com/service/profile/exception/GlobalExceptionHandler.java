@@ -1,107 +1,71 @@
 package com.service.profile.exception;
 
 import com.service.profile.dto.ApiResponse;
-import jakarta.validation.ConstraintViolation;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.http.converter.HttpMessageNotReadableException;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
-import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 
-@ControllerAdvice
+@RestControllerAdvice
 @Slf4j
 public class GlobalExceptionHandler {
 
-    private static final String MIN_ATTRIBUTE = "min";
-
-    @ExceptionHandler(value = Exception.class)
-    ResponseEntity<ApiResponse<?>> handlingRuntimeException(Exception exception) {
-        log.error("Exception: ", exception);
-        ApiResponse<?> apiResponse = new ApiResponse<>();
-
-        apiResponse.setCode(ErrorCode.UNCATEGORIZED_EXCEPTION.getCode());
-        apiResponse.setMessage(ErrorCode.UNCATEGORIZED_EXCEPTION.getMessage());
-
-        return ResponseEntity.badRequest().body(apiResponse);
-    }
-
-    @ExceptionHandler(value = AppException.class)
-    ResponseEntity<ApiResponse<?>> handlingAppException(AppException exception) {
-        ErrorCode errorCode = exception.getErrorCode();
-        ApiResponse<?> apiResponse = new ApiResponse<>();
-
-        apiResponse.setCode(errorCode.getCode());
-        apiResponse.setMessage(errorCode.getMessage());
-
-        return ResponseEntity.status(errorCode.getStatusCode()).body(apiResponse);
-    }
-
-    @ExceptionHandler(value = AccessDeniedException.class)
-    ResponseEntity<ApiResponse<?>> handlingAccessDeniedException(AccessDeniedException exception) {
-        ErrorCode errorCode = ErrorCode.UNAUTHORIZED;
-
-        return ResponseEntity.status(errorCode.getStatusCode())
-                .body(ApiResponse.builder()
-                        .code(errorCode.getCode())
-                        .message(errorCode.getMessage())
-                        .build());
-    }
-
-    @ExceptionHandler(value = MethodArgumentNotValidException.class)
-    ResponseEntity<ApiResponse<?>> handlingValidation(MethodArgumentNotValidException exception) {
-        var fieldErrors = exception.getBindingResult().getFieldErrors();
-
-        // Map each field error to its ErrorCode and message
-        List<ErrorCode> codes = fieldErrors.stream()
-                .map(err -> {
-                    String key = err.getDefaultMessage();
-                    try { return ErrorCode.valueOf(key); } catch (IllegalArgumentException ex) { return ErrorCode.INVALID_KEY; }
-                })
-                .toList();
-
-        String message = fieldErrors.stream()
-                .map(err -> {
-                    String key = err.getDefaultMessage();
-                    ErrorCode ec;
-                    try { ec = ErrorCode.valueOf(key); } catch (IllegalArgumentException ex) { ec = ErrorCode.INVALID_KEY; }
-                    // Handle {min} replacement for messages with attributes
-                    try {
-                        var violation = exception.getBindingResult().getAllErrors().getFirst().unwrap(ConstraintViolation.class);
-                        @SuppressWarnings("unchecked")
-                        Map<String, Object> attrs = (Map<String, Object>) violation.getConstraintDescriptor().getAttributes();
-                        return mapAttribute(ec.getMessage(), attrs);
-                    } catch (Exception e) {
-                        return ec.getMessage();
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ApiResponse<String>> handleValidationException(MethodArgumentNotValidException ex) {
+        log.error("Validation failed: {}", ex.getMessage());
+        
+        String errorMessage = ex.getBindingResult()
+                .getFieldErrors()
+                .stream()
+                .map(error -> {
+                    String message = error.getDefaultMessage();
+                    
+                    // Try to find matching ErrorCode dynamically
+                    for (ErrorCode errorCode : ErrorCode.values()) {
+                        if (errorCode.getMessage().contains(message) || 
+                            errorCode.name().equals(message)) {
+                            return errorCode.getMessage();
+                        }
                     }
+                    
+                    // Fallback to original message
+                    return error.getField() + ": " + message;
                 })
-                .collect(Collectors.joining("; "));
-
-        ApiResponse<?> apiResponse = new ApiResponse<>();
-        // Use the first code for the top-level code; include all messages concatenated
-        apiResponse.setCode(codes.isEmpty() ? ErrorCode.INVALID_KEY.getCode() : codes.getFirst().getCode());
-        apiResponse.setMessage(message);
-
-        return ResponseEntity.badRequest().body(apiResponse);
+                .collect(Collectors.joining(", "));
+        
+        ApiResponse<String> response = ApiResponse.<String>builder()
+                .code(4000)
+                .message("Validation failed: " + errorMessage)
+                .build();
+        
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
     }
 
-    @ExceptionHandler(value = HttpMessageNotReadableException.class)
-    ResponseEntity<ApiResponse<?>> handlingMissingRequestBody(HttpMessageNotReadableException exception) {
-        ErrorCode errorCode = ErrorCode.INVALID_KEY;
-        ApiResponse<?> apiResponse = new ApiResponse<>();
-        apiResponse.setCode(errorCode.getCode());
-        apiResponse.setMessage("Required request body is missing");
-        return ResponseEntity.badRequest().body(apiResponse);
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ApiResponse<String>> handleGenericException(Exception ex) {
+        log.error("Unhandled exception occurred: {}", ex.getMessage(), ex);
+        
+        ApiResponse<String> response = ApiResponse.<String>builder()
+                .code(9999)
+                .message(ex.getMessage()) // Trả về message từ exception
+                .build();
+        
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
     }
 
-    private String mapAttribute(String message, Map<String, Object> attributes) {
-        String minValue = String.valueOf(attributes.get(MIN_ATTRIBUTE));
-
-        return message.replace("{" + MIN_ATTRIBUTE + "}", minValue);
+    @ExceptionHandler(AppException.class)
+    public ResponseEntity<ApiResponse<String>> handleAppException(AppException ex) {
+        log.error("Application exception: {}", ex.getMessage(), ex);
+        
+        ApiResponse<String> response = ApiResponse.<String>builder()
+                .code(ex.getErrorCode().getCode())
+                .message(ex.getMessage())
+                .build();
+        
+        return ResponseEntity.status(ex.getErrorCode().getStatusCode()).body(response);
     }
 }

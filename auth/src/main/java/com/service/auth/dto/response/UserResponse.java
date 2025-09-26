@@ -1,5 +1,7 @@
 package com.service.auth.dto.response;
 
+import java.time.LocalDate;
+
 import com.service.auth.entity.Role;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
@@ -13,6 +15,9 @@ public class UserResponse {
     Integer user_id;
     String email;
     String fullname;
-    String phone_number;
+    String phoneNumber;
+    LocalDate dob;
+    String avatarUrl;
+    String bio;
     Role role;
 }

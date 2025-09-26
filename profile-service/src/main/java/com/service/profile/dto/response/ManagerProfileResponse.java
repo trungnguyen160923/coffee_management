@@ -3,6 +3,7 @@ package com.service.profile.dto.response;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
@@ -10,10 +11,11 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class AddressResponse {
-    Integer addressId;
-    String label;
-    String fullAddress;
+public class ManagerProfileResponse {
+    Integer userId;
+    Integer branchId;
+    LocalDate hireDate;
+    String identityCard;
     LocalDateTime createAt;
     LocalDateTime updateAt;
 }

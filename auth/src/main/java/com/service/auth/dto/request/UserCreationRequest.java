@@ -26,7 +26,7 @@ public class UserCreationRequest {
     String fullname;
 
     @NotBlank(message = "EMPTY_PHONE_NUMBER")
-    String phone_number;
+    String phoneNumber;
 
     String avatarUrl;
     String bio;
@@ -34,7 +34,7 @@ public class UserCreationRequest {
     @NotNull(message = "EMPTY_DOB")
     LocalDate dob;
 
-    @NotBlank(message = "EMPTY_ROLE")
-    @RoleConstraint(message = "INVALID_ROLE")
-    String role;
+    // @NotBlank(message = "EMPTY_ROLE")
+    // @RoleConstraint(message = "INVALID_ROLE")
+    // String role;
 }
