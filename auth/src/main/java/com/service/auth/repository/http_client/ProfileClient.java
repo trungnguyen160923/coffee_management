@@ -3,7 +3,9 @@ package com.service.auth.repository.http_client;
 import com.service.auth.configuration.AuthenticationRequestInterceptor;
 import com.service.auth.dto.request.CustomerProfileCreationRequest;
 import com.service.auth.dto.request.ManagerProfileCreationRequest;
+import com.service.auth.dto.request.ManagerProfileRequest;
 import com.service.auth.dto.request.StaffProfileCreationRequest;
+import com.service.auth.dto.request.StaffProfileRequest;
 import com.service.auth.dto.response.ApiResponse;
 import com.service.auth.dto.response.CustomerProfileResponse;
 import com.service.auth.dto.response.ManagerProfileResponse;
@@ -24,8 +26,8 @@ public interface ProfileClient {
     ApiResponse<CustomerProfileResponse> createProfile(@RequestBody CustomerProfileCreationRequest request);
 
     @PostMapping(value = "/manager-profiles", produces = MediaType.APPLICATION_JSON_VALUE)
-    ApiResponse<ManagerProfileResponse> createManagerProfile(@RequestBody ManagerProfileCreationRequest request);
+    ApiResponse<ManagerProfileResponse> createManagerProfile(@RequestBody ManagerProfileRequest request);
 
     @PostMapping(value = "/staff-profiles", produces = MediaType.APPLICATION_JSON_VALUE)
-    ApiResponse<StaffProfileResponse> createStaffProfile(@RequestBody StaffProfileCreationRequest request);
+    ApiResponse<StaffProfileResponse> createStaffProfile(@RequestBody StaffProfileRequest request);
 }

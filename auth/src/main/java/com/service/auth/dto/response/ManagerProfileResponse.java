@@ -22,6 +22,4 @@ public class ManagerProfileResponse {
     private String identityCard;
     private Integer branchId;
     private LocalDate hireDate;
-    private String position;
-    private Double salary;
 }

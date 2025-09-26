@@ -2,7 +2,9 @@ package com.service.auth.service;
 
 import com.service.auth.dto.request.CustomerProfileCreationRequest;
 import com.service.auth.dto.request.ManagerProfileCreationRequest;
+import com.service.auth.dto.request.ManagerProfileRequest;
 import com.service.auth.dto.request.StaffProfileCreationRequest;
+import com.service.auth.dto.request.StaffProfileRequest;
 import com.service.auth.dto.request.UserCreationRequest;
 import com.service.auth.dto.request.UserUpdateRequest;
 import com.service.auth.dto.response.ApiResponse;
@@ -24,6 +26,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 
+import java.math.BigDecimal;
 import java.util.List;
 
     import org.springframework.context.annotation.Lazy;
@@ -81,10 +84,16 @@ public class UserService {
                 .identityCard(request.getIdentityCard())
                 .branchId(request.getBranchId())
                 .hireDate(request.getHireDate())
-                .position(request.getPosition())
-                .salary(request.getSalary())
                 .build();
 
+        ManagerProfileRequest managerProfileRequest = ManagerProfileRequest.builder()
+                .userId(user.getUserId())
+                .branchId(request.getBranchId())
+                .hireDate(request.getHireDate())
+                .identityCard(request.getIdentityCard())
+                .build();
+
+        ApiResponse<ManagerProfileResponse> profileResp = profileClient.createManagerProfile(managerProfileRequest);
         return ApiResponse.<ManagerProfileResponse>builder()
                 .result(managerProfile)
                 .build();
@@ -130,6 +139,15 @@ public class UserService {
                 .salary(request.getSalary())
                 .build();
 
+        StaffProfileRequest staffProfileRequest = StaffProfileRequest.builder()
+                .userId(user.getUserId())
+                .branchId(request.getBranchId())
+                .hireDate(request.getHireDate())
+                .identityCard(request.getIdentityCard())
+                .position(request.getPosition())
+                .salary(BigDecimal.valueOf(request.getSalary()))
+                .build();
+        ApiResponse<StaffProfileResponse> profileResp = profileClient.createStaffProfile(staffProfileRequest);
         return ApiResponse.<StaffProfileResponse>builder()
                 .result(staffProfile)
                 .build();
