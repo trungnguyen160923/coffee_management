@@ -1,0 +1,113 @@
+import React from 'react';
+import { useAuth } from '../context/AuthContext';
+import { 
+  Coffee, 
+  Users, 
+  Package, 
+  BarChart3, 
+  Settings, 
+  LogOut, 
+  Home,
+  Store,
+  BookOpen,
+  ShoppingCart,
+  Calendar,
+  Archive
+} from 'lucide-react';
+
+interface LayoutProps {
+  children: React.ReactNode;
+}
+
+export function Layout({ children }: LayoutProps) {
+  const { user, logout } = useAuth();
+
+  const getNavigationItems = () => {
+    if (user?.role === 'admin') {
+      return [
+        { icon: Home, label: 'Tổng quan', path: '/admin' },
+        { icon: Package, label: 'Sản phẩm', path: '/admin/products' },
+        { icon: BookOpen, label: 'Công thức', path: '/admin/recipes' },
+        { icon: Store, label: 'Chi nhánh', path: '/admin/branches' },
+        { icon: Users, label: 'Quản lý', path: '/admin/managers' },
+        { icon: BarChart3, label: 'Thống kê', path: '/admin/statistics' },
+      ];
+    } else if (user?.role === 'manager') {
+      return [
+        { icon: Home, label: 'Tổng quan', path: '/manager' },
+        { icon: Users, label: 'Nhân viên', path: '/manager/staff' },
+        { icon: Archive, label: 'Kho', path: '/manager/inventory' },
+        { icon: BarChart3, label: 'Thống kê', path: '/manager/statistics' },
+      ];
+    } else {
+      return [
+        { icon: Home, label: 'Tổng quan', path: '/staff' },
+        { icon: ShoppingCart, label: 'Đơn hàng', path: '/staff/orders' },
+        { icon: Calendar, label: 'Đặt bàn', path: '/staff/reservations' },
+        { icon: BookOpen, label: 'Công thức', path: '/staff/recipes' },
+      ];
+    }
+  };
+
+  const navigationItems = getNavigationItems();
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-50">
+      <div className="flex">
+        {/* Sidebar */}
+        <div className="w-64 bg-gradient-to-b from-amber-900 to-amber-800 text-white min-h-screen shadow-xl">
+          <div className="p-6 border-b border-amber-700">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 bg-amber-700 rounded-lg">
+                <Coffee className="h-6 w-6" />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold">CoffeeChain</h1>
+                <p className="text-amber-200 text-sm capitalize">{user?.role} Panel</p>
+              </div>
+            </div>
+          </div>
+
+          <nav className="mt-6">
+            {navigationItems.map((item) => (
+              <a
+                key={item.path}
+                href={item.path}
+                className="flex items-center space-x-3 px-6 py-3 text-amber-100 hover:bg-amber-700 hover:text-white transition-colors duration-200 border-l-4 border-transparent hover:border-amber-300"
+              >
+                <item.icon className="h-5 w-5" />
+                <span>{item.label}</span>
+              </a>
+            ))}
+          </nav>
+
+          <div className="absolute bottom-0 left-0 right-0 w-64 p-6 border-t border-amber-700">
+            <div className="flex items-center space-x-3 mb-4">
+              <img
+                src={user?.avatar || 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=150'}
+                alt={user?.name}
+                className="w-10 h-10 rounded-full object-cover"
+              />
+              <div className="flex-1">
+                <p className="text-sm font-medium">{user?.name}</p>
+                <p className="text-xs text-amber-200">{user?.email}</p>
+              </div>
+            </div>
+            <button
+              onClick={logout}
+              className="flex items-center space-x-2 text-amber-200 hover:text-white transition-colors duration-200 w-full"
+            >
+              <LogOut className="h-4 w-4" />
+              <span>Đăng xuất</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Main Content */}
+        <div className="flex-1 overflow-auto">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
