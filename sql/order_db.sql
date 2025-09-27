@@ -74,6 +74,7 @@ DROP TABLE IF EXISTS orders;
 CREATE TABLE orders (
   order_id INT NOT NULL AUTO_INCREMENT,
   customer_id INT DEFAULT NULL, -- loose reference to customer_profiles/user_id
+  customer_name VARCHAR(50) DEFAULT NULL,
   branch_id INT NOT NULL,
   table_id INT DEFAULT NULL,
   reservation_id INT DEFAULT NULL,
@@ -91,8 +92,10 @@ CREATE TABLE orders (
   KEY idx_orders_reservation_id (reservation_id),
   CONSTRAINT fk_orders_branch FOREIGN KEY (branch_id) REFERENCES branches(branch_id) ON DELETE RESTRICT,
   CONSTRAINT fk_orders_table FOREIGN KEY (table_id) REFERENCES cafe_tables(table_id) ON DELETE SET NULL,
-  CONSTRAINT fk_orders_reservation FOREIGN KEY (reservation_id) REFERENCES reservations(reservation_id) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4_COLLATE=utf8mb4_unicode_ci;
+  CONSTRAINT fk_orders_reservation FOREIGN KEY (reservation_id) REFERENCES reservations(reservation_id) ON DELETE SET NULL,
+  CONSTRAINT chk_customer_not_both_null CHECK (customer_id IS NOT NULL OR customer_name IS NOT NULL)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 
 -- Order details (line items)
 DROP TABLE IF EXISTS order_details;

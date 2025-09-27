@@ -87,9 +87,9 @@ public class AuthenticationService {
                 .build();
     }
 
-    public void logout(LogoutRequest request) throws ParseException, JOSEException {
+    public void logout(String token) throws ParseException, JOSEException {
         try {
-            var signToken = verifyToken(request.getToken(), true);
+            var signToken = verifyToken(token, true);
 
             String jit = signToken.getJWTClaimsSet().getJWTID();
             Date expiryTime = signToken.getJWTClaimsSet().getExpirationTime();
