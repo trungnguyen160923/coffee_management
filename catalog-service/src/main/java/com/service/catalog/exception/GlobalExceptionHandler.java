@@ -1,7 +1,7 @@
-package orderservice.order_service.exception;
+package com.service.catalog.exception;
 
+import com.service.catalog.dto.ApiResponse;
 import lombok.extern.slf4j.Slf4j;
-import orderservice.order_service.dto.ApiResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.MessageSource;
 import org.springframework.context.i18n.LocaleContextHolder;

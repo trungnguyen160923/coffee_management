@@ -1,0 +1,49 @@
+server:
+  port: 8004
+  servlet:
+    context-path: /catalogs
+spring:
+  application:
+    name: catalog-service
+  datasource:
+    url: "jdbc:mysql://localhost:3306/catalog_db"
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: root
+    password: 12345678
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+      enabled: true
+  task:
+    scheduling:
+      enabled: true
+      pool:
+        size: 2
+      thread-name-prefix: "scheduled-"
+
+# File upload configuration
+app:
+  upload:
+    dir: ./uploads
+  
+  # kafka:
+  #   bootstrap-servers: localhost:9094
+  #   consumer:
+  #     group-id: profile-service-group
+  #     auto-offset-reset: earliest
+  #     key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+  #     value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+  #     properties:
+  #       spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
+  #       spring.json.trusted.packages: "com.service.profile.events,com.service.auth.events"
+  #   producer:
+  #     key-serializer: org.apache.kafka.common.serialization.StringSerializer
+  #     value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+jwt:
+  signerKey: "1TjXchw5FloESb63Kc+DFhTARvpWL4jUGCwfGWxuG5SIf/1y/LgJxHnMqaF6A/ij"
