@@ -1,4 +1,4 @@
-package orderservice.order_service.configuration;
+package com.service.catalog.configuration;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -16,7 +16,7 @@ import org.springframework.security.web.SecurityFilterChain;
 @EnableMethodSecurity
 public class SecurityConfig {
 
-    private static final String[] PUBLIC_ENDPOINTS = {};
+    private static final String[] PUBLIC_ENDPOINTS = {"/files/upload", "/files/cleanup"};
 
     private final CustomJwtDecoder customJwtDecoder;
 

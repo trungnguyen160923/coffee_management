@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Image Upload</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .upload-area {
+            border: 2px dashed #ccc;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            margin: 20px 0;
+        }
+        .upload-area.dragover {
+            border-color: #007bff;
+            background-color: #f8f9fa;
+        }
+        .preview {
+            margin: 20px 0;
+        }
+        .preview img {
+            max-width: 300px;
+            max-height: 300px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .result {
+            margin: 20px 0;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test Image Upload API</h1>
+    
+    <div class="upload-area" id="uploadArea">
+        <p>Drag & drop image here or click to select</p>
+        <input type="file" id="fileInput" accept="image/*" style="display: none;">
+        <button onclick="document.getElementById('fileInput').click()">Choose File</button>
+    </div>
+    
+    <div class="preview" id="preview"></div>
+    
+    <div class="result" id="result"></div>
+    
+    <button onclick="uploadFile()" id="uploadBtn" disabled>Upload Image</button>
+    <button onclick="cleanupImages()" id="cleanupBtn">Cleanup Unused Images</button>
+    
+    <script>
+        const API_BASE = 'http://localhost:8000/api/catalogs';
+        let selectedFile = null;
+        
+        // File input change
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                selectedFile = file;
+                showPreview(file);
+                document.getElementById('uploadBtn').disabled = false;
+            }
+        });
+        
+        // Drag and drop
+        const uploadArea = document.getElementById('uploadArea');
+        
+        uploadArea.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        
+        uploadArea.addEventListener('dragleave', function(e) {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+        });
+        
+        uploadArea.addEventListener('drop', function(e) {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                const file = files[0];
+                if (file.type.startsWith('image/')) {
+                    selectedFile = file;
+                    showPreview(file);
+                    document.getElementById('uploadBtn').disabled = false;
+                } else {
+                    showResult('Please select an image file', 'error');
+                }
+            }
+        });
+        
+        // Show preview
+        function showPreview(file) {
+            const preview = document.getElementById('preview');
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                preview.innerHTML = `
+                    <h3>Preview:</h3>
+                    <img src="${e.target.result}" alt="Preview">
+                    <p><strong>File:</strong> ${file.name}</p>
+                    <p><strong>Size:</strong> ${(file.size / 1024).toFixed(2)} KB</p>
+                    <p><strong>Type:</strong> ${file.type}</p>
+                `;
+            };
+            
+            reader.readAsDataURL(file);
+        }
+        
+        // Upload file
+        async function uploadFile() {
+            if (!selectedFile) {
+                showResult('Please select a file first', 'error');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+            
+            try {
+                showResult('Uploading...', 'info');
+                document.getElementById('uploadBtn').disabled = true;
+                
+                const response = await fetch(`${API_BASE}/files/upload`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.code === 1000) {
+                    showResult(`
+                        <h3>Upload Success!</h3>
+                        <p><strong>Image URL:</strong> ${result.result}</p>
+                        <p><strong>Full URL:</strong> ${API_BASE}${result.result}</p>
+                        <img src="${API_BASE}${result.result}" alt="Uploaded Image" style="max-width: 300px;">
+                    `, 'success');
+                } else {
+                    showResult(`Upload failed: ${result.message}`, 'error');
+                }
+            } catch (error) {
+                showResult(`Upload error: ${error.message}`, 'error');
+            } finally {
+                document.getElementById('uploadBtn').disabled = false;
+            }
+        }
+        
+        // Cleanup images
+        async function cleanupImages() {
+            try {
+                showResult('Cleaning up unused images...', 'info');
+                document.getElementById('cleanupBtn').disabled = true;
+                
+                const response = await fetch(`${API_BASE}/files/cleanup`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer YOUR_ADMIN_TOKEN' // Replace with actual token
+                    }
+                });
+                
+                const result = await response.json();
+                
+                if (result.code === 1000) {
+                    showResult(`
+                        <h3>Cleanup Success!</h3>
+                        <p><strong>Deleted:</strong> ${result.result} unused images</p>
+                        <p><strong>Message:</strong> ${result.message}</p>
+                    `, 'success');
+                } else {
+                    showResult(`Cleanup failed: ${result.message}`, 'error');
+                }
+            } catch (error) {
+                showResult(`Cleanup error: ${error.message}`, 'error');
+            } finally {
+                document.getElementById('cleanupBtn').disabled = false;
+            }
+        }
+        
+        // Show result
+        function showResult(message, type) {
+            const result = document.getElementById('result');
+            result.innerHTML = message;
+            result.className = `result ${type}`;
+        }
+    </script>
+</body>
+</html>
