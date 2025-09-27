@@ -1,12 +1,15 @@
 package orderservice.order_service.service;
 
+import lombok.extern.slf4j.Slf4j;
 import orderservice.order_service.dto.request.CreateReservationRequest;
 import orderservice.order_service.entity.Reservation;
 import orderservice.order_service.repository.ReservationRepository;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 @Service
+@Slf4j
 public class ReservationService {
 
     private final ReservationRepository reservationRepository;
@@ -31,6 +34,11 @@ public class ReservationService {
         reservation.setNotes(request.getNotes());
         reservation.setStatus("PENDING");
         return reservationRepository.save(reservation);
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    public void testAPIADMIN(){
+        log.info("Test", "test");
     }
 }
 

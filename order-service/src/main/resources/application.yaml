@@ -25,3 +25,6 @@ spring:
   thymeleaf:
     cache: false
     enabled: true
+
+jwt:
+  signerKey: "1TjXchw5FloESb63Kc+DFhTARvpWL4jUGCwfGWxuG5SIf/1y/LgJxHnMqaF6A/ij"

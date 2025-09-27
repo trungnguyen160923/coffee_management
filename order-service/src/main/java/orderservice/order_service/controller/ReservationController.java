@@ -29,4 +29,9 @@ public class ReservationController {
     public ResponseEntity<String> test() {
         return ResponseEntity.ok("Order Service is running!");
     }
+
+    @GetMapping("test")
+    public void TestAPIADMIN(){
+        reservationService.testAPIADMIN();
+    }
 }
