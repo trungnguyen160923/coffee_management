@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 
 import java.text.ParseException;
@@ -48,8 +49,13 @@ public class AuthenticationController {
     }
 
     @PostMapping("/logout")
-    ApiResponse<Void> logout(@Valid @RequestBody LogoutRequest request) throws ParseException, JOSEException {
-        authenticationService.logout(request);
+    ApiResponse<Void> logout(HttpServletRequest request) throws ParseException, JOSEException {
+        String authHeader = request.getHeader("Authorization");
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            throw new IllegalArgumentException("Authorization header missing or invalid");
+        }
+        String token = authHeader.replace("Bearer ", "");
+        authenticationService.logout(token);
         return ApiResponse.<Void>builder().build();
     }
 }
