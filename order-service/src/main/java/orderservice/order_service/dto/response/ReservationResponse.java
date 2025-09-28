@@ -1,51 +1,53 @@
-package orderservice.order_service.dto.request;
+package orderservice.order_service.dto.response;
 
-import jakarta.validation.constraints.*;
 import java.time.LocalDateTime;
 
-public class CreateReservationRequest {
+public class ReservationResponse {
 
-    // For authenticated users
+    private Integer reservationId;
     private Integer customerId;
-
-    // For non-authenticated users
-    @Size(max = 50, message = "Customer name must not exceed 50 characters")
     private String customerName;
-
-    @Size(max = 20, message = "Phone must not exceed 20 characters")
-    @Pattern(regexp = "^[0-9+\\-\\s()]*$", message = "Phone number contains invalid characters")
     private String phone;
-
-    @NotNull(message = "Branch ID is required")
     private Integer branchId;
-
-    @NotNull(message = "Reservation time is required")
+    private String branchName;
     private LocalDateTime reservedAt;
-
-    @NotNull(message = "Party size is required")
-    @Min(value = 1, message = "Party size must be at least 1")
-    @Max(value = 20, message = "Party size cannot exceed 20")
-    private Integer partySize = 1;
-
-    @Size(max = 255, message = "Notes must not exceed 255 characters")
+    private String status;
+    private Integer partySize;
     private String notes;
+    private LocalDateTime createAt;
+    private LocalDateTime updateAt;
 
     // Constructors
-    public CreateReservationRequest() {
+    public ReservationResponse() {
     }
 
-    public CreateReservationRequest(Integer customerId, String customerName, String phone,
-            Integer branchId, LocalDateTime reservedAt, Integer partySize, String notes) {
+    public ReservationResponse(Integer reservationId, Integer customerId, String customerName,
+            String phone, Integer branchId, String branchName, LocalDateTime reservedAt,
+            String status, Integer partySize, String notes, LocalDateTime createAt,
+            LocalDateTime updateAt) {
+        this.reservationId = reservationId;
         this.customerId = customerId;
         this.customerName = customerName;
         this.phone = phone;
         this.branchId = branchId;
+        this.branchName = branchName;
         this.reservedAt = reservedAt;
+        this.status = status;
         this.partySize = partySize;
         this.notes = notes;
+        this.createAt = createAt;
+        this.updateAt = updateAt;
     }
 
     // Getters and Setters
+    public Integer getReservationId() {
+        return reservationId;
+    }
+
+    public void setReservationId(Integer reservationId) {
+        this.reservationId = reservationId;
+    }
+
     public Integer getCustomerId() {
         return customerId;
     }
@@ -78,12 +80,28 @@ public class CreateReservationRequest {
         this.branchId = branchId;
     }
 
+    public String getBranchName() {
+        return branchName;
+    }
+
+    public void setBranchName(String branchName) {
+        this.branchName = branchName;
+    }
+
     public LocalDateTime getReservedAt() {
         return reservedAt;
     }
 
     public void setReservedAt(LocalDateTime reservedAt) {
         this.reservedAt = reservedAt;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
     }
 
     public Integer getPartySize() {
@@ -102,9 +120,19 @@ public class CreateReservationRequest {
         this.notes = notes;
     }
 
-    // Business validation method
-    public boolean isValidCustomerInfo() {
-        return customerId != null || (customerName != null && !customerName.trim().isEmpty()
-                && phone != null && !phone.trim().isEmpty());
+    public LocalDateTime getCreateAt() {
+        return createAt;
+    }
+
+    public void setCreateAt(LocalDateTime createAt) {
+        this.createAt = createAt;
+    }
+
+    public LocalDateTime getUpdateAt() {
+        return updateAt;
+    }
+
+    public void setUpdateAt(LocalDateTime updateAt) {
+        this.updateAt = updateAt;
     }
 }
