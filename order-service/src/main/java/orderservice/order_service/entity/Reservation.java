@@ -1,6 +1,7 @@
 package orderservice.order_service.entity;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.*;
 import java.time.LocalDateTime;
 
 @Entity
@@ -15,25 +16,35 @@ public class Reservation {
     @Column(name = "customer_id")
     private Integer customerId;
 
-    @Column(name = "customer_name")
+    @Column(name = "customer_name", length = 50)
+    @Size(max = 50, message = "Customer name must not exceed 50 characters")
     private String customerName;
 
-    @Column(name = "phone")
+    @Column(name = "phone", length = 20)
+    @Size(max = 20, message = "Phone must not exceed 20 characters")
+    @Pattern(regexp = "^[0-9+\\-\\s()]*$", message = "Phone number contains invalid characters")
     private String phone;
 
     @Column(name = "branch_id", nullable = false)
+    @NotNull(message = "Branch ID is required")
     private Integer branchId;
 
     @Column(name = "reserved_at", nullable = false)
+    @NotNull(message = "Reservation time is required")
     private LocalDateTime reservedAt;
 
-    @Column(name = "status")
-    private String status;
+    @Column(name = "status", length = 50)
+    @Size(max = 50, message = "Status must not exceed 50 characters")
+    private String status = "PENDING";
 
     @Column(name = "party_size", nullable = false)
-    private Integer partySize;
+    @NotNull(message = "Party size is required")
+    @Min(value = 1, message = "Party size must be at least 1")
+    @Max(value = 20, message = "Party size cannot exceed 20")
+    private Integer partySize = 1;
 
-    @Column(name = "notes")
+    @Column(name = "notes", length = 255)
+    @Size(max = 255, message = "Notes must not exceed 255 characters")
     private String notes;
 
     @Column(name = "create_at")
@@ -133,5 +144,28 @@ public class Reservation {
 
     public void setUpdateAt(LocalDateTime updateAt) {
         this.updateAt = updateAt;
+    }
+
+    @PrePersist
+    protected void onCreate() {
+        createAt = LocalDateTime.now();
+        updateAt = LocalDateTime.now();
+        if (status == null) {
+            status = "PENDING";
+        }
+        if (partySize == null) {
+            partySize = 1;
+        }
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        updateAt = LocalDateTime.now();
+    }
+
+    // Business validation method
+    public boolean isValidCustomerInfo() {
+        return customerId != null || (customerName != null && !customerName.trim().isEmpty()
+                && phone != null && !phone.trim().isEmpty());
     }
 }
