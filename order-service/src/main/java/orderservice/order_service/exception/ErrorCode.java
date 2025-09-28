@@ -38,6 +38,16 @@ public enum ErrorCode {
     EMPTY_POSITION(1026, "Position is required", HttpStatus.BAD_REQUEST),
     EMPTY_HIRE_DATE(1027, "Hire date is required", HttpStatus.BAD_REQUEST),
     EMPTY_SALARY(1028, "Salary is required", HttpStatus.BAD_REQUEST),
+    BRANCH_NOT_FOUND(1029, "Branch not found", HttpStatus.NOT_FOUND),
+    BRANCH_NAME_EXISTS(1030, "Branch name already exists", HttpStatus.BAD_REQUEST),
+    INVALID_BUSINESS_HOURS(1031, "Open hours must be before end hours", HttpStatus.BAD_REQUEST),
+    RESERVATION_NOT_FOUND(1032, "Reservation not found", HttpStatus.NOT_FOUND),
+    EMPTY_RESERVATION_TIME(1033, "Reservation time is required", HttpStatus.BAD_REQUEST),
+    INVALID_PARTY_SIZE(1034, "Party size must be between 1 and 20", HttpStatus.BAD_REQUEST),
+    INVALID_CUSTOMER_INFO(1035, "Customer information is invalid", HttpStatus.BAD_REQUEST),
+    RESERVATION_TIME_TOO_EARLY(1036, "Reservation must be at least 1 hour in advance", HttpStatus.BAD_REQUEST),
+    RESERVATION_TIME_TOO_LATE(1037, "Reservation cannot be more than 30 days in advance", HttpStatus.BAD_REQUEST),
+    RESERVATION_CANNOT_BE_CANCELLED(1038, "Reservation cannot be cancelled", HttpStatus.BAD_REQUEST),
     VALIDATION_FAILED(4000, "Validation failed", HttpStatus.BAD_REQUEST),
     ;
 
@@ -50,7 +60,7 @@ public enum ErrorCode {
     private final int code;
     private final String message;
     private final HttpStatusCode statusCode;
-    
+
     public HttpStatus getHttpStatus() {
         return (HttpStatus) statusCode;
     }

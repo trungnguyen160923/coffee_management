@@ -34,7 +34,6 @@ public class UserController {
         return ApiResponse.<UserResponse>builder().result(result).build();
     }
 
-
     @GetMapping("/staffs")
     ApiResponse<List<UserResponse>> getAllStaffs() {
         var result = userService.getAllStaffs();
@@ -47,30 +46,42 @@ public class UserController {
         return ApiResponse.<List<UserResponse>>builder().result(result).build();
     }
 
+    @GetMapping("/{userId}")
+    ApiResponse<UserResponse> getUserById(@PathVariable Integer userId) {
+        var result = userService.getUserById(userId);
+        return ApiResponse.<UserResponse>builder().result(result).build();
+    }
+
     @PutMapping("/{userId}")
-    ApiResponse<UserResponse> updateUser(@PathVariable Integer userId, 
-                                        @Valid @RequestBody UserUpdateRequest request) {
+    ApiResponse<UserResponse> updateUser(@PathVariable Integer userId,
+            @Valid @RequestBody UserUpdateRequest request) {
         var result = userService.updateUser(userId, request);
         return ApiResponse.<UserResponse>builder().result(result).build();
     }
 
     @PostMapping("/create-manager")
     ApiResponse<ManagerProfileResponse> createManager(@Valid @RequestBody ManagerProfileCreationRequest request) {
-        
+
         // Call Profile Service to create manager profile
         ApiResponse<ManagerProfileResponse> response = userService.createManagerProfile(request);
-        
+
         log.info("Manager profile created successfully: {}", response.getResult());
         return response;
     }
 
     @PostMapping("/create-staff")
     ApiResponse<StaffProfileResponse> createStaff(@Valid @RequestBody StaffProfileCreationRequest request) {
-        
+
         // Call Profile Service to create staff profile
         ApiResponse<StaffProfileResponse> response = userService.createStaffProfile(request);
-        
+
         log.info("Staff profile created successfully: {}", response.getResult());
         return response;
+    }
+
+    @GetMapping("/internal/{userId}")
+    ApiResponse<UserResponse> getUserByIdInternal(@PathVariable Integer userId) {
+        var result = userService.getUserById(userId);
+        return ApiResponse.<UserResponse>builder().result(result).build();
     }
 }
