@@ -1,11 +1,11 @@
 import React from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { 
   Coffee, 
   Users, 
   Package, 
   BarChart3, 
-  Settings, 
   LogOut, 
   Home,
   Store,
@@ -21,6 +21,7 @@ interface LayoutProps {
 
 export function Layout({ children }: LayoutProps) {
   const { user, logout } = useAuth();
+  const location = useLocation();
 
   const getNavigationItems = () => {
     if (user?.role === 'admin') {
@@ -69,16 +70,23 @@ export function Layout({ children }: LayoutProps) {
           </div>
 
           <nav className="mt-6">
-            {navigationItems.map((item) => (
-              <a
-                key={item.path}
-                href={item.path}
-                className="flex items-center space-x-3 px-6 py-3 text-amber-100 hover:bg-amber-700 hover:text-white transition-colors duration-200 border-l-4 border-transparent hover:border-amber-300"
-              >
-                <item.icon className="h-5 w-5" />
-                <span>{item.label}</span>
-              </a>
-            ))}
+            {navigationItems.map((item) => {
+              const isActive = location.pathname === item.path;
+              return (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className={`flex items-center space-x-3 px-6 py-3 transition-colors duration-200 border-l-4 ${
+                    isActive
+                      ? 'bg-amber-700 text-white border-amber-300'
+                      : 'text-amber-100 hover:bg-amber-700 hover:text-white border-transparent hover:border-amber-300'
+                  }`}
+                >
+                  <item.icon className="h-5 w-5" />
+                  <span>{item.label}</span>
+                </Link>
+              );
+            })}
           </nav>
 
           <div className="absolute bottom-0 left-0 right-0 w-64 p-6 border-t border-amber-700">
