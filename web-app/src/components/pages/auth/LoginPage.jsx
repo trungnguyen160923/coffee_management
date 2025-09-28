@@ -35,13 +35,18 @@ const LoginPage = () => {
 
             // Call real API
             const response = await authService.login(formData.email, formData.password);
-            
+
+            // Decode JWT token to get user ID
+            const token = response.result.token;
+            const tokenPayload = JSON.parse(atob(token.split('.')[1]));
+            const userId = tokenPayload.user_id;
+
             // Store real token and user data
-            localStorage.setItem('token', response.result.token);
+            localStorage.setItem('token', token);
             localStorage.setItem('user', JSON.stringify({
                 email: formData.email,
                 username: formData.email.split('@')[0],
-                userId: response.result.userId
+                userId: userId
             }));
 
             // Dispatch custom event to notify Header

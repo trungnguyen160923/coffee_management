@@ -15,4 +15,8 @@ export const API = {
   CREATE_MESSAGE: "/chat/messages/create",
   GET_CONVERSATION_MESSAGES: "/chat/messages",
   LOGOUT: "/auth-service/auth/logout",
+  // Reservation APIs
+  CREATE_RESERVATION: "/order-service/api/reservations",
+  GET_BRANCHES: "/order-service/api/branches",
+  GET_RESERVATIONS_BY_CUSTOMER: "/order-service/api/reservations/customer",
 };

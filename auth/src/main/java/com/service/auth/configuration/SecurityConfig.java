@@ -19,7 +19,15 @@ import org.springframework.security.web.SecurityFilterChain;
 public class SecurityConfig {
 
     private static final String[] PUBLIC_ENDPOINTS = {
-        "/users/registration", "/auth/token", "/auth/introspect", "/auth/logout", "/auth/refresh"
+            "/users/registration", "/auth/token", "/auth/introspect", "/auth/logout", "/auth/refresh"
+    };
+
+    private static final String[] PUBLIC_GET_ENDPOINTS = {
+            "/users/**" // Allow GET /users/** for internal service calls
+    };
+
+    private static final String[] INTERNAL_SERVICE_ENDPOINTS = {
+            "/users/internal/**" // Allow internal service calls without authentication
     };
 
     private final CustomJwtDecoder customJwtDecoder;
@@ -30,16 +38,24 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity httpSecurity) throws Exception {
-        httpSecurity.authorizeHttpRequests(request -> request.requestMatchers(HttpMethod.POST, PUBLIC_ENDPOINTS)
+        httpSecurity.authorizeHttpRequests(request -> request
+                .requestMatchers(HttpMethod.POST, PUBLIC_ENDPOINTS)
+                .permitAll()
+                .requestMatchers(HttpMethod.GET, PUBLIC_GET_ENDPOINTS)
+                .permitAll()
+                .requestMatchers(INTERNAL_SERVICE_ENDPOINTS)
                 .permitAll()
                 .anyRequest()
                 .authenticated());
 
+        // Only configure OAuth2 resource server for authenticated endpoints
         httpSecurity.oauth2ResourceServer(oauth2 -> oauth2.jwt(jwtConfigurer -> jwtConfigurer
-                        .decoder(customJwtDecoder)
-                        .jwtAuthenticationConverter(jwtAuthenticationConverter()))
+                .decoder(customJwtDecoder)
+                .jwtAuthenticationConverter(jwtAuthenticationConverter()))
                 .authenticationEntryPoint(new JwtAuthenticationEntryPoint()));
+
         httpSecurity.csrf(AbstractHttpConfigurer::disable);
+        httpSecurity.cors(cors -> cors.disable()); // Disable CORS for internal service calls
 
         return httpSecurity.build();
     }
