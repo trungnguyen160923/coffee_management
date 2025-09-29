@@ -15,7 +15,7 @@ public enum ErrorCode {
     EMPTY_EMAIL(1006, "Email is required", HttpStatus.BAD_REQUEST),
     EMPTY_FULLNAME(1007, "Fullname is required", HttpStatus.BAD_REQUEST),
     EMPTY_PHONE_NUMBER(1008, "Phone number is required", HttpStatus.BAD_REQUEST),
-    USER_NOT_EXISTED(1007, "User not existed", HttpStatus.NOT_FOUND),
+    EMAIL_NOT_EXISTED(1007, "Email not existed", HttpStatus.NOT_FOUND),
     UNAUTHENTICATED(1008, "Unauthenticated", HttpStatus.UNAUTHORIZED),
     UNAUTHORIZED(1007, "You do not have permission", HttpStatus.FORBIDDEN),
     INVALID_DOB(1009, "Your age must be at least {min}", HttpStatus.BAD_REQUEST),
@@ -39,6 +39,8 @@ public enum ErrorCode {
     EMPTY_HIRE_DATE(1027, "Hire date is required", HttpStatus.BAD_REQUEST),
     EMPTY_SALARY(1028, "Salary is required", HttpStatus.BAD_REQUEST),
     VALIDATION_FAILED(4000, "Validation failed", HttpStatus.BAD_REQUEST),
+    USER_ID_NOT_FOUND(4001, "User id not found", HttpStatus.NOT_FOUND),
+    BRANCH_NOT_FOUND(4002, "Branch not found", HttpStatus.NOT_FOUND),
     ;
 
     ErrorCode(int code, String message, HttpStatusCode statusCode) {

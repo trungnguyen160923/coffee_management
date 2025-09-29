@@ -13,42 +13,42 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 
 export function AdminDashboard() {
   const stats = [
-    { title: 'Tổng doanh thu', value: '2.5 tỷ', change: '+12%', icon: DollarSign, color: 'bg-green-500' },
-    { title: 'Chi nhánh', value: '15', change: '+3', icon: Store, color: 'bg-blue-500' },
-    { title: 'Quản lý', value: '18', change: '+2', icon: Users, color: 'bg-purple-500' },
-    { title: 'Sản phẩm', value: '45', change: '+5', icon: Coffee, color: 'bg-amber-500' }
+    { title: 'Total Revenue', value: '2.5B', change: '+12%', icon: DollarSign, color: 'bg-green-500' },
+    { title: 'Branches', value: '15', change: '+3', icon: Store, color: 'bg-blue-500' },
+    { title: 'Managers', value: '18', change: '+2', icon: Users, color: 'bg-purple-500' },
+    { title: 'Products', value: '45', change: '+5', icon: Coffee, color: 'bg-amber-500' }
   ];
 
   const branchRevenue = [
-    { name: 'CN Quận 1', revenue: 450 },
-    { name: 'CN Quận 3', revenue: 380 },
-    { name: 'CN Quận 7', revenue: 290 },
-    { name: 'CN Thủ Đức', revenue: 420 },
-    { name: 'CN Bình Thạnh', revenue: 350 }
+    { name: 'District 1', revenue: 450 },
+    { name: 'District 3', revenue: 380 },
+    { name: 'District 7', revenue: 290 },
+    { name: 'Thu Duc', revenue: 420 },
+    { name: 'Binh Thanh', revenue: 350 }
   ];
 
   const monthlyTrend = [
-    { month: 'T1', revenue: 2100, orders: 1200 },
-    { month: 'T2', revenue: 2300, orders: 1350 },
-    { month: 'T3', revenue: 2500, orders: 1480 },
-    { month: 'T4', revenue: 2200, orders: 1290 },
-    { month: 'T5', revenue: 2800, orders: 1650 },
-    { month: 'T6', revenue: 3200, orders: 1890 }
+    { month: 'Jan', revenue: 2100, orders: 1200 },
+    { month: 'Feb', revenue: 2300, orders: 1350 },
+    { month: 'Mar', revenue: 2500, orders: 1480 },
+    { month: 'Apr', revenue: 2200, orders: 1290 },
+    { month: 'May', revenue: 2800, orders: 1650 },
+    { month: 'Jun', revenue: 3200, orders: 1890 }
   ];
 
   const productSales = [
-    { name: 'Cà phê đá', value: 35, color: '#8B4513' },
-    { name: 'Cà phê sữa', value: 25, color: '#D2691E' },
+    { name: 'Iced Coffee', value: 35, color: '#8B4513' },
+    { name: 'Coffee with Milk', value: 25, color: '#D2691E' },
     { name: 'Cappuccino', value: 20, color: '#CD853F' },
     { name: 'Latte', value: 15, color: '#F4A460' },
-    { name: 'Khác', value: 5, color: '#DEB887' }
+    { name: 'Others', value: 5, color: '#DEB887' }
   ];
 
   return (
     <div className="p-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-800 mb-2">Tổng quan hệ thống</h1>
-        <p className="text-gray-600">Quản lý toàn bộ chuỗi cửa hàng cà phê</p>
+        <h1 className="text-3xl font-bold text-gray-800 mb-2">System Overview</h1>
+        <p className="text-gray-600">Manage your entire coffee chain system</p>
       </div>
 
       {/* Stats Cards */}
@@ -72,7 +72,7 @@ export function AdminDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         {/* Branch Revenue Chart */}
         <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">Doanh thu theo chi nhánh</h3>
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">Revenue by Branch</h3>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={branchRevenue}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -89,7 +89,7 @@ export function AdminDashboard() {
 
         {/* Product Sales Pie Chart */}
         <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">Sản phẩm bán chạy</h3>
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">Top Selling Products</h3>
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
               <Pie

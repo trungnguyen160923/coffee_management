@@ -72,7 +72,7 @@ public class GlobalExceptionHandler {
         
         ApiResponse<String> response = ApiResponse.<String>builder()
                 .code(4000)
-                .message("Validation failed: " + errorMessage)
+                .message(errorMessage)
                 .build();
         
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);

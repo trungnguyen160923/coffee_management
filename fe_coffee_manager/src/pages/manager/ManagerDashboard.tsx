@@ -13,10 +13,10 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 
 export function ManagerDashboard() {
   const stats = [
-    { title: 'Doanh thu hôm nay', value: '12.5 triệu', change: '+8%', icon: DollarSign, color: 'bg-green-500' },
-    { title: 'Đơn hàng', value: '156', change: '+12', icon: ShoppingBag, color: 'bg-blue-500' },
-    { title: 'Nhân viên', value: '12', change: '2 ca', icon: Users, color: 'bg-purple-500' },
-    { title: 'Hàng tồn kho', value: '8 thiếu', change: 'cần nhập', icon: AlertTriangle, color: 'bg-red-500' }
+    { title: 'Today\'s Revenue', value: '12.5M', change: '+8%', icon: DollarSign, color: 'bg-green-500' },
+    { title: 'Orders', value: '156', change: '+12', icon: ShoppingBag, color: 'bg-blue-500' },
+    { title: 'Staff', value: '12', change: '2 shifts', icon: Users, color: 'bg-purple-500' },
+    { title: 'Inventory', value: '8 low', change: 'need restock', icon: AlertTriangle, color: 'bg-red-500' }
   ];
 
   const hourlyOrders = [

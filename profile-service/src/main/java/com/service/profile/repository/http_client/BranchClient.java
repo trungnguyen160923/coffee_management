@@ -1,0 +1,25 @@
+package com.service.profile.repository.http_client;
+
+import com.service.profile.configuration.AuthenticationRequestInterceptor;
+import com.service.profile.dto.ApiResponse;
+import com.service.profile.dto.response.BranchResponse;
+
+import java.util.List;
+
+import org.springframework.cloud.openfeign.FeignClient;
+import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+
+
+@FeignClient(
+        name = "order-service",
+        url = "${app.services.order}",
+        configuration = {AuthenticationRequestInterceptor.class})
+public interface BranchClient {
+    @GetMapping(value = "/api/branches", produces = MediaType.APPLICATION_JSON_VALUE)
+    ApiResponse<List<BranchResponse>> getBranches();
+
+    @GetMapping(value = "/api/branches/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
+    ApiResponse<BranchResponse> getBranchById(@PathVariable Integer id);
+}

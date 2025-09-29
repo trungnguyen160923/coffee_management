@@ -54,7 +54,7 @@ public class CustomerProfileService {
     }
 
     public CustomerProfileResponse getCustomerProfile(Integer userId){
-        CustomerProfile customerProfile = customerProfileRepository.findById(userId).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+        CustomerProfile customerProfile = customerProfileRepository.findById(userId).orElseThrow(() -> new AppException(ErrorCode.EMAIL_NOT_EXISTED));
         return customerProfileMapper.toCustomerProfileResponse(customerProfile);
     }
 
@@ -71,7 +71,7 @@ public class CustomerProfileService {
         
         // Find customer profile by user ID
         CustomerProfile customerProfile = customerProfileRepository.findById(userId)
-                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+                .orElseThrow(() -> new AppException(ErrorCode.EMAIL_NOT_EXISTED));
         
         return customerProfileMapper.toCustomerProfileResponse(customerProfile);
     }

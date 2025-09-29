@@ -46,6 +46,12 @@ public class UserController {
         return ApiResponse.<List<UserResponse>>builder().result(result).build();
     }
 
+    @GetMapping("/managers")
+    ApiResponse<List<UserResponse>> getAllManagers() {
+        var result = userService.getAllManagers();
+        return ApiResponse.<List<UserResponse>>builder().result(result).build();
+    }
+
     @GetMapping("/{userId}")
     ApiResponse<UserResponse> getUserById(@PathVariable Integer userId) {
         var result = userService.getUserById(userId);
@@ -82,6 +88,12 @@ public class UserController {
     @GetMapping("/internal/{userId}")
     ApiResponse<UserResponse> getUserByIdInternal(@PathVariable Integer userId) {
         var result = userService.getUserById(userId);
+        return ApiResponse.<UserResponse>builder().result(result).build();
+    }
+
+    @GetMapping("/me")
+    ApiResponse<UserResponse> getMe() {
+        var result = userService.getMe();
         return ApiResponse.<UserResponse>builder().result(result).build();
     }
 }

@@ -2,9 +2,7 @@ package com.service.catalog.exception;
 
 import com.service.catalog.dto.ApiResponse;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.MessageSource;
-import org.springframework.context.i18n.LocaleContextHolder;
+
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -13,13 +11,12 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.util.stream.Collectors;
+import jakarta.validation.constraints.Size;
 
 @RestControllerAdvice
 @Slf4j
 public class GlobalExceptionHandler {
     
-    @Autowired
-    private MessageSource messageSource;
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<String>> handleValidationException(MethodArgumentNotValidException ex) {
@@ -36,30 +33,8 @@ public class GlobalExceptionHandler {
                         if (errorCode.name().equals(message)) {
                             String formattedMessage = errorCode.getMessage();
                             
-                            // Try to extract values from the default message directly
-                            log.debug("Error code: {}, Default message: {}", error.getCode(), error.getDefaultMessage());
-                            log.debug("Arguments: {}", java.util.Arrays.toString(error.getArguments()));
-                            
-                            // Extract actual values from arguments
-                            Object[] args = error.getArguments();
-                            if (args != null && args.length > 0) {
-                                // Find numeric values in arguments
-                                for (Object arg : args) {
-                                    if (arg instanceof Number) {
-                                        Number num = (Number) arg;
-                                        if (num.intValue() == 1) { // min value
-                                            formattedMessage = formattedMessage.replace("{min}", "1");
-                                        } else if (num.intValue() == 2147483647) { // max value
-                                            formattedMessage = formattedMessage.replace("{max}", "2147483647");
-                                        }
-                                    }
-                                }
-                            }
-                            
-                            // Fallback: try to extract from default message
-                            if (formattedMessage.contains("{min}") || formattedMessage.contains("{max}")) {
-                                formattedMessage = replacePlaceholders(formattedMessage, error.getDefaultMessage());
-                            }
+                            // Fill placeholders using validation metadata
+                            formattedMessage = fillConstraintPlaceholders(formattedMessage, ex, error);
                             
                             return formattedMessage;
                         }
@@ -78,6 +53,71 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
     }
     
+    // Fill {min}/{max} placeholders using validation arguments or reflection on DTO field
+    private String fillConstraintPlaceholders(String template, MethodArgumentNotValidException ex,
+                                              org.springframework.validation.FieldError error) {
+        String result = template;
+
+        Integer minArg = extractMinFromArguments(error.getArguments());
+        Integer maxArg = extractMaxFromArguments(error.getArguments());
+
+        if (minArg == null || (maxArg == null || maxArg == Integer.MAX_VALUE)) {
+            Integer[] sizeBounds = getSizeBoundsFromField(ex, error.getField());
+            if (minArg == null && sizeBounds[0] != null) minArg = sizeBounds[0];
+            if ((maxArg == null || maxArg == Integer.MAX_VALUE) && sizeBounds[1] != null) maxArg = sizeBounds[1];
+        }
+
+        if (minArg != null) result = result.replace("{min}", String.valueOf(minArg));
+        if (maxArg != null && maxArg != Integer.MAX_VALUE) result = result.replace("{max}", String.valueOf(maxArg));
+
+        if (result.contains("{min}") || result.contains("{max}")) {
+            result = replacePlaceholders(result, error.getDefaultMessage());
+        }
+
+        return result;
+    }
+
+    private Integer extractMinFromArguments(Object[] args) {
+        if (args == null) return null;
+        Integer min = null;
+        for (Object arg : args) {
+            if (arg instanceof Number) {
+                int v = ((Number) arg).intValue();
+                if (v > 0 && v < Integer.MAX_VALUE) min = (min == null) ? v : Math.min(min, v);
+            }
+        }
+        return min;
+    }
+
+    private Integer extractMaxFromArguments(Object[] args) {
+        if (args == null) return null;
+        Integer max = null;
+        for (Object arg : args) {
+            if (arg instanceof Number) {
+                int v = ((Number) arg).intValue();
+                max = (max == null) ? v : Math.max(max, v);
+            }
+        }
+        return max;
+    }
+
+    private Integer[] getSizeBoundsFromField(MethodArgumentNotValidException ex, String fieldName) {
+        Integer[] bounds = new Integer[] { null, null };
+        try {
+            Object target = ex.getBindingResult().getTarget();
+            if (target == null) return bounds;
+            Class<?> clazz = target.getClass();
+            java.lang.reflect.Field field = clazz.getDeclaredField(fieldName);
+            Size size = field.getAnnotation(Size.class);
+            if (size != null) {
+                bounds[0] = size.min();
+                bounds[1] = size.max();
+            }
+        } catch (NoSuchFieldException ignored) {
+        }
+        return bounds;
+    }
+
     private String replacePlaceholders(String template, String resolvedMessage) {
         String result = template;
         

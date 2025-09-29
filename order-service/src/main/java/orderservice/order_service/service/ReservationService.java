@@ -63,10 +63,10 @@ public class ReservationService {
                     reservation.setCustomerName(userInfo.getFullname());
                     reservation.setPhone(userInfo.getPhoneNumber());
                 } else {
-                    throw new AppException(ErrorCode.USER_NOT_EXISTED);
+                    throw new AppException(ErrorCode.EMAIL_NOT_EXISTED);
                 }
             } catch (Exception e) {
-                throw new AppException(ErrorCode.USER_NOT_EXISTED);
+                throw new AppException(ErrorCode.EMAIL_NOT_EXISTED);
             }
         } else {
             // Non-authenticated user - use provided information

@@ -20,4 +20,11 @@ public class UserResponse {
     String avatarUrl;
     String bio;
     Role role;
+    String identityCard;
+    BranchResponse branch;
+    LocalDate hireDate;
+    String position;
+    Double salary;
+    Byte adminLevel;
+    String notes;
 }
