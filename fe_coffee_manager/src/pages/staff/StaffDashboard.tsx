@@ -15,10 +15,10 @@ export function StaffDashboard() {
   const [activeTab, setActiveTab] = useState('orders');
 
   const todayStats = [
-    { title: 'Đơn hàng hôm nay', value: '32', icon: Coffee, color: 'bg-blue-500' },
-    { title: 'Đang chế biến', value: '5', icon: Clock, color: 'bg-orange-500' },
-    { title: 'Hoàn thành', value: '27', icon: CheckCircle, color: 'bg-green-500' },
-    { title: 'Đặt bàn hôm nay', value: '8', icon: Calendar, color: 'bg-purple-500' }
+    { title: 'Today\'s Orders', value: '32', icon: Coffee, color: 'bg-blue-500' },
+    { title: 'In Progress', value: '5', icon: Clock, color: 'bg-orange-500' },
+    { title: 'Completed', value: '27', icon: CheckCircle, color: 'bg-green-500' },
+    { title: 'Today\'s Reservations', value: '8', icon: Calendar, color: 'bg-purple-500' }
   ];
 
   const currentOrders = [

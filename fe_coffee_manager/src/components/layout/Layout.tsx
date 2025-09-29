@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../../context/AuthContext';
 import { 
   Coffee, 
   Users, 
@@ -15,6 +15,8 @@ import {
   Archive
 } from 'lucide-react';
 
+import { DEFAULT_IMAGES } from '../../config/constants';
+
 interface LayoutProps {
   children: React.ReactNode;
 }
@@ -22,35 +24,50 @@ interface LayoutProps {
 export function Layout({ children }: LayoutProps) {
   const { user, logout } = useAuth();
   const location = useLocation();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const getNavigationItems = () => {
     if (user?.role === 'admin') {
       return [
-        { icon: Home, label: 'Tổng quan', path: '/admin' },
-        { icon: Package, label: 'Sản phẩm', path: '/admin/products' },
-        { icon: BookOpen, label: 'Công thức', path: '/admin/recipes' },
-        { icon: Store, label: 'Chi nhánh', path: '/admin/branches' },
-        { icon: Users, label: 'Quản lý', path: '/admin/managers' },
-        { icon: BarChart3, label: 'Thống kê', path: '/admin/statistics' },
+        { icon: Home, label: 'Overview', path: '/admin' },
+        { icon: Package, label: 'Products', path: '/admin/products' },
+        { icon: BookOpen, label: 'Recipes', path: '/admin/recipes' },
+        { icon: Store, label: 'Branches', path: '/admin/branches' },
+        { icon: Users, label: 'Managers', path: '/admin/managers' },
+        { icon: BarChart3, label: 'Statistics', path: '/admin/statistics' },
       ];
     } else if (user?.role === 'manager') {
       return [
-        { icon: Home, label: 'Tổng quan', path: '/manager' },
-        { icon: Users, label: 'Nhân viên', path: '/manager/staff' },
-        { icon: Archive, label: 'Kho', path: '/manager/inventory' },
-        { icon: BarChart3, label: 'Thống kê', path: '/manager/statistics' },
+        { icon: Home, label: 'Overview', path: '/manager' },
+        { icon: Users, label: 'Staff', path: '/manager/staff' },
+        { icon: Archive, label: 'Inventory', path: '/manager/inventory' },
+        { icon: BarChart3, label: 'Statistics', path: '/manager/statistics' },
       ];
     } else {
       return [
-        { icon: Home, label: 'Tổng quan', path: '/staff' },
-        { icon: ShoppingCart, label: 'Đơn hàng', path: '/staff/orders' },
-        { icon: Calendar, label: 'Đặt bàn', path: '/staff/reservations' },
-        { icon: BookOpen, label: 'Công thức', path: '/staff/recipes' },
+        { icon: Home, label: 'Overview', path: '/staff' },
+        { icon: ShoppingCart, label: 'Orders', path: '/staff/orders' },
+        { icon: Calendar, label: 'Reservations', path: '/staff/reservations' },
+        { icon: BookOpen, label: 'Recipes', path: '/staff/recipes' },
       ];
     }
   };
 
   const navigationItems = getNavigationItems();
+
+  const handleLogout = async () => {
+    if (isLoggingOut) return;
+    
+    setIsLoggingOut(true);
+    try {
+      logout();
+      // Redirect sẽ được xử lý bởi AuthContext và App.tsx
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-50">
@@ -92,21 +109,31 @@ export function Layout({ children }: LayoutProps) {
           <div className="absolute bottom-0 left-0 right-0 w-64 p-6 border-t border-amber-700">
             <div className="flex items-center space-x-3 mb-4">
               <img
-                src={user?.avatar || 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=150'}
+                src={user?.avatar || DEFAULT_IMAGES.USER_AVATAR}
                 alt={user?.name}
                 className="w-10 h-10 rounded-full object-cover"
               />
               <div className="flex-1">
                 <p className="text-sm font-medium">{user?.name}</p>
                 <p className="text-xs text-amber-200">{user?.email}</p>
+                <span className="inline-block px-2 py-1 rounded-full text-xs font-medium bg-amber-700 text-amber-100 mt-1">
+                  {user?.role === 'admin' ? 'Administrator' : 
+                   user?.role === 'manager' ? 'Manager' : 
+                   user?.role === 'staff' ? 'Staff' : user?.role}
+                </span>
               </div>
             </div>
             <button
-              onClick={logout}
-              className="flex items-center space-x-2 text-amber-200 hover:text-white transition-colors duration-200 w-full"
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+              className={`flex items-center space-x-2 transition-colors duration-200 w-full p-2 rounded ${
+                isLoggingOut 
+                  ? 'text-amber-400 cursor-not-allowed' 
+                  : 'text-amber-200 hover:text-white hover:bg-amber-700'
+              }`}
             >
               <LogOut className="h-4 w-4" />
-              <span>Đăng xuất</span>
+                <span>{isLoggingOut ? 'Signing out...' : 'Sign Out'}</span>
             </button>
           </div>
         </div>

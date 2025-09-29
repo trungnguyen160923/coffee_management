@@ -20,6 +20,6 @@ public class ManagerProfileResponse {
     private String phone_number;
     private Role role;
     private String identityCard;
-    private Integer branchId;
+    private BranchResponse branch;
     private LocalDate hireDate;
 }

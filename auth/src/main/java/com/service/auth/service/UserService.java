@@ -7,6 +7,7 @@ import com.service.auth.dto.request.StaffProfileCreationRequest;
 import com.service.auth.dto.request.StaffProfileRequest;
 import com.service.auth.dto.request.UserCreationRequest;
 import com.service.auth.dto.request.UserUpdateRequest;
+import com.service.auth.dto.response.AdminProfileResponse;
 import com.service.auth.dto.response.ApiResponse;
 import com.service.auth.dto.response.CustomerProfileResponse;
 import com.service.auth.dto.response.ManagerProfileResponse;
@@ -29,11 +30,11 @@ import lombok.extern.slf4j.Slf4j;
 import java.math.BigDecimal;
 import java.util.List;
 
-import org.springframework.context.annotation.Lazy;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -83,8 +84,6 @@ public class UserService {
                 .fullname(user.getFullname())
                 .phone_number(user.getPhoneNumber())
                 .role(user.getRole())
-                .identityCard(request.getIdentityCard())
-                .branchId(request.getBranchId())
                 .hireDate(request.getHireDate())
                 .build();
 
@@ -95,7 +94,7 @@ public class UserService {
                 .identityCard(request.getIdentityCard())
                 .build();
 
-        ApiResponse<ManagerProfileResponse> profileResp = profileClient.createManagerProfile(managerProfileRequest);
+        profileClient.createManagerProfile(managerProfileRequest);
         return ApiResponse.<ManagerProfileResponse>builder()
                 .result(managerProfile)
                 .build();
@@ -137,7 +136,6 @@ public class UserService {
                 .phone_number(user.getPhoneNumber())
                 .role(user.getRole())
                 .identityCard(request.getIdentityCard())
-                .branchId(request.getBranchId())
                 .hireDate(request.getHireDate())
                 .position(request.getPosition())
                 .salary(request.getSalary())
@@ -151,7 +149,7 @@ public class UserService {
                 .position(request.getPosition())
                 .salary(BigDecimal.valueOf(request.getSalary()))
                 .build();
-        ApiResponse<StaffProfileResponse> profileResp = profileClient.createStaffProfile(staffProfileRequest);
+        profileClient.createStaffProfile(staffProfileRequest);
         return ApiResponse.<StaffProfileResponse>builder()
                 .result(staffProfile)
                 .build();
@@ -170,15 +168,32 @@ public class UserService {
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
     @Transactional(readOnly = true)
     public List<UserResponse> getAllStaffs() {
-        return userRepository.findAll()
+        try {
+            List<StaffProfileResponse> staffProfiles = profileClient.getAllStaffProfiles().getResult();
+            List<User> users = userRepository.findByRoleName(PredefinedRole.STAFF_ROLE);
+
+            java.util.Map<Integer, StaffProfileResponse> staffByUserId = staffProfiles
                 .stream()
-                .filter(user -> {
-                    // Force role to be loaded to avoid proxy serialization issues
-                    var role = user.getRole();
-                    return role != null && PredefinedRole.STAFF_ROLE.equals(role.getName());
+                .collect(java.util.stream.Collectors.toMap(StaffProfileResponse::getUserId, java.util.function.Function.identity(), (a, b) -> a));
+
+            List<UserResponse> userResponses = users.stream()
+                .map(userMapper::toUserResponse)
+                .peek(ur -> {
+                    StaffProfileResponse sp = staffByUserId.get(ur.getUser_id());
+                    if (sp != null) {
+                        ur.setIdentityCard(sp.getIdentityCard());
+                        ur.setBranch(sp.getBranch());
+                        ur.setHireDate(sp.getHireDate());
+                        ur.setPosition(sp.getPosition());
+                        ur.setSalary(sp.getSalary());
+                    }
                 })
-                .map(userMapper::toUserCreationResponse)
                 .toList();
+
+            return userResponses;
+        } catch (Exception e) {
+            throw new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION);
+        }
     }
 
     @PreAuthorize("hasRole('ADMIN')")
@@ -190,15 +205,47 @@ public class UserService {
                     var role = user.getRole();
                     return role != null && PredefinedRole.CUSTOMER_ROLE.equals(role.getName());
                 })
-                .map(userMapper::toUserCreationResponse)
+                .map(userMapper::toUserResponse)
                 .toList();
+    }
+
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @Transactional(readOnly = true)
+    public List<UserResponse> getAllManagers() {
+
+        try {
+            List<ManagerProfileResponse> managerProfiles = profileClient.getAllManagerProfiles().getResult();
+            List<User> users = userRepository.findByRoleName(PredefinedRole.MANAGER_ROLE);
+
+            java.util.Map<Integer, ManagerProfileResponse> managerByUserId = managerProfiles
+                .stream()
+                .collect(java.util.stream.Collectors.toMap(ManagerProfileResponse::getUserId, java.util.function.Function.identity(), (a, b) -> a));
+
+            List<UserResponse> userResponses = users.stream()
+                .map(userMapper::toUserResponse)
+                .peek(ur -> {
+                    ManagerProfileResponse mgr = managerByUserId.get(ur.getUser_id());
+                    if (mgr != null) {
+                        ur.setIdentityCard(mgr.getIdentityCard());
+                        ur.setBranch(mgr.getBranch());
+                        ur.setHireDate(mgr.getHireDate());
+                    }
+                })
+                .toList();
+
+            return userResponses;
+        } catch (Exception e) {
+            throw new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION);
+        }
+        
     }
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER') or @userService.canUpdateUser(#userId, authentication)")
     @Transactional
     public UserResponse updateUser(Integer userId, UserUpdateRequest request) {
         var user = userRepository.findById(userId)
-                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+                .orElseThrow(() -> new AppException(ErrorCode.EMAIL_NOT_EXISTED));
 
         // Check permissions
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -237,7 +284,7 @@ public class UserService {
         }
 
         userRepository.save(user);
-        return userMapper.toUserCreationResponse(user);
+        return userMapper.toUserResponse(user);
     }
 
     public boolean canUpdateUser(Integer userId, Authentication authentication) {
@@ -253,8 +300,8 @@ public class UserService {
     @Transactional(readOnly = true)
     public UserResponse getUserById(Integer userId) {
         var user = userRepository.findById(userId)
-                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
-        return userMapper.toUserCreationResponse(user);
+                .orElseThrow(() -> new AppException(ErrorCode.EMAIL_NOT_EXISTED));
+        return userMapper.toUserResponse(user);
     }
 
     public UserResponse createCustomer(UserCreationRequest request) {
@@ -275,11 +322,70 @@ public class UserService {
                 .build();
         ApiResponse<CustomerProfileResponse> profileResp = profileClient.createProfile(customerProfileCreationRequest);
         CustomerProfileResponse profile = profileResp.getResult();
-        UserResponse userResponse = userMapper.toUserCreationResponse(user);
+        UserResponse userResponse = userMapper.toUserResponse(user);
         userResponse.setDob(profile.getDob());
         userResponse.setAvatarUrl(profile.getAvatarUrl());
         userResponse.setBio(profile.getBio());
         return userResponse;
+    }
+
+    public UserResponse getMe() {
+        // Get current user from SecurityContext
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || auth.getPrincipal() == null) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED);
+        }
+        
+        // Extract userId from JWT token claims
+        Integer userId;
+        if (auth.getPrincipal() instanceof Jwt jwt) {
+            // Get user_id from JWT claims (it's stored as Long, convert to Integer)
+            Long userIdLong = jwt.getClaim("user_id");
+            if (userIdLong != null) {
+                userId = userIdLong.intValue();
+            } else {
+                throw new AppException(ErrorCode.UNAUTHENTICATED);
+            }
+        } else {
+            // Fallback: try to get from authorities or other sources
+            throw new AppException(ErrorCode.UNAUTHENTICATED);
+        }
+        
+        UserResponse user = userMapper.toUserResponse(userRepository.findById(userId)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_ID_NOT_FOUND)));
+        
+        
+
+        if(user.getRole().getName().equals(PredefinedRole.CUSTOMER_ROLE)) {
+            CustomerProfileResponse customerProfile = profileClient.getCustomerProfile(userId).getResult();
+            user.setDob(customerProfile.getDob());
+            user.setAvatarUrl(customerProfile.getAvatarUrl());
+            user.setBio(customerProfile.getBio());
+        }
+        else if(user.getRole().getName().equals(PredefinedRole.MANAGER_ROLE)) {
+            ManagerProfileResponse managerProfile = profileClient.getManagerProfile(userId).getResult();
+            user.setIdentityCard(managerProfile.getIdentityCard());
+            user.setBranch(managerProfile.getBranch());
+            user.setHireDate(managerProfile.getHireDate());
+        }
+        else if(user.getRole().getName().equals(PredefinedRole.STAFF_ROLE)) {
+            StaffProfileResponse staffProfile = profileClient.getStaffProfile(userId).getResult();
+            user.setIdentityCard(staffProfile.getIdentityCard());
+            user.setBranch(staffProfile.getBranch());
+            user.setHireDate(staffProfile.getHireDate());
+            user.setPosition(staffProfile.getPosition());
+            user.setSalary(staffProfile.getSalary());
+        }
+        else if(user.getRole().getName().equals(PredefinedRole.ADMIN_ROLE)) {
+            AdminProfileResponse adminProfile = profileClient.getAdminProfile(userId).getResult();
+            user.setAdminLevel(adminProfile.getAdminLevel());
+            user.setNotes(adminProfile.getNotes());
+        }
+        else {
+            throw new AppException(ErrorCode.ROLE_NOT_FOUND);
+        }
+
+        return user;
     }
 
 }

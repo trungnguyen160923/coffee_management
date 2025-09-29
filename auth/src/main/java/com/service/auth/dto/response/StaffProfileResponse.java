@@ -20,7 +20,7 @@ public class StaffProfileResponse {
     private String phone_number;
     private Role role;
     private String identityCard;
-    private Integer branchId;
+    private BranchResponse branch;
     private LocalDate hireDate;
     private String position;
     private Double salary;

@@ -8,15 +8,59 @@ export interface User {
   }
   
   export interface Branch {
-    id: string;
+    branchId: number;
     name: string;
     address: string;
     phone: string;
-    managerId: string;
-    revenue: number;
-    orders: number;
-    status: 'active' | 'inactive';
+    managerUserId: number;
+    openHours: string;
+    endHours: string;
+    createAt: string;
+    updateAt: string;
   }
+
+  export interface ManagerProfile {
+    userId: number;
+    branchId: number;
+    hireDate: string;
+    identityCard: string;
+    createAt: string;
+    updateAt: string;
+    branch: Branch | null;
+  }
+
+  export interface ManagerListResponse {
+    code: number;
+    result: ManagerProfile[];
+  }
+
+export interface RoleDto {
+  roleId: number;
+  name: 'ADMIN' | 'MANAGER' | 'STAFF' | 'CUSTOMER';
+}
+
+export interface UserResponseDto {
+  user_id: number;
+  email: string;
+  fullname: string;
+  phoneNumber: string;
+  dob: string | null;
+  avatarUrl: string | null;
+  bio: string | null;
+  role: RoleDto;
+  identityCard: string | null;
+  branch: Branch | null;
+  hireDate: string | null;
+  position: string | null;
+  salary: number | null;
+  adminLevel: number | null;
+  notes: string | null;
+}
+
+export interface UsersListResponseDto<T> {
+  code: number;
+  result: T[];
+}
   
   export interface Product {
     id: string;

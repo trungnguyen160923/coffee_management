@@ -13,9 +13,9 @@ import java.time.LocalDateTime;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class ManagerProfileResponse {
     Integer userId;
-    Integer branchId;
     LocalDate hireDate;
     String identityCard;
     LocalDateTime createAt;
     LocalDateTime updateAt;
+    BranchResponse branch;
 }

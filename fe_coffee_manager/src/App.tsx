@@ -1,11 +1,14 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { Login } from './components/Login';
-import { Layout } from './components/Layout';
-import { AdminDashboard } from './components/admin/AdminDashboard';
-import { ManagerDashboard } from './components/manager/ManagerDashboard';
-import { StaffDashboard } from './components/staff/StaffDashboard';
+import { Login } from './pages/auth/Login';
+import { Layout } from './components/layout/Layout';
+import { RoleRedirect } from './components/common/RoleRedirect';
+import { ProtectedRoute } from './components/auth/ProtectedRoute';
+import { NotFoundPage } from './components/common/NotFoundPage';
+import { AdminDashboard } from './pages/admin/AdminDashboard';
+import ManagerManagement from './pages/admin/ManagerManagement';
+import { ManagerDashboard } from './pages/manager/ManagerDashboard';
+import { StaffDashboard } from './pages/staff/StaffDashboard';
 
 function AppRoutes() {
   const { user, loading } = useAuth();
@@ -23,46 +26,81 @@ function AppRoutes() {
     );
   }
 
-  if (!user) {
+  // Only show Login if there is no token at all. If a token exists but user
+  // is not yet resolved, keep routes so 404/guards can render appropriately.
+  const hasToken = !!localStorage.getItem('coffee-token');
+  if (!user && !hasToken) {
     return <Login />;
   }
 
   return (
-    <Layout>
-      <Routes>
-        {user.role === 'admin' && (
-          <>
-            <Route path="/admin" element={<AdminDashboard />} />
-            <Route path="/admin/products" element={<div className="p-8"><h1 className="text-2xl font-bold">Quản lý sản phẩm</h1></div>} />
-            <Route path="/admin/recipes" element={<div className="p-8"><h1 className="text-2xl font-bold">Quản lý công thức</h1></div>} />
-            <Route path="/admin/branches" element={<div className="p-8"><h1 className="text-2xl font-bold">Quản lý chi nhánh</h1></div>} />
-            <Route path="/admin/managers" element={<div className="p-8"><h1 className="text-2xl font-bold">Quản lý quản lý</h1></div>} />
-            <Route path="/admin/statistics" element={<div className="p-8"><h1 className="text-2xl font-bold">Thống kê</h1></div>} />
-            <Route path="*" element={<Navigate to="/admin" replace />} />
-          </>
-        )}
-        
-        {user.role === 'manager' && (
-          <>
-            <Route path="/manager" element={<ManagerDashboard />} />
-            <Route path="/manager/staff" element={<div className="p-8"><h1 className="text-2xl font-bold">Quản lý nhân viên</h1></div>} />
-            <Route path="/manager/inventory" element={<div className="p-8"><h1 className="text-2xl font-bold">Quản lý kho</h1></div>} />
-            <Route path="/manager/statistics" element={<div className="p-8"><h1 className="text-2xl font-bold">Thống kê chi nhánh</h1></div>} />
-            <Route path="*" element={<Navigate to="/manager" replace />} />
-          </>
-        )}
-        
-        {user.role === 'staff' && (
-          <>
-            <Route path="/staff" element={<StaffDashboard />} />
-            <Route path="/staff/orders" element={<div className="p-8"><h1 className="text-2xl font-bold">Quản lý đơn hàng</h1></div>} />
-            <Route path="/staff/reservations" element={<div className="p-8"><h1 className="text-2xl font-bold">Quản lý đặt bàn</h1></div>} />
-            <Route path="/staff/recipes" element={<div className="p-8"><h1 className="text-2xl font-bold">Xem công thức</h1></div>} />
-            <Route path="*" element={<Navigate to="/staff" replace />} />
-          </>
-        )}
-      </Routes>
-    </Layout>
+    <Routes>
+      {/* Root redirect - chuyển hướng đến trang tương ứng với role */}
+      <Route path="/" element={<RoleRedirect />} />
+      
+      {/* Admin routes */}
+      <Route path="/admin" element={
+        <ProtectedRoute allowedRoles={['admin']}>
+          <Layout>
+            <AdminDashboard />
+          </Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/admin/*" element={
+        <ProtectedRoute allowedRoles={['admin']}>
+          <Routes>
+            <Route path="products" element={<Layout><div className="p-8"><h1 className="text-2xl font-bold">Quản lý sản phẩm</h1></div></Layout>} />
+            <Route path="recipes" element={<Layout><div className="p-8"><h1 className="text-2xl font-bold">Quản lý công thức</h1></div></Layout>} />
+            <Route path="branches" element={<Layout><div className="p-8"><h1 className="text-2xl font-bold">Quản lý chi nhánh</h1></div></Layout>} />
+            <Route path="managers" element={<Layout><ManagerManagement /></Layout>} />
+            <Route path="statistics" element={<Layout><div className="p-8"><h1 className="text-2xl font-bold">Thống kê</h1></div></Layout>} />
+            {/* Unknown admin subroute: show 404 without Layout */}
+            <Route path="*" element={<NotFoundPage showLoginButton={false} />} />
+          </Routes>
+        </ProtectedRoute>
+      } />
+      
+      {/* Manager routes */}
+      <Route path="/manager" element={
+        <ProtectedRoute allowedRoles={['manager']}>
+          <Layout>
+            <ManagerDashboard />
+          </Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/manager/*" element={
+        <ProtectedRoute allowedRoles={['manager']}>
+          <Routes>
+            <Route path="staff" element={<Layout><div className="p-8"><h1 className="text-2xl font-bold">Quản lý nhân viên</h1></div></Layout>} />
+            <Route path="inventory" element={<Layout><div className="p-8"><h1 className="text-2xl font-bold">Quản lý kho</h1></div></Layout>} />
+            <Route path="statistics" element={<Layout><div className="p-8"><h1 className="text-2xl font-bold">Thống kê chi nhánh</h1></div></Layout>} />
+            <Route path="*" element={<NotFoundPage showLoginButton={false} />} />
+          </Routes>
+        </ProtectedRoute>
+      } />
+      
+      {/* Staff routes */}
+      <Route path="/staff" element={
+        <ProtectedRoute allowedRoles={['staff']}>
+          <Layout>
+            <StaffDashboard />
+          </Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/staff/*" element={
+        <ProtectedRoute allowedRoles={['staff']}>
+          <Routes>
+            <Route path="orders" element={<Layout><div className="p-8"><h1 className="text-2xl font-bold">Quản lý đơn hàng</h1></div></Layout>} />
+            <Route path="reservations" element={<Layout><div className="p-8"><h1 className="text-2xl font-bold">Quản lý đặt bàn</h1></div></Layout>} />
+            <Route path="recipes" element={<Layout><div className="p-8"><h1 className="text-2xl font-bold">Xem công thức</h1></div></Layout>} />
+            <Route path="*" element={<NotFoundPage showLoginButton={false} />} />
+          </Routes>
+        </ProtectedRoute>
+      } />
+      
+      {/* Global 404 */}
+      <Route path="*" element={<NotFoundPage showLoginButton={false} />} />
+    </Routes>
   );
 }
 
