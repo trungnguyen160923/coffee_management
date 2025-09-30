@@ -70,6 +70,36 @@ public class BranchService {
         return branchRepository.findByNameContainingIgnoreCase(name);
     }
 
+    public Branch assignManager(Integer branchId, Integer managerUserId) {
+        Branch branch = branchRepository.findById(branchId)
+                .orElseThrow(() -> new AppException(ErrorCode.BRANCH_NOT_FOUND));
+
+        // Idempotent: if already assigned to the same manager, just return
+        if (managerUserId != null && managerUserId.equals(branch.getManagerUserId())) {
+            return branch;
+        }
+
+        // Reject if branch already has a different manager
+        if (branch.getManagerUserId() != null && !branch.getManagerUserId().equals(managerUserId)) {
+            throw new AppException(ErrorCode.BRANCH_ALREADY_HAS_MANAGER);
+        }
+
+        branch.setManagerUserId(managerUserId);
+        return branchRepository.save(branch);
+    }
+
+    public Branch unassignManager(Integer branchId, Integer managerUserId) {
+        Branch branch = branchRepository.findById(branchId)
+                .orElseThrow(() -> new AppException(ErrorCode.BRANCH_NOT_FOUND));
+
+        // Idempotent: only clear if currently assigned to the same manager
+        if (branch.getManagerUserId() != null && branch.getManagerUserId().equals(managerUserId)) {
+            branch.setManagerUserId(null);
+            return branchRepository.save(branch);
+        }
+        return branch; // No change needed
+    }
+
     public Branch updateBranch(Integer branchId, CreateBranchRequest request) {
         Branch branch = branchRepository.findById(branchId)
                 .orElseThrow(() -> new AppException(ErrorCode.BRANCH_NOT_FOUND));
