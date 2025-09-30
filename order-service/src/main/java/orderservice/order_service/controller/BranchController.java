@@ -1,6 +1,7 @@
 package orderservice.order_service.controller;
 
 import jakarta.validation.Valid;
+import orderservice.order_service.dto.request.AssignManagerRequest;
 import orderservice.order_service.dto.ApiResponse;
 import orderservice.order_service.dto.request.CreateBranchRequest;
 import orderservice.order_service.entity.Branch;
@@ -174,6 +175,86 @@ public class BranchController {
             ApiResponse<Void> response = ApiResponse.<Void>builder()
                     .code(500)
                     .message("Failed to delete branch: " + e.getMessage())
+                    .result(null)
+                    .build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    @PutMapping("/{branchId}/assign-manager")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<Branch>> assignManager(@PathVariable Integer branchId,
+            @Valid @RequestBody AssignManagerRequest request) {
+        try {
+            Branch branch = branchService.assignManager(branchId, request.getManagerUserId());
+            ApiResponse<Branch> response = ApiResponse.<Branch>builder()
+                    .code(200)
+                    .message("Manager assigned successfully")
+                    .result(branch)
+                    .build();
+            return ResponseEntity.ok(response);
+        } catch (orderservice.order_service.exception.AppException e) {
+            ApiResponse<Branch> response = ApiResponse.<Branch>builder()
+                    .code(e.getErrorCode().getCode())
+                    .message(e.getErrorCode().getMessage())
+                    .result(null)
+                    .build();
+            return ResponseEntity.status(e.getErrorCode().getHttpStatus()).body(response);
+        } catch (Exception e) {
+            ApiResponse<Branch> response = ApiResponse.<Branch>builder()
+                    .code(500)
+                    .message("Failed to assign manager: " + e.getMessage())
+                    .result(null)
+                    .build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    // Internal endpoint for Kafka listeners (no authentication required)
+    @PutMapping("/internal/{branchId}/assign-manager")
+    public ResponseEntity<ApiResponse<Branch>> assignManagerInternal(@PathVariable Integer branchId,
+            @Valid @RequestBody AssignManagerRequest request) {
+        try {
+            Branch branch = branchService.assignManager(branchId, request.getManagerUserId());
+            ApiResponse<Branch> response = ApiResponse.<Branch>builder()
+                    .code(200)
+                    .message("Manager assigned successfully")
+                    .result(branch)
+                    .build();
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            ApiResponse<Branch> response = ApiResponse.<Branch>builder()
+                    .code(500)
+                    .message("Failed to assign manager: " + e.getMessage())
+                    .result(null)
+                    .build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    // Internal compensation endpoint to unassign manager (no authentication required)
+    @PutMapping("/internal/{branchId}/unassign-manager")
+    public ResponseEntity<ApiResponse<Branch>> unassignManagerInternal(@PathVariable Integer branchId,
+            @Valid @RequestBody AssignManagerRequest request) {
+        try {
+            Branch branch = branchService.unassignManager(branchId, request.getManagerUserId());
+            ApiResponse<Branch> response = ApiResponse.<Branch>builder()
+                    .code(200)
+                    .message("Manager unassigned successfully")
+                    .result(branch)
+                    .build();
+            return ResponseEntity.ok(response);
+        } catch (orderservice.order_service.exception.AppException e) {
+            ApiResponse<Branch> response = ApiResponse.<Branch>builder()
+                    .code(e.getErrorCode().getCode())
+                    .message(e.getErrorCode().getMessage())
+                    .result(null)
+                    .build();
+            return ResponseEntity.status(e.getErrorCode().getHttpStatus()).body(response);
+        } catch (Exception e) {
+            ApiResponse<Branch> response = ApiResponse.<Branch>builder()
+                    .code(500)
+                    .message("Failed to unassign manager: " + e.getMessage())
                     .result(null)
                     .build();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);

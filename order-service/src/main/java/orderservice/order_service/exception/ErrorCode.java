@@ -41,6 +41,7 @@ public enum ErrorCode {
     BRANCH_NOT_FOUND(1029, "Branch not found", HttpStatus.NOT_FOUND),
     BRANCH_NAME_EXISTS(1030, "Branch name already exists", HttpStatus.BAD_REQUEST),
     INVALID_BUSINESS_HOURS(1031, "Open hours must be before end hours", HttpStatus.BAD_REQUEST),
+    BRANCH_ALREADY_HAS_MANAGER(1039, "Branch already has a manager", HttpStatus.BAD_REQUEST),
     RESERVATION_NOT_FOUND(1032, "Reservation not found", HttpStatus.NOT_FOUND),
     EMPTY_RESERVATION_TIME(1033, "Reservation time is required", HttpStatus.BAD_REQUEST),
     INVALID_PARTY_SIZE(1034, "Party size must be between 1 and 20", HttpStatus.BAD_REQUEST),
