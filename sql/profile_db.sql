@@ -90,3 +90,14 @@ CREATE TABLE staff_profiles (
 
 -- Example: create index for fast lookups
 CREATE INDEX ux_customer_profiles_user_id ON customer_profiles(user_id);
+
+
+-- Processed events (idempotency for Kafka listeners)
+DROP TABLE IF EXISTS processed_event;
+CREATE TABLE processed_event (
+  event_id VARCHAR(100) NOT NULL,
+  event_type VARCHAR(100) NOT NULL,
+  processed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (event_id),
+  KEY idx_processed_type_time (event_type, processed_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

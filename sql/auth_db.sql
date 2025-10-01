@@ -51,3 +51,19 @@ STARTS TIMESTAMP(CURRENT_DATE, '00:00:00')
 DO
   DELETE FROM invalidated_tokens
   WHERE expiry_time < NOW();
+
+
+-- Outbox Event (for saga/event publishing)
+DROP TABLE IF EXISTS outbox_event;
+CREATE TABLE outbox_event (
+  id VARCHAR(255) NOT NULL, -- UUID
+  aggregate_type VARCHAR(50) NOT NULL,
+  aggregate_id VARCHAR(100) NOT NULL,
+  type VARCHAR(100) NOT NULL,
+  payload LONGTEXT NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'NEW', -- NEW|PUBLISHED|FAILED
+  attempts INT DEFAULT 0,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_outbox_status_created_at (status, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
