@@ -40,7 +40,18 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
             "/auth-service/users/registration",
             "/order-service/api/branches.*",
             "/order-service/api/branches",
-            "/order-service/api/reservations"
+            "/order-service/api/reservations",
+            // Make cart endpoints public (no token required)
+            "/order-service/api/cart",
+            "/order-service/api/cart/.*",
+            "/catalogs/sizes",
+            "/catalogs/files/images/products/.*",
+            "/catalogs/products",
+            "/catalogs/products/.*",
+            "/catalogs/products/detail/.*",
+            // Public categories endpoints
+            "/catalogs/categories",
+            "/catalogs/categories/.*"
     };
 
     @Value("${app.api-prefix}")

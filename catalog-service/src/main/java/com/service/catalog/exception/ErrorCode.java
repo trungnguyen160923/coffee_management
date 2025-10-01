@@ -29,7 +29,7 @@ public enum ErrorCode {
     EMPTY_PRODUCT_SIZES(1036, "Product sizes are required", HttpStatus.BAD_REQUEST),
     EMPTY_PRICE(1037, "Price is required", HttpStatus.BAD_REQUEST),
     INVALID_PRODUCT_SIZES(1039, "Product sizes must be at least {min} items", HttpStatus.BAD_REQUEST),
-    
+
     // Not Found errors (404)
     PRODUCT_NOT_FOUND(2001, "Product not found", HttpStatus.NOT_FOUND),
     CATEGORY_NOT_FOUND(2002, "Category not found", HttpStatus.NOT_FOUND),
@@ -47,7 +47,7 @@ public enum ErrorCode {
     private final int code;
     private final String message;
     private final HttpStatusCode statusCode;
-    
+
     public HttpStatus getHttpStatus() {
         return (HttpStatus) statusCode;
     }
