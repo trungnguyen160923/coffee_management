@@ -7,7 +7,9 @@ export interface CreateBranchRequest {
   name: string;
   address: string;
   phone: string;
-  managerId: string;
+  managerUserId?: number;
+  openHours?: string; // HH:mm
+  endHours?: string;  // HH:mm
 }
 
 export interface UpdateBranchRequest extends Partial<CreateBranchRequest> {
@@ -52,6 +54,7 @@ export interface BranchService {
   
   // Branch management
   getBranchStats: (filters?: { dateFrom?: string; dateTo?: string }) => Promise<BranchStats>;
+  getUnassignedBranches: () => Promise<Branch[]>;
   getBranchRevenue: (branchId: string, filters?: { dateFrom?: string; dateTo?: string }) => Promise<{
     totalRevenue: number;
     dailyRevenue: Array<{ date: string; revenue: number }>;
@@ -60,7 +63,8 @@ export interface BranchService {
   
   // Branch staff
   getBranchStaff: (branchId: string) => Promise<any[]>;
-  assignManager: (branchId: string, managerId: string) => Promise<Branch>;
+  assignManager: (branchId: number | string, managerUserId: number | string) => Promise<Branch>;
+  unassignManagerInternal: (branchId: number | string, managerUserId: number | string) => Promise<Branch>;
 }
 
 // Branch Service Implementation
@@ -128,8 +132,20 @@ export const branchService: BranchService = {
     return await apiClient.get<any[]>(API_ENDPOINTS.BRANCHES.STAFF(branchId));
   },
 
-  async assignManager(branchId: string, managerId: string): Promise<Branch> {
-    return await apiClient.post<Branch>(API_ENDPOINTS.BRANCHES.MANAGER(branchId), { managerId });
+  async assignManager(branchId: number | string, managerUserId: number | string): Promise<Branch> {
+    return await apiClient.put<Branch>(API_ENDPOINTS.BRANCHES.ASSIGN_MANAGER(branchId), { managerUserId });
+  },
+
+  async getUnassignedBranches(): Promise<Branch[]> {
+    const resp = await apiClient.get<{ code: number; result: Branch[] }>(API_ENDPOINTS.BRANCHES.UNASSIGNED);
+    if ((resp as any).code && (resp as any).code !== 200 && (resp as any).code !== 1000) {
+      throw new Error((resp as any).message || 'Failed to fetch unassigned branches');
+    }
+    return (resp as any).result || [];
+  },
+
+  async unassignManagerInternal(branchId: number | string, managerUserId: number | string): Promise<Branch> {
+    return await apiClient.put<Branch>(API_ENDPOINTS.BRANCHES.UNASSIGN_MANAGER_INTERNAL(branchId), { managerUserId });
   },
 };
 

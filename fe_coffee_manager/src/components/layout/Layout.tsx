@@ -70,10 +70,10 @@ export function Layout({ children }: LayoutProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-50">
-      <div className="flex">
+    <div className="h-screen overflow-hidden bg-gradient-to-br from-amber-50 to-orange-50">
+      <div className="flex h-full">
         {/* Sidebar */}
-        <div className="w-64 bg-gradient-to-b from-amber-900 to-amber-800 text-white min-h-screen shadow-xl">
+        <div className="w-64 bg-gradient-to-b from-amber-900 to-amber-800 text-white h-screen shadow-xl sticky top-0 relative">
           <div className="p-6 border-b border-amber-700">
             <div className="flex items-center space-x-3">
               <div className="p-2 bg-amber-700 rounded-lg">
@@ -139,7 +139,7 @@ export function Layout({ children }: LayoutProps) {
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 overflow-auto">
+        <div className="flex-1 h-screen overflow-y-auto">
           {children}
         </div>
       </div>

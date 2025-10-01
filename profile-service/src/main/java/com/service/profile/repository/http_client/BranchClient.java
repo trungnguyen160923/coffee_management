@@ -2,6 +2,7 @@ package com.service.profile.repository.http_client;
 
 import com.service.profile.configuration.AuthenticationRequestInterceptor;
 import com.service.profile.dto.ApiResponse;
+import com.service.profile.dto.request.AssignManagerRequest;
 import com.service.profile.dto.response.BranchResponse;
 
 import java.util.List;
@@ -26,8 +27,8 @@ public interface BranchClient {
     ApiResponse<BranchResponse> getBranchById(@PathVariable Integer id);
 
     @PutMapping(value = "/api/branches/internal/{id}/assign-manager", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
-    ApiResponse<BranchResponse> assignManager(@PathVariable Integer id, @RequestBody com.service.profile.dto.request.AssignManagerRequest request);
+    ApiResponse<BranchResponse> assignManager(@PathVariable Integer id, @RequestBody AssignManagerRequest request);
 
     @PutMapping(value = "/api/branches/internal/{id}/unassign-manager", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
-    ApiResponse<BranchResponse> unassignManager(@PathVariable Integer id, @RequestBody com.service.profile.dto.request.AssignManagerRequest request);
+    ApiResponse<BranchResponse> unassignManager(@PathVariable Integer id, @RequestBody AssignManagerRequest request);
 }

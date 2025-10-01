@@ -8,6 +8,8 @@ import orderservice.order_service.repository.BranchRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 
 import java.time.LocalTime;
 import java.util.List;
@@ -52,6 +54,13 @@ public class BranchService {
 
     public List<Branch> getAllBranches() {
         return branchRepository.findAll();
+    }
+
+    public Page<Branch> getBranchesPaged(int page, int size) {
+        int safePage = Math.max(page, 0);
+        int safeSize = size <= 0 ? 10 : Math.min(size, 100);
+        var pageable = PageRequest.of(safePage, safeSize, org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createAt"));
+        return branchRepository.findAll(pageable);
     }
 
     public Optional<Branch> getBranchById(Integer branchId) {
@@ -129,9 +138,23 @@ public class BranchService {
     }
 
     public void deleteBranch(Integer branchId) {
-        if (!branchRepository.existsById(branchId)) {
-            throw new AppException(ErrorCode.BRANCH_NOT_FOUND);
+        Branch branch = branchRepository.findById(branchId)
+                .orElseThrow(() -> new AppException(ErrorCode.BRANCH_NOT_FOUND));
+
+        // Prevent delete if branch is assigned to a manager
+        if (branch.getManagerUserId() != null) {
+            throw new AppException(ErrorCode.BRANCH_ALREADY_HAS_MANAGER);
         }
-        branchRepository.deleteById(branchId);
+
+        try {
+            branchRepository.deleteById(branchId);
+        } catch (org.springframework.dao.DataIntegrityViolationException ex) {
+            // Foreign key constraints exist in related tables
+            throw new AppException(ErrorCode.BRANCH_IN_USE);
+        }
+    }
+
+    public List<Branch> getBranchesUnassigned() {
+        return branchRepository.findByManagerUserIdIsNull();
     }
 }

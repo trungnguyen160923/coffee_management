@@ -43,6 +43,9 @@ public class StaffProfileService {
     @PreAuthorize("hasRole('STAFF')")
     public StaffProfileResponse getStaffProfile(Integer userId){
         StaffProfile staffProfile = staffProfileRepository.findById(userId).orElseThrow(() -> new AppException(ErrorCode.USER_ID_NOT_FOUND));
+        if(staffProfile.getBranchId() == null){
+            throw new AppException(ErrorCode.USER_NOT_ASSIGNED_TO_BRANCH);
+        }
         try {
             BranchResponse branch = branchClient.getBranchById(staffProfile.getBranchId()).getResult();
             StaffProfileResponse staffProfileResponse = staffProfileMapper.toStaffProfileResponse(staffProfile);

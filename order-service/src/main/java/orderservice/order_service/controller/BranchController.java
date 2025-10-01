@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Optional;
+import orderservice.order_service.dto.response.PagedResponse;
 
 @RestController
 @RequestMapping("/api/branches")
@@ -59,6 +60,35 @@ public class BranchController {
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             ApiResponse<List<Branch>> response = ApiResponse.<List<Branch>>builder()
+                    .code(500)
+                    .message("Failed to retrieve branches: " + e.getMessage())
+                    .result(null)
+                    .build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    @GetMapping("/paged")
+    public ResponseEntity<ApiResponse<PagedResponse<Branch>>> getBranchesPaged(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        try {
+            var branchPage = branchService.getBranchesPaged(page, size);
+            var payload = PagedResponse.<Branch>builder()
+                    .data(branchPage.getContent())
+                    .total(branchPage.getTotalElements())
+                    .page(branchPage.getNumber())
+                    .size(branchPage.getSize())
+                    .totalPages(branchPage.getTotalPages())
+                    .build();
+            var response = ApiResponse.<PagedResponse<Branch>>builder()
+                    .code(200)
+                    .message("Branches retrieved successfully")
+                    .result(payload)
+                    .build();
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            var response = ApiResponse.<PagedResponse<Branch>>builder()
                     .code(500)
                     .message("Failed to retrieve branches: " + e.getMessage())
                     .result(null)
@@ -234,8 +264,7 @@ public class BranchController {
 
     // Internal compensation endpoint to unassign manager (no authentication required)
     @PutMapping("/internal/{branchId}/unassign-manager")
-    public ResponseEntity<ApiResponse<Branch>> unassignManagerInternal(@PathVariable Integer branchId,
-            @Valid @RequestBody AssignManagerRequest request) {
+    public ResponseEntity<ApiResponse<Branch>> unassignManagerInternal(@PathVariable Integer branchId,@Valid @RequestBody AssignManagerRequest request ) {
         try {
             Branch branch = branchService.unassignManager(branchId, request.getManagerUserId());
             ApiResponse<Branch> response = ApiResponse.<Branch>builder()
@@ -259,5 +288,17 @@ public class BranchController {
                     .build();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
         }
+    }
+
+    @GetMapping("/unassigned")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<List<Branch>>> getBranchesUnassigned() {
+        List<Branch> branches = branchService.getBranchesUnassigned();
+        ApiResponse<List<Branch>> response = ApiResponse.<List<Branch>>builder()
+                .code(200)
+                .message("Branches retrieved successfully")
+                .result(branches)
+                .build();
+        return ResponseEntity.ok(response);
     }
 }

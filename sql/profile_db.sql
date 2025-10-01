@@ -50,7 +50,7 @@ CREATE TABLE customer_addresses (
 DROP TABLE IF EXISTS manager_profiles;
 CREATE TABLE manager_profiles (
   user_id INT NOT NULL UNIQUE,
-  branch_id INT NOT NULL,
+  branch_id INT NOT NULL DEFAULT -1,
   hire_date DATE NOT NULL,
   identity_card VARCHAR(50) NOT NULL,
   create_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

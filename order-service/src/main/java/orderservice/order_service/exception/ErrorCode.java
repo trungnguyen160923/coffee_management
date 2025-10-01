@@ -50,6 +50,7 @@ public enum ErrorCode {
     RESERVATION_TIME_TOO_LATE(1037, "Reservation cannot be more than 30 days in advance", HttpStatus.BAD_REQUEST),
     RESERVATION_CANNOT_BE_CANCELLED(1038, "Reservation cannot be cancelled", HttpStatus.BAD_REQUEST),
     VALIDATION_FAILED(4000, "Validation failed", HttpStatus.BAD_REQUEST),
+    BRANCH_IN_USE(1040, "Branch is in use", HttpStatus.BAD_REQUEST),
     ;
 
     ErrorCode(int code, String message, HttpStatusCode statusCode) {

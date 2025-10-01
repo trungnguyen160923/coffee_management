@@ -21,6 +21,6 @@ public class UserUpdateRequest {
     @Size(min = 10, message = "PHONE_NUMBER_SIZE")
     String phone_number;
     
-    @RoleConstraint(message = "INVALID_ROLE")
-    String role;
+    // @RoleConstraint(message = "INVALID_ROLE")
+    // String role;
 }

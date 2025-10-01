@@ -37,6 +37,10 @@ public class UserV2Service {
     @Transactional
     public Object createManagerUser(ManagerProfileCreationRequest req) {
         System.out.println("=== UserV2Service.createManagerUser called ===");
+        // Validate duplicate email
+        if (userRepository.existsByEmail(req.getEmail())) {
+            throw new RuntimeException("Email already exists");
+        }
         User user = new User();
         user.setEmail(req.getEmail());
         user.setPassword(passwordEncoder.encode(req.getPassword()));
