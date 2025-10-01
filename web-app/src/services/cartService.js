@@ -1,5 +1,5 @@
 import httpClient from '../configurations/httpClient';
-import { API } from '../configurations/configuration';
+import { API, CONFIG } from '../configurations/configuration';
 
 class CartService {
     getGuestId() {
@@ -20,9 +20,24 @@ class CartService {
             const product = it.product || {};
             const price = it.unitPrice ?? (it.productDetail && it.productDetail.price) ?? 0;
             const imagePath = product.imageUrl || '';
-            const imageUrl = imagePath && imagePath.startsWith('http')
-                ? imagePath
-                : `${API.FILE_IMAGE_PRODUCTS}/${imagePath}`;
+            let imageUrl = '/images/placeholder.jpg';
+            if (typeof imagePath === 'string' && imagePath.length > 0) {
+                if (imagePath.startsWith('http')) {
+                    imageUrl = imagePath;
+                } else {
+                    const marker = '/files/images/products/';
+                    let filename = imagePath;
+                    if (filename.includes(marker)) {
+                        filename = filename.substring(filename.lastIndexOf('/') + 1);
+                    } else {
+                        filename = filename.replace(/[{}]/g, '');
+                        if (filename.includes('/')) {
+                            filename = filename.substring(filename.lastIndexOf('/') + 1);
+                        }
+                    }
+                    imageUrl = `${CONFIG.API_GATEWAY}${API.FILE_IMAGE_PRODUCTS}/${filename}`;
+                }
+            }
             return {
                 cartItemId: it.cartItemId,
                 productId: it.productId,

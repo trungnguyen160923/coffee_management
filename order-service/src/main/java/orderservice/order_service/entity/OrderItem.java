@@ -28,11 +28,11 @@ public class OrderItem {
     @Column(name = "product_id", nullable = false)
     Integer productId;
 
-    @Column(name = "product_detail_id", nullable = false)
+    @Column(name = "size_id")
     Integer productDetailId;
 
     @Column(name = "qty", nullable = false, precision = 12, scale = 2)
-    BigDecimal quantity;
+    java.math.BigDecimal quantity;
 
     @Column(name = "unit_price", nullable = false, precision = 12, scale = 2)
     BigDecimal unitPrice;
@@ -40,7 +40,7 @@ public class OrderItem {
     @Column(name = "line_total", nullable = false, precision = 12, scale = 2)
     BigDecimal totalPrice;
 
-    @Column(name = "note", columnDefinition = "VARCHAR(255)")
+    @Column(name = "note", length = 255)
     String notes;
 
     @Column(name = "create_at", nullable = false)

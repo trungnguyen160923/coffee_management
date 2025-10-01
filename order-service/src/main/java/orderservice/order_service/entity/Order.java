@@ -21,28 +21,55 @@ public class Order {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     Integer orderId;
 
-    @Column(nullable = false)
+    @Column(nullable = false, name = "customer_id")
     Integer customerId;
 
-    @Column(nullable = false)
+    @Column(name = "customer_name", length = 50)
+    String customerName;
+
+    @Column(name = "phone", length = 20)
+    String phone;
+
+    @Column(name = "delivery_address", length = 255)
+    String deliveryAddress;
+
+    @Column(nullable = false, name = "branch_id")
     Integer branchId;
+
+    @Column(name = "table_id")
+    Integer tableId;
+
+    @Column(name = "reservation_id")
+    Integer reservationId;
 
     @Column(nullable = false)
     String status;
 
-    @Column(nullable = false, precision = 10, scale = 2)
+    @Column(name = "payment_method", length = 50)
+    String paymentMethod;
+
+    @Column(name = "payment_status", length = 50)
+    String paymentStatus;
+
+    @Column(name = "subtotal", nullable = false, precision = 12, scale = 2)
+    BigDecimal subtotal;
+
+    @Column(name = "discount", nullable = false, precision = 12, scale = 2)
+    BigDecimal discount;
+
+    @Column(name = "total_amount", nullable = false, precision = 12, scale = 2)
     BigDecimal totalAmount;
 
     @Column(columnDefinition = "TEXT")
     String notes;
 
-    @Column(nullable = false)
+    @Column(name = "order_date", nullable = false)
     LocalDateTime orderDate;
 
-    @Column(nullable = false)
+    @Column(name = "create_at", nullable = false)
     LocalDateTime createAt;
 
-    @Column(nullable = false)
+    @Column(name = "update_at", nullable = false)
     LocalDateTime updateAt;
 
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
