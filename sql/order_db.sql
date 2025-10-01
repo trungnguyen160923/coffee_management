@@ -79,6 +79,7 @@ CREATE TABLE orders (
   customer_name VARCHAR(50) DEFAULT NULL,
   phone VARCHAR(20) DEFAULT NULL,
   branch_id INT NOT NULL,
+  delivery_address VARCHAR(255) NOT NULL,
   table_id INT DEFAULT NULL,
   reservation_id INT DEFAULT NULL,
   status VARCHAR(50) NOT NULL DEFAULT 'CREATED',
@@ -138,3 +139,27 @@ CREATE TABLE reviews (
 -- Example seeds (optional)
 INSERT INTO branches (name, address, phone, openhours, endhours) 
 VALUES ('Main Branch', '123 Coffee St', '+84123456789', '08:00:00', '22:00:00');
+CREATE TABLE IF NOT EXISTS carts (
+  cart_id INT PRIMARY KEY AUTO_INCREMENT,
+  user_id INT NOT NULL,
+  create_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  update_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_carts_user_id (user_id)
+);
+
+-- cart_items
+CREATE TABLE IF NOT EXISTS cart_items (
+  cart_item_id INT PRIMARY KEY AUTO_INCREMENT,
+  cart_id INT NOT NULL,
+  product_id INT NOT NULL,
+  product_detail_id INT NOT NULL,
+  quantity INT NOT NULL,
+  unit_price DECIMAL(12,2) NOT NULL,
+  total_price DECIMAL(12,2) NOT NULL,
+  create_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  update_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY idx_cart_items_cart_id (cart_id),
+  KEY idx_cart_items_product_id (product_id),
+  KEY idx_cart_items_pd_id (product_detail_id),
+  CONSTRAINT fk_cart_items_cart FOREIGN KEY (cart_id) REFERENCES carts(cart_id) ON DELETE CASCADE
+);
