@@ -1,5 +1,5 @@
 import httpClient from '../configurations/httpClient';
-import { API } from '../configurations/configuration';
+import { API, CONFIG } from '../configurations/configuration';
 
 export const productService = {
     // Get all products - từ ProductController @GetMapping
@@ -52,9 +52,25 @@ export const productService = {
     // Utility function để tạo đầy đủ image URL
     getFullImageUrl: (imagePath) => {
         if (!imagePath) return '/images/placeholder.jpg';
+        if (typeof imagePath !== 'string') return '/images/placeholder.jpg';
         if (imagePath.startsWith('http')) return imagePath;
-        // Serve through API Gateway
-        return `${API.FILE_IMAGE_PRODUCTS}/${imagePath}`;
+
+        // Chuẩn hóa: nếu là đường dẫn '/files/images/products/filename', chỉ lấy filename
+        const marker = '/files/images/products/';
+        let filename = imagePath;
+        if (filename.includes(marker)) {
+            filename = filename.substring(filename.lastIndexOf('/') + 1);
+            //
+        } else {
+            // Loại bỏ ký tự '{}' nếu có, và chỉ lấy phần sau cùng sau '/'
+            filename = filename.replace(/[{}]/g, '');
+            if (filename.includes('/')) {
+                filename = filename.substring(filename.lastIndexOf('/') + 1);
+            }
+        }
+        console.log('filename', filename);
+        // Trả về URL đúng qua API Gateway (absolute URL)
+        return `${CONFIG.API_GATEWAY}${API.FILE_IMAGE_PRODUCTS}/${filename}`;
     }
 };
 
