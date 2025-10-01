@@ -20,11 +20,13 @@ export const API_ENDPOINTS = {
     ITEMS: (id: string) => `/api/orders/${id}/items`,
   },
   BRANCHES: {
-    BASE: '/api/branches',
-    STATS: '/api/branches/stats',
-    REVENUE: (id: string) => `/api/branches/${id}/revenue`,
-    STAFF: (id: string) => `/api/branches/${id}/staff`,
-    MANAGER: (id: string) => `/api/branches/${id}/manager`,
+    BASE: '/api/order-service/api/branches',
+    STATS: '/api/order-service/api/branches/stats',
+    REVENUE: (id: string) => `/api/order-service/api/branches/${id}/revenue`,
+    STAFF: (id: string) => `/api/order-service/api/branches/${id}/staff`,
+    ASSIGN_MANAGER: (id: number | string) => `/api/order-service/api/branches/${id}/assign-manager`,
+    UNASSIGN_MANAGER_INTERNAL: (id: number | string) => `/api/order-service/api/branches/internal/${id}/unassign-manager`,
+    UNASSIGNED: '/api/order-service/api/branches/unassigned',
   },
 } as const;
 

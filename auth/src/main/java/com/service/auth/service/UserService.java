@@ -12,6 +12,7 @@ import com.service.auth.dto.response.ApiResponse;
 import com.service.auth.dto.response.CustomerProfileResponse;
 import com.service.auth.dto.response.ManagerProfileResponse;
 import com.service.auth.dto.response.StaffProfileResponse;
+import com.service.auth.dto.response.PagedResponse;
 import com.service.auth.dto.response.UserResponse;
 import com.service.auth.entity.User;
 import com.service.auth.exception.AppException;
@@ -29,7 +30,11 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -241,6 +246,63 @@ public class UserService {
         
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
+    @Transactional(readOnly = true)
+    public UserResponse getManagerById(Integer userId) {
+        try {
+            ManagerProfileResponse managerProfile = profileClient.getManagerProfile(userId).getResult();
+            UserResponse userResponse = userMapper.toUserResponse(userRepository.findById(userId).orElseThrow(() -> new AppException(ErrorCode.USER_ID_NOT_FOUND)));
+            userResponse.setIdentityCard(managerProfile.getIdentityCard());
+            userResponse.setBranch(managerProfile.getBranch());
+            userResponse.setHireDate(managerProfile.getHireDate());
+            return userResponse;
+        } catch (Exception e) {
+            throw new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION);
+        }
+
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @Transactional(readOnly = true)
+    public PagedResponse<UserResponse> getManagersPaged(int page, int size) {
+        try {
+            int safePage = Math.max(page, 0);
+            int safeSize = size <= 0 ? 10 : Math.min(size, 100);
+
+            Pageable pageable = PageRequest.of(safePage, safeSize, org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createAt"));
+            Page<User> userPage = userRepository.findByRoleName(PredefinedRole.MANAGER_ROLE, pageable);
+
+            // Reuse profile service bulk call if ever added; currently fetch all and map
+            List<ManagerProfileResponse> managerProfiles = profileClient.getAllManagerProfiles().getResult();
+            Map<Integer, ManagerProfileResponse> managerByUserId = managerProfiles
+                .stream()
+                .collect(java.util.stream.Collectors.toMap(ManagerProfileResponse::getUserId, java.util.function.Function.identity(), (a, b) -> a));
+
+            List<UserResponse> data = userPage.getContent()
+                .stream()
+                .map(userMapper::toUserResponse)
+                .peek(ur -> {
+                    ManagerProfileResponse mgr = managerByUserId.get(ur.getUser_id());
+                    if (mgr != null) {
+                        ur.setIdentityCard(mgr.getIdentityCard());
+                        ur.setBranch(mgr.getBranch());
+                        ur.setHireDate(mgr.getHireDate());
+                    }
+                })
+                .toList();
+
+            return PagedResponse.<UserResponse>builder()
+                .data(data)
+                .total(userPage.getTotalElements())
+                .page(userPage.getNumber())
+                .size(userPage.getSize())
+                .totalPages(userPage.getTotalPages())
+                .build();
+        } catch (Exception e) {
+            throw new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION);
+        }
+    }
+
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER') or @userService.canUpdateUser(#userId, authentication)")
     @Transactional
     public UserResponse updateUser(Integer userId, UserUpdateRequest request) {
@@ -275,13 +337,13 @@ public class UserService {
         }
 
         // Only ADMIN can change role
-        if ("ADMIN".equals(currentUserRole)) {
-            if (request.getRole() != null) {
-                var newRole = roleRepository.findByName(request.getRole())
-                        .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_FOUND));
-                user.setRole(newRole);
-            }
-        }
+        // if ("ADMIN".equals(currentUserRole)) {
+        //     if (request.getRole() != null) {
+        //         var newRole = roleRepository.findByName(request.getRole())
+        //                 .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_FOUND));
+        //         user.setRole(newRole);
+        //     }
+        // }
 
         userRepository.save(user);
         return userMapper.toUserResponse(user);

@@ -11,6 +11,7 @@ import com.service.auth.dto.request.UserUpdateRequest;
 import com.service.auth.dto.response.ApiResponse;
 import com.service.auth.dto.response.ManagerProfileResponse;
 import com.service.auth.dto.response.StaffProfileResponse;
+import com.service.auth.dto.response.PagedResponse;
 import com.service.auth.dto.response.UserResponse;
 import com.service.auth.service.UserService;
 
@@ -50,6 +51,20 @@ public class UserController {
     ApiResponse<List<UserResponse>> getAllManagers() {
         var result = userService.getAllManagers();
         return ApiResponse.<List<UserResponse>>builder().result(result).build();
+    }
+
+    @GetMapping("/managers/{userId}")
+    ApiResponse<UserResponse> getManagerById(@PathVariable Integer userId) {
+        var result = userService.getManagerById(userId);
+        return ApiResponse.<UserResponse>builder().result(result).build();
+    }
+
+    @GetMapping("/managers/paged")
+    ApiResponse<PagedResponse<UserResponse>> getManagersPaged(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        var result = userService.getManagersPaged(page, size);
+        return ApiResponse.<PagedResponse<UserResponse>>builder().result(result).build();
     }
 
     @GetMapping("/{userId}")

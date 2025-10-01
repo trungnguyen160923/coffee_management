@@ -41,6 +41,11 @@ public enum ErrorCode {
     VALIDATION_FAILED(4000, "Validation failed", HttpStatus.BAD_REQUEST),
     USER_ID_NOT_FOUND(4001, "User id not found", HttpStatus.NOT_FOUND),
     BRANCH_NOT_FOUND(4002, "Branch not found", HttpStatus.NOT_FOUND),
+    IDENTITY_CARD_EXISTED(4003, "Identity card existed", HttpStatus.BAD_REQUEST),
+    IDENTITY_CARD_NUMERIC_ONLY(4004, "Identity card must be numeric only", HttpStatus.BAD_REQUEST),
+    IDENTITY_CARD_SIZE(4005, "Identity card must be at least {min} characters", HttpStatus.BAD_REQUEST),
+    USER_NOT_ASSIGNED_TO_BRANCH(4006, "User not assigned to branch", HttpStatus.BAD_REQUEST),
+    EMPTY_MANAGER_USER_ID(4007, "Manager user id is required", HttpStatus.BAD_REQUEST),
     ;
 
     ErrorCode(int code, String message, HttpStatusCode statusCode) {

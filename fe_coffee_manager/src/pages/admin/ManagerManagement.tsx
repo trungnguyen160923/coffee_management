@@ -1,23 +1,55 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Plus, Pencil, Trash2, X, Check } from 'lucide-react';
 import { managerService } from '../../services';
 import { UserResponseDto } from '../../types';
+import CreateManagerModal from '../../components/common/modal/CreateManagerModal';
+import AssignBranchModal from '../../components/common/modal/AssignBranchModal';
+import ConfirmModal from '../../components/common/modal/ConfirmModal';
+import { branchService } from '../../services';
+import { toast } from 'react-hot-toast';
 
 const ManagerManagement: React.FC = () => {
   const [managers, setManagers] = useState<UserResponseDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
+  const [size, setSize] = useState(10);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalManagers, setTotalManagers] = useState(0);
+  const [withBranchCount, setWithBranchCount] = useState(0);
+  const [withoutBranchCount, setWithoutBranchCount] = useState(0);
+  const [isCreating, setIsCreating] = useState(false);
+  const [isAssigning, setIsAssigning] = useState(false);
+  const [assigningManager, setAssigningManager] = useState<UserResponseDto | null>(null);
+  const [isUnassigning, setIsUnassigning] = useState(false);
+  const [unassigningManager, setUnassigningManager] = useState<UserResponseDto | null>(null);
+  const [unassignedBranches, setUnassignedBranches] = useState<import('../../types').Branch[]>([]);
+  const [loadingBranches, setLoadingBranches] = useState(false);
+  const topScrollRef = useRef<HTMLDivElement | null>(null);
+  const bottomScrollRef = useRef<HTMLDivElement | null>(null);
+  const tableRef = useRef<HTMLTableElement | null>(null);
+  const topInnerRef = useRef<HTMLDivElement | null>(null);
+  const syncingRef = useRef(false);
+  const [editing, setEditing] = useState<{ id: number; field: 'email' | 'identityCard' | 'hireDate' } | null>(null);
+  const [editValue, setEditValue] = useState('');
 
   useEffect(() => {
     fetchManagers();
+  }, [page, size]);
+
+  useEffect(() => {
+    fetchManagerStats();
   }, []);
 
   const fetchManagers = async () => {
     try {
       setLoading(true);
       setError(null);
-      const data = await managerService.getManagerProfiles();
-      setManagers(data);
+      const resp = await managerService.getManagerProfilesPaged(page, size);
+      setManagers(resp.data);
+      setTotal(resp.total);
+      setTotalPages(resp.totalPages);
     } catch (err) {
       setError('Failed to load managers list');
       console.error('Error fetching managers:', err);
@@ -25,6 +57,196 @@ const ManagerManagement: React.FC = () => {
       setLoading(false);
     }
   };
+
+  const fetchManagerStats = async () => {
+    try {
+      const all = await managerService.getManagerProfiles();
+      setTotalManagers(all.length);
+      const withBranch = all.filter(m => m.branch !== null).length;
+      setWithBranchCount(withBranch);
+      setWithoutBranchCount(all.length - withBranch);
+    } catch (err) {
+      console.error('Error fetching manager stats:', err);
+    }
+  };
+
+  const openCreateModal = async () => {
+    setIsCreating(true);
+    setLoadingBranches(true);
+    try {
+      const branches = await branchService.getUnassignedBranches();
+      setUnassignedBranches(branches);
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to load branches');
+    } finally {
+      setLoadingBranches(false);
+    }
+  };
+
+  const openAssignModal = async (manager: UserResponseDto) => {
+    setAssigningManager(manager);
+    setIsAssigning(true);
+    setLoadingBranches(true);
+    try {
+      const branches = await branchService.getUnassignedBranches();
+      setUnassignedBranches(branches);
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to load branches');
+    } finally {
+      setLoadingBranches(false);
+    }
+  };
+
+  const openUnassignModal = (manager: UserResponseDto) => {
+    setUnassigningManager(manager);
+    setIsUnassigning(true);
+  };
+
+  const handleUnassignManager = async () => {
+    if (!unassigningManager) return;
+    try {
+      await managerService.unassignManager(unassigningManager.user_id);
+      toast.success('Unassigned branch');
+      
+      // Optimistic update - cập nhật local state
+      setManagers(prevManagers => 
+        prevManagers.map(m => 
+          m.user_id === unassigningManager.user_id 
+            ? { ...m, branch: null }
+            : m
+        )
+      );
+      
+      // Cập nhật stats
+      setWithBranchCount(prev => prev - 1);
+      setWithoutBranchCount(prev => prev + 1);
+      
+      setIsUnassigning(false);
+      setUnassigningManager(null);
+    } catch (e: any) {
+      const msg = e?.response?.message || e?.message || 'Failed to unassign';
+      toast.error(msg);
+      // Rollback nếu có lỗi
+      await fetchManagers();
+      await fetchManagerStats();
+      setIsUnassigning(false);
+      setUnassigningManager(null);
+    }
+  };
+
+  const handleCancelUnassign = () => {
+    setIsUnassigning(false);
+    setUnassigningManager(null);
+  };
+
+  const startInlineEdit = (m: UserResponseDto, field: 'email' | 'identityCard' | 'hireDate') => {
+    setEditing({ id: m.user_id, field });
+    setEditValue(String((m as any)[field] ?? ''));
+  };
+
+  const cancelInlineEdit = () => {
+    setEditing(null);
+    setEditValue('');
+  };
+
+  const saveInlineEdit = async (m: UserResponseDto) => {
+    if (!editing) return;
+    try {
+      if (editing.field === 'email') {
+        // Gọi Auth Service API
+        await managerService.updateUser(m.user_id, { email: editValue });
+        toast.success('Email updated successfully');
+      } else if (editing.field === 'identityCard') {
+        // Gọi Profile Service API
+        await managerService.updateManagerProfile(m.user_id, { identityCard: editValue });
+        toast.success('Identity card updated successfully');
+      } else if (editing.field === 'hireDate') {
+        // Gọi Profile Service API
+        await managerService.updateManagerProfile(m.user_id, { hireDate: editValue });
+        toast.success('Hire date updated successfully');
+      }
+      
+      // Cập nhật local state thay vì reload toàn bộ
+      setManagers(prevManagers => 
+        prevManagers.map(manager => 
+          manager.user_id === m.user_id 
+            ? { 
+                ...manager, 
+                [editing.field]: editValue,
+                // Cập nhật thời gian update nếu có
+                updateAt: new Date().toISOString()
+              }
+            : manager
+        )
+      );
+      
+      setEditing(null);
+      setEditValue('');
+      
+      // Chỉ cập nhật stats nếu cần thiết (không reload toàn bộ)
+      if (editing.field === 'email') {
+        // Email không ảnh hưởng đến stats, không cần fetch lại
+      } else {
+        // Identity card và hire date có thể ảnh hưởng đến stats
+        await fetchManagerStats();
+      }
+    } catch (e: any) {
+      const msg = e?.response?.message || e?.message || 'Update failed';
+      toast.error(msg);
+    }
+  };
+
+  // Sync top/bottom horizontal scrollbars
+  useEffect(() => {
+    const top = topScrollRef.current;
+    const bottom = bottomScrollRef.current;
+    if (!top || !bottom) return;
+
+    const handleTop = () => {
+      if (!bottom) return;
+      if (syncingRef.current) return;
+      syncingRef.current = true;
+      bottom.scrollLeft = top.scrollLeft;
+      requestAnimationFrame(() => { syncingRef.current = false; });
+    };
+    const handleBottom = () => {
+      if (!top) return;
+      if (syncingRef.current) return;
+      syncingRef.current = true;
+      top.scrollLeft = bottom.scrollLeft;
+      requestAnimationFrame(() => { syncingRef.current = false; });
+    };
+
+    top.addEventListener('scroll', handleTop, { passive: true });
+    bottom.addEventListener('scroll', handleBottom, { passive: true });
+    return () => {
+      top.removeEventListener('scroll', handleTop as any);
+      bottom.removeEventListener('scroll', handleBottom as any);
+    };
+  }, [managers, size, page]);
+
+  // Keep top scrollbar width in sync with table width
+  useEffect(() => {
+    const syncWidth = () => {
+      if (topInnerRef.current && tableRef.current) {
+        topInnerRef.current.style.width = tableRef.current.scrollWidth + 'px';
+      }
+    };
+    const raf = requestAnimationFrame(syncWidth);
+    let ro: ResizeObserver | null = null;
+    if ('ResizeObserver' in window && tableRef.current) {
+      ro = new ResizeObserver(syncWidth);
+      ro.observe(tableRef.current);
+    }
+    window.addEventListener('resize', syncWidth);
+    return () => {
+      cancelAnimationFrame(raf);
+      if (ro && tableRef.current) ro.unobserve(tableRef.current);
+      window.removeEventListener('resize', syncWidth);
+    };
+  }, [managers, size, page]);
 
 
   if (loading) {
@@ -64,7 +286,7 @@ const ManagerManagement: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="p-6 space-y-6">
       {/* Header */}
       <div className="bg-white shadow rounded-lg">
         <div className="px-4 py-5 sm:p-6">
@@ -81,7 +303,7 @@ const ManagerManagement: React.FC = () => {
                 Refresh
               </button>
               <button
-                onClick={() => console.log('create manager')}
+                onClick={openCreateModal}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium inline-flex items-center gap-2"
               >
                 <Plus className="w-4 h-4" />
@@ -105,7 +327,7 @@ const ManagerManagement: React.FC = () => {
               <div className="ml-5 w-0 flex-1">
                 <dl>
                   <dt className="text-sm font-medium text-gray-500 truncate">Total managers</dt>
-                  <dd className="text-lg font-medium text-gray-900">{managers.length}</dd>
+                  <dd className="text-lg font-medium text-gray-900">{totalManagers}</dd>
                 </dl>
               </div>
             </div>
@@ -124,7 +346,7 @@ const ManagerManagement: React.FC = () => {
                 <dl>
                   <dt className="text-sm font-medium text-gray-500 truncate">With branch</dt>
                   <dd className="text-lg font-medium text-gray-900">
-                    {managers.filter(m => m.branch !== null).length}
+                    {withBranchCount}
                   </dd>
                 </dl>
               </div>
@@ -144,7 +366,7 @@ const ManagerManagement: React.FC = () => {
                 <dl>
                   <dt className="text-sm font-medium text-gray-500 truncate">Without branch</dt>
                   <dd className="text-lg font-medium text-gray-900">
-                    {managers.filter(m => m.branch === null).length}
+                    {withoutBranchCount}
                   </dd>
                 </dl>
               </div>
@@ -155,11 +377,15 @@ const ManagerManagement: React.FC = () => {
 
       {/* Manager List */}
       <div className="bg-white shadow rounded-lg">
-        <div className="px-4 py-5 sm:p-6">
+          <div className="px-4 py-5 sm:p-6">
           <h2 className="text-lg font-medium text-gray-900 mb-4">Managers</h2>
           
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
+          {/* Top horizontal scrollbar */}
+          <div ref={topScrollRef} className="overflow-x-auto overflow-y-hidden h-5 mb-2">
+            <div ref={topInnerRef} style={{ height: 1 }} />
+          </div>
+          <div ref={bottomScrollRef} className="overflow-x-auto">
+            <table ref={tableRef} className="min-w-max divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -169,9 +395,7 @@ const ManagerManagement: React.FC = () => {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID Card</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Branch
-                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Branch</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Hire date</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
@@ -186,37 +410,112 @@ const ManagerManagement: React.FC = () => {
                       {manager.fullname}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {manager.email}
+                      {editing && editing.id === manager.user_id && editing.field === 'email' ? (
+                        <div className="flex items-center gap-2">
+                          <input className="border rounded px-2 py-1 text-sm" value={editValue} onChange={(e) => setEditValue(e.target.value)} />
+                          <button onClick={() => saveInlineEdit(manager)} className="text-emerald-600 hover:text-emerald-700" title="Save"><Check className="w-4 h-4" /></button>
+                          <button onClick={cancelInlineEdit} className="text-gray-500 hover:text-gray-700" title="Cancel"><X className="w-4 h-4" /></button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <span>{manager.email}</span>
+                          <button onClick={() => startInlineEdit(manager, 'email')} className="text-blue-600 hover:text-blue-700" title="Edit email"><Pencil className="w-4 h-4" /></button>
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {manager.phoneNumber}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {manager.identityCard ?? '-'}
+                      {editing && editing.id === manager.user_id && editing.field === 'identityCard' ? (
+                        <div className="flex items-center gap-2">
+                          <input className="border rounded px-2 py-1 text-sm" value={editValue} onChange={(e) => setEditValue(e.target.value.replace(/\D/g, ''))} />
+                          <button onClick={() => saveInlineEdit(manager)} className="text-emerald-600 hover:text-emerald-700" title="Save"><Check className="w-4 h-4" /></button>
+                          <button onClick={cancelInlineEdit} className="text-gray-500 hover:text-gray-700" title="Cancel"><X className="w-4 h-4" /></button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <span>{manager.identityCard ?? '-'}</span>
+                          <button onClick={() => startInlineEdit(manager, 'identityCard')} className="text-blue-600 hover:text-blue-700" title="Edit ID card"><Pencil className="w-4 h-4" /></button>
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {manager.branch ? (
-                        <div>
-                          <div className="font-medium text-gray-900">{manager.branch.name}</div>
-                          <div className="text-gray-500">{manager.branch.address}</div>
-                          <div className="text-gray-500">{manager.branch.phone}</div>
+                        <div className="flex items-center gap-2">
+                          <div>
+                            <div className="font-medium text-gray-900">{manager.branch.name}</div>
+                            <div className="text-gray-500">{manager.branch.address}</div>
+                            <div className="text-gray-500">{manager.branch.phone}</div>
+                          </div>
+                          <button
+                            className="p-2 rounded hover:bg-gray-100 text-red-600"
+                            title="Unassign branch from this manager"
+                            onClick={() => openUnassignModal(manager)}
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
                         </div>
                       ) : (
-                        <span className="text-yellow-600 font-medium">No branch</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-yellow-600 font-medium">No branch</span>
+                          <button
+                            className="p-2 rounded hover:bg-gray-100 text-emerald-600"
+                            title="Assign this manager to a branch"
+                            onClick={() => openAssignModal(manager)}
+                          >
+                            <Plus className="w-4 h-4" />
+                          </button>
+                        </div>
                       )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{manager.hireDate ? new Date(manager.hireDate).toLocaleDateString('en-GB') : '-'}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {editing && editing.id === manager.user_id && editing.field === 'hireDate' ? (
+                        <div className="flex items-center gap-2">
+                          <input type="date" className="border rounded px-2 py-1 text-sm" value={editValue} onChange={(e) => setEditValue(e.target.value)} />
+                          <button onClick={() => saveInlineEdit(manager)} className="text-emerald-600 hover:text-emerald-700" title="Save"><Check className="w-4 h-4" /></button>
+                          <button onClick={cancelInlineEdit} className="text-gray-500 hover:text-gray-700" title="Cancel"><X className="w-4 h-4" /></button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <span>{manager.hireDate ? new Date(manager.hireDate).toLocaleDateString('en-GB') : '-'}</span>
+                          <button onClick={() => startInlineEdit(manager, 'hireDate')} className="text-blue-600 hover:text-blue-700" title="Edit hire date"><Pencil className="w-4 h-4" /></button>
+                        </div>
+                      )}
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => console.log('update manager', manager.user_id)}
-                          className="p-2 rounded hover:bg-gray-100 text-blue-600"
-                          title="Update"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => console.log('delete manager', manager.user_id)}
+                          onClick={async () => {
+                            if (window.confirm(`Are you sure you want to delete manager ${manager.fullname}?`)) {
+                              try {
+                                // TODO: Implement delete manager API call
+                                // await managerService.deleteManager(manager.user_id);
+                                
+                                // Optimistic update - xóa khỏi danh sách ngay lập tức
+                                setManagers(prevManagers => 
+                                  prevManagers.filter(m => m.user_id !== manager.user_id)
+                                );
+                                setTotal(prevTotal => prevTotal - 1);
+                                setTotalManagers(prevTotal => prevTotal - 1);
+                                
+                                // Cập nhật stats
+                                if (manager.branch) {
+                                  setWithBranchCount(prev => prev - 1);
+                                } else {
+                                  setWithoutBranchCount(prev => prev - 1);
+                                }
+                                
+                                toast.success('Manager deleted successfully');
+                              } catch (e: any) {
+                                const msg = e?.response?.message || e?.message || 'Failed to delete manager';
+                                toast.error(msg);
+                                // Rollback nếu có lỗi
+                                await fetchManagers();
+                                await fetchManagerStats();
+                              }
+                            }
+                          }}
                           className="p-2 rounded hover:bg-gray-100 text-red-600"
                           title="Delete"
                         >
@@ -239,8 +538,136 @@ const ManagerManagement: React.FC = () => {
               <p className="mt-1 text-sm text-gray-500">There are no managers in the system.</p>
             </div>
           )}
+
+          {/* Pagination Controls */}
+          <div className="mt-6 flex items-center justify-between">
+            <div className="text-sm text-gray-600">Total: {total} • Page {page + 1} / {Math.max(totalPages, 1)}</div>
+            <div className="flex items-center gap-2">
+              <button
+                disabled={page <= 0}
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                className={`px-3 py-1 rounded border ${page <= 0 ? 'text-gray-400 border-gray-200' : 'text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+              >
+                Prev
+              </button>
+              <button
+                disabled={page + 1 >= totalPages}
+                onClick={() => setPage((p) => p + 1)}
+                className={`px-3 py-1 rounded border ${(page + 1 >= totalPages) ? 'text-gray-400 border-gray-200' : 'text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+              >
+                Next
+              </button>
+              <select
+                value={size}
+                onChange={(e) => { setPage(0); setSize(parseInt(e.target.value, 10)); }}
+                className="ml-2 border border-gray-300 rounded px-2 py-1 text-sm"
+              >
+                {[10, 20, 50, 100].map((s) => (
+                  <option key={s} value={s}>{s} / page</option>
+                ))}
+              </select>
+            </div>
+          </div>
         </div>
       </div>
+      <CreateManagerModal
+        open={isCreating}
+        branches={unassignedBranches}
+        loadingBranches={loadingBranches}
+        onClose={() => setIsCreating(false)}
+        onSubmit={async (payload) => {
+          try {
+            const resp = await managerService.createManager(payload);
+            if ((resp as any).code === 400) {
+              toast.error((resp as any).message || 'Failed to create manager');
+              return;
+            }
+            toast.success('Manager created successfully');
+            setIsCreating(false);
+            
+            // Lấy thông tin đầy đủ của manager mới tạo
+            const userId = resp.result?.userId || resp.result?.user_id || resp.userId || resp.user_id;
+            if (userId) {
+              try {
+                const fullManagerInfo = await managerService.getManagerProfile(userId);
+                setManagers(prevManagers => [fullManagerInfo, ...prevManagers]);
+                setTotal(prevTotal => prevTotal + 1);
+                setTotalManagers(prevTotal => prevTotal + 1);
+                
+                // Cập nhật stats dựa trên branch assignment
+                if (payload.branchId && payload.branchId !== -1) {
+                  setWithBranchCount(prev => prev + 1);
+                } else {
+                  setWithoutBranchCount(prev => prev + 1);
+                }
+              } catch (fetchError) {
+                console.error('Failed to fetch manager details:', fetchError);
+                // Fallback: reload toàn bộ danh sách nếu không lấy được thông tin
+                await fetchManagers();
+                await fetchManagerStats();
+              }
+            } else {
+              // Fallback nếu không có userId
+              await fetchManagers();
+              await fetchManagerStats();
+            }
+          } catch (e: any) {
+            const msg = e?.response?.message || e?.message || 'Failed to create manager';
+            toast.error(msg);
+          }
+        }}
+      />
+      <AssignBranchModal
+        open={isAssigning}
+        managerName={assigningManager?.fullname || ''}
+        branches={unassignedBranches}
+        loadingBranches={loadingBranches}
+        onClose={() => {
+          setIsAssigning(false);
+          setAssigningManager(null);
+        }}
+        onSubmit={async (branchId) => {
+          if (!assigningManager) return;
+          try {
+            await managerService.assignManagerToBranch(assigningManager.user_id, branchId);
+            
+            // Optimistic update - cập nhật local state
+            const selectedBranch = unassignedBranches.find(b => b.branchId === branchId);
+            if (selectedBranch) {
+              setManagers(prevManagers => 
+                prevManagers.map(m => 
+                  m.user_id === assigningManager.user_id 
+                    ? { ...m, branch: selectedBranch }
+                    : m
+                )
+              );
+              
+              // Cập nhật stats
+              setWithBranchCount(prev => prev + 1);
+              setWithoutBranchCount(prev => prev - 1);
+            }
+            
+            toast.success('Branch assigned successfully');
+            setIsAssigning(false);
+            setAssigningManager(null);
+          } catch (e: any) {
+            const msg = e?.response?.message || e?.message || 'Failed to assign branch';
+            toast.error(msg);
+            // Rollback nếu có lỗi
+            await fetchManagers();
+            await fetchManagerStats();
+          }
+        }}
+      />
+      <ConfirmModal
+        open={isUnassigning}
+        title="Unassign Branch"
+        description={`Are you sure you want to unassign ${unassigningManager?.branch?.name} from ${unassigningManager?.fullname}?`}
+        confirmText="Unassign"
+        cancelText="Cancel"
+        onConfirm={handleUnassignManager}
+        onCancel={handleCancelUnassign}
+      />
     </div>
   );
 };

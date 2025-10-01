@@ -17,4 +17,6 @@ public interface BranchRepository extends JpaRepository<Branch, Integer> {
     boolean existsByName(String name);
 
     List<Branch> findByNameContainingIgnoreCase(String name);
+
+    List<Branch> findByManagerUserIdIsNull();
 }

@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import AppToaster from './components/common/AppToaster';
 import { Login } from './pages/auth/Login';
 import { Layout } from './components/layout/Layout';
 import { RoleRedirect } from './components/common/RoleRedirect';
@@ -7,6 +8,7 @@ import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { NotFoundPage } from './components/common/NotFoundPage';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
 import ManagerManagement from './pages/admin/ManagerManagement';
+import BranchManagement from './pages/admin/BranchManagement';
 import { ManagerDashboard } from './pages/manager/ManagerDashboard';
 import { StaffDashboard } from './pages/staff/StaffDashboard';
 
@@ -51,7 +53,7 @@ function AppRoutes() {
           <Routes>
             <Route path="products" element={<Layout><div className="p-8"><h1 className="text-2xl font-bold">Quản lý sản phẩm</h1></div></Layout>} />
             <Route path="recipes" element={<Layout><div className="p-8"><h1 className="text-2xl font-bold">Quản lý công thức</h1></div></Layout>} />
-            <Route path="branches" element={<Layout><div className="p-8"><h1 className="text-2xl font-bold">Quản lý chi nhánh</h1></div></Layout>} />
+            <Route path="branches" element={<Layout><BranchManagement /></Layout>} />
             <Route path="managers" element={<Layout><ManagerManagement /></Layout>} />
             <Route path="statistics" element={<Layout><div className="p-8"><h1 className="text-2xl font-bold">Thống kê</h1></div></Layout>} />
             {/* Unknown admin subroute: show 404 without Layout */}
@@ -108,6 +110,7 @@ function App() {
   return (
     <AuthProvider>
       <Router>
+        <AppToaster />
         <AppRoutes />
       </Router>
     </AuthProvider>
