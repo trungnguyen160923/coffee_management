@@ -7,7 +7,15 @@ import Footer from './Footer';
 const useThemeReinitOnRouteChange = () => {
     const location = useLocation();
     React.useEffect(() => {
-        if (window.__reInitTheme) window.__reInitTheme();
+        // Defer to the next paint so the new route content exists in the DOM
+        if (window.__reInitTheme) {
+            // microtask + slight delay to cover images/styles loading
+            Promise.resolve().then(() => window.__reInitTheme());
+            const t = setTimeout(() => {
+                try { window.__reInitTheme(); } catch (_) { }
+            }, 100);
+            return () => clearTimeout(t);
+        }
     }, [location.pathname]);
 };
 

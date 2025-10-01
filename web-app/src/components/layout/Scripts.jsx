@@ -43,6 +43,13 @@ const Scripts = () => {
             const $ = window.jQuery;
             if (!$) return;
             try {
+                // Ensure global loader overlay is hidden in SPA
+                const loaderEl = document.getElementById('ftco-loader');
+                if (loaderEl) {
+                    loaderEl.classList.remove('show');
+                    loaderEl.style.display = 'none';
+                }
+
                 // Recompute full-height sections
                 const setFullHeight = () => {
                     $('.js-fullheight').css('height', $(window).height());
@@ -59,11 +66,10 @@ const Scripts = () => {
                 if ($.fn.owlCarousel && $('.home-slider').length) {
                     $('.home-slider').each(function () {
                         const $el = $(this);
-                        // Destroy if already initialized
-                        if ($el.data('owl.carousel')) {
-                            $el.trigger('destroy.owl.carousel');
-                            $el.removeClass('owl-loaded');
-                            $el.find('.owl-stage-outer').children().unwrap();
+                        // If already initialized, just refresh to avoid destroy errors
+                        if ($el.hasClass('owl-loaded')) {
+                            try { $el.trigger('refresh.owl.carousel'); } catch (_) { }
+                            return;
                         }
                         $el.owlCarousel({
                             loop: true,
@@ -91,10 +97,9 @@ const Scripts = () => {
                 if ($.fn.owlCarousel && $('.carousel-work').length) {
                     $('.carousel-work').each(function () {
                         const $el = $(this);
-                        if ($el.data('owl.carousel')) {
-                            $el.trigger('destroy.owl.carousel');
-                            $el.removeClass('owl-loaded');
-                            $el.find('.owl-stage-outer').children().unwrap();
+                        if ($el.hasClass('owl-loaded')) {
+                            try { $el.trigger('refresh.owl.carousel'); } catch (_) { }
+                            return;
                         }
                         $el.owlCarousel({
                             autoplay: true,

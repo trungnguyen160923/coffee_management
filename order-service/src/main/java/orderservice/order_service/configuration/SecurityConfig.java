@@ -19,7 +19,9 @@ public class SecurityConfig {
     private static final String[] PUBLIC_ENDPOINTS = {
             "/customer-profiles/internal",
             "/api/branches", // Allow public access to get branches list
-            "/api/branches/**" // Allow public access to all branch endpoints
+            "/api/branches/**", // Allow public access to all branch endpoints
+            "/api/cart",
+            "/api/cart/**"
     };
 
     private final CustomJwtDecoder customJwtDecoder;
