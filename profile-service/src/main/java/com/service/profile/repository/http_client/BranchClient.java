@@ -26,6 +26,13 @@ public interface BranchClient {
     @GetMapping(value = "/api/branches/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     ApiResponse<BranchResponse> getBranchById(@PathVariable Integer id);
 
+    @GetMapping(value = "/api/branches/manager/{managerUserId}", produces = MediaType.APPLICATION_JSON_VALUE)
+    ApiResponse<List<BranchResponse>> getBranchesByManager(@PathVariable Integer managerUserId);
+
+    // Internal call without auth
+    @GetMapping(value = "/api/branches/internal/manager/{managerUserId}", produces = MediaType.APPLICATION_JSON_VALUE)
+    ApiResponse<List<BranchResponse>> getBranchesByManagerInternal(@PathVariable Integer managerUserId);
+
     @PutMapping(value = "/api/branches/internal/{id}/assign-manager", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     ApiResponse<BranchResponse> assignManager(@PathVariable Integer id, @RequestBody AssignManagerRequest request);
 

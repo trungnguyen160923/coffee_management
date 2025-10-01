@@ -1,0 +1,11 @@
+package com.service.auth.events;
+
+import java.time.Instant;
+
+public class UserDeleteProfileCompletedEvent {
+    public String sagaId;
+    public Integer userId;
+    public Instant occurredAt;
+}
+
+

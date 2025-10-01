@@ -168,6 +168,27 @@ public class BranchController {
         }
     }
 
+    // Internal endpoint for inter-service background processing (no authentication required)
+    @GetMapping("/internal/manager/{managerUserId}")
+    public ResponseEntity<ApiResponse<List<Branch>>> getBranchesByManagerInternal(@PathVariable Integer managerUserId) {
+        try {
+            List<Branch> branches = branchService.getBranchesByManager(managerUserId);
+            ApiResponse<List<Branch>> response = ApiResponse.<List<Branch>>builder()
+                    .code(200)
+                    .message("Branches retrieved successfully")
+                    .result(branches)
+                    .build();
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            ApiResponse<List<Branch>> response = ApiResponse.<List<Branch>>builder()
+                    .code(500)
+                    .message("Failed to retrieve branches: " + e.getMessage())
+                    .result(null)
+                    .build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
     @PutMapping("/{branchId}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<Branch>> updateBranch(@PathVariable Integer branchId,

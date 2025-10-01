@@ -109,6 +109,11 @@ class ManagerService {
     }
     return resp.result;
   }
+
+  async deleteManager(userId: number): Promise<{ code?: number; message?: string; result?: any }> {
+    const resp = await apiClient.delete<{ code?: number; message?: string; result?: any }>(`${this.v2Url}/delete-manager/${userId}`);
+    return resp;
+  }
 }
 
 export default new ManagerService();
