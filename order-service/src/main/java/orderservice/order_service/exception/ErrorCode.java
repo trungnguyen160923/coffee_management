@@ -48,6 +48,10 @@ public enum ErrorCode {
     RESERVATION_TIME_TOO_EARLY(1036, "Reservation must be at least 1 hour in advance", HttpStatus.BAD_REQUEST),
     RESERVATION_TIME_TOO_LATE(1037, "Reservation cannot be more than 30 days in advance", HttpStatus.BAD_REQUEST),
     RESERVATION_CANNOT_BE_CANCELLED(1038, "Reservation cannot be cancelled", HttpStatus.BAD_REQUEST),
+    PRODUCT_NOT_FOUND(1039, "Product not found", HttpStatus.NOT_FOUND),
+    ORDER_NOT_FOUND(1040, "Order not found", HttpStatus.NOT_FOUND),
+    ORDER_CREATION_FAILED(1041, "Order creation failed", HttpStatus.INTERNAL_SERVER_ERROR),
+    CART_ITEM_NOT_FOUND(1042, "Cart item not found", HttpStatus.NOT_FOUND),
     VALIDATION_FAILED(4000, "Validation failed", HttpStatus.BAD_REQUEST),
     ;
 

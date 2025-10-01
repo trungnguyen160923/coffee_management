@@ -36,7 +36,6 @@ public class SizeService {
         return sizeMapper.toSizeResponse(size);
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
     @Transactional
     public List<SizeResponse> getAllSizes() {
         return sizeRepository.findAll()

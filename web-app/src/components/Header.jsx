@@ -65,45 +65,45 @@ const Header = () => {
                             <Link to="/coffee/contact" className="nav-link">Contact</Link>
                         </li>
 
+                        {/* Cart icon - always visible */}
+                        <li className="nav-item cart">
+                            <Link to="/coffee/cart" className="nav-link">
+                                <span className="icon icon-shopping_cart"></span>
+                            </Link>
+                        </li>
+
                         {isAuthenticated ? (
-                            <>
-                                <li className="nav-item cart">
-                                    <Link to="/products/cart" className="nav-link">
-                                        <span className="icon icon-shopping_cart"></span>
-                                    </Link>
-                                </li>
-                                <li className="nav-item dropdown">
-                                    <a
-                                        className="nav-link dropdown-toggle"
-                                        href="#"
-                                        role="button"
-                                        data-bs-toggle="dropdown"
-                                        aria-expanded="false"
-                                    >
-                                        {username}
-                                    </a>
-                                    <ul className="dropdown-menu">
-                                        <li>
-                                            <Link className="dropdown-item" to="/users/bookings">
-                                                My Bookings
-                                            </Link>
-                                        </li>
-                                        <li>
-                                            <Link className="dropdown-item" to="/users/orders">
-                                                My Orders
-                                            </Link>
-                                        </li>
-                                        <li>
-                                            <hr className="dropdown-divider" />
-                                        </li>
-                                        <li>
-                                            <button className="dropdown-item" onClick={handleLogout}>
-                                                Log Out
-                                            </button>
-                                        </li>
-                                    </ul>
-                                </li>
-                            </>
+                            <li className="nav-item dropdown">
+                                <a
+                                    className="nav-link dropdown-toggle"
+                                    href="#"
+                                    role="button"
+                                    data-bs-toggle="dropdown"
+                                    aria-expanded="false"
+                                >
+                                    {username}
+                                </a>
+                                <ul className="dropdown-menu">
+                                    <li>
+                                        <Link className="dropdown-item" to="/users/bookings">
+                                            My Bookings
+                                        </Link>
+                                    </li>
+                                    <li>
+                                        <Link className="dropdown-item" to="/users/orders">
+                                            My Orders
+                                        </Link>
+                                    </li>
+                                    <li>
+                                        <hr className="dropdown-divider" />
+                                    </li>
+                                    <li>
+                                        <button className="dropdown-item" onClick={handleLogout}>
+                                            Log Out
+                                        </button>
+                                    </li>
+                                </ul>
+                            </li>
                         ) : (
                             <>
                                 <li className="nav-item">
