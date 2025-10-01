@@ -48,7 +48,7 @@ public class ManagerProfileService {
         return managerProfileMapper.toManagerProfileResponse(managerProfile);
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
     public ManagerProfileResponse getManagerProfile(Integer userId){
         ManagerProfile managerProfile = managerProfileRepository.findById(userId).orElseThrow(() -> new AppException(ErrorCode.USER_ID_NOT_FOUND));
         try {

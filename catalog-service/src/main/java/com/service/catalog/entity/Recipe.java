@@ -31,6 +31,11 @@ public class Recipe {
     ProductDetail productDetail;
 
 
+    @ManyToOne
+    @JoinColumn(name = "category_id")
+    Category category;
+
+
     @Column(nullable = false)
     Integer version;
 
