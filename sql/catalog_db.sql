@@ -78,6 +78,7 @@ DROP TABLE IF EXISTS recipes;
 CREATE TABLE `recipes` (
   `recipe_id` INT PRIMARY KEY NOT NULL AUTO_INCREMENT,
   `pd_id` INT NOT NULL,
+  `category_id` INT DEFAULT null,
   `version` INT NOT NULL DEFAULT 1,
   `description` TEXT DEFAULT null,
   `yield` DECIMAL(12,2) DEFAULT 1,
@@ -141,6 +142,7 @@ CREATE INDEX `idx_ps_size_id` ON `product_details` (`size_id`);
 CREATE INDEX `idx_ingredients_supplier_id` ON `ingredients` (`supplier_id`);
 
 CREATE INDEX `idx_recipes_product_id` ON `recipes` (`pd_id`);
+CREATE INDEX `idx_recipes_category_id` ON `recipes` (`category_id`);
 
 CREATE INDEX `idx_ri_recipe_id` ON `recipe_items` (`recipe_id`);
 
@@ -163,6 +165,7 @@ ALTER TABLE `product_details` ADD CONSTRAINT `fk_pd_size` FOREIGN KEY (`size_id`
 ALTER TABLE `ingredients` ADD CONSTRAINT `fk_ingredients_supplier` FOREIGN KEY (`supplier_id`) REFERENCES `suppliers` (`supplier_id`) ON DELETE SET NULL ON UPDATE NO ACTION;
 
 ALTER TABLE `recipes` ADD CONSTRAINT `fk_recipes_pd` FOREIGN KEY (`pd_id`) REFERENCES `product_details` (`pd_id`) ON DELETE CASCADE;
+ALTER TABLE `recipes` ADD CONSTRAINT `fk_recipes_category` FOREIGN KEY (`category_id`) REFERENCES `categories` (`category_id`) ON DELETE SET NULL;
 
 ALTER TABLE `recipe_items` ADD CONSTRAINT `fk_ri_recipe` FOREIGN KEY (`recipe_id`) REFERENCES `recipes` (`recipe_id`) ON DELETE CASCADE;
 
