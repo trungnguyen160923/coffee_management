@@ -27,6 +27,7 @@ const BranchManagement: React.FC = () => {
   const [editing, setEditing] = useState<{ id: number; field: 'name' | 'address' | 'phone' | 'openHours' | 'endHours' | 'businessHours' } | null>(null);
   const [editValue, setEditValue] = useState('');
   const [pendingDelete, setPendingDelete] = useState<Branch | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const topScrollRef = useRef<HTMLDivElement | null>(null);
   const bottomScrollRef = useRef<HTMLDivElement | null>(null);
   const tableRef = useRef<HTMLTableElement | null>(null);
@@ -137,6 +138,7 @@ const BranchManagement: React.FC = () => {
   const deleteBranch = async () => {
     if (!pendingDelete) return;
     try {
+      setDeleteLoading(true);
       await branchService.deleteBranch(String(pendingDelete.branchId));
       
       // Cập nhật local state thay vì reload toàn bộ
@@ -151,6 +153,8 @@ const BranchManagement: React.FC = () => {
       const err: any = e as any;
       const msg = err?.response?.message || err?.message || 'Failed to delete branch';
       toast.error(msg);
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -420,6 +424,7 @@ const BranchManagement: React.FC = () => {
               cancelText="Cancel"
               onCancel={() => setPendingDelete(null)}
               onConfirm={deleteBranch}
+              loading={deleteLoading}
             />
 
             {/* Pagination */}

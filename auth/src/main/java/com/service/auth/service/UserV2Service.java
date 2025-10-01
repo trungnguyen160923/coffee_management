@@ -120,6 +120,37 @@ public class UserV2Service {
 
         return java.util.Map.of("userId", user.getUserId(), "sagaId", evt.sagaId);
     }
+
+    @Transactional
+    public Object deleteManagerUser(Integer userId) {
+        var user = userRepository.findById(userId).orElseThrow();
+        if (user.getRole() == null || user.getRole().getName() == null || !"MANAGER".equals(user.getRole().getName())) {
+            throw new RuntimeException("USER_NOT_MANAGER");
+        }
+
+        var evt = new com.service.auth.events.UserDeleteRequestedEvent();
+        evt.sagaId = java.util.UUID.randomUUID().toString();
+        evt.userId = user.getUserId();
+        evt.role = "MANAGER";
+        evt.occurredAt = java.time.Instant.now();
+
+        OutboxEvent ob = new OutboxEvent();
+        ob.setId(java.util.UUID.randomUUID().toString());
+        ob.setAggregateType("USER");
+        ob.setAggregateId(String.valueOf(user.getUserId()));
+        ob.setType("UserDeleteRequestedV1");
+        try {
+            ob.setPayload(json.writeValueAsString(evt));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        ob.setStatus("NEW");
+        ob.setAttempts(0);
+        ob.setCreatedAt(java.time.Instant.now());
+        outboxRepo.save(ob);
+
+        return java.util.Map.of("userId", user.getUserId(), "sagaId", evt.sagaId);
+    }
 }
 
 

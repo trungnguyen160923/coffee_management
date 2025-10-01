@@ -40,7 +40,19 @@ public class OutboxPublisher {
 
         for (com.service.auth.outbox.OutboxEvent e : batch) {
             try {
-                kafka.send("user.created.v2", e.getPayload())
+                String topic;
+                switch (e.getType()) {
+                    case "UserCreatedV2" -> topic = "user.created.v2";
+                    case "UserDeleteRequestedV1" -> topic = "user.delete.requested.v1";
+                    default -> topic = null;
+                }
+                if (topic == null) {
+                    log.warn("Unknown outbox type: {}", e.getType());
+                    e.setStatus("FAILED");
+                    repo.save(e);
+                    continue;
+                }
+                kafka.send(topic, e.getPayload())
                     .whenComplete((result, ex) -> {
                         if (ex == null) {
                             e.setStatus("PUBLISHED");

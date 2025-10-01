@@ -33,6 +33,9 @@ const ManagerManagement: React.FC = () => {
   const syncingRef = useRef(false);
   const [editing, setEditing] = useState<{ id: number; field: 'email' | 'identityCard' | 'hireDate' } | null>(null);
   const [editValue, setEditValue] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deletingManager, setDeletingManager] = useState<UserResponseDto | null>(null);
+  const [deletingLoading, setDeletingLoading] = useState(false);
 
   useEffect(() => {
     fetchManagers();
@@ -195,6 +198,52 @@ const ManagerManagement: React.FC = () => {
     } catch (e: any) {
       const msg = e?.response?.message || e?.message || 'Update failed';
       toast.error(msg);
+    }
+  };
+
+  const refreshManagersLight = async () => {
+    try {
+      await fetchManagers();
+      await fetchManagerStats();
+    } catch {}
+  };
+
+  const handleDeleteManager = async (manager: UserResponseDto) => {
+    try {
+      setDeletingLoading(true);
+      const resp = await managerService.deleteManager(manager.user_id);
+      if ((resp as any)?.code === 202) {
+        toast.success('Delete requested. Saga in progress...');
+        setTimeout(refreshManagersLight, 3000);
+        setTimeout(refreshManagersLight, 8000);
+        setDeletingLoading(false);
+        setIsDeleting(false);
+        setDeletingManager(null);
+        return;
+      }
+      if ((resp as any)?.code && (resp as any).code !== 1000 && (resp as any).code !== 200) {
+        throw new Error((resp as any).message || 'Delete manager failed');
+      }
+
+      setManagers(prevManagers => prevManagers.filter(m => m.user_id !== manager.user_id));
+      setTotal(prevTotal => prevTotal - 1);
+      setTotalManagers(prevTotal => prevTotal - 1);
+      if (manager.branch) {
+        setWithBranchCount(prev => prev - 1);
+      } else {
+        setWithoutBranchCount(prev => prev - 1);
+      }
+      toast.success('Manager deleted successfully');
+      setDeletingLoading(false);
+      setIsDeleting(false);
+      setDeletingManager(null);
+    } catch (e: any) {
+      const msg = e?.response?.message || e?.message || 'Failed to delete manager';
+      toast.error(msg);
+      await refreshManagersLight();
+      setDeletingLoading(false);
+      setIsDeleting(false);
+      setDeletingManager(null);
     }
   };
 
@@ -486,36 +535,7 @@ const ManagerManagement: React.FC = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={async () => {
-                            if (window.confirm(`Are you sure you want to delete manager ${manager.fullname}?`)) {
-                              try {
-                                // TODO: Implement delete manager API call
-                                // await managerService.deleteManager(manager.user_id);
-                                
-                                // Optimistic update - xóa khỏi danh sách ngay lập tức
-                                setManagers(prevManagers => 
-                                  prevManagers.filter(m => m.user_id !== manager.user_id)
-                                );
-                                setTotal(prevTotal => prevTotal - 1);
-                                setTotalManagers(prevTotal => prevTotal - 1);
-                                
-                                // Cập nhật stats
-                                if (manager.branch) {
-                                  setWithBranchCount(prev => prev - 1);
-                                } else {
-                                  setWithoutBranchCount(prev => prev - 1);
-                                }
-                                
-                                toast.success('Manager deleted successfully');
-                              } catch (e: any) {
-                                const msg = e?.response?.message || e?.message || 'Failed to delete manager';
-                                toast.error(msg);
-                                // Rollback nếu có lỗi
-                                await fetchManagers();
-                                await fetchManagerStats();
-                              }
-                            }
-                          }}
+                          onClick={() => { setDeletingManager(manager); setIsDeleting(true); }}
                           className="p-2 rounded hover:bg-gray-100 text-red-600"
                           title="Delete"
                         >
@@ -667,6 +687,16 @@ const ManagerManagement: React.FC = () => {
         cancelText="Cancel"
         onConfirm={handleUnassignManager}
         onCancel={handleCancelUnassign}
+      />
+      <ConfirmModal
+        open={isDeleting}
+        title="Delete Manager"
+        description={`Are you sure you want to delete manager ${deletingManager?.fullname}? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        onConfirm={() => { if (deletingManager) { void handleDeleteManager(deletingManager); } }}
+        onCancel={() => { setIsDeleting(false); setDeletingManager(null); }}
+        loading={deletingLoading}
       />
     </div>
   );
