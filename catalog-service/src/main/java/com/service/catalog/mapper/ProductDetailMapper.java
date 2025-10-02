@@ -13,13 +13,16 @@ public class ProductDetailMapper {
             return null;
         }
         
-        SizeResponse sizeResponse = SizeResponse.builder()
-                .sizeId(productDetail.getSize().getSizeId())
-                .name(productDetail.getSize().getName())
-                .description(productDetail.getSize().getDescription())
-                .createAt(productDetail.getSize().getCreateAt())
-                .updateAt(productDetail.getSize().getUpdateAt())
-                .build();
+        SizeResponse sizeResponse = null;
+        if (productDetail.getSize() != null) {
+            sizeResponse = SizeResponse.builder()
+                    .sizeId(productDetail.getSize().getSizeId())
+                    .name(productDetail.getSize().getName())
+                    .description(productDetail.getSize().getDescription())
+                    .createAt(productDetail.getSize().getCreateAt())
+                    .updateAt(productDetail.getSize().getUpdateAt())
+                    .build();
+        }
         
         return ProductDetailResponse.builder()
                 .pdId(productDetail.getPdId())

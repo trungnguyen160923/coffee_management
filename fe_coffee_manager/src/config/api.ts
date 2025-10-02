@@ -109,11 +109,15 @@ class ApiClient {
       try { await this.refreshAccessToken(); } catch {}
     }
 
+    const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
+    const baseHeaders: Record<string, string> = {
+      ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
+    };
     const config: RequestInit = {
       headers: {
-        'Content-Type': 'application/json',
-        ...(this.token && { Authorization: `Bearer ${this.token}` }),
-        ...options.headers,
+        ...baseHeaders,
+        ...(!isFormData ? { 'Content-Type': 'application/json' } : {}),
+        ...(options.headers || {}),
       },
       ...options,
     };
@@ -129,12 +133,13 @@ class ApiClient {
           try {
             if (!this.isRefreshing) await this.refreshAccessToken();
             // Retry with updated token
+            const retryIsFormData = typeof FormData !== 'undefined' && (config.body instanceof FormData);
             const retryConfig: RequestInit = {
               ...config,
               headers: {
                 ...(config.headers || {}),
-                'Content-Type': 'application/json',
-                ...(this.token && { Authorization: `Bearer ${this.token}` })
+                ...(!retryIsFormData ? { 'Content-Type': 'application/json' } : {}),
+                ...(this.token ? { Authorization: `Bearer ${this.token}` } : {})
               }
             };
             response = await fetch(url, retryConfig);
@@ -181,17 +186,23 @@ class ApiClient {
 
   // POST request
   async post<T>(endpoint: string, data?: any): Promise<T> {
+    const body = (typeof FormData !== 'undefined' && data instanceof FormData)
+      ? data
+      : (data !== undefined ? JSON.stringify(data) : undefined);
     return this.request<T>(endpoint, {
       method: 'POST',
-      body: data ? JSON.stringify(data) : undefined,
+      body,
     });
   }
 
   // PUT request
   async put<T>(endpoint: string, data?: any): Promise<T> {
+    const body = (typeof FormData !== 'undefined' && data instanceof FormData)
+      ? data
+      : (data !== undefined ? JSON.stringify(data) : undefined);
     return this.request<T>(endpoint, {
       method: 'PUT',
-      body: data ? JSON.stringify(data) : undefined,
+      body,
     });
   }
 
@@ -202,9 +213,12 @@ class ApiClient {
 
   // PATCH request
   async patch<T>(endpoint: string, data?: any): Promise<T> {
+    const body = (typeof FormData !== 'undefined' && data instanceof FormData)
+      ? data
+      : (data !== undefined ? JSON.stringify(data) : undefined);
     return this.request<T>(endpoint, {
       method: 'PATCH',
-      body: data ? JSON.stringify(data) : undefined,
+      body,
     });
   }
 

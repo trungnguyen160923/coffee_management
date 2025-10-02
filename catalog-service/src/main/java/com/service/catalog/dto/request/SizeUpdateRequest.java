@@ -1,0 +1,18 @@
+package com.service.catalog.dto.request;
+
+import jakarta.validation.constraints.Size;
+import lombok.*;
+import lombok.experimental.FieldDefaults;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+@FieldDefaults(level = AccessLevel.PRIVATE)
+public class SizeUpdateRequest {
+    @Size(max = 50, message = "INVALID_NAME_SIZE")
+    String name;
+    
+    @Size(max = 255, message = "INVALID_DESCRIPTION")
+    String description;
+}

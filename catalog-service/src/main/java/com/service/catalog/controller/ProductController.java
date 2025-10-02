@@ -2,7 +2,10 @@ package com.service.catalog.controller;
 
 import com.service.catalog.dto.ApiResponse;
 import com.service.catalog.dto.request.ProductCreationRequest;
+import com.service.catalog.dto.request.ProductUpdateRequest;
+import com.service.catalog.dto.request.ProductSearchRequest;
 import com.service.catalog.dto.response.ProductDetailResponse;
+import com.service.catalog.dto.response.ProductPageResponse;
 import com.service.catalog.dto.response.ProductResponse;
 import com.service.catalog.service.ProductService;
 import jakarta.validation.Valid;
@@ -26,6 +29,12 @@ public class ProductController {
         return ApiResponse.<ProductResponse>builder().result(result).build();
     }
     
+    @PutMapping("/{productId}")
+    ApiResponse<ProductResponse> updateProduct(@PathVariable Integer productId, @Valid @RequestBody ProductUpdateRequest request) {
+        ProductResponse result = productService.updateProduct(productId, request);
+        return ApiResponse.<ProductResponse>builder().result(result).build();
+    }
+    
     @GetMapping
     ApiResponse<List<ProductResponse>> getAllProducts() {
         List<ProductResponse> result = productService.getAllProducts();
@@ -42,5 +51,35 @@ public class ProductController {
     ApiResponse<ProductDetailResponse> getProductDetailById(@PathVariable Integer productDetailId) {
         ProductDetailResponse result = productService.getProductDetailById(productDetailId);
         return ApiResponse.<ProductDetailResponse>builder().result(result).build();
+    }
+    
+    @GetMapping("/search")
+    ApiResponse<ProductPageResponse> searchProducts(
+            @RequestParam(defaultValue = "0") Integer page,
+            @RequestParam(defaultValue = "10") Integer size,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) Integer categoryId,
+            @RequestParam(required = false) Boolean active,
+            @RequestParam(required = false) String sortBy,
+            @RequestParam(required = false) String sortDirection) {
+        
+        ProductSearchRequest request = ProductSearchRequest.builder()
+                .page(page)
+                .size(size)
+                .search(search)
+                .categoryId(categoryId)
+                .active(active)
+                .sortBy(sortBy)
+                .sortDirection(sortDirection)
+                .build();
+        
+        ProductPageResponse result = productService.searchProducts(request);
+        return ApiResponse.<ProductPageResponse>builder().result(result).build();
+    }
+
+    @DeleteMapping("/{productId}")
+    ApiResponse<Void> deleteProduct(@PathVariable Integer productId) {
+        productService.deleteProduct(productId);
+        return ApiResponse.<Void>builder().build();
     }
 }

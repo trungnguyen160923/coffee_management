@@ -73,3 +73,8 @@ nbdist/
 # Embedded Tomcat logs, temporary files
 spring.log
 
+### Upload directories ###
+# Ignore uploaded files
+catalog-service/uploads/
+uploads/
+
