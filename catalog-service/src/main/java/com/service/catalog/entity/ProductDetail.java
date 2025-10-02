@@ -29,7 +29,7 @@ public class ProductDetail {
     Product product;
 
     @ManyToOne
-    @JoinColumn(name = "size_id", nullable = false)
+    @JoinColumn(name = "size_id", nullable = true)
     Size size;
 
     @Column(nullable = false, columnDefinition = "DECIMAL(12,2) DEFAULT 0.00")

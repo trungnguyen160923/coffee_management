@@ -12,7 +12,7 @@ import java.math.BigDecimal;
 @Builder
 public class ProductSizeRequest {
     @NotNull(message = "EMPTY_SIZE_ID")
-    @Positive(message = "INVALID_SIZE_ID")
+    // Allow any integer (including -1 for non-beverage items)
     Integer sizeId;
     
     @NotNull(message = "EMPTY_PRICE")

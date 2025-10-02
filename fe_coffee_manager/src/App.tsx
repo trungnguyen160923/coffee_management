@@ -9,6 +9,7 @@ import { NotFoundPage } from './components/common/NotFoundPage';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
 import ManagerManagement from './pages/admin/ManagerManagement';
 import BranchManagement from './pages/admin/BranchManagement';
+import ProductManagement from './pages/admin/ProductManagement';
 import { ManagerDashboard } from './pages/manager/ManagerDashboard';
 import { StaffDashboard } from './pages/staff/StaffDashboard';
 
@@ -51,7 +52,7 @@ function AppRoutes() {
       <Route path="/admin/*" element={
         <ProtectedRoute allowedRoles={['admin']}>
           <Routes>
-            <Route path="products" element={<Layout><div className="p-8"><h1 className="text-2xl font-bold">Quản lý sản phẩm</h1></div></Layout>} />
+            <Route path="products" element={<Layout><ProductManagement /></Layout>} />
             <Route path="recipes" element={<Layout><div className="p-8"><h1 className="text-2xl font-bold">Quản lý công thức</h1></div></Layout>} />
             <Route path="branches" element={<Layout><BranchManagement /></Layout>} />
             <Route path="managers" element={<Layout><ManagerManagement /></Layout>} />

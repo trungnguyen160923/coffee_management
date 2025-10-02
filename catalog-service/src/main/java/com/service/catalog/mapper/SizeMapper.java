@@ -3,6 +3,7 @@ package com.service.catalog.mapper;
 import org.mapstruct.Mapper;
 
 import com.service.catalog.dto.request.SizeCreationRequest;
+import com.service.catalog.dto.request.SizeUpdateRequest;
 import com.service.catalog.dto.response.SizeResponse;
 import com.service.catalog.entity.Size;
 
@@ -10,4 +11,5 @@ import com.service.catalog.entity.Size;
 public interface SizeMapper {
     Size toSize(SizeCreationRequest request);
     SizeResponse toSizeResponse(Size size);
+    Size toSize(SizeUpdateRequest request);
 }

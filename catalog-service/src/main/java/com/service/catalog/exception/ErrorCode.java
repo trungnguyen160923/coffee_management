@@ -7,6 +7,7 @@ import org.springframework.http.HttpStatusCode;
 @Getter
 public enum ErrorCode {
     UNCATEGORIZED_EXCEPTION(9999, "Uncategorized error", HttpStatus.INTERNAL_SERVER_ERROR),
+    SERVER_ERROR(9998, "Server error", HttpStatus.INTERNAL_SERVER_ERROR),
     INVALID_KEY(1001, "Uncategorized error", HttpStatus.BAD_REQUEST),
     UNAUTHENTICATED(1008, "Unauthenticated", HttpStatus.UNAUTHORIZED),
     UNAUTHORIZED(1007, "You do not have permission", HttpStatus.FORBIDDEN),
@@ -35,7 +36,11 @@ public enum ErrorCode {
     CATEGORY_NOT_FOUND(2002, "Category not found", HttpStatus.NOT_FOUND),
     SIZE_NOT_FOUND(2003, "Size not found", HttpStatus.NOT_FOUND),
     PRODUCT_DETAIL_NOT_FOUND(2004, "Product detail not found", HttpStatus.NOT_FOUND),
-
+    SIZE_IN_USE(2005, "Size is currently being used in products", HttpStatus.BAD_REQUEST),
+    EMPTY_NAME_CATEGORY(1038, "Name category is required", HttpStatus.BAD_REQUEST),
+    INVALID_NAME_CATEGORY(1039, "Name category must be at most {max} characters", HttpStatus.BAD_REQUEST),
+    CATEGORY_NAME_ALREADY_EXISTS(1042, "Name category is unique", HttpStatus.BAD_REQUEST),
+    CATEGORY_IN_USE(1043, "Category is currently being used in products", HttpStatus.BAD_REQUEST),
     ;
 
     ErrorCode(int code, String message, HttpStatusCode statusCode) {

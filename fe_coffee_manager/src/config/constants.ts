@@ -13,6 +13,11 @@ export const API_ENDPOINTS = {
     IMAGE: (id: string) => `/api/products/${id}/image`,
     RECIPES: (id: string) => `/api/products/${id}/recipes`,
   },
+  CATALOGS: {
+    SIZES: '/api/catalogs/sizes',
+    PRODUCTS: '/api/catalogs/products',
+    CATEGORIES: '/api/catalogs/categories',
+  },
   ORDERS: {
     BASE: '/api/orders',
     STATS: '/api/orders/stats',

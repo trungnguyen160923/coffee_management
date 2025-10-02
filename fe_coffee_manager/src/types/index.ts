@@ -86,6 +86,66 @@ export interface UsersListResponseDto<T> {
     quantity: number;
     unit: string;
   }
+
+// Catalog service shapes
+export interface CatalogSize {
+  sizeId: number;
+  name: string;
+  description?: string | null;
+  createAt: string;
+  updateAt: string;
+}
+
+export interface CatalogCategory {
+  categoryId: number;
+  name: string;
+  description?: string | null;
+  createAt: string;
+  updateAt: string;
+}
+
+export interface CatalogProductDetail {
+  pdId: number;
+  size: CatalogSize;
+  price: number;
+  createAt: string;
+  updateAt: string;
+}
+
+export interface CatalogProduct {
+  productId: number;
+  name: string;
+  imageUrl?: string | null;
+  category?: CatalogCategory | null;
+  sku?: string | null;
+  description?: string | null;
+  active: boolean;
+  createAt: string;
+  updateAt: string;
+  productDetails: CatalogProductDetail[];
+}
+
+export interface ProductPageResponse {
+  content: CatalogProduct[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  first: boolean;
+  last: boolean;
+  hasNext: boolean;
+  hasPrevious: boolean;
+}
+
+export interface ProductSearchParams {
+  page?: number;
+  size?: number;
+  search?: string;
+  categoryId?: number;
+  active?: boolean;
+  sortBy?: string;
+  sortDirection?: 'ASC' | 'DESC';
+}
   
   export interface Order {
     id: string;
