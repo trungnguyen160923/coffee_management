@@ -335,33 +335,45 @@ const ManagerManagement: React.FC = () => {
   }
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="bg-white shadow rounded-lg">
-        <div className="px-4 py-5 sm:p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Manager Management</h1>
-              <p className="mt-1 text-sm text-gray-500">Manage branch managers information</p>
-            </div>
-            <div className="flex space-x-3">
-              <button
-                onClick={fetchManagers}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium"
-              >
-                Refresh
-              </button>
-              <button
-                onClick={openCreateModal}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium inline-flex items-center gap-2"
-              >
-                <Plus className="w-4 h-4" />
-                Create Manager
-              </button>
+    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50">
+      <div className="max-w-7xl mx-auto px-2 py-4 sm:px-6 lg:px-8">
+        <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+          <div className="bg-gradient-to-r from-amber-600 to-orange-600 px-8 py-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="bg-white p-2 rounded-lg">
+                  <svg className="w-8 h-8 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <h1 className="text-3xl font-bold text-white">Manager Management</h1>
+                  <p className="text-amber-100 mt-1">Manage branch managers information</p>
+                </div>
+              </div>
+              <div className="flex space-x-3">
+                <button
+                  onClick={fetchManagers}
+                  className="flex items-center space-x-2 bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg transition-colors"
+                  title="Refresh data"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  <span className="font-medium">Refresh</span>
+                </button>
+                <button
+                  onClick={openCreateModal}
+                  className="flex items-center space-x-2 bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg transition-colors"
+                >
+                  <Plus className="w-5 h-5" />
+                  <span className="font-medium">Create Manager</span>
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
+
+          <div className="p-8">
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -588,8 +600,10 @@ const ManagerManagement: React.FC = () => {
               </select>
             </div>
           </div>
+          </div>
         </div>
       </div>
+
       <CreateManagerModal
         open={isCreating}
         branches={unassignedBranches}
@@ -698,6 +712,8 @@ const ManagerManagement: React.FC = () => {
         onCancel={() => { setIsDeleting(false); setDeletingManager(null); }}
         loading={deletingLoading}
       />
+        </div>
+      </div>
     </div>
   );
 };

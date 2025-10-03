@@ -146,6 +146,47 @@ export interface ProductSearchParams {
   sortBy?: string;
   sortDirection?: 'ASC' | 'DESC';
 }
+
+// Supplier types
+export interface CatalogSupplier {
+  supplierId: number;
+  name: string;
+  contactName?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  address?: string | null;
+  note?: string | null;
+  createAt: string;
+  updateAt: string;
+}
+
+export interface SupplierPageResponse {
+  content: CatalogSupplier[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  first: boolean;
+  last: boolean;
+  hasNext: boolean;
+  hasPrevious: boolean;
+}
+
+export interface SupplierSearchParams {
+  page?: number;
+  size?: number;
+  search?: string;
+  sortBy?: string;
+  sortDirection?: 'ASC' | 'DESC';
+}
+
+export interface CreateSupplierRequest {
+  name: string;
+  contactName?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  address?: string | null;
+}
   
   export interface Order {
     id: string;

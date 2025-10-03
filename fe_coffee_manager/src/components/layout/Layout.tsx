@@ -12,7 +12,8 @@ import {
   BookOpen,
   ShoppingCart,
   Calendar,
-  Archive
+  Archive,
+  Truck
 } from 'lucide-react';
 
 import { DEFAULT_IMAGES } from '../../config/constants';
@@ -31,6 +32,7 @@ export function Layout({ children }: LayoutProps) {
       return [
         { icon: Home, label: 'Overview', path: '/admin' },
         { icon: Package, label: 'Products', path: '/admin/products' },
+        { icon: Truck, label: 'Suppliers', path: '/admin/suppliers' },
         { icon: BookOpen, label: 'Recipes', path: '/admin/recipes' },
         { icon: Store, label: 'Branches', path: '/admin/branches' },
         { icon: Users, label: 'Managers', path: '/admin/managers' },
