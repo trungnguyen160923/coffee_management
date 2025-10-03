@@ -1,39 +1,126 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { cartService } from '../../services/cartService';
 import { orderService } from '../../services/orderService';
+import axios from 'axios';
 
 const CheckoutPage = () => {
     const navigate = useNavigate();
 
     const [formData, setFormData] = useState({
-        firstName: '',
-        lastName: '',
-        country: '',
-        streetAddress: '',
-        townCity: '',
-        zipCode: '',
+        name: '',
+        province: '',
+        provinceCode: '',
+        district: '',
+        districtCode: '',
+        ward: '',
         phone: '',
         email: '',
         paymentMethod: 'CASH',
-        branchId: 1
+        branchId: 1,
+        notes: ''
     });
 
+    const [provinces, setProvinces] = useState([]);
+    const [districts, setDistricts] = useState([]);
+    const [wards, setWards] = useState([]);
+
     const [submitting, setSubmitting] = useState(false);
+
+    // Fetch provinces on mount
+    useEffect(() => {
+        fetchProvinces();
+    }, []);
+
+    const fetchProvinces = async () => {
+        try {
+            const response = await axios.get('http://localhost:8000/api/provinces/p');
+            setProvinces(response.data);
+        } catch (error) {
+            console.error('Error fetching provinces:', error);
+        }
+    };
+
+    const fetchDistricts = async (provinceCode) => {
+        try {
+            const response = await axios.get(`http://localhost:8000/api/provinces/p/${provinceCode}?depth=2`);
+            setDistricts(response.data.districts || []);
+            setWards([]);
+        } catch (error) {
+            console.error('Error fetching districts:', error);
+        }
+    };
+
+    const fetchWards = async (districtCode) => {
+        try {
+            const response = await axios.get(`http://localhost:8000/api/provinces/d/${districtCode}?depth=2`);
+            setWards(response.data.wards || []);
+        } catch (error) {
+            console.error('Error fetching wards:', error);
+        }
+    };
 
     const onChange = (e) => {
         const { name, value } = e.target;
         setFormData((prev) => ({ ...prev, [name]: value }));
     };
 
+    const handleProvinceChange = (e) => {
+        const selectedOption = e.target.options[e.target.selectedIndex];
+        const provinceCode = selectedOption.value;
+        const provinceName = selectedOption.text;
+
+        setFormData((prev) => ({
+            ...prev,
+            province: provinceName,
+            provinceCode: provinceCode,
+            district: '',
+            districtCode: '',
+            ward: ''
+        }));
+
+        setDistricts([]);
+        setWards([]);
+
+        if (provinceCode) {
+            fetchDistricts(provinceCode);
+        }
+    };
+
+    const handleDistrictChange = (e) => {
+        const selectedOption = e.target.options[e.target.selectedIndex];
+        const districtCode = selectedOption.value;
+        const districtName = selectedOption.text;
+
+        setFormData((prev) => ({
+            ...prev,
+            district: districtName,
+            districtCode: districtCode,
+            ward: ''
+        }));
+
+        setWards([]);
+
+        if (districtCode) {
+            fetchWards(districtCode);
+        }
+    };
+
+    const handleWardChange = (e) => {
+        const wardName = e.target.options[e.target.selectedIndex].text;
+        setFormData((prev) => ({
+            ...prev,
+            ward: wardName
+        }));
+    };
+
     const validateRequired = () => {
-        const { firstName, country, streetAddress, townCity, zipCode, phone, email } = formData;
+        const { name, province, district, ward, phone, email } = formData;
         return (
-            firstName.trim() !== '' &&
-            country.trim() !== '' &&
-            streetAddress.trim() !== '' &&
-            townCity.trim() !== '' &&
-            zipCode.trim() !== '' &&
+            name.trim() !== '' &&
+            province.trim() !== '' &&
+            district.trim() !== '' &&
+            ward.trim() !== '' &&
             phone.trim() !== '' &&
             email.trim() !== ''
         );
@@ -41,10 +128,20 @@ const CheckoutPage = () => {
 
     const onSubmit = async (e) => {
         e.preventDefault();
+
+        // Check authentication first
+        const token = localStorage.getItem('token');
+        if (!token) {
+            alert('Please login before placing an order.');
+            navigate('/coffee/login');
+            return;
+        }
+
         if (!validateRequired()) {
             alert('Please fill all the details !!');
             return;
         }
+
         try {
             setSubmitting(true);
             // Fetch cart to build order items
@@ -57,24 +154,27 @@ const CheckoutPage = () => {
             const user = localStorage.getItem('user');
             const customerId = user ? JSON.parse(user).userId : null;
 
+            // Build deliveryAddress from all address fields
+            const deliveryAddress = [
+                formData.ward,
+                formData.district,
+                formData.province
+            ].filter(a => a.trim()).join(', ');
+
             const payload = {
                 customerId: customerId,
+                customerName: formData.name,
+                phone: formData.phone,
+                deliveryAddress: deliveryAddress,
                 branchId: formData.branchId,
+                paymentMethod: formData.paymentMethod,
+                discount: 0,
                 orderItems: cartItems.map(it => ({
                     productId: it.productId,
                     productDetailId: it.productDetailId,
                     quantity: it.quantity
                 })),
-                firstName: formData.firstName,
-                lastName: formData.lastName,
-                phone: formData.phone,
-                email: formData.email,
-                country: formData.country,
-                streetAddress: formData.streetAddress,
-                townCity: formData.townCity,
-                zipCode: formData.zipCode,
-                paymentMethod: formData.paymentMethod,
-                notes: ''
+                notes: formData.notes
             };
 
             await orderService.createOrder(payload);
@@ -82,6 +182,10 @@ const CheckoutPage = () => {
             alert('Order placed successfully!');
             window.dispatchEvent(new Event('cartUpdated'));
             navigate('/coffee');
+        } catch (error) {
+            console.error('Order creation failed:', error);
+            const errorMsg = error?.response?.data?.message || error.message || 'Failed to place order';
+            alert('Order failed: ' + errorMsg);
         } finally {
             setSubmitting(false);
         }
@@ -115,31 +219,17 @@ const CheckoutPage = () => {
                             <form onSubmit={onSubmit} className="billing-form ftco-bg-dark p-3 p-md-5">
                                 <h3 className="mb-4 billing-heading">Billing Details</h3>
                                 <div className="row align-items-end">
-                                    <div className="col-md-6">
+                                    <div className="col-md-12">
                                         <div className="form-group">
-                                            <label htmlFor="first-name">First Name *</label>
+                                            <label htmlFor="name">Full Name *</label>
                                             <input
                                                 type="text"
-                                                id="first-name"
-                                                name="firstName"
-                                                value={formData.firstName}
+                                                id="name"
+                                                name="name"
+                                                value={formData.name}
                                                 onChange={onChange}
                                                 className="form-control"
-                                                placeholder=""
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="col-md-6">
-                                        <div className="form-group">
-                                            <label htmlFor="last-name">Last Name</label>
-                                            <input
-                                                type="text"
-                                                id="last-name"
-                                                name="lastName"
-                                                value={formData.lastName}
-                                                onChange={onChange}
-                                                className="form-control"
-                                                placeholder=""
+                                                placeholder="Enter your full name"
                                             />
                                         </div>
                                     </div>
@@ -181,26 +271,24 @@ const CheckoutPage = () => {
 
                                     <div className="col-md-12">
                                         <div className="form-group">
-                                            <label htmlFor="country">State / Country *</label>
+                                            <label htmlFor="province">Province / City *</label>
                                             <div className="select-wrap">
                                                 <div className="icon">
                                                     <span className="ion-ios-arrow-down"></span>
                                                 </div>
                                                 <select
-                                                    name="country"
-                                                    id="country"
-                                                    value={formData.country}
-                                                    onChange={onChange}
+                                                    name="province"
+                                                    id="province"
+                                                    value={formData.provinceCode}
+                                                    onChange={handleProvinceChange}
                                                     className="form-control"
                                                 >
-                                                    <option value="" hidden>Select State/Country</option>
-                                                    <option value="France">France</option>
-                                                    <option value="Italy">Italy</option>
-                                                    <option value="India">India</option>
-                                                    <option value="Philippines">Philippines</option>
-                                                    <option value="South Korea">South Korea</option>
-                                                    <option value="Hongkong">Hongkong</option>
-                                                    <option value="Japan">Japan</option>
+                                                    <option value="">Select Province/City</option>
+                                                    {provinces.map((province) => (
+                                                        <option key={province.code} value={province.code}>
+                                                            {province.name}
+                                                        </option>
+                                                    ))}
                                                 </select>
                                             </div>
                                         </div>
@@ -210,47 +298,55 @@ const CheckoutPage = () => {
 
                                     <div className="col-md-12">
                                         <div className="form-group">
-                                            <label htmlFor="street-address">Street Address *</label>
-                                            <input
-                                                type="text"
-                                                id="street-address"
-                                                name="streetAddress"
-                                                value={formData.streetAddress}
-                                                onChange={onChange}
-                                                className="form-control"
-                                                placeholder="House number and street name"
-                                            />
+                                            <label htmlFor="district">District *</label>
+                                            <div className="select-wrap">
+                                                <div className="icon">
+                                                    <span className="ion-ios-arrow-down"></span>
+                                                </div>
+                                                <select
+                                                    name="district"
+                                                    id="district"
+                                                    value={formData.districtCode}
+                                                    onChange={handleDistrictChange}
+                                                    className="form-control"
+                                                    disabled={!formData.provinceCode}
+                                                >
+                                                    <option value="">Select District</option>
+                                                    {districts.map((district) => (
+                                                        <option key={district.code} value={district.code}>
+                                                            {district.name}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
                                         </div>
                                     </div>
 
                                     <div className="w-100"></div>
 
-                                    <div className="col-md-6">
+                                    <div className="col-md-12">
                                         <div className="form-group">
-                                            <label htmlFor="town-or-city">Town / City *</label>
-                                            <input
-                                                type="text"
-                                                id="town-or-city"
-                                                name="townCity"
-                                                value={formData.townCity}
-                                                onChange={onChange}
-                                                className="form-control"
-                                                placeholder=""
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="col-md-6">
-                                        <div className="form-group">
-                                            <label htmlFor="postcode-or-zip">Postcode / ZIP *</label>
-                                            <input
-                                                type="text"
-                                                id="postcode-or-zip"
-                                                name="zipCode"
-                                                value={formData.zipCode}
-                                                onChange={onChange}
-                                                className="form-control"
-                                                placeholder=""
-                                            />
+                                            <label htmlFor="ward">Ward *</label>
+                                            <div className="select-wrap">
+                                                <div className="icon">
+                                                    <span className="ion-ios-arrow-down"></span>
+                                                </div>
+                                                <select
+                                                    name="ward"
+                                                    id="ward"
+                                                    value={formData.ward}
+                                                    onChange={handleWardChange}
+                                                    className="form-control"
+                                                    disabled={!formData.districtCode}
+                                                >
+                                                    <option value="">Select Ward</option>
+                                                    {wards.map((ward) => (
+                                                        <option key={ward.code} value={ward.name}>
+                                                            {ward.name}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -281,6 +377,23 @@ const CheckoutPage = () => {
                                                 onChange={onChange}
                                                 className="form-control"
                                                 placeholder=""
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="w-100"></div>
+
+                                    <div className="col-md-12">
+                                        <div className="form-group">
+                                            <label htmlFor="notes">Order Notes (Optional)</label>
+                                            <textarea
+                                                id="notes"
+                                                name="notes"
+                                                value={formData.notes}
+                                                onChange={onChange}
+                                                className="form-control"
+                                                rows="3"
+                                                placeholder="Any special instructions for your order..."
                                             />
                                         </div>
                                     </div>
