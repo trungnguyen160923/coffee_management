@@ -51,7 +51,9 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
             "/catalogs/products/detail/.*",
             // Public categories endpoints
             "/catalogs/categories",
-            "/catalogs/categories/.*"
+            "/catalogs/categories/.*",
+            // Provinces proxy endpoints (public)
+            "/provinces/.*"
     };
 
     @Value("${app.api-prefix}")

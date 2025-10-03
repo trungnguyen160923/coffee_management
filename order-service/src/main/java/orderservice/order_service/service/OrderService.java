@@ -35,39 +35,24 @@ public class OrderService {
         @Transactional
         public OrderResponse createOrder(CreateOrderRequest request, String token) {
                 try {
-                        log.info("CreateOrder start: customerId={}, branchId={}, itemsCount={}, discount={}, paymentMethod={}, reservationId={}, tableId={}",
-                                        request.getCustomerId(), request.getBranchId(),
-                                        request.getOrderItems() != null ? request.getOrderItems().size() : 0,
-                                        request.getDiscount(), request.getPaymentMethod(), request.getReservationId(),
-                                        request.getTableId());
-                        log.debug("Customer info: name='{}', phone='{}', address='{}'",
-                                        request.getCustomerName(), request.getPhone(), request.getDeliveryAddress());
                         // Validate products and calculate subtotal
                         BigDecimal subtotal = BigDecimal.ZERO;
 
                         for (CreateOrderRequest.OrderItemRequest itemRequest : request.getOrderItems()) {
-                                // Get product detail to validate and get price
-                                log.debug("Fetching product detail: productDetailId={}, productId={}",
-                                                itemRequest.getProductDetailId(), itemRequest.getProductId());
                                 ApiResponse<ProductDetailResponse> productDetailResponse = catalogServiceClient
                                                 .getProductDetailById(itemRequest.getProductDetailId());
 
-                                if (productDetailResponse.getResult() == null) {
-                                        log.warn("Product detail not found: productDetailId={}",
-                                                        itemRequest.getProductDetailId());
+                                if (productDetailResponse == null || productDetailResponse.getResult() == null) {
                                         throw new AppException(ErrorCode.PRODUCT_NOT_FOUND);
                                 }
 
                                 ProductDetailResponse productDetail = productDetailResponse.getResult();
                                 BigDecimal itemTotal = productDetail.getPrice().multiply(itemRequest.getQuantity());
-                                log.debug("Item calc: price={}, qty={}, total={}",
-                                                productDetail.getPrice(), itemRequest.getQuantity(), itemTotal);
                                 subtotal = subtotal.add(itemTotal);
                         }
 
                         BigDecimal discount = request.getDiscount() != null ? request.getDiscount() : BigDecimal.ZERO;
                         BigDecimal totalAmount = subtotal.subtract(discount);
-                        log.info("Totals: subtotal={}, discount={}, total={}", subtotal, discount, totalAmount);
 
                         // Create order
                         Order order = Order.builder()
@@ -89,7 +74,6 @@ public class OrderService {
                                         .build();
 
                         order = orderRepository.save(order);
-                        log.info("Order saved: orderId={}", order.getOrderId());
 
                         // Create order items
                         for (CreateOrderRequest.OrderItemRequest itemRequest : request.getOrderItems()) {
@@ -102,6 +86,7 @@ public class OrderService {
                                                 .order(order)
                                                 .productId(itemRequest.getProductId())
                                                 .productDetailId(itemRequest.getProductDetailId())
+                                                .sizeId(productDetail.getSize().getSizeId())
                                                 .quantity(itemRequest.getQuantity())
                                                 .unitPrice(productDetail.getPrice())
                                                 .totalPrice(productDetail.getPrice()
@@ -110,18 +95,12 @@ public class OrderService {
                                                 .build();
 
                                 orderItemRepository.save(orderItem);
-                                log.debug("OrderItem saved: orderId={}, itemId={}, productId={}, productDetailId={}, qty={}, unitPrice={}, lineTotal={}",
-                                                order.getOrderId(), orderItem.getOrderItemId(),
-                                                orderItem.getProductId(),
-                                                orderItem.getProductDetailId(), orderItem.getQuantity(),
-                                                orderItem.getUnitPrice(), orderItem.getTotalPrice());
                         }
 
-                        log.info("CreateOrder success: orderId={}", order.getOrderId());
+                        log.info("Order created successfully: orderId={}", order.getOrderId());
                         return convertToOrderResponse(order);
                 } catch (Exception e) {
-                        log.error("CreateOrder failed for customerId={}, branchId={}: {}", request.getCustomerId(),
-                                        request.getBranchId(), e.getMessage(), e);
+                        log.error("Failed to create order: {}", e.getMessage());
                         throw new AppException(ErrorCode.ORDER_CREATION_FAILED);
                 }
         }
@@ -182,37 +161,29 @@ public class OrderService {
 
         private OrderResponse.OrderItemResponse convertToOrderItemResponse(OrderItem orderItem) {
                 try {
-                        // Get product and product detail information
+                        // Get product information
                         ApiResponse<ProductResponse> productResponse = catalogServiceClient
                                         .getProductById(orderItem.getProductId());
-                        ApiResponse<ProductDetailResponse> productDetailResponse = catalogServiceClient
-                                        .getProductDetailById(orderItem.getProductDetailId());
-                        log.debug("convertToOrderItemResponse: orderItemId={}, productId={}, productDetailId={}, fetchedProduct={}, fetchedDetail={}",
-                                        orderItem.getOrderItemId(), orderItem.getProductId(),
-                                        orderItem.getProductDetailId(),
-                                        productResponse.getResult() != null, productDetailResponse.getResult() != null);
 
                         return OrderResponse.OrderItemResponse.builder()
                                         .orderItemId(orderItem.getOrderItemId())
                                         .productId(orderItem.getProductId())
                                         .productDetailId(orderItem.getProductDetailId())
+                                        .sizeId(orderItem.getSizeId())
                                         .product(productResponse.getResult())
-                                        .productDetail(productDetailResponse.getResult())
                                         .quantity(orderItem.getQuantity())
                                         .unitPrice(orderItem.getUnitPrice())
                                         .totalPrice(orderItem.getTotalPrice())
                                         .notes(orderItem.getNotes())
                                         .build();
                 } catch (Exception e) {
-                        log.warn("convertToOrderItemResponse: fallback due to error for orderItemId={}: {}",
-                                        orderItem.getOrderItemId(), e.getMessage());
                         // Return basic information if Feign call fails
                         return OrderResponse.OrderItemResponse.builder()
                                         .orderItemId(orderItem.getOrderItemId())
                                         .productId(orderItem.getProductId())
                                         .productDetailId(orderItem.getProductDetailId())
+                                        .sizeId(orderItem.getSizeId())
                                         .product(null)
-                                        .productDetail(null)
                                         .quantity(orderItem.getQuantity())
                                         .unitPrice(orderItem.getUnitPrice())
                                         .totalPrice(orderItem.getTotalPrice())

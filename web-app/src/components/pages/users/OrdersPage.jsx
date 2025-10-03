@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import DataTable from './DataTable';
+import { orderService } from '../../../services/orderService';
+import { CONFIG } from '../../../configurations/configuration';
 
 const OrdersPage = () => {
     const [orders, setOrders] = useState([]);
@@ -23,103 +24,122 @@ const OrdersPage = () => {
         try {
             setLoading(true);
 
-            // Mock data - in real app, you would fetch from API
-            const mockOrders = [
-                {
-                    id: 1,
-                    firstName: 'John',
-                    lastName: 'Doe',
-                    streetAddress: '123 Main St',
-                    country: 'USA',
-                    town: 'New York',
-                    zipCode: '10001',
-                    phone: '+1-555-0123',
-                    email: 'john.doe@email.com',
-                    status: 'Delivered',
-                    totalPrice: 25.99
-                },
-                {
-                    id: 2,
-                    firstName: 'Jane',
-                    lastName: 'Smith',
-                    streetAddress: '456 Oak Ave',
-                    country: 'USA',
-                    town: 'Los Angeles',
-                    zipCode: '90210',
-                    phone: '+1-555-0456',
-                    email: 'jane.smith@email.com',
-                    status: 'Processing',
-                    totalPrice: 18.50
-                },
-                {
-                    id: 3,
-                    firstName: 'Bob',
-                    lastName: 'Johnson',
-                    streetAddress: '789 Pine Rd',
-                    country: 'USA',
-                    town: 'Chicago',
-                    zipCode: '60601',
-                    phone: '+1-555-0789',
-                    email: 'bob.johnson@email.com',
-                    status: 'Cancelled',
-                    totalPrice: 32.75
-                }
-            ];
+            // Get user info from localStorage
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            const customerId = user?.userId || user?.user_id || user?.id;
 
-            // Simulate API call delay
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            if (!customerId) {
+                console.error('Customer ID not found');
+                setOrders([]);
+                return;
+            }
 
-            setOrders(mockOrders);
+            // Fetch real data from API
+            const response = await orderService.getOrdersByCustomer(customerId);
+
+            if (response && response.result) {
+                setOrders(response.result);
+            } else {
+                setOrders([]);
+            }
         } catch (error) {
             console.error('Error fetching orders:', error);
+            setOrders([]);
         } finally {
             setLoading(false);
         }
     };
 
+    const formatDate = (dateString) => {
+        if (!dateString) return 'N/A';
+        const date = new Date(dateString);
+        return date.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        });
+    };
+
+    const formatTime = (dateTimeString) => {
+        if (!dateTimeString) return 'N/A';
+        const date = new Date(dateTimeString);
+        return date.toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true
+        });
+    };
+
+    const formatPrice = (value) => {
+        return new Intl.NumberFormat('vi-VN').format(Number(value || 0)) + ' đ';
+    };
+
     const columns = [
         {
-            header: 'First Name',
-            key: 'firstName'
+            header: 'Order ID',
+            key: 'orderId'
         },
         {
-            header: 'Last Name',
-            key: 'lastName'
-        },
-        {
-            header: 'Address',
-            key: 'address',
-            render: (order) => `${order.streetAddress}, ${order.country}, ${order.town}`
-        },
-        {
-            header: 'Zip Code',
-            key: 'zipCode'
+            header: 'Customer Name',
+            key: 'customerName'
         },
         {
             header: 'Phone',
             key: 'phone'
         },
         {
-            header: 'Email',
-            key: 'email'
+            header: 'Address',
+            key: 'deliveryAddress',
+            render: (order) => (
+                <div style={{ maxWidth: '200px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {order.deliveryAddress || 'N/A'}
+                </div>
+            )
+        },
+        {
+            header: 'Order Date',
+            key: 'orderDate',
+            render: (order) => formatDate(order.orderDate)
+        },
+        {
+            header: 'Time',
+            key: 'orderDate',
+            render: (order) => formatTime(order.orderDate)
+        },
+        {
+            header: 'Items',
+            key: 'orderItems',
+            render: (order) => order.orderItems?.length || 0
+        },
+        {
+            header: 'Total Amount',
+            key: 'totalAmount',
+            render: (order) => formatPrice(order.totalAmount)
+        },
+        {
+            header: 'Payment',
+            key: 'paymentMethod'
         },
         {
             header: 'Status',
             key: 'status',
             render: (order) => (
-                <span className={`badge ${order.status === 'Delivered' ? 'badge-success' :
-                    order.status === 'Processing' ? 'badge-warning' :
-                        order.status === 'Cancelled' ? 'badge-danger' :
-                            'badge-secondary'
-                    }`}>
+                <span style={{
+                    padding: '4px 12px',
+                    borderRadius: '20px',
+                    fontSize: '11px',
+                    fontWeight: 'bold',
+                    textTransform: 'uppercase',
+                    backgroundColor: order.status === 'COMPLETED' ? '#28a745' :
+                        order.status === 'PENDING' ? '#c49b63' :
+                            order.status === 'CANCELLED' ? '#dc3545' :
+                                order.status === 'PROCESSING' ? '#17a2b8' :
+                                    '#6c757d',
+                    color: '#fff'
+                }}>
                     {order.status}
                 </span>
             )
-        },
-        {
-            header: 'Total Price',
-            key: 'totalPrice',
-            render: (order) => `$${order.totalPrice.toFixed(2)}`
         }
     ];
 
@@ -140,23 +160,70 @@ const OrdersPage = () => {
             </section>
 
             {/* Orders Table Section */}
-            <section className="ftco-section ftco-cart">
+            <section className="ftco-section ftco-cart" style={{
+                background: 'url(/images/bg_4.jpg) no-repeat fixed',
+                backgroundSize: 'cover'
+            }}>
                 <div className="container">
                     <div className="row">
                         <div className="col-md-12 ftco-animate">
-                            <div className="card">
-                                <div className="card-header">
-                                    <h3 className="card-title">Order History</h3>
-                                </div>
-                                <div className="card-body">
-                                    <DataTable
-                                        title="Orders"
-                                        columns={columns}
-                                        data={orders}
-                                        emptyMessage="You don't have any Orders!"
-                                        loading={loading}
-                                    />
-                                </div>
+                            <div className="book p-4" style={{
+                                backgroundColor: 'rgba(0, 0, 0, 0.1)',
+                                borderRadius: '10px',
+                                color: 'white'
+                            }}>
+                                <h3 style={{ color: 'white', fontSize: '1.5rem', textAlign: 'center', marginBottom: '30px' }}>Order History</h3>
+
+                                {loading ? (
+                                    <div style={{ textAlign: 'center', padding: '40px', color: 'white' }}>
+                                        <div className="spinner-border text-warning" role="status">
+                                            <span className="sr-only">Loading...</span>
+                                        </div>
+                                        <p style={{ marginTop: '15px' }}>Loading orders...</p>
+                                    </div>
+                                ) : orders.length === 0 ? (
+                                    <div style={{ textAlign: 'center', padding: '40px', color: 'white' }}>
+                                        <p>You don't have any Orders!</p>
+                                    </div>
+                                ) : (
+                                    <div style={{ overflowX: 'auto' }}>
+                                        <table className="table" style={{ margin: 0, backgroundColor: 'transparent' }}>
+                                            <thead style={{ backgroundColor: '#c49b63' }}>
+                                                <tr>
+                                                    {columns.map((column, index) => (
+                                                        <th key={index} style={{
+                                                            color: 'white',
+                                                            fontWeight: 'bold',
+                                                            textAlign: 'center',
+                                                            padding: '15px 10px',
+                                                            border: 'none',
+                                                            fontSize: '14px'
+                                                        }}>
+                                                            {column.header}
+                                                        </th>
+                                                    ))}
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {orders.map((order, index) => (
+                                                    <tr key={index} style={{ backgroundColor: 'transparent' }}>
+                                                        {columns.map((column, colIndex) => (
+                                                            <td key={colIndex} style={{
+                                                                color: '#e0e0e0',
+                                                                padding: '12px 10px',
+                                                                border: 'none',
+                                                                textAlign: column.key === 'orderId' || column.key === 'orderItems' ? 'center' : 'left',
+                                                                fontSize: '13px'
+                                                            }}>
+                                                                {column.render ? column.render(order) : order[column.key]}
+                                                            </td>
+                                                        ))}
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>

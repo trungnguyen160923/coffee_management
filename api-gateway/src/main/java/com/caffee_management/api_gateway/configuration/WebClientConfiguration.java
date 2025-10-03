@@ -3,12 +3,14 @@ package com.caffee_management.api_gateway.configuration;
 import com.caffee_management.api_gateway.repository.AuthClient;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.reactive.CorsWebFilter;
 import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.support.WebClientAdapter;
 import org.springframework.web.service.invoker.HttpServiceProxyFactory;
+import reactor.netty.http.client.HttpClient;
 
 import java.util.List;
 
@@ -19,6 +21,15 @@ public class WebClientConfiguration {
         return WebClient.builder()
                 .baseUrl("http://localhost:8001/auth-service")
                 .build();
+    }
+
+    @Bean
+    WebClient.Builder webClientBuilder() {
+        HttpClient httpClient = HttpClient.create()
+                .followRedirect(true);
+
+        return WebClient.builder()
+                .clientConnector(new ReactorClientHttpConnector(httpClient));
     }
 
     @Bean
