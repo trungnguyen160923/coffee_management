@@ -16,14 +16,6 @@ const BranchManagement: React.FC = () => {
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [isCreating, setIsCreating] = useState(false);
-  const defaultCreateForm = {
-    name: '',
-    address: '',
-    phone: '',
-    openHours: '09:00',
-    endHours: '21:00',
-  };
-  const [createForm, setCreateForm] = useState(defaultCreateForm);
   const [editing, setEditing] = useState<{ id: number; field: 'name' | 'address' | 'phone' | 'openHours' | 'endHours' | 'businessHours' } | null>(null);
   const [editValue, setEditValue] = useState('');
   const [pendingDelete, setPendingDelete] = useState<Branch | null>(null);
@@ -223,45 +215,295 @@ const BranchManagement: React.FC = () => {
   }, [allBranches, limit, page]);
 
   return (
-    <div className="p-6">
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Branch Management</h1>
-          <p className="text-gray-500 text-sm">Manage branch locations</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setIsCreating(true)}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium"
-          >
-            Add Branch
-          </button>
-          <button
-            onClick={fetchBranches}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium"
-          >
-            Refresh
-          </button>
-          <select
-            value={limit}
-            onChange={(e) => { setPage(0); setLimit(parseInt(e.target.value, 10)); }}
-            className="border border-gray-300 rounded px-2 py-1 text-sm"
-          >
-            {[10, 20, 50, 100].map((s) => (
-              <option key={s} value={s}>{s} / page</option>
-            ))}
-          </select>
+    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50">
+      <div className="max-w-7xl mx-auto px-2 py-4 sm:px-6 lg:px-8">
+        <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+          <div className="bg-gradient-to-r from-amber-600 to-orange-600 px-8 py-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="bg-white p-2 rounded-lg">
+                  <svg className="w-8 h-8 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
+                </div>
+                <div>
+                  <h1 className="text-3xl font-bold text-white">Branch Management</h1>
+                  <p className="text-amber-100 mt-1">Manage branch locations</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setIsCreating(true)}
+                  className="flex items-center space-x-2 bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  </svg>
+                  <span className="font-medium">Add Branch</span>
+                </button>
+                <button
+                  onClick={fetchBranches}
+                  className="flex items-center space-x-2 bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg transition-colors"
+                  title="Refresh data"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  <span className="font-medium">Refresh</span>
+                </button>
+                <select
+                  value={limit}
+                  onChange={(e) => { setPage(0); setLimit(parseInt(e.target.value, 10)); }}
+                  className="bg-white/20 hover:bg-white/30 text-white border-white/30 rounded px-3 py-2 text-sm"
+                >
+                  {[10, 20, 50, 100].map((s) => (
+                    <option key={s} value={s} className="text-gray-900">{s} / page</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-8">
+            {/* Statistics Cards */}
+            <div className="mb-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="bg-white shadow rounded-lg">
+                <div className="px-4 py-5 sm:p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-lg font-medium text-gray-900">Total Branches</h2>
+                  </div>
+                  <div className="bg-blue-50 rounded-lg p-3">
+                    <div className="text-xl font-bold text-blue-600">{total}</div>
+                    <div className="text-xs text-blue-800">Branches</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white shadow rounded-lg">
+                <div className="px-4 py-5 sm:p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-lg font-medium text-gray-900">With Managers</h2>
+                  </div>
+                  <div className="bg-green-50 rounded-lg p-3">
+                    <div className="text-xl font-bold text-green-600">
+                      {branches.filter(b => (b as any).managerUserId).length}
+                    </div>
+                    <div className="text-xs text-green-800">Have managers</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white shadow rounded-lg">
+                <div className="px-4 py-5 sm:p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-lg font-medium text-gray-900">Actions</h2>
+                    <button
+                      onClick={() => setIsCreating(true)}
+                      className="flex items-center space-x-1 text-sm bg-amber-600 text-white px-3 py-1.5 rounded-lg hover:bg-amber-700 transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                      </svg>
+                      <span>Add New</span>
+                    </button>
+                  </div>
+                  <div className="bg-purple-50 rounded-lg p-3">
+                    <div className="text-xl font-bold text-purple-600">
+                      {branches.filter(b => b.createAt && new Date(b.createAt) > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)).length}
+                    </div>
+                    <div className="text-xs text-purple-800">Added in 30 days</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="flex justify-center items-center h-64">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+              </div>
+            ) : error ? (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">{error}</div>
+            ) : (
+              <div className="bg-white shadow rounded-lg">
+                <div className="px-4 py-5 sm:p-6">
+                {/* Top horizontal scrollbar */}
+                <div ref={topScrollRef} className="overflow-x-auto overflow-y-hidden h-5 mb-2">
+                  <div ref={topInnerRef} style={{ height: 1 }} />
+                </div>
+
+                <div ref={bottomScrollRef} className="overflow-x-auto">
+                  <table ref={tableRef} className="min-w-max divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" rowSpan={2}>ID</th>
+                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" rowSpan={2}>Name</th>
+                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" rowSpan={2}>Address</th>
+                          <th className="px-6 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" colSpan={2}>Business Hours</th>
+                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" rowSpan={2}>Phone</th>
+                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" rowSpan={2}>Created At</th>
+                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" rowSpan={2}>Updated At</th>
+                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" rowSpan={2}>Actions</th>
+                        </tr>
+                        <tr>
+                          <th className="px-6 py-1 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Open Hours</th>
+                          <th className="px-6 py-1 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">End Hours</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {branches.map((b) => (
+                          <tr key={b.branchId} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{b.branchId}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                              {editing && editing.id === b.branchId && editing.field === 'name' ? (
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    className="border rounded px-2 py-1 text-sm"
+                                    value={editValue}
+                                    onChange={(e) => setEditValue(e.target.value)}
+                                  />
+                                  <button onClick={() => saveEdit(b)} className="text-emerald-600 hover:text-emerald-700"><Check className="w-4 h-4" /></button>
+                                  <button onClick={cancelEdit} className="text-gray-500 hover:text-gray-700"><X className="w-4 h-4" /></button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <span>{b.name}</span>
+                                  <button onClick={() => startEdit(b, 'name')} className="text-blue-600 hover:text-blue-700"><Pencil className="w-4 h-4" /></button>
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {editing && editing.id === b.branchId && editing.field === 'address' ? (
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    className="border rounded px-2 py-1 text-sm w-64"
+                                    value={editValue}
+                                    onChange={(e) => setEditValue(e.target.value)}
+                                  />
+                                  <button onClick={() => saveEdit(b)} className="text-emerald-600 hover:text-emerald-700"><Check className="w-4 h-4" /></button>
+                                  <button onClick={cancelEdit} className="text-gray-500 hover:text-gray-700"><X className="w-4 h-4" /></button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <span>{b.address}</span>
+                                  <button onClick={() => startEdit(b, 'address')} className="text-blue-600 hover:text-blue-700"><Pencil className="w-4 h-4" /></button>
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {editing && editing.id === b.branchId && editing.field === 'openHours' ? (
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="time"
+                                    className="border rounded px-2 py-1 text-sm"
+                                    value={editValue}
+                                    onChange={(e) => setEditValue(e.target.value)}
+                                  />
+                                  <button onClick={() => saveEdit(b)} className="text-emerald-600 hover:text-emerald-700"><Check className="w-4 h-4" /></button>
+                                  <button onClick={cancelEdit} className="text-gray-500 hover:text-gray-700"><X className="w-4 h-4" /></button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <span>{b.openHours ? String(b.openHours).slice(0,5) : '--:--'}</span>
+                                  <button onClick={() => startEdit(b, 'openHours')} className="text-blue-600 hover:text-blue-700"><Pencil className="w-4 h-4" /></button>
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {editing && editing.id === b.branchId && editing.field === 'endHours' ? (
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="time"
+                                    className="border rounded px-2 py-1 text-sm"
+                                    value={editValue}
+                                    onChange={(e) => setEditValue(e.target.value)}
+                                  />
+                                  <button onClick={() => saveEdit(b)} className="text-emerald-600 hover:text-emerald-700"><Check className="w-4 h-4" /></button>
+                                  <button onClick={cancelEdit} className="text-gray-500 hover:text-gray-700"><X className="w-4 h-4" /></button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <span>{b.endHours ? String(b.endHours).slice(0,5) : '--:--'}</span>
+                                  <button onClick={() => startEdit(b, 'endHours')} className="text-blue-600 hover:text-blue-700"><Pencil className="w-4 h-4" /></button>
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {editing && editing.id === b.branchId && editing.field === 'phone' ? (
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    className="border rounded px-2 py-1 text-sm"
+                                    value={editValue}
+                                    onChange={(e) => setEditValue(e.target.value)}
+                                  />
+                                  <button onClick={() => saveEdit(b)} className="text-emerald-600 hover:text-emerald-700"><Check className="w-4 h-4" /></button>
+                                  <button onClick={cancelEdit} className="text-gray-500 hover:text-gray-700"><X className="w-4 h-4" /></button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <span>{b.phone}</span>
+                                  <button onClick={() => startEdit(b, 'phone')} className="text-blue-600 hover:text-blue-700"><Pencil className="w-4 h-4" /></button>
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{b.createAt ? new Date(b.createAt).toLocaleString('en-GB') : '-'}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{b.updateAt ? new Date(b.updateAt).toLocaleString('en-GB') : '-'}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              <button onClick={() => setPendingDelete(b)} className="inline-flex items-center gap-1 text-red-600 hover:text-red-700">
+                                <Trash2 className="w-4 h-4" />
+                                Delete
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <ConfirmModal
+                    open={!!pendingDelete}
+                    title="Confirm deletion"
+                    description={pendingDelete ? `Are you sure you want to delete branch "${pendingDelete.name}"? This action cannot be undone.` : ''}
+                    confirmText="Delete"
+                    cancelText="Cancel"
+                    onCancel={() => setPendingDelete(null)}
+                    onConfirm={deleteBranch}
+                    loading={deleteLoading}
+                  />
+
+                  {/* Pagination */}
+                  <div className="mt-6 flex items-center justify-between">
+                    <div className="text-sm text-gray-600">Total: {total} • Page {page + 1} / {Math.max(totalPages, 1)}</div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        disabled={page <= 0}
+                        onClick={() => setPage((p) => Math.max(0, p - 1))}
+                        className={`px-3 py-1 rounded border ${page <= 0 ? 'text-gray-400 border-gray-200' : 'text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+                      >
+                        Prev
+                      </button>
+                      <button
+                        disabled={page + 1 >= totalPages}
+                        onClick={() => setPage((p) => p + 1)}
+                        className={`px-3 py-1 rounded border ${(page + 1 >= totalPages) ? 'text-gray-400 border-gray-200' : 'text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
       <CreateBranchModal
         open={isCreating}
-        onClose={() => { setIsCreating(false); setCreateForm(defaultCreateForm); }}
+        onClose={() => { setIsCreating(false); }}
         onSubmit={async (payload) => {
           try {
             await branchService.createBranch(payload);
             setIsCreating(false);
-            setCreateForm(defaultCreateForm);
             setPage(0);
             await fetchBranches();
             toast.success('Branch created successfully');
@@ -273,187 +515,8 @@ const BranchManagement: React.FC = () => {
           }
         }}
       />
-
-      {loading ? (
-        <div className="flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-        </div>
-      ) : error ? (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">{error}</div>
-      ) : (
-        <div className="bg-white shadow rounded-lg">
-          <div className="px-4 py-5 sm:p-6">
-          {/* Top horizontal scrollbar */}
-          <div ref={topScrollRef} className="overflow-x-auto overflow-y-hidden h-5 mb-2">
-            <div ref={topInnerRef} style={{ height: 1 }} />
-          </div>
-
-          <div ref={bottomScrollRef} className="overflow-x-auto">
-            <table ref={tableRef} className="min-w-max divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" rowSpan={2}>ID</th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" rowSpan={2}>Name</th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" rowSpan={2}>Address</th>
-                    <th className="px-6 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" colSpan={2}>Business Hours</th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" rowSpan={2}>Phone</th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" rowSpan={2}>Created At</th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" rowSpan={2}>Updated At</th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" rowSpan={2}>Actions</th>
-                  </tr>
-                  <tr>
-                    <th className="px-6 py-1 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Open Hours</th>
-                    <th className="px-6 py-1 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">End Hours</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {branches.map((b) => (
-                    <tr key={b.branchId} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{b.branchId}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                        {editing && editing.id === b.branchId && editing.field === 'name' ? (
-                          <div className="flex items-center gap-2">
-                            <input
-                              className="border rounded px-2 py-1 text-sm"
-                              value={editValue}
-                              onChange={(e) => setEditValue(e.target.value)}
-                            />
-                            <button onClick={() => saveEdit(b)} className="text-emerald-600 hover:text-emerald-700"><Check className="w-4 h-4" /></button>
-                            <button onClick={cancelEdit} className="text-gray-500 hover:text-gray-700"><X className="w-4 h-4" /></button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2">
-                            <span>{b.name}</span>
-                            <button onClick={() => startEdit(b, 'name')} className="text-blue-600 hover:text-blue-700"><Pencil className="w-4 h-4" /></button>
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {editing && editing.id === b.branchId && editing.field === 'address' ? (
-                          <div className="flex items-center gap-2">
-                            <input
-                              className="border rounded px-2 py-1 text-sm w-64"
-                              value={editValue}
-                              onChange={(e) => setEditValue(e.target.value)}
-                            />
-                            <button onClick={() => saveEdit(b)} className="text-emerald-600 hover:text-emerald-700"><Check className="w-4 h-4" /></button>
-                            <button onClick={cancelEdit} className="text-gray-500 hover:text-gray-700"><X className="w-4 h-4" /></button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2">
-                            <span>{b.address}</span>
-                            <button onClick={() => startEdit(b, 'address')} className="text-blue-600 hover:text-blue-700"><Pencil className="w-4 h-4" /></button>
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {editing && editing.id === b.branchId && editing.field === 'openHours' ? (
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="time"
-                              className="border rounded px-2 py-1 text-sm"
-                              value={editValue}
-                              onChange={(e) => setEditValue(e.target.value)}
-                            />
-                            <button onClick={() => saveEdit(b)} className="text-emerald-600 hover:text-emerald-700"><Check className="w-4 h-4" /></button>
-                            <button onClick={cancelEdit} className="text-gray-500 hover:text-gray-700"><X className="w-4 h-4" /></button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2">
-                            <span>{b.openHours ? String(b.openHours).slice(0,5) : '--:--'}</span>
-                            <button onClick={() => startEdit(b, 'openHours')} className="text-blue-600 hover:text-blue-700"><Pencil className="w-4 h-4" /></button>
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {editing && editing.id === b.branchId && editing.field === 'endHours' ? (
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="time"
-                              className="border rounded px-2 py-1 text-sm"
-                              value={editValue}
-                              onChange={(e) => setEditValue(e.target.value)}
-                            />
-                            <button onClick={() => saveEdit(b)} className="text-emerald-600 hover:text-emerald-700"><Check className="w-4 h-4" /></button>
-                            <button onClick={cancelEdit} className="text-gray-500 hover:text-gray-700"><X className="w-4 h-4" /></button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2">
-                            <span>{b.endHours ? String(b.endHours).slice(0,5) : '--:--'}</span>
-                            <button onClick={() => startEdit(b, 'endHours')} className="text-blue-600 hover:text-blue-700"><Pencil className="w-4 h-4" /></button>
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {editing && editing.id === b.branchId && editing.field === 'phone' ? (
-                          <div className="flex items-center gap-2">
-                            <input
-                              className="border rounded px-2 py-1 text-sm"
-                              value={editValue}
-                              onChange={(e) => setEditValue(e.target.value)}
-                            />
-                            <button onClick={() => saveEdit(b)} className="text-emerald-600 hover:text-emerald-700"><Check className="w-4 h-4" /></button>
-                            <button onClick={cancelEdit} className="text-gray-500 hover:text-gray-700"><X className="w-4 h-4" /></button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2">
-                            <span>{b.phone}</span>
-                            <button onClick={() => startEdit(b, 'phone')} className="text-blue-600 hover:text-blue-700"><Pencil className="w-4 h-4" /></button>
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{b.createAt ? new Date(b.createAt).toLocaleString('en-GB') : '-'}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{b.updateAt ? new Date(b.updateAt).toLocaleString('en-GB') : '-'}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <button onClick={() => setPendingDelete(b)} className="inline-flex items-center gap-1 text-red-600 hover:text-red-700">
-                          <Trash2 className="w-4 h-4" />
-                          Delete
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <ConfirmModal
-              open={!!pendingDelete}
-              title="Confirm deletion"
-              description={pendingDelete ? `Are you sure you want to delete branch "${pendingDelete.name}"? This action cannot be undone.` : ''}
-              confirmText="Delete"
-              cancelText="Cancel"
-              onCancel={() => setPendingDelete(null)}
-              onConfirm={deleteBranch}
-              loading={deleteLoading}
-            />
-
-            {/* Pagination */}
-            <div className="mt-6 flex items-center justify-between">
-              <div className="text-sm text-gray-600">Total: {total} • Page {page + 1} / {Math.max(totalPages, 1)}</div>
-              <div className="flex items-center gap-2">
-                <button
-                  disabled={page <= 0}
-                  onClick={() => setPage((p) => Math.max(0, p - 1))}
-                  className={`px-3 py-1 rounded border ${page <= 0 ? 'text-gray-400 border-gray-200' : 'text-gray-700 border-gray-300 hover:bg-gray-50'}`}
-                >
-                  Prev
-                </button>
-                <button
-                  disabled={page + 1 >= totalPages}
-                  onClick={() => setPage((p) => p + 1)}
-                  className={`px-3 py-1 rounded border ${(page + 1 >= totalPages) ? 'text-gray-400 border-gray-200' : 'text-gray-700 border-gray-300 hover:bg-gray-50'}`}
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
 
 export default BranchManagement;
-
-

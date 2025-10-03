@@ -41,6 +41,22 @@ public enum ErrorCode {
     INVALID_NAME_CATEGORY(1039, "Name category must be at most {max} characters", HttpStatus.BAD_REQUEST),
     CATEGORY_NAME_ALREADY_EXISTS(1042, "Name category is unique", HttpStatus.BAD_REQUEST),
     CATEGORY_IN_USE(1043, "Category is currently being used in products", HttpStatus.BAD_REQUEST),
+
+    // Supplier errors (1044-1054)
+    EMPTY_NAME_SUPPLIER(1044, "Name supplier is required", HttpStatus.BAD_REQUEST),
+    INVALID_NAME_SUPPLIER(1045, "Name supplier must be at most {max} characters", HttpStatus.BAD_REQUEST),
+    INVALID_CONTACT_NAME(1046, "Contact name must be at most {max} characters", HttpStatus.BAD_REQUEST),
+    INVALID_PHONE(1047, "Phone must be at most {max} characters", HttpStatus.BAD_REQUEST),
+    INVALID_EMAIL(1048, "Email must be at most {max} characters", HttpStatus.BAD_REQUEST),
+    INVALID_ADDRESS(1049, "Address must be at most {max} characters", HttpStatus.BAD_REQUEST),
+    EMPTY_CONTACT_NAME(1050, "Contact name is required", HttpStatus.BAD_REQUEST),
+    EMPTY_PHONE(1051, "Phone is required", HttpStatus.BAD_REQUEST),
+    EMPTY_EMAIL(1052, "Email is required", HttpStatus.BAD_REQUEST),
+    EMPTY_ADDRESS(1053, "Address is required", HttpStatus.BAD_REQUEST),
+    SUPPLIER_NOT_FOUND(1054, "Supplier not found", HttpStatus.NOT_FOUND),
+    INVALID_NOTE(1055, "Note must be at most {max} characters", HttpStatus.BAD_REQUEST),
+    SUPPLIER_IN_USE(1056, "Cannot delete supplier. Supplier is currently being used in purchase orders", HttpStatus.BAD_REQUEST),
+    SUPPLIER_IN_USE_INGREDIENTS(1057, "Cannot delete supplier. Supplier is currently being used in ingredients", HttpStatus.BAD_REQUEST),
     ;
 
     ErrorCode(int code, String message, HttpStatusCode statusCode) {

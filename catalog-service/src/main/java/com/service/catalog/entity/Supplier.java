@@ -44,6 +44,9 @@ public class Supplier {
     @Column(length = 255)
     String address;
 
+    @Column(length = 255)
+    String note;
+
 
     @Column(name = "create_at", nullable = false, updatable = false,
             columnDefinition = "DATETIME DEFAULT CURRENT_TIMESTAMP")

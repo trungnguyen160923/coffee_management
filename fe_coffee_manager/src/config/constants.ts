@@ -17,6 +17,7 @@ export const API_ENDPOINTS = {
     SIZES: '/api/catalogs/sizes',
     PRODUCTS: '/api/catalogs/products',
     CATEGORIES: '/api/catalogs/categories',
+    SUPPLIERS: '/api/catalogs/suppliers',
   },
   ORDERS: {
     BASE: '/api/orders',

@@ -1,6 +1,6 @@
 import { apiClient } from '../config/api';
 import { API_ENDPOINTS } from '../config/constants';
-import { CatalogSize, CatalogProduct, CatalogCategory, ProductPageResponse, ProductSearchParams } from '../types';
+import { CatalogSize, CatalogProduct, CatalogCategory, ProductPageResponse, ProductSearchParams, CatalogSupplier, SupplierPageResponse, SupplierSearchParams, CreateSupplierRequest } from '../types';
 
 export interface ApiEnvelope<T> { code?: number; message?: string; result: T }
 
@@ -241,6 +241,85 @@ export const catalogService = {
       hasNext: false,
       hasPrevious: false
     };
+  },
+
+  // Supplier management functions
+  async getSuppliers(params: SupplierSearchParams = {}): Promise<SupplierPageResponse> {
+    const queryParams = new URLSearchParams();
+    
+    if (params.page !== undefined) queryParams.append('page', params.page.toString());
+    if (params.size !== undefined) queryParams.append('size', params.size.toString());
+    if (params.search) queryParams.append('search', params.search);
+    if (params.sortBy) queryParams.append('sortBy', params.sortBy);
+    if (params.sortDirection) queryParams.append('sortDirection', params.sortDirection);
+    
+    const url = `${API_ENDPOINTS.CATALOGS.SUPPLIERS}/search${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+    const resp = await apiClient.get<ApiEnvelope<SupplierPageResponse>>(url);
+    return resp?.result || {
+      content: [],
+      page: 0,
+      size: 10,
+      totalElements: 0,
+      totalPages: 0,
+      first: true,
+      last: true,
+      hasNext: false,
+      hasPrevious: false
+    };
+  },
+
+  async createSupplier(payload: CreateSupplierRequest): Promise<CatalogSupplier> {
+    try {
+      const resp = await apiClient.post<ApiEnvelope<CatalogSupplier>>(API_ENDPOINTS.CATALOGS.SUPPLIERS, payload);
+      if (resp?.code === 1000 && resp.result) {
+        return resp.result;
+      }
+      throw new Error(resp?.message || 'Failed to create supplier');
+    } catch (error: any) {
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+      if (error.message) {
+        throw new Error(error.message);
+      }
+      throw new Error('Không thể kết nối đến server');
+    }
+  },
+
+  async updateSupplier(supplierId: number, payload: CreateSupplierRequest): Promise<CatalogSupplier> {
+    try {
+      const resp = await apiClient.put<ApiEnvelope<CatalogSupplier>>(`${API_ENDPOINTS.CATALOGS.SUPPLIERS}/${supplierId}`, payload);
+      if (resp?.code === 1000 && resp.result) {
+        return resp.result;
+      }
+      throw new Error(resp?.message || 'Failed to update supplier');
+    } catch (error: any) {
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+      if (error.message) {
+        throw new Error(error.message);
+      }
+      throw new Error('Không thể kết nối đến server');
+    }
+  },
+
+  async deleteSupplier(supplierId: number): Promise<void> {
+    try {
+      const resp = await apiClient.delete<ApiEnvelope<void>>(`${API_ENDPOINTS.CATALOGS.SUPPLIERS}/${supplierId}`);
+      if (resp?.code === 1000) {
+        return;
+      }
+      throw new Error(resp?.message || 'Failed to delete supplier');
+    } catch (error: any) {
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+      if (error.message) {
+        throw new Error(error.message);
+      }
+      throw new Error('Không thể kết nối đến server');
+    }
   }
 };
 
