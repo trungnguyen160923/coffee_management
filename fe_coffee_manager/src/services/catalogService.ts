@@ -1,6 +1,6 @@
 import { apiClient } from '../config/api';
 import { API_ENDPOINTS } from '../config/constants';
-import { CatalogSize, CatalogProduct, CatalogCategory, ProductPageResponse, ProductSearchParams, CatalogSupplier, SupplierPageResponse, SupplierSearchParams, CreateSupplierRequest } from '../types';
+import { CatalogSize, CatalogProduct, CatalogCategory, ProductPageResponse, ProductSearchParams, CatalogSupplier, SupplierPageResponse, SupplierSearchParams, CreateSupplierRequest, CatalogIngredient, IngredientPageResponse, IngredientSearchParams, CreateIngredientRequest, UpdateIngredientRequest } from '../types';
 
 export interface ApiEnvelope<T> { code?: number; message?: string; result: T }
 
@@ -311,6 +311,62 @@ export const catalogService = {
         return;
       }
       throw new Error(resp?.message || 'Failed to delete supplier');
+    } catch (error: any) {
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+      if (error.message) {
+        throw new Error(error.message);
+      }
+      throw new Error('Không thể kết nối đến server');
+    }
+  }
+  ,
+
+  // Ingredient management
+  async searchIngredients(params: IngredientSearchParams = {}): Promise<IngredientPageResponse> {
+    const queryParams = new URLSearchParams();
+    if (params.page !== undefined) queryParams.append('page', params.page.toString());
+    if (params.size !== undefined) queryParams.append('size', params.size.toString());
+    if (params.search) queryParams.append('search', params.search);
+    if (params.supplierId !== undefined) queryParams.append('supplierId', params.supplierId.toString());
+    if (params.sortBy) queryParams.append('sortBy', params.sortBy);
+    if (params.sortDirection) queryParams.append('sortDirection', params.sortDirection);
+
+    const url = `${API_ENDPOINTS.CATALOGS.INGREDIENTS}/search${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+    const resp = await apiClient.get<ApiEnvelope<IngredientPageResponse>>(url);
+    return resp?.result || {
+      content: [],
+      page: 0,
+      size: 10,
+      totalElements: 0,
+      totalPages: 0,
+      first: true,
+      last: true,
+      hasNext: false,
+      hasPrevious: false
+    };
+  },
+
+  async createIngredient(payload: CreateIngredientRequest): Promise<CatalogIngredient> {
+    const resp = await apiClient.post<ApiEnvelope<CatalogIngredient>>(API_ENDPOINTS.CATALOGS.INGREDIENTS, payload);
+    if (resp?.result) return resp.result;
+    throw new Error((resp as any)?.message || 'Create ingredient failed');
+  },
+
+  async updateIngredient(ingredientId: number, payload: UpdateIngredientRequest): Promise<CatalogIngredient> {
+    const resp = await apiClient.put<ApiEnvelope<CatalogIngredient>>(`${API_ENDPOINTS.CATALOGS.INGREDIENTS}/${ingredientId}`, payload);
+    if (resp?.result) return resp.result;
+    throw new Error((resp as any)?.message || 'Update ingredient failed');
+  },
+
+  async deleteIngredient(ingredientId: number): Promise<void> {
+    try {
+      const resp = await apiClient.delete<ApiEnvelope<void>>(`${API_ENDPOINTS.CATALOGS.INGREDIENTS}/${ingredientId}`);
+      if (resp?.code === 1000) {
+        return;
+      }
+      throw new Error(resp?.message || 'Failed to delete ingredient');
     } catch (error: any) {
       if (error.response?.data?.message) {
         throw new Error(error.response.data.message);

@@ -1,6 +1,5 @@
-package com.service.catalog.dto.request;
+package com.service.catalog.dto.request.size;
 
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
@@ -10,8 +9,7 @@ import lombok.experimental.FieldDefaults;
 @AllArgsConstructor
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class SizeCreationRequest {
-    @NotBlank(message = "EMPTY_NAME_SIZE")
+public class SizeUpdateRequest {
     @Size(max = 50, message = "INVALID_NAME_SIZE")
     String name;
     

@@ -3,8 +3,8 @@ package com.service.catalog.mapper;
 
 import org.mapstruct.Mapper;
 
-import com.service.catalog.dto.request.CategoryCreationRequest;
-import com.service.catalog.dto.request.CategoryUpdateRequest;
+import com.service.catalog.dto.request.category.CategoryCreationRequest;
+import com.service.catalog.dto.request.category.CategoryUpdateRequest;
 import com.service.catalog.dto.response.CategoryResponse;
 import com.service.catalog.entity.Category;
 

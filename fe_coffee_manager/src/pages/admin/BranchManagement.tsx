@@ -502,10 +502,19 @@ const BranchManagement: React.FC = () => {
         onClose={() => { setIsCreating(false); }}
         onSubmit={async (payload) => {
           try {
-            await branchService.createBranch(payload);
+            const newBranch = await branchService.createBranch(payload);
             setIsCreating(false);
-            setPage(0);
-            await fetchBranches();
+            
+            // Optimistic update - add to local state
+            setAllBranches(prevBranches => [newBranch, ...prevBranches]);
+            setTotal(prevTotal => prevTotal + 1);
+            setTotalPages(Math.ceil((total + 1) / limit));
+            
+            // If current page is not first page, go to first page to see new branch
+            if (page > 0) {
+              setPage(0);
+            }
+            
             toast.success('Branch created successfully');
           } catch (e) {
             console.error(e);

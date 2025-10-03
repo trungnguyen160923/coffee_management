@@ -13,7 +13,8 @@ import {
   ShoppingCart,
   Calendar,
   Archive,
-  Truck
+  Truck,
+  UtensilsCrossed
 } from 'lucide-react';
 
 import { DEFAULT_IMAGES } from '../../config/constants';
@@ -33,6 +34,7 @@ export function Layout({ children }: LayoutProps) {
         { icon: Home, label: 'Overview', path: '/admin' },
         { icon: Package, label: 'Products', path: '/admin/products' },
         { icon: Truck, label: 'Suppliers', path: '/admin/suppliers' },
+        { icon: UtensilsCrossed, label: 'Ingredients', path: '/admin/ingredients' },
         { icon: BookOpen, label: 'Recipes', path: '/admin/recipes' },
         { icon: Store, label: 'Branches', path: '/admin/branches' },
         { icon: Users, label: 'Managers', path: '/admin/managers' },

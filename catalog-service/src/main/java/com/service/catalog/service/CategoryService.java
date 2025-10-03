@@ -1,7 +1,7 @@
 package com.service.catalog.service;
 
-import com.service.catalog.dto.request.CategoryCreationRequest;
-import com.service.catalog.dto.request.CategoryUpdateRequest;
+import com.service.catalog.dto.request.category.CategoryCreationRequest;
+import com.service.catalog.dto.request.category.CategoryUpdateRequest;
 import com.service.catalog.dto.response.CategoryResponse;
 import com.service.catalog.entity.Category;
 import com.service.catalog.exception.AppException;

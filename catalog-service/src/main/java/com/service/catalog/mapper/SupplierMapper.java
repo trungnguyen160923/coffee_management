@@ -2,8 +2,8 @@ package com.service.catalog.mapper;
 
 import org.mapstruct.Mapper;
 import com.service.catalog.entity.Supplier;
-import com.service.catalog.dto.request.SupplierCreationRequest;
-import com.service.catalog.dto.request.SupplierUpdateRequest;
+import com.service.catalog.dto.request.supplier.SupplierCreationRequest;
+import com.service.catalog.dto.request.supplier.SupplierUpdateRequest;
 import com.service.catalog.dto.response.SupplierResponse;
 
 @Mapper(componentModel = "spring")

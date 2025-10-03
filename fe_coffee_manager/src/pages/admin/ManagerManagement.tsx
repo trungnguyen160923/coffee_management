@@ -619,7 +619,7 @@ const ManagerManagement: React.FC = () => {
             toast.success('Manager created successfully');
             setIsCreating(false);
             
-            // Lấy thông tin đầy đủ của manager mới tạo
+            // Optimistic update - get full manager info and add to local state
             const userId = resp.result?.userId || resp.result?.user_id || resp.userId || resp.user_id;
             if (userId) {
               try {
@@ -628,11 +628,16 @@ const ManagerManagement: React.FC = () => {
                 setTotal(prevTotal => prevTotal + 1);
                 setTotalManagers(prevTotal => prevTotal + 1);
                 
-                // Cập nhật stats dựa trên branch assignment
+                // Update stats based on branch assignment
                 if (payload.branchId && payload.branchId !== -1) {
                   setWithBranchCount(prev => prev + 1);
                 } else {
                   setWithoutBranchCount(prev => prev + 1);
+                }
+                
+                // If current page is not first page, go to first page to see new manager
+                if (page > 0) {
+                  setPage(0);
                 }
               } catch (fetchError) {
                 console.error('Failed to fetch manager details:', fetchError);

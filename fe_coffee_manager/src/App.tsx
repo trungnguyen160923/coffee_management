@@ -11,6 +11,7 @@ import ManagerManagement from './pages/admin/ManagerManagement';
 import BranchManagement from './pages/admin/BranchManagement';
 import ProductManagement from './pages/admin/ProductManagement';
 import SupplierManagement from './pages/admin/SupplierManagement';
+import IngredientManagement from './pages/admin/IngredientManagement';
 import { ManagerDashboard } from './pages/manager/ManagerDashboard';
 import { StaffDashboard } from './pages/staff/StaffDashboard';
 
@@ -55,6 +56,7 @@ function AppRoutes() {
           <Routes>
             <Route path="products" element={<Layout><ProductManagement /></Layout>} />
             <Route path="suppliers" element={<Layout><SupplierManagement /></Layout>} />
+            <Route path="ingredients" element={<Layout><IngredientManagement /></Layout>} />
             <Route path="recipes" element={<Layout><div className="p-8"><h1 className="text-2xl font-bold">Quản lý công thức</h1></div></Layout>} />
             <Route path="branches" element={<Layout><BranchManagement /></Layout>} />
             <Route path="managers" element={<Layout><ManagerManagement /></Layout>} />

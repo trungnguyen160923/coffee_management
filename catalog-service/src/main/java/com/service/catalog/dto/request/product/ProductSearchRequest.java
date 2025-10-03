@@ -1,4 +1,4 @@
-package com.service.catalog.dto.request;
+package com.service.catalog.dto.request.product;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

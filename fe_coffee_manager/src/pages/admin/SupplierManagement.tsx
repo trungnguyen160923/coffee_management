@@ -105,7 +105,17 @@ const SupplierManagement: React.FC = () => {
     try {
       await catalogService.deleteSupplier(supplierToDelete);
       toast.success('Supplier deleted successfully!');
-      await loadSuppliers();
+      
+      // Optimistic update - remove from local state
+      setSuppliers(prevSuppliers => prevSuppliers.filter(s => s.supplierId !== supplierToDelete));
+      setTotalElements(prev => Math.max(0, prev - 1));
+      
+      // If current page becomes empty and not first page, go to previous page
+      const remainingSuppliers = suppliers.filter(s => s.supplierId !== supplierToDelete);
+      if (remainingSuppliers.length === 0 && currentPage > 0) {
+        setCurrentPage(prev => Math.max(0, prev - 1));
+        loadSuppliers();
+      }
     } catch (error: any) {
       console.error('Error deleting supplier:', error);
       toast.error(error.message || 'Failed to delete supplier!');
@@ -138,8 +148,20 @@ const SupplierManagement: React.FC = () => {
     setSelectedSupplier(null);
   };
 
-  const handleModalSuccess = () => {
-    loadSuppliers();
+  const handleModalSuccess = (newSupplier?: CatalogSupplier) => {
+    if (newSupplier) {
+      // Optimistic update for create
+      setSuppliers(prevSuppliers => [newSupplier, ...prevSuppliers]);
+      setTotalElements(prev => prev + 1);
+      
+      // If current page is not first page, go to first page to see new supplier
+      if (currentPage > 0) {
+        setCurrentPage(0);
+      }
+    } else {
+      // For edit, reload to get updated data
+      loadSuppliers();
+    }
   };
 
   const startInlineEdit = (supplier: CatalogSupplier, field: 'name' | 'phone' | 'address') => {

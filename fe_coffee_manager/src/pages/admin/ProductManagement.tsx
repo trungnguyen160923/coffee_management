@@ -165,7 +165,17 @@ const ProductManagement: React.FC = () => {
     try {
       await catalogService.deleteProduct(parseInt(productToDelete));
       toast.success('Xóa sản phẩm thành công!');
-      await loadProducts({ soft: true }); // Refresh the list
+      
+      // Optimistic update - remove from local state
+      setProducts(prevProducts => prevProducts.filter(p => p.productId !== parseInt(productToDelete)));
+      setTotalElements(prev => Math.max(0, prev - 1));
+      
+      // If current page becomes empty and not first page, go to previous page
+      const remainingProducts = products.filter(p => p.productId !== parseInt(productToDelete));
+      if (remainingProducts.length === 0 && currentPage > 0) {
+        setCurrentPage(prev => Math.max(0, prev - 1));
+        loadProducts({ soft: true });
+      }
     } catch (error: any) {
       console.error('Error deleting product:', error);
       toast.error(error.message || 'Không thể xóa sản phẩm!');
@@ -199,7 +209,11 @@ const ProductManagement: React.FC = () => {
       // Update product to set active = true
       await catalogService.updateProduct(parseInt(productId), { active: true });
       toast.success('Khôi phục sản phẩm thành công!');
-      await loadProducts({ soft: true }); // Refresh the list
+      
+      // Optimistic update - update in local state
+      setProducts(prevProducts => 
+        prevProducts.map(p => p.productId === parseInt(productId) ? { ...p, active: true } : p)
+      );
     } catch (error: any) {
       console.error('Error restoring product:', error);
       toast.error(error.message || 'Không thể khôi phục sản phẩm!');
@@ -268,16 +282,37 @@ const ProductManagement: React.FC = () => {
 
       if (selectedProduct) {
         // Update existing product
-        await catalogService.updateProduct(selectedProduct.productId, payload as any);
+        const updatedProduct = await catalogService.updateProduct(selectedProduct.productId, payload as any);
         toast.success('Cập nhật sản phẩm thành công');
+        
+        // Optimistic update - replace in local state
+        setProducts(prevProducts => 
+          prevProducts.map(p => p.productId === updatedProduct.productId ? updatedProduct : p)
+        );
       } else {
         // Create new product
-        await catalogService.createProduct(payload as any);
+        const newProduct = await catalogService.createProduct(payload as any);
         toast.success('Tạo sản phẩm thành công');
+        
+        // Optimistic update - add to local state
+        setTotalElements(prev => prev + 1);
+        setProducts(prevProducts => {
+          const next = [newProduct, ...prevProducts];
+          // If exceeds page size, need to reload to get correct pagination
+          if (next.length > pageSize) {
+            loadProducts({ soft: true });
+            return prevProducts;
+          }
+          return next;
+        });
+        
+        // If not on first page, reload to get correct data
+        if (currentPage > 0) {
+          loadProducts({ soft: true });
+        }
       }
       
       setModalType(null);
-      await loadProducts();
     } catch (error: any) {
       console.error('Error saving product:', error);
       toast.error(error.message || 'Không thể lưu sản phẩm!');
