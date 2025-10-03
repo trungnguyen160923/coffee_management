@@ -1,4 +1,4 @@
-package com.service.catalog.dto.request;
+package com.service.catalog.dto.request.supplier;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;

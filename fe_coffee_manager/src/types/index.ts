@@ -187,6 +187,52 @@ export interface CreateSupplierRequest {
   email?: string | null;
   address?: string | null;
 }
+
+// Ingredient types
+export interface CatalogIngredient {
+  ingredientId: number;
+  name: string;
+  unit?: string | null;
+  unitPrice: number;
+  supplier?: CatalogSupplier | null;
+  createAt: string;
+  updateAt: string;
+}
+
+export interface IngredientPageResponse {
+  content: CatalogIngredient[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  first: boolean;
+  last: boolean;
+  hasNext: boolean;
+  hasPrevious: boolean;
+}
+
+export interface IngredientSearchParams {
+  page?: number;
+  size?: number;
+  search?: string;
+  supplierId?: number;
+  sortBy?: string;
+  sortDirection?: 'ASC' | 'DESC';
+}
+
+export interface CreateIngredientRequest {
+  name: string;
+  unit?: string | null;
+  unitPrice: number;
+  supplierId: number;
+}
+
+export interface UpdateIngredientRequest {
+  name?: string;
+  unit?: string | null;
+  unitPrice?: number;
+  supplierId?: number;
+}
   
   export interface Order {
     id: string;

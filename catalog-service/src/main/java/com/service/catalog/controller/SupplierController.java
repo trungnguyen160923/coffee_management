@@ -13,8 +13,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.service.catalog.dto.ApiResponse;
-import com.service.catalog.dto.request.SupplierCreationRequest;
-import com.service.catalog.dto.request.SupplierUpdateRequest;
+import com.service.catalog.dto.request.supplier.SupplierCreationRequest;
+import com.service.catalog.dto.request.supplier.SupplierUpdateRequest;
 import com.service.catalog.dto.response.SupplierResponse;
 import com.service.catalog.dto.response.SupplierPageResponse;
 import com.service.catalog.service.SupplierService;
@@ -56,8 +56,8 @@ public class SupplierController {
             @RequestParam(required = false) String sortBy,
             @RequestParam(required = false) String sortDirection) {
         
-        com.service.catalog.dto.request.SupplierSearchRequest request = 
-            com.service.catalog.dto.request.SupplierSearchRequest.builder()
+        com.service.catalog.dto.request.supplier.SupplierSearchRequest request = 
+            com.service.catalog.dto.request.supplier.SupplierSearchRequest.builder()
                 .page(page)
                 .size(size)
                 .search(search)

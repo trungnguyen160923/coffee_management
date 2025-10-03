@@ -1,4 +1,4 @@
-package com.service.catalog.dto.request;
+package com.service.catalog.dto.request.product;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -16,12 +16,10 @@ import lombok.experimental.FieldDefaults;
 @AllArgsConstructor
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class ProductCreationRequest {
-    @NotBlank(message = "EMPTY_NAME_PRODUCT")
+public class ProductUpdateRequest {
     @Size(max = 150, message = "INVALID_NAME_PRODUCT")
     String name;
     
-    @NotNull(message = "EMPTY_CATEGORY_ID")
     Integer categoryId;
     
     @Size(max = 100, message = "INVALID_SKU")
@@ -34,7 +32,6 @@ public class ProductCreationRequest {
     String imageUrl;
     
     @Valid
-    @NotNull(message = "EMPTY_PRODUCT_SIZES")
     @Size(min = 1, message = "INVALID_PRODUCT_SIZES")
     List<ProductSizeRequest> productSizes;
 }

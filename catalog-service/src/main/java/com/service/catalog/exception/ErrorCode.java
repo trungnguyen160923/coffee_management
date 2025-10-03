@@ -57,6 +57,14 @@ public enum ErrorCode {
     INVALID_NOTE(1055, "Note must be at most {max} characters", HttpStatus.BAD_REQUEST),
     SUPPLIER_IN_USE(1056, "Cannot delete supplier. Supplier is currently being used in purchase orders", HttpStatus.BAD_REQUEST),
     SUPPLIER_IN_USE_INGREDIENTS(1057, "Cannot delete supplier. Supplier is currently being used in ingredients", HttpStatus.BAD_REQUEST),
+
+    // Ingredient errors (1058-1068)
+    EMPTY_NAME_INGREDIENT(1058, "Name ingredient is required", HttpStatus.BAD_REQUEST),
+    INVALID_NAME_INGREDIENT(1059, "Name ingredient must be at most {max} characters", HttpStatus.BAD_REQUEST),
+    INVALID_UNIT(1060, "Unit must be at most {max} characters", HttpStatus.BAD_REQUEST),
+    EMPTY_UNIT_PRICE(1061, "Unit price is required", HttpStatus.BAD_REQUEST),
+    EMPTY_SUPPLIER_ID(1062, "Supplier id is required", HttpStatus.BAD_REQUEST),
+    INGREDIENT_NOT_FOUND(1063, "Ingredient not found", HttpStatus.NOT_FOUND),
     ;
 
     ErrorCode(int code, String message, HttpStatusCode statusCode) {

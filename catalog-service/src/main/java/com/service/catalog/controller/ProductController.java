@@ -1,9 +1,9 @@
 package com.service.catalog.controller;
 
 import com.service.catalog.dto.ApiResponse;
-import com.service.catalog.dto.request.ProductCreationRequest;
-import com.service.catalog.dto.request.ProductUpdateRequest;
-import com.service.catalog.dto.request.ProductSearchRequest;
+import com.service.catalog.dto.request.product.ProductCreationRequest;
+import com.service.catalog.dto.request.product.ProductSearchRequest;
+import com.service.catalog.dto.request.product.ProductUpdateRequest;
 import com.service.catalog.dto.response.ProductDetailResponse;
 import com.service.catalog.dto.response.ProductPageResponse;
 import com.service.catalog.dto.response.ProductResponse;

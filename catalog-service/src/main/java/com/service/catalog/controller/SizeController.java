@@ -19,8 +19,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.service.catalog.dto.ApiResponse;
-import com.service.catalog.dto.request.SizeCreationRequest;
-import com.service.catalog.dto.request.SizeUpdateRequest;
+import com.service.catalog.dto.request.size.SizeCreationRequest;
+import com.service.catalog.dto.request.size.SizeUpdateRequest;
 import com.service.catalog.dto.response.SizeResponse;
 import com.service.catalog.exception.AppException;
 import com.service.catalog.service.SizeService;

@@ -2,8 +2,8 @@ package com.service.catalog.mapper;
 
 import org.mapstruct.Mapper;
 
-import com.service.catalog.dto.request.SizeCreationRequest;
-import com.service.catalog.dto.request.SizeUpdateRequest;
+import com.service.catalog.dto.request.size.SizeCreationRequest;
+import com.service.catalog.dto.request.size.SizeUpdateRequest;
 import com.service.catalog.dto.response.SizeResponse;
 import com.service.catalog.entity.Size;
 

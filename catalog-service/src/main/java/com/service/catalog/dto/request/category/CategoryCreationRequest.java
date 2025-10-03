@@ -1,4 +1,4 @@
-package com.service.catalog.dto.request;
+package com.service.catalog.dto.request.category;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;

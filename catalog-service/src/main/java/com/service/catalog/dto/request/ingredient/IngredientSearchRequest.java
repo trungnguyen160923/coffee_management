@@ -1,4 +1,4 @@
-package com.service.catalog.dto.request;
+package com.service.catalog.dto.request.ingredient;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -9,17 +9,19 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class SupplierSearchRequest {
-    
-    @Builder.Default
-    private Integer page = 0;
-    
-    @Builder.Default
-    private Integer size = 10;
-    
+public class IngredientSearchRequest {
+
+    private Integer page;
+
+    private Integer size;
+
     private String search;
-    
+
+    private Integer supplierId;
+
     private String sortBy;
-    
+
     private String sortDirection;
 }
+
+
