@@ -6,6 +6,7 @@ import ServicesPage from "../components/pages/ServicesPage";
 import ContactPage from "../components/pages/ContactPage";
 import ProductDetail from "../components/pages/ProductDetail";
 import CheckoutPage from "../components/pages/CheckoutPage";
+import GuestCheckout from "../components/pages/GuestCheckout";
 import CartPage from "../components/pages/CartPage";
 import LoginPage from "../components/pages/auth/LoginPage";
 import RegisterPage from "../components/pages/auth/RegisterPage";
@@ -28,6 +29,7 @@ const AppRoutes = () => {
       <Route path="/coffee/cart" element={<CartPage />} />
       <Route path="/coffee/checkout" element={<CheckoutPage />} />
       <Route path="/coffee/checkout/:id" element={<CheckoutPage />} />
+      <Route path="/coffee/guest-checkout" element={<GuestCheckout />} />
 
       <Route path="/auth/login" element={<LoginPage />} />
       <Route path="/auth/register" element={<RegisterPage />} />

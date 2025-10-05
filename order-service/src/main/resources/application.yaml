@@ -2,17 +2,25 @@ server:
   port: 8002
   servlet:
     context-path: /order-service
+  tomcat:
+    uri-encoding: UTF-8
 
 spring:
   application:
     name: order-service
-
+  mvc:
+    locale: vi_VN
+    locale-resolver: accept-header
+  http:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
   datasource:
     url: "jdbc:mysql://localhost:3306/order_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
     driver-class-name: com.mysql.cj.jdbc.Driver
     username: root
     password: 
-
   jpa:
     hibernate:
       ddl-auto: update
@@ -21,10 +29,17 @@ spring:
       hibernate:
         format_sql: true
     database-platform: org.hibernate.dialect.MySQLDialect
-
   thymeleaf:
     cache: false
     enabled: true
+
+logging:
+  charset:
+    console: UTF-8
+    file: UTF-8
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
 
 jwt:
   signerKey: "1TjXchw5FloESb63Kc+DFhTARvpWL4jUGCwfGWxuG5SIf/1y/LgJxHnMqaF6A/ij"
@@ -49,3 +64,12 @@ feign:
     enabled: true
     max-connections: 200
     max-connections-per-route: 50
+
+# Nominatim configuration
+nominatim:
+  userAgent: "coffee-order-service/1.0 (contact: youremail@example.com)"
+  email: "caoha3829@gmail.com"
+# Geocoding configuration
+geocoding:
+  api:
+    key: "dd6d33ea0b6b467b9b2ffed8e92c4e1a"

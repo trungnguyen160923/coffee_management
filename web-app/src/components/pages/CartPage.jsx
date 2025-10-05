@@ -89,8 +89,15 @@ const CartPage = () => {
 
     const handleCheckout = () => {
         if (total > 0) {
-            // Navigate to checkout page
-            window.location.href = '/coffee/checkout';
+            // Check if user is logged in
+            const token = localStorage.getItem('token');
+            if (token) {
+                // User is logged in - go to regular checkout
+                window.location.href = '/coffee/checkout';
+            } else {
+                // User is not logged in - go to guest checkout
+                window.location.href = '/coffee/guest-checkout';
+            }
         }
     };
 

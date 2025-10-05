@@ -21,7 +21,8 @@ public class SecurityConfig {
             "/api/branches", // Allow public access to get branches list
             "/api/branches/**", // Allow public access to all branch endpoints
             "/api/cart",
-            "/api/cart/**"
+            "/api/cart/**",
+            "/api/orders/guest" // Allow guest checkout without authentication
     };
 
     private final CustomJwtDecoder customJwtDecoder;
