@@ -32,6 +32,19 @@ spring:
   thymeleaf:
     cache: false
     enabled: true
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: hyngotraidat@gmail.com
+    password: aeca cqkr gahw nfvr
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+          ssl:
+            trust: smtp.gmail.com
 
 logging:
   charset:

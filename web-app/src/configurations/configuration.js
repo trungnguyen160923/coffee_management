@@ -37,4 +37,6 @@ export const API = {
   CREATE_ORDER: "/order-service/api/orders",
   CREATE_GUEST_ORDER: "/order-service/api/orders/guest",
   GET_ORDERS_BY_CUSTOMER: "/order-service/api/orders/customer",
+  // Email service
+  SEND_ORDER_CONFIRMATION_EMAIL: "/order-service/api/email/send-order-confirmation",
 };
