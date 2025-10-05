@@ -35,5 +35,6 @@ export const API = {
   GET_CART_TOTAL: "/order-service/api/cart/total",
   // Order-service orders (via API Gateway)
   CREATE_ORDER: "/order-service/api/orders",
+  CREATE_GUEST_ORDER: "/order-service/api/orders/guest",
   GET_ORDERS_BY_CUSTOMER: "/order-service/api/orders/customer",
 };

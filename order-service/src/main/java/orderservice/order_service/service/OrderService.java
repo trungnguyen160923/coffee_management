@@ -6,9 +6,11 @@ import lombok.extern.slf4j.Slf4j;
 import orderservice.order_service.client.CatalogServiceClient;
 import orderservice.order_service.dto.ApiResponse;
 import orderservice.order_service.dto.request.CreateOrderRequest;
+import orderservice.order_service.dto.request.CreateGuestOrderRequest;
 import orderservice.order_service.dto.response.OrderResponse;
 import orderservice.order_service.dto.response.ProductDetailResponse;
 import orderservice.order_service.dto.response.ProductResponse;
+import orderservice.order_service.entity.Branch;
 import orderservice.order_service.entity.Order;
 import orderservice.order_service.entity.OrderItem;
 import orderservice.order_service.exception.AppException;
@@ -31,9 +33,13 @@ public class OrderService {
         OrderRepository orderRepository;
         OrderItemRepository orderItemRepository;
         CatalogServiceClient catalogServiceClient;
+        BranchSelectionService branchSelectionService;
 
         @Transactional
         public OrderResponse createOrder(CreateOrderRequest request, String token) {
+                log.info("=== STARTING ORDER CREATION ===");
+                log.info("Request: customerId={}, deliveryAddress={}", request.getCustomerId(),
+                                request.getDeliveryAddress());
                 try {
                         // Validate products and calculate subtotal
                         BigDecimal subtotal = BigDecimal.ZERO;
@@ -54,13 +60,24 @@ public class OrderService {
                         BigDecimal discount = request.getDiscount() != null ? request.getDiscount() : BigDecimal.ZERO;
                         BigDecimal totalAmount = subtotal.subtract(discount);
 
+                        // Tự động chọn chi nhánh dựa trên địa chỉ giao hàng (chỉ district + province)
+                        String addressForBranchSelection = request.getBranchSelectionAddress() != null
+                                        ? request.getBranchSelectionAddress()
+                                        : request.getDeliveryAddress();
+                        Branch selectedBranch = branchSelectionService.findNearestBranch(addressForBranchSelection);
+                        if (selectedBranch == null) {
+                                throw new AppException(ErrorCode.BRANCH_NOT_FOUND);
+                        }
+                        log.info("Selected branch: {} for branch selection address: {}", selectedBranch.getName(),
+                                        addressForBranchSelection);
+
                         // Create order
                         Order order = Order.builder()
                                         .customerId(request.getCustomerId())
                                         .customerName(request.getCustomerName())
                                         .phone(request.getPhone())
                                         .deliveryAddress(request.getDeliveryAddress())
-                                        .branchId(request.getBranchId())
+                                        .branchId(selectedBranch.getBranchId())
                                         .tableId(request.getTableId())
                                         .reservationId(request.getReservationId())
                                         .status("PENDING")
@@ -189,6 +206,93 @@ public class OrderService {
                                         .totalPrice(orderItem.getTotalPrice())
                                         .notes(orderItem.getNotes())
                                         .build();
+                }
+        }
+
+        @Transactional
+        public OrderResponse createGuestOrder(CreateGuestOrderRequest request) {
+                log.info("=== STARTING GUEST ORDER CREATION ===");
+                log.info("Request: customerName={}, phone={}, deliveryAddress={}",
+                                request.getCustomerName(), request.getPhone(), request.getDeliveryAddress());
+                try {
+                        // Validate products and calculate subtotal
+                        BigDecimal subtotal = BigDecimal.ZERO;
+
+                        for (CreateGuestOrderRequest.OrderItemRequest itemRequest : request.getOrderItems()) {
+                                ApiResponse<ProductDetailResponse> productDetailResponse = catalogServiceClient
+                                                .getProductDetailById(itemRequest.getProductDetailId());
+
+                                if (productDetailResponse == null || productDetailResponse.getResult() == null) {
+                                        throw new AppException(ErrorCode.PRODUCT_NOT_FOUND);
+                                }
+
+                                ProductDetailResponse productDetail = productDetailResponse.getResult();
+                                BigDecimal itemTotal = productDetail.getPrice().multiply(itemRequest.getQuantity());
+                                subtotal = subtotal.add(itemTotal);
+                        }
+
+                        BigDecimal discount = request.getDiscount() != null ? request.getDiscount() : BigDecimal.ZERO;
+                        BigDecimal totalAmount = subtotal.subtract(discount);
+
+                        // Tự động chọn chi nhánh dựa trên địa chỉ giao hàng (chỉ district + province)
+                        String addressForBranchSelection = request.getBranchSelectionAddress() != null
+                                        ? request.getBranchSelectionAddress()
+                                        : request.getDeliveryAddress();
+                        Branch selectedBranch = branchSelectionService.findNearestBranch(addressForBranchSelection);
+                        if (selectedBranch == null) {
+                                throw new AppException(ErrorCode.BRANCH_NOT_FOUND);
+                        }
+                        log.info("Selected branch: {} for branch selection address: {}", selectedBranch.getName(),
+                                        addressForBranchSelection);
+
+                        // Create order (customerId = null for guest)
+                        Order order = Order.builder()
+                                        .customerId(null) // Guest order không có customerId
+                                        .customerName(request.getCustomerName())
+                                        .phone(request.getPhone())
+                                        .deliveryAddress(request.getDeliveryAddress())
+                                        .branchId(selectedBranch.getBranchId())
+                                        .tableId(request.getTableId())
+                                        .reservationId(request.getReservationId())
+                                        .status("PENDING")
+                                        .paymentMethod(request.getPaymentMethod())
+                                        .paymentStatus(request.getPaymentStatus() == null ? "PENDING"
+                                                        : request.getPaymentStatus())
+                                        .subtotal(subtotal)
+                                        .discount(discount)
+                                        .totalAmount(totalAmount)
+                                        .notes(request.getNotes())
+                                        .build();
+
+                        order = orderRepository.save(order);
+
+                        // Create order items
+                        for (CreateGuestOrderRequest.OrderItemRequest itemRequest : request.getOrderItems()) {
+                                ApiResponse<ProductDetailResponse> productDetailResponse = catalogServiceClient
+                                                .getProductDetailById(itemRequest.getProductDetailId());
+                                ProductDetailResponse productDetail = productDetailResponse.getResult();
+
+                                OrderItem orderItem = OrderItem.builder()
+                                                .order(order)
+                                                .productId(itemRequest.getProductId())
+                                                .productDetailId(itemRequest.getProductDetailId())
+                                                .sizeId(productDetail.getSize().getSizeId())
+                                                .quantity(itemRequest.getQuantity())
+                                                .unitPrice(productDetail.getPrice())
+                                                .totalPrice(productDetail.getPrice()
+                                                                .multiply(itemRequest.getQuantity()))
+                                                .notes(itemRequest.getNotes())
+                                                .build();
+
+                                orderItemRepository.save(orderItem);
+                        }
+
+                        log.info("✅ Guest order created successfully: Order ID = {}", order.getOrderId());
+                        return convertToOrderResponse(order);
+
+                } catch (Exception e) {
+                        log.error("❌ Error creating guest order", e);
+                        throw e;
                 }
         }
 }

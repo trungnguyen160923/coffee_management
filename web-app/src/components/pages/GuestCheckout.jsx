@@ -4,7 +4,7 @@ import { cartService } from '../../services/cartService';
 import { orderService } from '../../services/orderService';
 import axios from 'axios';
 
-const CheckoutPage = () => {
+const GuestCheckout = () => {
     const navigate = useNavigate();
 
     const [formData, setFormData] = useState({
@@ -14,6 +14,7 @@ const CheckoutPage = () => {
         district: '',
         districtCode: '',
         ward: '',
+        wardCode: '',
         phone: '',
         email: '',
         paymentMethod: 'CASH',
@@ -75,7 +76,8 @@ const CheckoutPage = () => {
             provinceCode: provinceCode,
             district: '',
             districtCode: '',
-            ward: ''
+            ward: '',
+            wardCode: ''
         }));
 
         setDistricts([]);
@@ -95,7 +97,8 @@ const CheckoutPage = () => {
             ...prev,
             district: districtName,
             districtCode: districtCode,
-            ward: ''
+            ward: '',
+            wardCode: ''
         }));
 
         setWards([]);
@@ -114,30 +117,20 @@ const CheckoutPage = () => {
     };
 
     const validateRequired = () => {
-        const { name, province, district, ward, phone, email } = formData;
+        const { name, province, district, phone } = formData;
         return (
             name.trim() !== '' &&
             province.trim() !== '' &&
             district.trim() !== '' &&
-            ward.trim() !== '' &&
-            phone.trim() !== '' &&
-            email.trim() !== ''
+            phone.trim() !== ''
         );
     };
 
     const onSubmit = async (e) => {
         e.preventDefault();
 
-        // Check authentication first
-        const token = localStorage.getItem('token');
-        if (!token) {
-            alert('Please login before placing an order.');
-            navigate('/coffee/login');
-            return;
-        }
-
         if (!validateRequired()) {
-            alert('Please fill all the details !!');
+            alert('Please fill all the required fields (Name, Province, District, Phone) !!');
             return;
         }
 
@@ -149,9 +142,6 @@ const CheckoutPage = () => {
                 alert('Your cart is empty. Please add items before checkout.');
                 return;
             }
-
-            const user = localStorage.getItem('user');
-            const customerId = user ? JSON.parse(user).userId : null;
 
             // Build full deliveryAddress for database storage
             const fullDeliveryAddress = [
@@ -167,12 +157,11 @@ const CheckoutPage = () => {
             ].filter(a => a.trim()).join(', ');
 
             const payload = {
-                customerId: customerId,
                 customerName: formData.name,
                 phone: formData.phone,
+                email: formData.email,
                 deliveryAddress: fullDeliveryAddress, // Lưu đầy đủ địa chỉ vào DB
                 branchSelectionAddress: deliveryAddress, // Chỉ dùng để tìm chi nhánh
-                // branchId sẽ được tự động chọn bởi backend
                 paymentMethod: formData.paymentMethod,
                 discount: 0,
                 orderItems: cartItems.map(it => ({
@@ -183,15 +172,15 @@ const CheckoutPage = () => {
                 notes: formData.notes
             };
 
-            await orderService.createOrder(payload);
+            await orderService.createGuestOrder(payload);
             try { await cartService.clearCart(); } catch (_) { }
-            alert('Order placed successfully!');
+            alert('Guest order placed successfully!');
             window.dispatchEvent(new Event('cartUpdated'));
             navigate('/coffee');
         } catch (error) {
-            console.error('Order creation failed:', error);
-            const errorMsg = error?.response?.data?.message || error.message || 'Failed to place order';
-            alert('Order failed: ' + errorMsg);
+            console.error('Guest order creation failed:', error);
+            const errorMsg = error?.response?.data?.message || error.message || 'Failed to place guest order';
+            alert('Guest order failed: ' + errorMsg);
         } finally {
             setSubmitting(false);
         }
@@ -199,17 +188,17 @@ const CheckoutPage = () => {
 
     return (
         <>
-            {/* Hero Section to mirror checkout.php */}
+            {/* Hero Section */}
             <section className="home-slider owl-carousel">
                 <div className="slider-item" style={{ backgroundImage: 'url(/images/bg_3.jpg)' }} data-stellar-background-ratio="0.5">
                     <div className="overlay"></div>
                     <div className="container">
                         <div className="row slider-text justify-content-center align-items-center">
-                            <div className="col-md-7 col-sm-12 text-center ftco-animate">
-                                <h1 className="mb-3 mt-5 bread">Checkout</h1>
+                            <div className="col-md-7 col-sm-12 text-center">
+                                <h1 className="mb-3 mt-5 bread">CHECKOUT</h1>
                                 <p className="breadcrumbs">
                                     <span className="mr-2"><Link to="/coffee">Home</Link></span>
-                                    <span>Checkout</span>
+                                    <span>CHECKOUT</span>
                                 </p>
                             </div>
                         </div>
@@ -255,6 +244,7 @@ const CheckoutPage = () => {
                                             >
                                                 <option value="CASH">Cash</option>
                                                 <option value="CARD">Card</option>
+                                                <option value="BANK_TRANSFER">Bank Transfer</option>
                                             </select>
                                         </div>
                                     </div>
@@ -419,5 +409,4 @@ const CheckoutPage = () => {
     );
 };
 
-export default CheckoutPage;
-
+export default GuestCheckout;

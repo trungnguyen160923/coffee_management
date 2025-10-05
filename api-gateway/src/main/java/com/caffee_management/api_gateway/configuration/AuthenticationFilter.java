@@ -44,6 +44,8 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
             // Make cart endpoints public (no token required)
             "/order-service/api/cart",
             "/order-service/api/cart/.*",
+            // Make guest order endpoint public (no token required)
+            "/order-service/api/orders/guest",
             "/catalogs/sizes",
             "/catalogs/files/images/products/.*",
             "/catalogs/products",

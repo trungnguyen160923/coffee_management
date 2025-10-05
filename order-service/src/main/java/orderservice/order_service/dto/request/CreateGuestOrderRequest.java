@@ -13,13 +13,19 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class CreateOrderRequest {
+public class CreateGuestOrderRequest {
 
-    @NotNull(message = "Customer ID is required")
-    Integer customerId;
-
+    // Thông tin khách hàng (bắt buộc cho guest)
+    @NotNull(message = "Customer name is required")
     String customerName;
+
+    @NotNull(message = "Phone is required")
     String phone;
+
+    String email; // Optional
+
+    // Địa chỉ giao hàng
+    @NotNull(message = "Delivery address is required")
     String deliveryAddress;
 
     // Địa chỉ để tìm chi nhánh (chỉ district + province)
