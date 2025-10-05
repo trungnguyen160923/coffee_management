@@ -54,6 +54,8 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
             // Public categories endpoints
             "/catalogs/categories",
             "/catalogs/categories/.*",
+            "/order-service/api/email/send-order-confirmation",
+            "/order-service/api/email/send-order-confirmation/.*",
             // Provinces proxy endpoints (public)
             "/provinces/.*"
     };

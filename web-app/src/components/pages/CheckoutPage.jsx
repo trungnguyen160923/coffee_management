@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { cartService } from '../../services/cartService';
 import { orderService } from '../../services/orderService';
+import { emailService } from '../../services/emailService';
 import axios from 'axios';
 
 const CheckoutPage = () => {
@@ -183,9 +184,28 @@ const CheckoutPage = () => {
                 notes: formData.notes
             };
 
-            await orderService.createOrder(payload);
+            const orderResult = await orderService.createOrder(payload);
             try { await cartService.clearCart(); } catch (_) { }
-            alert('Order placed successfully!');
+
+            // Send order confirmation email
+            try {
+                const emailData = {
+                    email: formData.email,
+                    customerName: formData.name,
+                    orderId: orderResult?.orderId || 'N/A',
+                    orderItems: cartItems,
+                    totalAmount: cartItems.reduce((total, item) => total + (item.price * item.quantity), 0),
+                    deliveryAddress: fullDeliveryAddress,
+                    paymentMethod: formData.paymentMethod,
+                    orderDate: new Date().toLocaleString('vi-VN')
+                };
+                await emailService.sendOrderConfirmation(emailData);
+            } catch (emailError) {
+                console.error('Failed to send confirmation email:', emailError);
+                // Don't fail the order if email fails
+            }
+
+            alert('Order placed successfully! Confirmation email has been sent.');
             window.dispatchEvent(new Event('cartUpdated'));
             navigate('/coffee');
         } catch (error) {
