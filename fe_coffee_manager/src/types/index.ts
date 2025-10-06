@@ -3,8 +3,22 @@ export interface User {
     name: string;
     email: string;
     role: 'admin' | 'manager' | 'staff';
-    branchId?: string;
+    branchId?: string; // Keep for backward compatibility
+    branch?: Branch;   // New field from backend
     avatar?: string;
+    // Additional fields from backend API
+    user_id?: number;
+    fullname?: string;
+    phoneNumber?: string;
+    dob?: string | null;
+    avatarUrl?: string | null;
+    bio?: string | null;
+    identityCard?: string;
+    hireDate?: string;
+    position?: string | null;
+    salary?: number | null;
+    adminLevel?: number | null;
+    notes?: string | null;
   }
   
   export interface Branch {
@@ -55,6 +69,7 @@ export interface UserResponseDto {
   salary: number | null;
   adminLevel: number | null;
   notes: string | null;
+  active?: boolean;
 }
 
 export interface UsersListResponseDto<T> {

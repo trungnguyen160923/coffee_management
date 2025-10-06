@@ -2,7 +2,7 @@ import { apiClient } from '../config/api';
 import { UsersListResponseDto, UserResponseDto } from '../types';
 
 class StaffService {
-  private baseUrl = '/api/auth-service/users/staff';
+  private baseUrl = '/api/auth-service/users/staffs';
   private v2Url = '/api/auth-service/users-v2';
 
   async getStaffProfiles(): Promise<UserResponseDto[]> {
@@ -33,6 +33,21 @@ class StaffService {
       return response.result;
     }
     throw new Error(`API Error: ${response.code}`);
+  }
+
+  async getStaffProfilesByBranch(branchId: number): Promise<UserResponseDto[]> {
+    try {
+      const response = await apiClient.get<{ code: number; result: UserResponseDto[] }>(`${this.baseUrl}/branch/${branchId}`);
+      
+      if (response.code === 1000) {
+        return response.result;
+      } else {
+        throw new Error(`API Error: ${response.code}`);
+      }
+    } catch (error) {
+      console.error('Error fetching staff profiles by branch:', error);
+      throw error;
+    }
   }
 
   async getStaffProfile(userId: number): Promise<UserResponseDto> {

@@ -6,6 +6,8 @@ import com.service.profile.dto.request.StaffProfileCreationRequest;
 import com.service.profile.dto.response.StaffProfileResponse;
 import com.service.profile.service.StaffProfileService;
 
+import java.util.List;
+
 import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -33,9 +35,21 @@ public class StaffProfileController {
         return ApiResponse.<StaffProfileResponse>builder().result(result).build();
     }
 
+    @GetMapping
+    ApiResponse<List<StaffProfileResponse>> getAllStaffProfiles() {
+        List<StaffProfileResponse> result = staffProfileService.getAllStaffProfiles();
+        return ApiResponse.<List<StaffProfileResponse>>builder().result(result).build();
+    }
+
     @GetMapping("/{userId}")
     ApiResponse<StaffProfileResponse> getStaffProfile(@PathVariable Integer userId) {
         StaffProfileResponse result = staffProfileService.getStaffProfile(userId);
         return ApiResponse.<StaffProfileResponse>builder().result(result).build();
+    }
+
+    @GetMapping("/branch/{branchId}")
+    ApiResponse<List<StaffProfileResponse>> getStaffProfilesByBranch(@PathVariable Integer branchId) {
+        List<StaffProfileResponse> result = staffProfileService.getStaffProfilesByBranch(branchId);
+        return ApiResponse.<List<StaffProfileResponse>>builder().result(result).build();
     }
 }

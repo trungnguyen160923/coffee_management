@@ -262,6 +262,54 @@ public class UserService {
 
     }
 
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    @Transactional(readOnly = true)
+    public UserResponse getStaffById(Integer userId) {
+        try {
+            StaffProfileResponse staffProfile = profileClient.getStaffProfile(userId).getResult();
+            UserResponse userResponse = userMapper.toUserResponse(userRepository.findById(userId).orElseThrow(() -> new AppException(ErrorCode.USER_ID_NOT_FOUND)));
+            userResponse.setIdentityCard(staffProfile.getIdentityCard());
+            userResponse.setBranch(staffProfile.getBranch());
+            userResponse.setHireDate(staffProfile.getHireDate());
+            userResponse.setPosition(staffProfile.getPosition());
+            userResponse.setSalary(staffProfile.getSalary());
+            return userResponse;
+        } catch (Exception e) {
+            throw new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION);
+        }
+    }
+
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    @Transactional(readOnly = true)
+    public List<UserResponse> getStaffsByBranch(Integer branchId) {
+        try {
+            List<StaffProfileResponse> staffProfiles = profileClient.getStaffProfilesByBranch(branchId).getResult();
+            List<Integer> userIds = staffProfiles.stream()
+                    .map(StaffProfileResponse::getUserId)
+                    .toList();
+            
+            List<User> users = userRepository.findAllById(userIds);
+            Map<Integer, StaffProfileResponse> staffByUserId = staffProfiles.stream()
+                    .collect(java.util.stream.Collectors.toMap(StaffProfileResponse::getUserId, java.util.function.Function.identity(), (a, b) -> a));
+
+            return users.stream()
+                    .map(userMapper::toUserResponse)
+                    .peek(ur -> {
+                        StaffProfileResponse staff = staffByUserId.get(ur.getUser_id());
+                        if (staff != null) {
+                            ur.setIdentityCard(staff.getIdentityCard());
+                            ur.setBranch(staff.getBranch());
+                            ur.setHireDate(staff.getHireDate());
+                            ur.setPosition(staff.getPosition());
+                            ur.setSalary(staff.getSalary());
+                        }
+                    })
+                    .toList();
+        } catch (Exception e) {
+            throw new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION);
+        }
+    }
+
     @PreAuthorize("hasRole('ADMIN')")
     @Transactional(readOnly = true)
     public PagedResponse<UserResponse> getManagersPaged(int page, int size) {
@@ -287,6 +335,49 @@ public class UserService {
                         ur.setIdentityCard(mgr.getIdentityCard());
                         ur.setBranch(mgr.getBranch());
                         ur.setHireDate(mgr.getHireDate());
+                    }
+                })
+                .toList();
+
+            return PagedResponse.<UserResponse>builder()
+                .data(data)
+                .total(userPage.getTotalElements())
+                .page(userPage.getNumber())
+                .size(userPage.getSize())
+                .totalPages(userPage.getTotalPages())
+                .build();
+        } catch (Exception e) {
+            throw new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION);
+        }
+    }
+
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    @Transactional(readOnly = true)
+    public PagedResponse<UserResponse> getStaffsPaged(int page, int size) {
+        try {
+            int safePage = Math.max(page, 0);
+            int safeSize = size <= 0 ? 10 : Math.min(size, 100);
+
+            Pageable pageable = PageRequest.of(safePage, safeSize, org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createAt"));
+            Page<User> userPage = userRepository.findByRoleName(PredefinedRole.STAFF_ROLE, pageable);
+
+            // Reuse profile service bulk call if ever added; currently fetch all and map
+            List<StaffProfileResponse> staffProfiles = profileClient.getAllStaffProfiles().getResult();
+            Map<Integer, StaffProfileResponse> staffByUserId = staffProfiles
+                .stream()
+                .collect(java.util.stream.Collectors.toMap(StaffProfileResponse::getUserId, java.util.function.Function.identity(), (a, b) -> a));
+
+            List<UserResponse> data = userPage.getContent()
+                .stream()
+                .map(userMapper::toUserResponse)
+                .peek(ur -> {
+                    StaffProfileResponse staff = staffByUserId.get(ur.getUser_id());
+                    if (staff != null) {
+                        ur.setIdentityCard(staff.getIdentityCard());
+                        ur.setBranch(staff.getBranch());
+                        ur.setHireDate(staff.getHireDate());
+                        ur.setPosition(staff.getPosition());
+                        ur.setSalary(staff.getSalary());
                     }
                 })
                 .toList();
