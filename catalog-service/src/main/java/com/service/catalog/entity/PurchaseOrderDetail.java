@@ -33,8 +33,13 @@ public class PurchaseOrderDetail {
     Ingredient ingredient;
 
 
-    @Column(nullable = false, columnDefinition = "DECIMAL(12,2) DEFAULT 0.00")
+    @Column(nullable = false, columnDefinition = "DECIMAL(12,4) DEFAULT 0.0000")
     BigDecimal qty;
+
+
+    @ManyToOne
+    @JoinColumn(name = "unit_code", referencedColumnName = "code")
+    Unit unit;
 
 
     @Column(name = "unit_price", nullable = false, columnDefinition = "DECIMAL(12,2) DEFAULT 0.00")

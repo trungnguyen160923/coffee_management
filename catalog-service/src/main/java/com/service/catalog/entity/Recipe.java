@@ -25,16 +25,12 @@ public class Recipe {
     @Column(name = "recipe_id")
     Integer recipeId;
 
+    @Column(name = "name", nullable = false, length = 150)
+    String name;
 
     @ManyToOne
-    @JoinColumn(name = "pd_id", nullable = false)
+    @JoinColumn(name = "pd_id", nullable = true)
     ProductDetail productDetail;
-
-
-    @ManyToOne
-    @JoinColumn(name = "category_id")
-    Category category;
-
 
     @Column(nullable = false)
     Integer version;
@@ -44,9 +40,14 @@ public class Recipe {
     String description;
 
 
-    @Column(name = "yield", columnDefinition = "DECIMAL(12,2) DEFAULT 1.00")
+    @Column(name = "yield", columnDefinition = "DECIMAL(12,4) DEFAULT 1.0000")
     BigDecimal yield;
 
+    @Column(name = "instructions", nullable = false, columnDefinition = "TEXT")
+    String instructions;
+
+    @Column(name = "status", nullable = false, length = 50)
+    String status;
 
     @Column(name = "create_at", nullable = false, updatable = false,
             columnDefinition = "DATETIME DEFAULT CURRENT_TIMESTAMP")

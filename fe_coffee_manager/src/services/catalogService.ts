@@ -1,6 +1,6 @@
 import { apiClient } from '../config/api';
 import { API_ENDPOINTS } from '../config/constants';
-import { CatalogSize, CatalogProduct, CatalogCategory, ProductPageResponse, ProductSearchParams, CatalogSupplier, SupplierPageResponse, SupplierSearchParams, CreateSupplierRequest, CatalogIngredient, IngredientPageResponse, IngredientSearchParams, CreateIngredientRequest, UpdateIngredientRequest } from '../types';
+import { CatalogSize, CatalogProduct, CatalogCategory, ProductPageResponse, ProductSearchParams, CatalogSupplier, SupplierPageResponse, SupplierSearchParams, CreateSupplierRequest, CatalogIngredient, IngredientPageResponse, IngredientSearchParams, CreateIngredientRequest, UpdateIngredientRequest, CatalogUnit, CreateUnitRequest, UpdateUnitRequest, RecipePageResponse, RecipeSearchParams, CatalogRecipe, CreateRecipeRequest, UpdateRecipeRequest } from '../types';
 
 export interface ApiEnvelope<T> { code?: number; message?: string; result: T }
 
@@ -374,6 +374,153 @@ export const catalogService = {
       if (error.message) {
         throw new Error(error.message);
       }
+      throw new Error('Không thể kết nối đến server');
+    }
+  },
+
+  // Unit management
+  async getUnits(): Promise<CatalogUnit[]> {
+    try {
+      const resp = await apiClient.get<ApiEnvelope<CatalogUnit[]>>(API_ENDPOINTS.CATALOGS.UNITS);
+      return Array.isArray(resp?.result) ? resp.result : [];
+    } catch (error: any) {
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+      if (error.message) {
+        throw new Error(error.message);
+      }
+      throw new Error('Không thể kết nối đến server');
+    }
+  },
+
+  async createUnit(payload: CreateUnitRequest): Promise<CatalogUnit> {
+    try {
+      const resp = await apiClient.post<ApiEnvelope<CatalogUnit>>(API_ENDPOINTS.CATALOGS.UNITS, payload);
+      if (resp?.code === 1000 && resp.result) {
+        return resp.result;
+      }
+      throw new Error(resp?.message || 'Failed to create unit');
+    } catch (error: any) {
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+      if (error.message) {
+        throw new Error(error.message);
+      }
+      throw new Error('Không thể kết nối đến server');
+    }
+  },
+
+  async updateUnit(unitCode: string, payload: UpdateUnitRequest): Promise<CatalogUnit> {
+    try {
+      const resp = await apiClient.put<ApiEnvelope<CatalogUnit>>(`${API_ENDPOINTS.CATALOGS.UNITS}/${unitCode}`, payload);
+      if (resp?.code === 1000 && resp.result) {
+        return resp.result;
+      }
+      throw new Error(resp?.message || 'Failed to update unit');
+    } catch (error: any) {
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+      if (error.message) {
+        throw new Error(error.message);
+      }
+      throw new Error('Không thể kết nối đến server');
+    }
+  },
+
+  async deleteUnit(unitCode: string): Promise<void> {
+    try {
+      const resp = await apiClient.delete<ApiEnvelope<void>>(`${API_ENDPOINTS.CATALOGS.UNITS}/${unitCode}`);
+      if (resp?.code === 1000) {
+        return;
+      }
+      throw new Error(resp?.message || 'Failed to delete unit');
+    } catch (error: any) {
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+      if (error.message) {
+        throw new Error(error.message);
+      }
+      throw new Error('Không thể kết nối đến server');
+    }
+  }
+  ,
+
+  // Recipe management
+  async searchRecipes(params: RecipeSearchParams = {}): Promise<RecipePageResponse> {
+    const queryParams = new URLSearchParams();
+    if (params.keyword) queryParams.append('keyword', params.keyword);
+    if (params.status) queryParams.append('status', params.status);
+    if (params.pdId !== undefined) queryParams.append('pdId', String(params.pdId));
+    if (params.productId !== undefined) queryParams.append('productId', String(params.productId));
+    if (params.categoryId !== undefined) queryParams.append('categoryId', String(params.categoryId));
+    if (params.page !== undefined) queryParams.append('page', String(params.page));
+    if (params.size !== undefined) queryParams.append('size', String(params.size));
+    if (params.sortBy) queryParams.append('sortBy', params.sortBy);
+    if (params.sortDir) queryParams.append('sortDir', params.sortDir);
+
+    const url = `${API_ENDPOINTS.CATALOGS.RECIPES}/search${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+    const resp = await apiClient.get<ApiEnvelope<RecipePageResponse>>(url);
+    return resp?.result || {
+      content: [],
+      page: 0,
+      size: 10,
+      totalElements: 0,
+      totalPages: 0,
+      first: true,
+      last: true,
+      hasNext: false,
+      hasPrevious: false
+    };
+  },
+
+  async createRecipe(payload: CreateRecipeRequest): Promise<CatalogRecipe> {
+    const resp = await apiClient.post<ApiEnvelope<CatalogRecipe>>(API_ENDPOINTS.CATALOGS.RECIPES, payload);
+    if (resp?.result) return resp.result;
+    throw new Error((resp as any)?.message || 'Create recipe failed');
+  },
+
+  async updateRecipe(recipeId: number, payload: UpdateRecipeRequest): Promise<CatalogRecipe> {
+    const resp = await apiClient.put<ApiEnvelope<CatalogRecipe>>(`${API_ENDPOINTS.CATALOGS.RECIPES}/${recipeId}`, payload);
+    if (resp?.result) return resp.result;
+    throw new Error((resp as any)?.message || 'Update recipe failed');
+  },
+
+  async deleteRecipe(recipeId: number): Promise<void> {
+    try {
+      const resp = await apiClient.delete<ApiEnvelope<void>>(`${API_ENDPOINTS.CATALOGS.RECIPES}/${recipeId}`);
+      if (resp?.code === 1000) return;
+      throw new Error(resp?.message || 'Failed to delete recipe');
+    } catch (error: any) {
+      if (error.response?.data?.message) throw new Error(error.response.data.message);
+      if (error.message) throw new Error(error.message);
+      throw new Error('Không thể kết nối đến server');
+    }
+  },
+
+  async restoreRecipe(recipeId: number): Promise<void> {
+    try {
+      const resp = await apiClient.post<ApiEnvelope<void>>(`${API_ENDPOINTS.CATALOGS.RECIPES}/${recipeId}/restore`);
+      if (resp?.code === 1000) return;
+      throw new Error(resp?.message || 'Failed to restore recipe');
+    } catch (error: any) {
+      if (error.response?.data?.message) throw new Error(error.response.data.message);
+      if (error.message) throw new Error(error.message);
+      throw new Error('Không thể kết nối đến server');
+    }
+  },
+
+  async getNextRecipeVersion(name: string, pdId: number): Promise<number> {
+    try {
+      const resp = await apiClient.get<ApiEnvelope<number>>(`${API_ENDPOINTS.CATALOGS.RECIPES}/next-version?name=${encodeURIComponent(name)}&pdId=${pdId}`);
+      if (resp?.code === 1000 && resp?.result !== undefined) return resp.result;
+      throw new Error(resp?.message || 'Failed to get next version');
+    } catch (error: any) {
+      if (error.response?.data?.message) throw new Error(error.response.data.message);
+      if (error.message) throw new Error(error.message);
       throw new Error('Không thể kết nối đến server');
     }
   }

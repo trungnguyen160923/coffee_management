@@ -4,6 +4,7 @@ export { default as productService } from './productService';
 export { default as orderService } from './orderService';
 export { default as branchService } from './branchService';
 export { default as managerService } from './managerService';
+export { default as staffService } from './staffService';
 export { default as catalogService } from './catalogService';
 
 // Export API client

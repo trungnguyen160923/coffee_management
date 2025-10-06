@@ -18,8 +18,8 @@ public class IngredientUpdateRequest {
     @Size(max = 150, message = "INVALID_NAME_INGREDIENT")
     String name;
     
-    @Size(max = 50, message = "INVALID_UNIT")
-    String unit;
+    @Size(max = 20, message = "INVALID_UNIT")
+    String unitCode;
     
     BigDecimal unitPrice;
 

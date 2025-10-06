@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { catalogService } from '../../services';
-import { CatalogProduct, CatalogSize, CatalogCategory, ProductSearchParams } from '../../types';
+import { CatalogProduct, CatalogSize, CatalogCategory, ProductSearchParams, CatalogRecipe } from '../../types';
 import { toast } from 'react-hot-toast';
 import { Coffee, Plus, Settings, Loader, X, Trash2, RefreshCw } from 'lucide-react';
 import ProductForm from '../../components/product/ProductForm';
@@ -12,6 +12,7 @@ import CategoryManager from '../../components/product/CategoryManager';
 import SearchBar from '../../components/product/SearchBar';
 import Pagination from '../../components/product/Pagination';
 import ConfirmModal from '../../components/common/ConfirmModal';
+import RecipeDetailModal from '../../components/recipe/RecipeDetailModal';
 
 type ModalType = 'create' | 'edit' | 'view' | null;
 
@@ -44,6 +45,10 @@ const ProductManagement: React.FC = () => {
   const [editingSize, setEditingSize] = useState<CatalogSize | null>(null);
   const [showDeleteSizeConfirm, setShowDeleteSizeConfirm] = useState(false);
   const [sizeToDelete, setSizeToDelete] = useState<CatalogSize | null>(null);
+  
+  // Recipe modal state
+  const [selectedRecipe, setSelectedRecipe] = useState<CatalogRecipe | null>(null);
+  const [recipeModalOpen, setRecipeModalOpen] = useState(false);
 
   useEffect(() => {
     loadInitialData();
@@ -324,6 +329,17 @@ const ProductManagement: React.FC = () => {
   const closeModal = () => {
     setModalType(null);
     setSelectedProduct(null);
+  };
+
+  // Recipe modal handlers
+  const handleViewRecipe = (recipe: CatalogRecipe) => {
+    setSelectedRecipe(recipe);
+    setRecipeModalOpen(true);
+  };
+
+  const closeRecipeModal = () => {
+    setRecipeModalOpen(false);
+    setSelectedRecipe(null);
   };
 
   return (
@@ -656,7 +672,7 @@ const ProductManagement: React.FC = () => {
         onClose={closeModal}
         title="Product Details"
       >
-        {selectedProduct && <ProductDetail product={selectedProduct} />}
+        {selectedProduct && <ProductDetail product={selectedProduct} onViewRecipe={handleViewRecipe} />}
       </ProductModal>
 
       {showSizeManager && (
@@ -692,6 +708,13 @@ const ProductManagement: React.FC = () => {
         cancelText="Hủy"
         onConfirm={confirmDeleteSize}
         onCancel={cancelDeleteSize}
+      />
+
+      {/* Global Recipe Detail Modal */}
+      <RecipeDetailModal
+        open={recipeModalOpen}
+        onClose={closeRecipeModal}
+        recipe={selectedRecipe}
       />
     </div>
   );

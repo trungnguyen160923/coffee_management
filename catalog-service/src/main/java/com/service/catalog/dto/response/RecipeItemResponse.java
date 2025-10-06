@@ -6,8 +6,9 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.FieldDefaults;
 
-import java.time.LocalDateTime;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
 import lombok.AccessLevel;
 
 @Data
@@ -15,12 +16,12 @@ import lombok.AccessLevel;
 @AllArgsConstructor
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class IngredientResponse {
-    Integer ingredientId;
-    String name;
+public class RecipeItemResponse {
+    Integer id;
+    IngredientResponse ingredient;
+    BigDecimal qty;
     UnitResponse unit;
-    BigDecimal unitPrice;
-    SupplierResponse supplier;
+    String note;
     LocalDateTime createAt;
     LocalDateTime updateAt;
 }

@@ -43,7 +43,7 @@ public class PurchaseOrder {
     String status;
 
 
-    @Column(name = "total_amount", nullable = false, columnDefinition = "DECIMAL(12,2) DEFAULT 0.00")
+    @Column(name = "total_amount", nullable = false, columnDefinition = "DECIMAL(12,4) DEFAULT 0.0000")
     BigDecimal totalAmount;
 
 

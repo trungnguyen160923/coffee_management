@@ -8,6 +8,7 @@ import lombok.experimental.FieldDefaults;
 
 import java.math.BigDecimal;
 
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -23,8 +24,8 @@ public class IngredientCreationRequest {
     @Size(max = 150, message = "INVALID_NAME_INGREDIENT")
     String name;
     
-    @Size(max = 50, message = "INVALID_UNIT")
-    String unit;
+    @Size(max = 20, message = "INVALID_UNIT")
+    String unitCode;
     
     @NotNull(message = "EMPTY_UNIT_PRICE")
     BigDecimal unitPrice;

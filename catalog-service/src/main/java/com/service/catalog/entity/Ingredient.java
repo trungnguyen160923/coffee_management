@@ -30,11 +30,12 @@ public class Ingredient {
     String name;
 
 
-    @Column(length = 50)
-    String unit;
+    @ManyToOne
+    @JoinColumn(name = "unit_code", referencedColumnName = "code")
+    Unit unit;
 
 
-    @Column(name = "unit_price", nullable = false, columnDefinition = "DECIMAL(12,2) DEFAULT 0.00")
+    @Column(name = "unit_price", nullable = false, columnDefinition = "DECIMAL(12,4) DEFAULT 0.0000")
     BigDecimal unitPrice;
 
 
