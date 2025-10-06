@@ -173,7 +173,7 @@ const MenuPage = () => {
                                 <div className="text">
                                     <h3>{product.name}</h3>
                                     <p>{product.description}</p>
-                                    <p className="price"><span>{getDisplayPrice(product)}</span></p>
+                                    <p className="price"><span style={{ background: '#000', color: '#c49b63', padding: '2px 8px', borderRadius: '3px' }}>{getDisplayPrice(product)}</span></p>
                                     <p>
                                         <button
                                             onClick={() => handleShowProduct(product.productId)}
@@ -190,6 +190,15 @@ const MenuPage = () => {
             </>
         );
     };
+
+    // Show all available categories (from DB) in featured section
+    const featuredCategoryKeys = useMemo(() => {
+        // keep the original categories order if available
+        const keysInOrder = effectiveCategories.map(c => c.key);
+        const available = Object.keys(categorizedProducts);
+        // fallback to available if no effective categories
+        return (keysInOrder.length ? keysInOrder : available).filter(k => (categorizedProducts[k] || []).length > 0);
+    }, [effectiveCategories, categorizedProducts]);
 
     return (
         <>
@@ -221,6 +230,51 @@ const MenuPage = () => {
                 </div>
             </section>
 
+            {/* Featured Menu section above Discover */}
+            <section className="ftco-section pt-5 pb-3">
+                <div className="container">
+                    {featuredCategoryKeys.length > 0 && (
+                        featuredCategoryKeys.reduce((rows, key, idx) => {
+                            if (idx % 2 === 0) rows.push([key]); else rows[rows.length - 1].push(key);
+                            return rows;
+                        }, []).map((pair, rowIdx) => (
+                            <div key={rowIdx} className="row">
+                                {pair.map((key) => (
+                                    <div key={key} className="col-md-6 mb-5 pb-3">
+                                        <h3 className="mb-5 heading-pricing" style={{ color: '#fff' }}>{effectiveCategories.find(c => c.key === key)?.label || key}</h3>
+                                        {(categorizedProducts[key] || []).map((item) => (
+                                            <div key={item.productId} className="pricing-entry d-flex" style={{ marginBottom: '20px' }}>
+                                                <div
+                                                    className="img"
+                                                    style={{
+                                                        backgroundImage: `url(${productService.getFullImageUrl(item.imageUrl)})`,
+                                                        width: '54px',
+                                                        height: '54px',
+                                                        borderRadius: '50%',
+                                                        backgroundSize: 'cover',
+                                                        backgroundPosition: 'center'
+                                                    }}
+                                                ></div>
+                                                <div className="desc pl-3" style={{ width: '100%' }}>
+                                                    <div className="d-flex text align-items-center" style={{ marginBottom: '6px' }}>
+                                                        <h3 style={{ margin: 0 }}><span style={{ color: '#fff', border: '1px solid #000', borderRadius: '3px', padding: '2px 8px' }}>{item.name}</span></h3>
+                                                        <div className="flex-grow-1" style={{ borderTop: '1px dashed rgba(196,155,99,0.35)', margin: '0 12px' }}></div>
+                                                        <span className="price" style={{ background: '#000', color: '#c49b63', padding: '2px 10px', borderRadius: '3px' }}>{getDisplayPrice(item)}</span>
+                                                    </div>
+                                                    <div className="d-block">
+                                                        <p style={{ color: 'rgba(255,255,255,0.7)', marginTop: '8px' }}>{item.description}</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ))}
+                            </div>
+                        ))
+                    )}
+                </div>
+            </section>
+
             {/* Product Categories  */}
             <section className="ftco-menu mb-5 pb-5">
                 <div className="container">
@@ -228,7 +282,7 @@ const MenuPage = () => {
                         <div className="col-md-7 heading-section text-center ftco-animate">
                             <span className="subheading">Discover</span>
                             <h2 className="mb-4">Our Products</h2>
-                            <p>Enjoy our coffee, drinks, desserts and more.</p>
+
                         </div>
                     </div>
 
@@ -329,32 +383,27 @@ const MenuPage = () => {
                                             <div className="col-md-12">
                                                 <div className="form-group">
                                                     <label style={{ color: '#c49b63' }}>Size:</label>
-                                                    <select
-                                                        value={selectedDetailId || ''}
-                                                        onChange={(e) => setSelectedDetailId(Number(e.target.value))}
-                                                        className="form-control"
-                                                        style={{
-                                                            backgroundColor: 'rgba(21, 17, 17, 0.8)',
-                                                            color: '#fff',
-                                                            border: '1px solid #c49b63',
-                                                            appearance: 'none',
-                                                            WebkitAppearance: 'none',
-                                                            MozAppearance: 'none'
-                                                        }}
-                                                    >
-                                                        {selectedProduct.productDetails?.map(detail => (
-                                                            <option
-                                                                key={detail.pdId}
-                                                                value={detail.pdId}
-                                                                style={{
-                                                                    backgroundColor: '#151111',
-                                                                    color: '#fff'
-                                                                }}
-                                                            >
-                                                                {detail.size?.name} - {formatPrice(detail.price)}
-                                                            </option>
-                                                        ))}
-                                                    </select>
+                                                    <div className="d-flex flex-wrap" role="radiogroup" aria-label="Size options">
+                                                        {selectedProduct.productDetails?.map(detail => {
+                                                            const isActive = selectedDetailId === detail.pdId;
+                                                            return (
+                                                                <button
+                                                                    key={detail.pdId}
+                                                                    type="button"
+                                                                    onClick={() => setSelectedDetailId(detail.pdId)}
+                                                                    aria-pressed={isActive}
+                                                                    className="btn btn-outline-secondary mr-2 mb-2"
+                                                                    style={{
+                                                                        backgroundColor: isActive ? '#c49b63' : 'rgba(21, 17, 17, 0.8)',
+                                                                        color: isActive ? '#151111' : '#fff',
+                                                                        border: '1px solid #c49b63'
+                                                                    }}
+                                                                >
+                                                                    {detail.size?.name} - {formatPrice(detail.price)}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
                                                 </div>
                                             </div>
                                             <div className="col-md-12">

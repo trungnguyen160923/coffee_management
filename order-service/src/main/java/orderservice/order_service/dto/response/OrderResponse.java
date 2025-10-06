@@ -43,8 +43,8 @@ public class OrderResponse {
         Integer orderItemId;
         Integer productId;
         Integer productDetailId;
+        Integer sizeId;
         ProductResponse product;
-        ProductDetailResponse productDetail;
         java.math.BigDecimal quantity;
         BigDecimal unitPrice;
         BigDecimal totalPrice;

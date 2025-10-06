@@ -9,6 +9,8 @@ const CartPage = () => {
     const [delivery, setDelivery] = useState(5.00);
     const [discount, setDiscount] = useState(3.00);
     const [total, setTotal] = useState(0);
+    const [error, setError] = useState(null);
+    const [totalItems, setTotalItems] = useState(0); // Track totalItems from API
 
     useEffect(() => {
         loadCartItems();
@@ -17,19 +19,22 @@ const CartPage = () => {
     const loadCartItems = async () => {
         try {
             setLoading(true);
+            setError(null);
             const [items, totals] = await Promise.all([
                 cartService.getCartItems(),
                 cartService.getCartTotal().catch(() => null)
             ]);
-            setCartItems(items);
-            if (totals && typeof totals.totalAmount !== 'undefined') {
-                setSubtotal(Number(totals.totalAmount || 0));
-                setTotal(Number(totals.totalAmount || 0) + delivery - discount);
+            setCartItems(items || []);
+            setTotalItems(totals?.result?.totalItems || 0); // Store totalItems
+            if (totals && typeof totals.result?.totalAmount !== 'undefined') {
+                setSubtotal(Number(totals.result.totalAmount || 0));
+                setTotal(Number(totals.result.totalAmount || 0) + delivery - discount);
             } else {
-                calculateTotals(items);
+                calculateTotals(items || []);
             }
         } catch (error) {
             console.error('Error loading cart items:', error);
+            setError('Failed to load cart items. Please try again.');
             setCartItems([]);
         } finally {
             setLoading(false);
@@ -43,7 +48,7 @@ const CartPage = () => {
     };
 
     const removeItem = async (productId) => {
-        // Optimistic UI update
+        const previousItems = [...cartItems];
         setCartItems((prev) => {
             const next = prev.filter((i) => i.productId !== productId);
             calculateTotals(next);
@@ -51,21 +56,20 @@ const CartPage = () => {
         });
         try {
             await cartService.removeFromCart(productId);
-            // Notify others (e.g., header badge) without reloading this page
             window.dispatchEvent(new Event('cartUpdated'));
         } catch (error) {
             console.error('Error removing item:', error);
-            // Fallback: reload to get server truth
-            loadCartItems();
+            setCartItems(previousItems);
+            calculateTotals(previousItems);
+            setError('Failed to remove item. Reverted changes.');
+            loadCartItems(); // Sync with server
         }
     };
 
     const updateQuantity = async (productId, newQuantity) => {
         if (newQuantity < 1) return;
-        // Optimistic UI update with rollback on failure
-        let previousItems;
+        const previousItems = [...cartItems];
         setCartItems((prev) => {
-            previousItems = prev;
             const next = prev.map((item) =>
                 item.productId === productId ? { ...item, quantity: newQuantity } : item
             );
@@ -77,9 +81,10 @@ const CartPage = () => {
             window.dispatchEvent(new Event('cartUpdated'));
         } catch (error) {
             console.error('Error updating quantity:', error);
-            // Rollback UI and refresh totals
             setCartItems(previousItems);
             calculateTotals(previousItems);
+            setError('Failed to update quantity. Reverted changes.');
+            loadCartItems(); // Sync with server
         }
     };
 
@@ -89,8 +94,8 @@ const CartPage = () => {
 
     const handleCheckout = () => {
         if (total > 0) {
-            // Navigate to checkout page
-            window.location.href = '/coffee/checkout';
+            const token = localStorage.getItem('token');
+            window.location.href = token ? '/coffee/checkout' : '/coffee/guest-checkout';
         }
     };
 
@@ -106,31 +111,18 @@ const CartPage = () => {
 
     return (
         <>
-            {/* Hero Section */}
-            <section className="home-slider owl-carousel">
-                <div className="slider-item" style={{ backgroundImage: 'url(/images/bg_3.jpg)' }} data-stellar-background-ratio="0.5">
-                    <div className="overlay"></div>
-                    <div className="container">
-                        <div className="row slider-text justify-content-center align-items-center">
-                            <div className="col-md-7 col-sm-12 text-center ftco-animate">
-                                <h1 className="mb-3 mt-5 bread">Cart</h1>
-                                <p className="breadcrumbs">
-                                    <span className="mr-2"><Link to="/coffee">Home</Link></span>
-                                    <span>Cart</span>
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            {/* Cart Section */}
-            <section className="ftco-section ftco-cart">
+            <section className="ftco-section ftco-cart" style={{ paddingTop: '100px' }}>
                 <div className="container">
+                    {error && (
+                        <div className="alert alert-danger" role="alert">
+                            {error}
+                            <button onClick={loadCartItems} className="btn btn-link">Retry</button>
+                        </div>
+                    )}
                     <div className="row">
-                        <div className="col-md-12 ftco-animate">
+                        <div className="col-md-12">
                             <div className="cart-list">
-                                <table className="table">
+                                <table className="table" style={{ display: 'table', visibility: 'visible' }}>
                                     <thead className="thead-primary">
                                         <tr className="text-center">
                                             <th>&nbsp;</th>
@@ -158,7 +150,6 @@ const CartPage = () => {
                                                             <span className="icon-close"></span>
                                                         </button>
                                                     </td>
-
                                                     <td className="image-prod">
                                                         <div
                                                             className="img"
@@ -172,14 +163,11 @@ const CartPage = () => {
                                                             }}
                                                         ></div>
                                                     </td>
-
                                                     <td className="product-name">
                                                         <h3>{item.name}</h3>
                                                         <p>{item.description}</p>
                                                     </td>
-
                                                     <td className="price">{formatPrice(item.price)}</td>
-
                                                     <td>
                                                         <div className="input-group mb-3" style={{ maxWidth: '220px', margin: '0 auto' }}>
                                                             <div className="input-group-prepend">
@@ -241,17 +229,28 @@ const CartPage = () => {
                                                             </div>
                                                         </div>
                                                     </td>
-
                                                     <td className="total">{formatPrice(item.price * item.quantity)}</td>
                                                 </tr>
                                             ))
                                         ) : (
                                             <tr>
                                                 <td colSpan="6" className="text-center">
-                                                    <h5>Your Cart is Empty</h5>
-                                                    <Link to="/coffee/menu" className="btn btn-primary mt-3">
-                                                        Continue Shopping
-                                                    </Link>
+                                                    {totalItems > 0 || subtotal > 0 ? (
+                                                        <>
+                                                            <h5>Error: Cart items could not be loaded</h5>
+                                                            <p>It looks like there are {totalItems} items in your cart, but we couldn't retrieve them. Please try again.</p>
+                                                            <button onClick={loadCartItems} className="btn btn-primary mt-3">
+                                                                Retry
+                                                            </button>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <h5>Your Cart is Empty</h5>
+                                                            <Link to="/coffee/menu" className="btn btn-primary mt-3">
+                                                                Continue Shopping
+                                                            </Link>
+                                                        </>
+                                                    )}
                                                 </td>
                                             </tr>
                                         )}
@@ -263,13 +262,9 @@ const CartPage = () => {
 
                     {cartItems.length > 0 && (
                         <div className="row justify-content-end">
-                            <div className="col col-lg-3 col-md-6 mt-5 cart-wrap ftco-animate">
+                            <div className="col col-lg-3 col-md-6 mt-5 cart-wrap">
                                 <div className="cart-total mb-3" style={{
                                     background: '#151111',
-                                    backgroundImage: 'url(/images/bg_4.jpg)',
-                                    backgroundRepeat: 'no-repeat',
-                                    backgroundAttachment: 'fixed',
-                                    backgroundSize: 'cover',
                                     border: '2px solid #c49b63',
                                     padding: '20px',
                                     borderRadius: '8px'

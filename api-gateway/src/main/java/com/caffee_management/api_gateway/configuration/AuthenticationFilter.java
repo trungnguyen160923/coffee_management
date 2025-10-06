@@ -44,6 +44,8 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
             // Make cart endpoints public (no token required)
             "/order-service/api/cart",
             "/order-service/api/cart/.*",
+            // Make guest order endpoint public (no token required)
+            "/order-service/api/orders/guest",
             "/catalogs/sizes",
             "/catalogs/files/images/products/.*",
             "/catalogs/products",
@@ -51,7 +53,11 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
             "/catalogs/products/detail/.*",
             // Public categories endpoints
             "/catalogs/categories",
-            "/catalogs/categories/.*"
+            "/catalogs/categories/.*",
+            "/order-service/api/email/send-order-confirmation",
+            "/order-service/api/email/send-order-confirmation/.*",
+            // Provinces proxy endpoints (public)
+            "/provinces/.*"
     };
 
     @Value("${app.api-prefix}")

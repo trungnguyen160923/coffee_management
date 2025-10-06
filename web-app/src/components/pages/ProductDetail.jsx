@@ -1,11 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { productService } from '../../services/productService';
 import { cartService } from '../../services/cartService';
 
 const ProductDetail = () => {
     const { id } = useParams();
-    const navigate = useNavigate();
     const [product, setProduct] = useState(null);
     const [loading, setLoading] = useState(true);
     const [selectedDetailId, setSelectedDetailId] = useState(null);
