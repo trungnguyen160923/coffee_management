@@ -6,6 +6,7 @@ import lombok.experimental.FieldDefaults;
 import orderservice.order_service.client.CatalogServiceClient;
 import orderservice.order_service.dto.ApiResponse;
 import orderservice.order_service.dto.request.CreateOrderRequest;
+import orderservice.order_service.dto.request.CreateGuestOrderRequest;
 import orderservice.order_service.dto.response.OrderResponse;
 import orderservice.order_service.dto.response.ProductResponse;
 import orderservice.order_service.service.OrderService;
@@ -44,6 +45,28 @@ public class OrderController {
             ApiResponse<OrderResponse> response = ApiResponse.<OrderResponse>builder()
                     .code(500)
                     .message("Failed to create order: " + e.getMessage())
+                    .result(null)
+                    .build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    @PostMapping("/guest")
+    public ResponseEntity<ApiResponse<OrderResponse>> createGuestOrder(
+            @Valid @RequestBody CreateGuestOrderRequest request) {
+        try {
+            // Guest order không cần token
+            OrderResponse order = orderService.createGuestOrder(request);
+            ApiResponse<OrderResponse> response = ApiResponse.<OrderResponse>builder()
+                    .code(200)
+                    .message("Guest order created successfully")
+                    .result(order)
+                    .build();
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        } catch (Exception e) {
+            ApiResponse<OrderResponse> response = ApiResponse.<OrderResponse>builder()
+                    .code(500)
+                    .message("Failed to create guest order: " + e.getMessage())
                     .result(null)
                     .build();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);

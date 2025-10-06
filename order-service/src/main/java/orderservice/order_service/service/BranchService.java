@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 
+import java.math.BigDecimal;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
@@ -20,10 +21,12 @@ import java.util.Optional;
 public class BranchService {
 
     private final BranchRepository branchRepository;
+    private final GeocodingService geocodingService;
 
     @Autowired
-    public BranchService(BranchRepository branchRepository) {
+    public BranchService(BranchRepository branchRepository, GeocodingService geocodingService) {
         this.branchRepository = branchRepository;
+        this.geocodingService = geocodingService;
     }
 
     public Branch createBranch(CreateBranchRequest request) {
@@ -48,6 +51,20 @@ public class BranchService {
         branch.setManagerUserId(request.getManagerUserId());
         branch.setOpenHours(openHours);
         branch.setEndHours(endHours);
+
+        // Geocode address to get coordinates
+        if (request.getAddress() != null && !request.getAddress().trim().isEmpty()) {
+            try {
+                GeocodingService.Coordinates coordinates = geocodingService.geocodeAddressWithFallback(request.getAddress());
+                if (coordinates != null) {
+                    branch.setLatitude(BigDecimal.valueOf(coordinates.getLatitude()));
+                    branch.setLongitude(BigDecimal.valueOf(coordinates.getLongitude()));
+                }
+            } catch (Exception e) {
+                // Log the error but don't fail the branch creation
+                System.err.println("⚠️ Geocoding failed for address: " + request.getAddress() + " - " + e.getMessage());
+            }
+        }
 
         return branchRepository.save(branch);
     }
@@ -127,12 +144,31 @@ public class BranchService {
             throw new AppException(ErrorCode.INVALID_BUSINESS_HOURS);
         }
 
+        // Store original address to compare later
+        String originalAddress = branch.getAddress();
+
         branch.setName(request.getName());
         branch.setAddress(request.getAddress());
         branch.setPhone(request.getPhone());
         branch.setManagerUserId(request.getManagerUserId());
         branch.setOpenHours(openHours);
         branch.setEndHours(endHours);
+
+        // Geocode address to get coordinates if address has changed
+        if (request.getAddress() != null && !request.getAddress().trim().isEmpty() 
+            && !request.getAddress().equals(originalAddress)) {
+            try {
+                GeocodingService.Coordinates coordinates = geocodingService.geocodeAddressWithFallback(request.getAddress());
+                if (coordinates != null) {
+                    branch.setLatitude(BigDecimal.valueOf(coordinates.getLatitude()));
+                    branch.setLongitude(BigDecimal.valueOf(coordinates.getLongitude()));
+                    System.out.println("✅ Geocoding successful for branch " + branchId + ": " + request.getAddress() + " → (" + coordinates.getLatitude() + ", " + coordinates.getLongitude() + ")");
+                }
+            } catch (Exception e) {
+                // Log the error but don't fail the branch update
+                System.err.println("⚠️ Geocoding failed for address: " + request.getAddress() + " - " + e.getMessage());
+            }
+        }
 
         return branchRepository.save(branch);
     }
@@ -156,5 +192,52 @@ public class BranchService {
 
     public List<Branch> getBranchesUnassigned() {
         return branchRepository.findByManagerUserIdIsNull();
+    }
+
+    /**
+     * Geocode lại tọa độ cho một chi nhánh cụ thể
+     */
+    public Branch geocodeBranch(Integer branchId) {
+        Branch branch = branchRepository.findById(branchId)
+                .orElseThrow(() -> new AppException(ErrorCode.BRANCH_NOT_FOUND));
+
+        if (branch.getAddress() != null && !branch.getAddress().trim().isEmpty()) {
+            try {
+                GeocodingService.Coordinates coordinates = geocodingService.geocodeAddressWithFallback(branch.getAddress());
+                if (coordinates != null) {
+                    branch.setLatitude(BigDecimal.valueOf(coordinates.getLatitude()));
+                    branch.setLongitude(BigDecimal.valueOf(coordinates.getLongitude()));
+                    return branchRepository.save(branch);
+                }
+            } catch (Exception e) {
+                System.err.println("⚠️ Geocoding failed for branch " + branchId + " address: " + branch.getAddress() + " - " + e.getMessage());
+                throw new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION);
+            }
+        }
+        
+        throw new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION);
+    }
+
+    /**
+     * Geocode lại tọa độ cho tất cả chi nhánh chưa có tọa độ
+     */
+    public List<Branch> geocodeAllBranchesWithoutCoordinates() {
+        List<Branch> branches = branchRepository.findByLatitudeIsNullOrLongitudeIsNull();
+        
+        for (Branch branch : branches) {
+            if (branch.getAddress() != null && !branch.getAddress().trim().isEmpty()) {
+                try {
+                    GeocodingService.Coordinates coordinates = geocodingService.geocodeAddressWithFallback(branch.getAddress());
+                    if (coordinates != null) {
+                        branch.setLatitude(BigDecimal.valueOf(coordinates.getLatitude()));
+                        branch.setLongitude(BigDecimal.valueOf(coordinates.getLongitude()));
+                    }
+                } catch (Exception e) {
+                    System.err.println("⚠️ Geocoding failed for branch " + branch.getBranchId() + " address: " + branch.getAddress() + " - " + e.getMessage());
+                }
+            }
+        }
+        
+        return branchRepository.saveAll(branches);
     }
 }

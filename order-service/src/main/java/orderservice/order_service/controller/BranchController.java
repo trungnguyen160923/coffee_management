@@ -322,4 +322,46 @@ public class BranchController {
                 .build();
         return ResponseEntity.ok(response);
     }
+
+    @PostMapping("/{branchId}/geocode")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<Branch>> geocodeBranch(@PathVariable Integer branchId) {
+        try {
+            Branch branch = branchService.geocodeBranch(branchId);
+            ApiResponse<Branch> response = ApiResponse.<Branch>builder()
+                    .code(200)
+                    .message("Branch geocoded successfully")
+                    .result(branch)
+                    .build();
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            ApiResponse<Branch> response = ApiResponse.<Branch>builder()
+                    .code(500)
+                    .message("Failed to geocode branch: " + e.getMessage())
+                    .result(null)
+                    .build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    @PostMapping("/geocode-all")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<List<Branch>>> geocodeAllBranchesWithoutCoordinates() {
+        try {
+            List<Branch> branches = branchService.geocodeAllBranchesWithoutCoordinates();
+            ApiResponse<List<Branch>> response = ApiResponse.<List<Branch>>builder()
+                    .code(200)
+                    .message("All branches geocoded successfully")
+                    .result(branches)
+                    .build();
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            ApiResponse<List<Branch>> response = ApiResponse.<List<Branch>>builder()
+                    .code(500)
+                    .message("Failed to geocode branches: " + e.getMessage())
+                    .result(null)
+                    .build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
 }

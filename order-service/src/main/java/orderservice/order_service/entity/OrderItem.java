@@ -28,8 +28,11 @@ public class OrderItem {
     @Column(name = "product_id", nullable = false)
     Integer productId;
 
-    @Column(name = "size_id")
+    @Column(name = "product_detail_id", nullable = false)
     Integer productDetailId;
+
+    @Column(name = "size_id")
+    Integer sizeId;
 
     @Column(name = "qty", nullable = false, precision = 12, scale = 2)
     java.math.BigDecimal quantity;
