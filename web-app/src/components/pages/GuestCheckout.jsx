@@ -27,10 +27,12 @@ const GuestCheckout = () => {
     const [wards, setWards] = useState([]);
 
     const [submitting, setSubmitting] = useState(false);
+    const [cartItems, setCartItems] = useState([]);
 
-    // Fetch provinces on mount
+    // Fetch provinces and cart items on mount
     useEffect(() => {
         fetchProvinces();
+        fetchCartItems();
     }, []);
 
     const fetchProvinces = async () => {
@@ -39,6 +41,16 @@ const GuestCheckout = () => {
             setProvinces(response.data);
         } catch (error) {
             console.error('Error fetching provinces:', error);
+        }
+    };
+
+    const fetchCartItems = async () => {
+        try {
+            const items = await cartService.getCartItems();
+            setCartItems(items || []);
+        } catch (error) {
+            console.error('Error fetching cart items:', error);
+            setCartItems([]);
         }
     };
 
@@ -117,6 +129,7 @@ const GuestCheckout = () => {
         }));
     };
 
+
     const validateRequired = () => {
         const { name, province, district, phone } = formData;
         return (
@@ -164,7 +177,6 @@ const GuestCheckout = () => {
                 deliveryAddress: fullDeliveryAddress, // Lưu đầy đủ địa chỉ vào DB
                 branchSelectionAddress: deliveryAddress, // Chỉ dùng để tìm chi nhánh
                 paymentMethod: formData.paymentMethod,
-                discount: 0,
                 orderItems: cartItems.map(it => ({
                     productId: it.productId,
                     productDetailId: it.productDetailId,
@@ -208,6 +220,22 @@ const GuestCheckout = () => {
 
     return (
         <>
+            <style>{`
+                .custom-scrollbar::-webkit-scrollbar {
+                    width: 8px;
+                }
+                .custom-scrollbar::-webkit-scrollbar-track {
+                    background: #000;
+                    border-radius: 4px;
+                }
+                .custom-scrollbar::-webkit-scrollbar-thumb {
+                    background: #333;
+                    border-radius: 4px;
+                }
+                .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+                    background: #555;
+                }
+            `}</style>
             {/* Hero Section */}
             <section className="home-slider owl-carousel">
                 <div className="slider-item" style={{ backgroundImage: 'url(/images/bg_3.jpg)' }} data-stellar-background-ratio="0.5">
@@ -230,7 +258,8 @@ const GuestCheckout = () => {
             <section className="ftco-section">
                 <div className="container">
                     <div className="row">
-                        <div className="col-md-12 ftco-animate">
+                        {/* Left Column - Billing Form */}
+                        <div className="col-md-8 ftco-animate">
                             <form onSubmit={onSubmit} className="billing-form ftco-bg-dark p-3 p-md-5">
                                 <h3 className="mb-4 billing-heading">Billing Details</h3>
                                 <div className="row align-items-end">
@@ -421,6 +450,124 @@ const GuestCheckout = () => {
                                     </div>
                                 </div>
                             </form>
+                        </div>
+
+                        {/* Right Column - Order Summary */}
+                        <div className="col-md-4 ftco-animate">
+                            <div className="order-summary ftco-bg-dark p-4 p-md-5" style={{
+                                minHeight: '600px'
+                            }}>
+                                <h3 className="mb-4 billing-heading">Your Order</h3>
+
+                                {cartItems.length === 0 ? (
+                                    <div className="text-center py-4">
+                                        <p className="text-muted">Your cart is empty</p>
+                                        <Link to="/coffee" className="btn btn-primary">
+                                            Continue Shopping
+                                        </Link>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div className="order-items custom-scrollbar" style={{
+                                            maxHeight: '500px',
+                                            overflowY: 'auto',
+                                            paddingRight: '10px',
+                                            scrollbarWidth: 'thin',
+                                            scrollbarColor: '#333 #000'
+                                        }}>
+                                            {cartItems.map((item, index) => (
+                                                <div key={index} className="order-item mb-3 pb-3 border-bottom">
+                                                    <div className="d-flex">
+                                                        {/* Product Image */}
+                                                        <div className="product-image me-3">
+                                                            <img
+                                                                src={item.imageUrl || '/images/menu-1.jpg'}
+                                                                alt={item.name}
+                                                                className="img-fluid"
+                                                                style={{
+                                                                    width: '60px',
+                                                                    height: '60px',
+                                                                    objectFit: 'cover',
+                                                                    borderRadius: '8px',
+                                                                    border: '1px solid #ddd'
+                                                                }}
+                                                                onError={(e) => {
+                                                                    e.target.src = '/images/menu-1.jpg';
+                                                                }}
+                                                            />
+                                                        </div>
+
+                                                        {/* Product Info */}
+                                                        <div className="product-info flex-grow-1">
+                                                            <h6 className="mb-1 text-primary">{item.name}</h6>
+                                                            {item.size && (
+                                                                <small className="text-muted d-block mb-1">
+                                                                    <i className="fa fa-tag me-1"></i>
+                                                                    Size: {item.size}
+                                                                </small>
+                                                            )}
+                                                            <div className="d-flex justify-content-between align-items-center">
+                                                                <div className="quantity-info">
+                                                                    <small className="text-muted">
+                                                                        <i className="fa fa-shopping-cart me-1"></i>
+                                                                        Qty: {item.quantity}
+                                                                    </small>
+                                                                </div>
+                                                                <div className="item-price">
+                                                                    <span className="price fw-bold text-primary">
+                                                                        ${(item.price * item.quantity).toFixed(2)}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+
+
+                                        </div>
+
+                                        {/* Discount Code Section */}
+                                        <div className="discount-section mt-4 pt-3 border-top">
+                                            <h6 className="mb-3">
+                                                <i className="fa fa-tag me-2"></i>
+                                                Discount Code
+                                            </h6>
+                                            <div className="input-group mb-2">
+                                                <input
+                                                    type="text"
+                                                    className="form-control form-control-sm"
+                                                    placeholder="Enter code"
+                                                    disabled
+                                                />
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-primary btn-sm fw-bold"
+                                                    disabled
+                                                >
+                                                    Apply
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div className="order-total mt-4 pt-3 border-top">
+                                            <div className="d-flex justify-content-between align-items-center">
+                                                <h5 className="mb-0">Total:</h5>
+                                                <h5 className="mb-0 text-primary">
+                                                    ${cartItems.reduce((total, item) => total + (item.price * item.quantity), 0).toFixed(2)}
+                                                </h5>
+                                            </div>
+                                        </div>
+
+                                        <div className="order-notes mt-4">
+                                            <small className="text-muted">
+                                                <i className="fa fa-info-circle"></i>
+                                                You will receive a confirmation email after placing your order.
+                                            </small>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>

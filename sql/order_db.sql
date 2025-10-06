@@ -79,7 +79,6 @@ CREATE TABLE orders (
   customer_name VARCHAR(50) DEFAULT NULL,
   phone VARCHAR(20) DEFAULT NULL,
   branch_id INT NOT NULL,
-  delivery_address VARCHAR(255) NOT NULL,
   table_id INT DEFAULT NULL,
   reservation_id INT DEFAULT NULL,
   status VARCHAR(50) NOT NULL DEFAULT 'CREATED',
@@ -102,6 +101,8 @@ CREATE TABLE orders (
     customer_id IS NOT NULL OR (customer_name IS NOT NULL AND phone IS NOT NULL)
   )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE orders
+ADD COLUMN delivery_address VARCHAR(255) NOT NULL AFTER phone;
 
 -- Order details (line items)
 DROP TABLE IF EXISTS order_details;
@@ -163,3 +164,7 @@ CREATE TABLE IF NOT EXISTS cart_items (
   KEY idx_cart_items_pd_id (product_detail_id),
   CONSTRAINT fk_cart_items_cart FOREIGN KEY (cart_id) REFERENCES carts(cart_id) ON DELETE CASCADE
 );
+ALTER TABLE branches
+ADD COLUMN latitude DECIMAL(10,8) DEFAULT NULL,
+ADD COLUMN longitude DECIMAL(11,8) DEFAULT NULL;
+

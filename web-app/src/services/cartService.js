@@ -18,7 +18,8 @@ class CartService {
     mapCartItems(rawItems = []) {
         return rawItems.map((it) => {
             const product = it.product || {};
-            const price = it.unitPrice ?? (it.productDetail && it.productDetail.price) ?? 0;
+            const productDetail = it.productDetail || {};
+            const price = it.unitPrice ?? (productDetail && productDetail.price) ?? 0;
             const imagePath = product.imageUrl || '';
             let imageUrl = '/images/placeholder.jpg';
             if (typeof imagePath === 'string' && imagePath.length > 0) {
@@ -47,6 +48,7 @@ class CartService {
                 name: product.name || '',
                 description: product.description || '',
                 imageUrl,
+                size: productDetail.size?.name || '',
             };
         });
     }
