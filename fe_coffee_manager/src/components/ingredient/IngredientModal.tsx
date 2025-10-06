@@ -1,13 +1,14 @@
 import React from 'react';
 import { X } from 'lucide-react';
-import { CatalogIngredient, CatalogSupplier } from '../../types';
+import { CatalogIngredient, CatalogSupplier, CatalogUnit } from '../../types';
+import { catalogService } from '../../services';
 
 interface IngredientModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (formData: {
     name: string;
-    unit: string;
+    unitCode: string;
     unitPrice: string;
     supplierId: string;
   }) => void;
@@ -26,23 +27,46 @@ const IngredientModal: React.FC<IngredientModalProps> = ({
 }) => {
   const [form, setForm] = React.useState({
     name: '',
-    unit: '',
+    unitCode: '',
     unitPrice: '',
     supplierId: ''
   });
 
   const [errors, setErrors] = React.useState({
     name: '',
-    unit: '',
+    unitCode: '',
     unitPrice: '',
     supplierId: ''
   });
+
+  const [units, setUnits] = React.useState<CatalogUnit[]>([]);
+  const [unitsLoading, setUnitsLoading] = React.useState(false);
+
+  // Load units when modal opens
+  React.useEffect(() => {
+    if (isOpen) {
+      loadUnits();
+    }
+  }, [isOpen]);
+
+  // Load units function
+  const loadUnits = async () => {
+    try {
+      setUnitsLoading(true);
+      const data = await catalogService.getUnits();
+      setUnits(data);
+    } catch (error) {
+      console.error('Error loading units:', error);
+    } finally {
+      setUnitsLoading(false);
+    }
+  };
 
   React.useEffect(() => {
     if (ingredient) {
       setForm({
         name: ingredient.name || '',
-        unit: ingredient.unit || '',
+        unitCode: ingredient.unit?.code || '',
         unitPrice: String(ingredient.unitPrice ?? ''),
         supplierId: ingredient.supplier?.supplierId ? String(ingredient.supplier.supplierId) : ''
       });
@@ -50,7 +74,7 @@ const IngredientModal: React.FC<IngredientModalProps> = ({
       // Clear form when creating new ingredient
       setForm({
         name: '',
-        unit: '',
+        unitCode: '',
         unitPrice: '',
         supplierId: ''
       });
@@ -58,41 +82,66 @@ const IngredientModal: React.FC<IngredientModalProps> = ({
     // Clear errors when modal opens/closes
     setErrors({
       name: '',
-      unit: '',
+      unitCode: '',
       unitPrice: '',
       supplierId: ''
     });
   }, [ingredient, isOpen]);
 
+  const validateField = (field: string, value: string) => {
+    let error = '';
+    
+    switch (field) {
+      case 'name':
+        if (!value.trim()) {
+          error = 'Name is required';
+        } else if (value.trim().length < 2) {
+          error = 'Name must be at least 2 characters';
+        } else if (value.trim().length > 100) {
+          error = 'Name must be at most 100 characters';
+        }
+        break;
+      case 'unitCode':
+        if (!value.trim()) {
+          error = 'Unit is required';
+        }
+        break;
+      case 'unitPrice':
+        if (!value.trim()) {
+          error = 'Unit price is required';
+        } else if (isNaN(Number(value))) {
+          error = 'Unit price must be a valid number';
+        } else if (Number(value) <= 0) {
+          error = 'Unit price must be greater than 0';
+        } else if (Number(value) > 999999.99) {
+          error = 'Unit price must be less than 1,000,000';
+        }
+        break;
+      case 'supplierId':
+        if (!value.trim()) {
+          error = 'Please select a supplier';
+        }
+        break;
+    }
+    
+    return error;
+  };
+
+  const handleFieldBlur = (field: string, value: string) => {
+    const error = validateField(field, value);
+    setErrors(prev => ({
+      ...prev,
+      [field]: error
+    }));
+  };
+
   const validateForm = () => {
     const newErrors = {
-      name: '',
-      unit: '',
-      unitPrice: '',
-      supplierId: ''
+      name: validateField('name', form.name),
+      unitCode: validateField('unitCode', form.unitCode),
+      unitPrice: validateField('unitPrice', form.unitPrice),
+      supplierId: validateField('supplierId', form.supplierId)
     };
-
-    // Name validation
-    if (!form.name.trim()) {
-      newErrors.name = 'Name is required';
-    }
-
-    // Unit validation
-    if (!form.unit.trim()) {
-      newErrors.unit = 'Unit is required';
-    }
-
-    // Unit Price validation
-    if (!form.unitPrice.trim()) {
-      newErrors.unitPrice = 'Unit price is required';
-    } else if (isNaN(Number(form.unitPrice)) || Number(form.unitPrice) <= 0) {
-      newErrors.unitPrice = 'Unit price must be a valid positive number';
-    }
-
-    // Supplier validation
-    if (!form.supplierId) {
-      newErrors.supplierId = 'Please select a supplier';
-    }
 
     setErrors(newErrors);
     return !Object.values(newErrors).some(error => error !== '');
@@ -102,6 +151,9 @@ const IngredientModal: React.FC<IngredientModalProps> = ({
     e.preventDefault();
     if (validateForm()) {
       onSubmit(form);
+    } else {
+      // Show error message if validation fails
+      console.log('Form validation failed');
     }
   };
 
@@ -122,11 +174,12 @@ const IngredientModal: React.FC<IngredientModalProps> = ({
         <div className="flex-1 overflow-y-auto p-6">
           <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700">Name</label>
+            <label className="block text-sm font-medium text-gray-700">Name <span className="text-red-500">*</span></label>
             <input
               type="text"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
+              onBlur={(e) => handleFieldBlur('name', e.target.value)}
               className={`mt-1 w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-500 ${
                 errors.name ? 'border-red-500' : 'border-gray-300'
               }`}
@@ -139,26 +192,37 @@ const IngredientModal: React.FC<IngredientModalProps> = ({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Unit</label>
-              <input
-                type="text"
-                value={form.unit}
-                onChange={(e) => setForm({ ...form, unit: e.target.value })}
+              <label className="block text-sm font-medium text-gray-700">Unit <span className="text-red-500">*</span></label>
+              <select
+                value={form.unitCode}
+                onChange={(e) => setForm({ ...form, unitCode: e.target.value })}
+                onBlur={(e) => handleFieldBlur('unitCode', e.target.value)}
                 className={`mt-1 w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-500 ${
-                  errors.unit ? 'border-red-500' : 'border-gray-300'
+                  errors.unitCode ? 'border-red-500' : 'border-gray-300'
                 }`}
-                placeholder="e.g., kg, g, ml"
-              />
-              {errors.unit && (
-                <p className="mt-1 text-sm text-red-600">{errors.unit}</p>
+                disabled={unitsLoading}
+              >
+                <option value="">Select unit</option>
+                {units.map(unit => (
+                  <option key={unit.code} value={unit.code}>
+                    {unit.name} ({unit.code})
+                  </option>
+                ))}
+              </select>
+              {errors.unitCode && (
+                <p className="mt-1 text-sm text-red-600">{errors.unitCode}</p>
+              )}
+              {unitsLoading && (
+                <p className="mt-1 text-sm text-gray-500">Loading units...</p>
               )}
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">Unit Price</label>
+              <label className="block text-sm font-medium text-gray-700">Unit Price <span className="text-red-500">*</span></label>
               <input
                 type="number"
                 value={form.unitPrice}
                 onChange={(e) => setForm({ ...form, unitPrice: e.target.value })}
+                onBlur={(e) => handleFieldBlur('unitPrice', e.target.value)}
                 className={`mt-1 w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-500 ${
                   errors.unitPrice ? 'border-red-500' : 'border-gray-300'
                 }`}
@@ -173,10 +237,11 @@ const IngredientModal: React.FC<IngredientModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">Supplier</label>
+            <label className="block text-sm font-medium text-gray-700">Supplier <span className="text-red-500">*</span></label>
             <select
               value={form.supplierId}
               onChange={(e) => setForm({ ...form, supplierId: e.target.value })}
+              onBlur={(e) => handleFieldBlur('supplierId', e.target.value)}
               className={`mt-1 w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-500 ${
                 errors.supplierId ? 'border-red-500' : 'border-gray-300'
               }`}

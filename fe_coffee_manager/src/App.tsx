@@ -12,7 +12,9 @@ import BranchManagement from './pages/admin/BranchManagement';
 import ProductManagement from './pages/admin/ProductManagement';
 import SupplierManagement from './pages/admin/SupplierManagement';
 import IngredientManagement from './pages/admin/IngredientManagement';
+import RecipeManagement from './pages/admin/RecipeManagement';
 import { ManagerDashboard } from './pages/manager/ManagerDashboard';
+import StaffManagement from './pages/manager/StaffManagement';
 import { StaffDashboard } from './pages/staff/StaffDashboard';
 
 function AppRoutes() {
@@ -57,7 +59,7 @@ function AppRoutes() {
             <Route path="products" element={<Layout><ProductManagement /></Layout>} />
             <Route path="suppliers" element={<Layout><SupplierManagement /></Layout>} />
             <Route path="ingredients" element={<Layout><IngredientManagement /></Layout>} />
-            <Route path="recipes" element={<Layout><div className="p-8"><h1 className="text-2xl font-bold">Quản lý công thức</h1></div></Layout>} />
+            <Route path="recipes" element={<Layout><RecipeManagement /></Layout>} />
             <Route path="branches" element={<Layout><BranchManagement /></Layout>} />
             <Route path="managers" element={<Layout><ManagerManagement /></Layout>} />
             <Route path="statistics" element={<Layout><div className="p-8"><h1 className="text-2xl font-bold">Thống kê</h1></div></Layout>} />
@@ -78,7 +80,7 @@ function AppRoutes() {
       <Route path="/manager/*" element={
         <ProtectedRoute allowedRoles={['manager']}>
           <Routes>
-            <Route path="staff" element={<Layout><div className="p-8"><h1 className="text-2xl font-bold">Quản lý nhân viên</h1></div></Layout>} />
+            <Route path="staff" element={<Layout><StaffManagement /></Layout>} />
             <Route path="inventory" element={<Layout><div className="p-8"><h1 className="text-2xl font-bold">Quản lý kho</h1></div></Layout>} />
             <Route path="statistics" element={<Layout><div className="p-8"><h1 className="text-2xl font-bold">Thống kê chi nhánh</h1></div></Layout>} />
             <Route path="*" element={<NotFoundPage showLoginButton={false} />} />

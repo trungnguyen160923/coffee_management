@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { catalogService } from '../../services';
-import { CatalogIngredient, CatalogSupplier } from '../../types';
+import { CatalogIngredient, CatalogSupplier, CatalogUnit } from '../../types';
 import { toast } from 'react-hot-toast';
 import { UtensilsCrossed, Plus, Settings, Loader, Trash2, RefreshCw, Eye } from 'lucide-react';
 import { IngredientModal, IngredientDetailModal } from '../../components/ingredient';
+import UnitManager from '../../components/unit/UnitManager';
 import ConfirmModal from '../../components/common/ConfirmModal';
 
 type ModalType = 'create' | 'edit' | 'view' | null;
@@ -11,6 +12,7 @@ type ModalType = 'create' | 'edit' | 'view' | null;
 const IngredientManagement: React.FC = () => {
   const [ingredients, setIngredients] = useState<CatalogIngredient[]>([]);
   const [suppliers, setSuppliers] = useState<CatalogSupplier[]>([]);
+  const [units, setUnits] = useState<CatalogUnit[]>([]);
   const [loading, setLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -31,9 +33,12 @@ const IngredientManagement: React.FC = () => {
     show: false,
     ingredientId: null
   });
+  const [showUnitManager, setShowUnitManager] = useState(false);
+  const [editingUnit, setEditingUnit] = useState<CatalogUnit | null>(null);
 
   useEffect(() => {
     loadSuppliers();
+    loadUnits();
     loadIngredients();
   }, []);
 
@@ -56,6 +61,15 @@ const IngredientManagement: React.FC = () => {
       setSuppliers(resp.content);
     } catch (error) {
       console.error('Error loading suppliers:', error);
+    }
+  };
+
+  const loadUnits = async () => {
+    try {
+      const resp = await catalogService.getUnits();
+      setUnits(resp);
+    } catch (error) {
+      console.error('Error loading units:', error);
     }
   };
 
@@ -106,7 +120,7 @@ const IngredientManagement: React.FC = () => {
 
   const handleSubmit = async (formData: {
     name: string;
-    unit: string;
+    unitCode: string;
     unitPrice: string;
     supplierId: string;
   }) => {
@@ -114,39 +128,26 @@ const IngredientManagement: React.FC = () => {
       setSubmitting(true);
       const payload = {
         name: formData.name.trim(),
-        unit: formData.unit.trim() || undefined,
+        unitCode: formData.unitCode.trim() || undefined,
         unitPrice: Number(formData.unitPrice),
         supplierId: Number(formData.supplierId)
       } as any;
 
-      if (!payload.name || !payload.unitPrice || !payload.supplierId) {
+      if (!payload.name || !payload.unitCode || !payload.unitPrice || !payload.supplierId) {
         toast.error('Please fill required fields');
         return;
       }
 
       if (editingIngredient) {
-        const updated = await catalogService.updateIngredient(editingIngredient.ingredientId, payload);
-        setIngredients(prev => prev.map(i => i.ingredientId === updated.ingredientId ? updated : i));
+        await catalogService.updateIngredient(editingIngredient.ingredientId, payload);
+        // Reload ingredients to ensure unit object is properly populated
+        await loadIngredients();
         toast.success('Updated ingredient successfully');
       } else {
-        const created = await catalogService.createIngredient(payload);
+        await catalogService.createIngredient(payload);
+        // Reload ingredients to ensure unit object is properly populated
+        await loadIngredients();
         setTotalElements(prev => prev + 1);
-        
-        // If on first page and sorting by createAt DESC, add to top
-        if (currentPage === 0) {
-          setIngredients(prev => {
-            const next = [created, ...prev];
-            // If exceeds page size, need to reload to get correct pagination
-            if (next.length > pageSize) {
-              loadIngredients();
-              return prev;
-            }
-            return next;
-          });
-        } else {
-          // If not on first page, reload to get correct data
-          loadIngredients();
-        }
         toast.success('Created ingredient successfully');
       }
       closeModal();
@@ -196,13 +197,27 @@ const IngredientManagement: React.FC = () => {
   const handleRefresh = async () => {
     try {
       setLoading(true);
-      await Promise.all([loadSuppliers(), loadIngredients()]);
+      await Promise.all([loadSuppliers(), loadUnits(), loadIngredients()]);
       toast.success('Data refreshed');
     } catch (error) {
       toast.error('Failed to refresh');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleEditUnit = (unit: CatalogUnit) => {
+    setEditingUnit(unit);
+    setShowUnitManager(true);
+  };
+
+  const handleCloseUnitManager = () => {
+    setShowUnitManager(false);
+    setEditingUnit(null);
+  };
+
+  const handleUnitsUpdated = () => {
+    loadUnits();
   };
 
   
@@ -240,21 +255,94 @@ const IngredientManagement: React.FC = () => {
                   <div className="flex items-center justify-between mb-4">
                     <h2 className="text-lg font-medium text-gray-900">Total Ingredients</h2>
                   </div>
-                  <div className="bg-blue-50 rounded-lg p-3">
+                  <div className="bg-blue-50 rounded-lg p-3 mb-4">
                     <div className="text-xl font-bold text-blue-600">{totalElements}</div>
                     <div className="text-xs text-blue-800">Ingredients</div>
                   </div>
-                </div>
-              </div>
-
-              <div className="bg-white shadow rounded-lg">
-                <div className="px-4 py-5 sm:p-6">
+                  
                   <div className="flex items-center justify-between mb-4">
                     <h2 className="text-lg font-medium text-gray-900">Suppliers</h2>
                   </div>
                   <div className="bg-green-50 rounded-lg p-3">
                     <div className="text-xl font-bold text-green-600">{suppliers.length}</div>
                     <div className="text-xs text-green-800">Available suppliers</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Unit Management - CRUD Table */}
+              <div className="bg-white shadow rounded-lg">
+                <div className="px-4 py-5 sm:p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-lg font-medium text-gray-900">Units</h2>
+                    <button
+                      onClick={() => setShowUnitManager(true)}
+                      className="flex items-center space-x-1 text-sm bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      <span>Manage Units</span>
+                    </button>
+                  </div>
+                  
+                  {/* Unit Statistics */}
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div className="bg-blue-50 rounded-lg p-3">
+                      <div className="text-xl font-bold text-blue-600">{units.length}</div>
+                      <div className="text-xs text-blue-800">Total Units</div>
+                    </div>
+                    <div className="bg-green-50 rounded-lg p-3">
+                      <div className="text-xl font-bold text-green-600">
+                        {units.filter(u => u.baseUnitCode === u.code).length}
+                      </div>
+                      <div className="text-xs text-green-800">Base Units</div>
+                    </div>
+                  </div>
+                  
+                  <div className="overflow-x-auto max-h-32 overflow-y-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-200">
+                          <th className="text-left py-2 font-medium text-gray-700">Code</th>
+                          <th className="text-left py-2 font-medium text-gray-700">Name</th>
+                          <th className="text-center py-2 font-medium text-gray-700">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {units.slice(0, 5).map(unit => (
+                          <tr key={unit.code} className="border-b border-gray-100 hover:bg-gray-50">
+                            <td className="py-2 font-medium text-gray-900 max-w-[80px] truncate" title={unit.code}>{unit.code}</td>
+                            <td className="py-2 text-gray-600 max-w-[150px] truncate" title={unit.name}>{unit.name}</td>
+                            <td className="py-2 text-center">
+                              <div className="flex items-center justify-center space-x-1">
+                                <button
+                                  onClick={() => handleEditUnit(unit)}
+                                  className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                  title="Edit unit"
+                                >
+                                  <Settings className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                        {!units.length && (
+                          <tr>
+                            <td colSpan={3} className="py-4 text-center text-gray-500">
+                              No units available
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                    {units.length > 5 && (
+                      <div className="text-center mt-2">
+                        <button
+                          onClick={() => setShowUnitManager(true)}
+                          className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                        >
+                          View all {units.length} units
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -365,7 +453,12 @@ const IngredientManagement: React.FC = () => {
                           <tr key={ing.ingredientId} className="hover:bg-gray-50">
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{ing.ingredientId}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{ing.name}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{ing.unit || '—'}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {ing.unit?.name && ing.unit?.code 
+                                ? `${ing.unit.name} (${ing.unit.code})` 
+                                : ing.unit?.name || ing.unit?.code || '—'
+                              }
+                            </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{Number(ing.unitPrice).toLocaleString()}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{ing.supplier?.name || '—'}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -464,6 +557,15 @@ const IngredientManagement: React.FC = () => {
         onConfirm={confirmDelete}
         onCancel={cancelDelete}
       />
+
+      {/* Unit Manager Modal */}
+      {showUnitManager && (
+        <UnitManager
+          onClose={handleCloseUnitManager}
+          onUnitsUpdated={handleUnitsUpdated}
+          editingUnit={editingUnit}
+        />
+      )}
     </div>
   );
 };

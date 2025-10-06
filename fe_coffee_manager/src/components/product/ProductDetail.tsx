@@ -1,11 +1,48 @@
-import { Coffee } from 'lucide-react';
-import { CatalogProduct } from '../../types';
+import { Coffee, ChefHat } from 'lucide-react';
+import { CatalogProduct, CatalogRecipe } from '../../types';
+import { useState, useEffect } from 'react';
+import catalogService from '../../services/catalogService';
 
 interface ProductDetailProps {
   product: CatalogProduct;
+  onViewRecipe: (recipe: CatalogRecipe) => void;
 }
 
-export default function ProductDetail({ product }: ProductDetailProps) {
+export default function ProductDetail({ product, onViewRecipe }: ProductDetailProps) {
+  const [recipesByPdId, setRecipesByPdId] = useState<Record<number, CatalogRecipe[]>>({});
+
+  // Fetch recipes for each product detail
+  useEffect(() => {
+    const fetchRecipes = async () => {
+      if (!product.productDetails) return;
+      
+      const recipeMap: Record<number, CatalogRecipe[]> = {};
+      
+      for (const detail of product.productDetails) {
+        try {
+          const response = await catalogService.searchRecipes({ 
+            pdId: detail.pdId, 
+            status: 'ACTIVE',
+            page: 0, 
+            size: 10 
+          });
+          recipeMap[detail.pdId] = response.content || [];
+        } catch (error) {
+          console.error(`Failed to fetch recipes for pdId ${detail.pdId}:`, error);
+          recipeMap[detail.pdId] = [];
+        }
+      }
+      
+      setRecipesByPdId(recipeMap);
+    };
+
+    fetchRecipes();
+  }, [product.productDetails]);
+
+  const handleViewRecipe = (recipe: CatalogRecipe) => {
+    onViewRecipe(recipe);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-start space-x-6">
@@ -62,8 +99,19 @@ export default function ProductDetail({ product }: ProductDetailProps) {
             {product.productDetails.map((detail) => (
               <div
                 key={detail.pdId}
-                className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 rounded-lg p-4"
+                className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 rounded-lg p-4 relative"
               >
+                {/* Recipe button - top right corner */}
+                {recipesByPdId[detail.pdId] && recipesByPdId[detail.pdId].length > 0 && (
+                  <button
+                    onClick={() => handleViewRecipe(recipesByPdId[detail.pdId][0])}
+                    className="absolute top-2 right-2 p-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-md transition-colors"
+                    title="View Recipe"
+                  >
+                    <ChefHat className="w-3 h-3" />
+                  </button>
+                )}
+                
                 {detail.size ? (
                   <>
                     <div className="text-sm font-medium text-gray-600 mb-1">Size {detail.size.name}</div>
@@ -77,6 +125,15 @@ export default function ProductDetail({ product }: ProductDetailProps) {
                 <div className="text-2xl font-bold text-amber-600">
                   {detail.price.toLocaleString('vi-VN')}đ
                 </div>
+                
+                {/* Multiple recipes indicator */}
+                {recipesByPdId[detail.pdId] && recipesByPdId[detail.pdId].length > 1 && (
+                  <div className="mt-2">
+                    <p className="text-xs text-gray-500">
+                      +{recipesByPdId[detail.pdId].length - 1} more recipe{recipesByPdId[detail.pdId].length - 1 > 1 ? 's' : ''}
+                    </p>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -99,6 +156,7 @@ export default function ProductDetail({ product }: ProductDetailProps) {
           </p>
         </div>
       </div>
+
     </div>
   );
 }

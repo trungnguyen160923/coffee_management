@@ -19,6 +19,10 @@ export default function CategoryManager({ onClose, onCategoriesUpdated }: Catego
     name: '',
     description: ''
   });
+  const [formErrors, setFormErrors] = useState({
+    name: '',
+    description: ''
+  });
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [categoryToDelete, setCategoryToDelete] = useState<CatalogCategory | null>(null);
 
@@ -45,20 +49,67 @@ export default function CategoryManager({ onClose, onCategoriesUpdated }: Catego
     }
   };
 
+  const validateField = (field: string, value: string) => {
+    let error = '';
+    
+    switch (field) {
+      case 'name':
+        if (!value.trim()) {
+          error = 'Category name is required';
+        } else if (value.trim().length < 2) {
+          error = 'Category name must be at least 2 characters';
+        } else if (value.trim().length > 50) {
+          error = 'Category name must be at most 50 characters';
+        }
+        break;
+      case 'description':
+        if (!value.trim()) {
+          error = 'Description is required';
+        } else if (value.trim().length < 5) {
+          error = 'Description must be at least 5 characters';
+        } else if (value.trim().length > 200) {
+          error = 'Description must be at most 200 characters';
+        }
+        break;
+    }
+    
+    return error;
+  };
+
+  const handleFieldBlur = (field: string, value: string) => {
+    const error = validateField(field, value);
+    setFormErrors(prev => ({
+      ...prev,
+      [field]: error
+    }));
+  };
+
+  const validateForm = () => {
+    const errors = {
+      name: validateField('name', formData.name),
+      description: validateField('description', formData.description)
+    };
+    
+    setFormErrors(errors);
+    
+    return !Object.values(errors).some(error => error !== '');
+  };
+
   const handleEdit = (category: CatalogCategory) => {
     setEditingCategory(category);
     setFormData({
       name: category.name,
       description: category.description || ''
     });
+    setFormErrors({ name: '', description: '' });
     setShowForm(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (!formData.name.trim()) {
-      toast.error('Category name is required!');
+    
+    if (!validateForm()) {
+      toast.error('Please fix the errors below');
       return;
     }
 
@@ -82,6 +133,7 @@ export default function CategoryManager({ onClose, onCategoriesUpdated }: Catego
       setShowForm(false);
       setEditingCategory(null);
       setFormData({ name: '', description: '' });
+      setFormErrors({ name: '', description: '' });
       loadCategories(); // Reload categories list
       onCategoriesUpdated?.();
     } catch (error) {
@@ -139,11 +191,13 @@ export default function CategoryManager({ onClose, onCategoriesUpdated }: Catego
     setShowForm(false);
     setEditingCategory(null);
     setFormData({ name: '', description: '' });
+    setFormErrors({ name: '', description: '' });
   };
 
   const handleAddNew = () => {
     setEditingCategory(null);
     setFormData({ name: '', description: '' });
+    setFormErrors({ name: '', description: '' });
     setShowForm(true);
   };
 
@@ -172,28 +226,39 @@ export default function CategoryManager({ onClose, onCategoriesUpdated }: Catego
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Category Name
+                    Category Name <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none"
+                    onBlur={(e) => handleFieldBlur('name', e.target.value)}
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none ${
+                      formErrors.name ? 'border-red-500' : 'border-gray-300'
+                    }`}
                     placeholder="Enter category name"
-                    required
                   />
+                  {formErrors.name && (
+                    <p className="mt-1 text-sm text-red-600">{formErrors.name}</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Description
+                    Description <span className="text-red-500">*</span>
                   </label>
                   <textarea
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none"
+                    onBlur={(e) => handleFieldBlur('description', e.target.value)}
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none ${
+                      formErrors.description ? 'border-red-500' : 'border-gray-300'
+                    }`}
                     placeholder="Enter category description"
                     rows={3}
                   />
+                  {formErrors.description && (
+                    <p className="mt-1 text-sm text-red-600">{formErrors.description}</p>
+                  )}
                 </div>
                 <div className="flex items-center justify-end space-x-3">
                   <button

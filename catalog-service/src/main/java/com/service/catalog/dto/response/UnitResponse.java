@@ -1,26 +1,29 @@
 package com.service.catalog.dto.response;
 
+import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.FieldDefaults;
 
-import java.time.LocalDateTime;
 import java.math.BigDecimal;
-import lombok.AccessLevel;
+import java.time.LocalDateTime;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class IngredientResponse {
-    Integer ingredientId;
+public class UnitResponse {
+    String code;
     String name;
-    UnitResponse unit;
-    BigDecimal unitPrice;
-    SupplierResponse supplier;
+    String dimension;
+    BigDecimal factorToBase;
+    
+    // Chỉ lưu code của base unit để tránh vòng lặp vô hạn
+    String baseUnitCode;
+    
     LocalDateTime createAt;
     LocalDateTime updateAt;
 }

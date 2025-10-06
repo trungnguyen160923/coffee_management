@@ -41,7 +41,7 @@ const IngredientDetailModal: React.FC<IngredientDetailModalProps> = ({
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">Unit</label>
-                <p className="mt-1 text-sm text-gray-900">{ingredient.unit || '—'}</p>
+                <p className="mt-1 text-sm text-gray-900">{ingredient.unit?.name || ingredient.unit?.code || '—'}</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">Unit Price</label>

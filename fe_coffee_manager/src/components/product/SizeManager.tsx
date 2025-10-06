@@ -20,7 +20,7 @@ export default function SizeManager({ onClose, onSizesUpdated, editingSize: prop
     name: '',
     description: '',
   });
-  const [errors, setErrors] = useState({
+  const [formErrors, setFormErrors] = useState({
     name: '',
     description: '',
   });
@@ -63,42 +63,69 @@ export default function SizeManager({ onClose, onSizesUpdated, editingSize: prop
   };
 
   const validateField = (field: string, value: string) => {
-    if (field === 'name' && !value.trim()) {
-      setErrors(prev => ({ ...prev, name: 'Size name is required' }));
-      return false;
+    let error = '';
+    
+    switch (field) {
+      case 'name':
+        if (!value.trim()) {
+          error = 'Size name is required';
+        }
+        else if (value.trim().length > 50) {
+          error = 'Size name must be at most 50 characters';
+        }
+        break;
+      case 'description':
+        if (!value.trim()) {
+          error = 'Description is required';
+        } else if (value.trim().length < 2) {
+          error = 'Description must be at least 2 characters';
+        } else if (value.trim().length > 200) {
+          error = 'Description must be at most 200 characters';
+        }
+        break;
     }
-    if (field === 'description' && !value.trim()) {
-      setErrors(prev => ({ ...prev, description: 'Description is required' }));
-      return false;
-    }
-    setErrors(prev => ({ ...prev, [field]: '' }));
-    return true;
+    
+    return error;
+  };
+
+  const handleFieldBlur = (field: string, value: string) => {
+    const error = validateField(field, value);
+    setFormErrors(prev => ({
+      ...prev,
+      [field]: error
+    }));
   };
 
   const validateForm = () => {
-    const nameValid = validateField('name', formData.name);
-    const descriptionValid = validateField('description', formData.description);
-    return nameValid && descriptionValid;
+    const errors = {
+      name: validateField('name', formData.name),
+      description: validateField('description', formData.description)
+    };
+    
+    setFormErrors(errors);
+    
+    return !Object.values(errors).some(error => error !== '');
   };
 
   const handleAdd = () => {
     setFormData({ name: '', description: '' });
-    setErrors({ name: '', description: '' });
+    setFormErrors({ name: '', description: '' });
     setEditingSize(null);
     setShowForm(true);
   };
 
   const handleEdit = (size: CatalogSize) => {
     setFormData({ name: size.name, description: size.description || '' });
-    setErrors({ name: '', description: '' });
+    setFormErrors({ name: '', description: '' });
     setEditingSize(size);
     setShowForm(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
+    
     if (!validateForm()) {
+      toast.error('Please fix the errors below');
       return;
     }
 
@@ -122,6 +149,7 @@ export default function SizeManager({ onClose, onSizesUpdated, editingSize: prop
       setShowForm(false);
       setEditingSize(null);
       setFormData({ name: '', description: '' });
+      setFormErrors({ name: '', description: '' });
       loadSizes(); // Reload sizes list
       onSizesUpdated?.();
     } catch (error) {
@@ -179,7 +207,7 @@ export default function SizeManager({ onClose, onSizesUpdated, editingSize: prop
     setShowForm(false);
     setEditingSize(null);
     setFormData({ name: '', description: '' });
-    setErrors({ name: '', description: '' });
+    setFormErrors({ name: '', description: '' });
   };
 
   return (
@@ -212,21 +240,15 @@ export default function SizeManager({ onClose, onSizesUpdated, editingSize: prop
                   <input
                     type="text"
                     value={formData.name}
-                    onChange={(e) => {
-                      setFormData({ ...formData, name: e.target.value });
-                      if (errors.name) {
-                        validateField('name', e.target.value);
-                      }
-                    }}
-                    onBlur={(e) => validateField('name', e.target.value)}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    onBlur={(e) => handleFieldBlur('name', e.target.value)}
                     className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none ${
-                      errors.name ? 'border-red-500' : 'border-gray-300'
+                      formErrors.name ? 'border-red-500' : 'border-gray-300'
                     }`}
                     placeholder="Enter size name"
-                    required
                   />
-                  {errors.name && (
-                    <p className="mt-1 text-sm text-red-600">{errors.name}</p>
+                  {formErrors.name && (
+                    <p className="mt-1 text-sm text-red-600">{formErrors.name}</p>
                   )}
                 </div>
                 <div>
@@ -235,21 +257,16 @@ export default function SizeManager({ onClose, onSizesUpdated, editingSize: prop
                   </label>
                   <textarea
                     value={formData.description}
-                    onChange={(e) => {
-                      setFormData({ ...formData, description: e.target.value });
-                      if (errors.description) {
-                        validateField('description', e.target.value);
-                      }
-                    }}
-                    onBlur={(e) => validateField('description', e.target.value)}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    onBlur={(e) => handleFieldBlur('description', e.target.value)}
                     className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none ${
-                      errors.description ? 'border-red-500' : 'border-gray-300'
+                      formErrors.description ? 'border-red-500' : 'border-gray-300'
                     }`}
                     placeholder="Enter size description"
                     rows={3}
                   />
-                  {errors.description && (
-                    <p className="mt-1 text-sm text-red-600">{errors.description}</p>
+                  {formErrors.description && (
+                    <p className="mt-1 text-sm text-red-600">{formErrors.description}</p>
                   )}
                 </div>
                 <div className="flex items-center justify-end space-x-3">

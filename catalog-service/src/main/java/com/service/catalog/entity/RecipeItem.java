@@ -33,12 +33,13 @@ public class RecipeItem {
     Ingredient ingredient;
 
 
-    @Column(nullable = false, columnDefinition = "DECIMAL(12,2) DEFAULT 0.00")
+    @Column(nullable = false, columnDefinition = "DECIMAL(12,4) DEFAULT 0.0000")
     BigDecimal qty;
 
 
-    @Column(length = 50)
-    String unit;
+    @ManyToOne
+    @JoinColumn(name = "unit_code", referencedColumnName = "code")
+    Unit unit;
 
 
     @Column(length = 255)

@@ -64,12 +64,23 @@ CREATE TABLE `suppliers` (
   update_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
+DROP TABLE IF EXISTS units;
+CREATE TABLE `units` (
+  `code` VARCHAR(20) PRIMARY KEY,
+  `name` VARCHAR(50) NOT NULL,
+  `dimension` VARCHAR(20) NOT NULL,
+  `factor_to_base` DECIMAL(18,8) NOT NULL,
+  `base_unit_code` VARCHAR(20) NOT NULL,
+  `create_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `update_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
 DROP TABLE IF EXISTS ingredients;
 CREATE TABLE `ingredients` (
   `ingredient_id` INT PRIMARY KEY NOT NULL AUTO_INCREMENT,
   `name` VARCHAR(150) NOT NULL,
-  `unit` VARCHAR(50) DEFAULT 'unit',
-  `unit_price` DECIMAL(12,2) NOT NULL DEFAULT 0,
+  `unit_code` VARCHAR(20) NOT NULL,
+  `unit_price` DECIMAL(12,4) NOT NULL DEFAULT 0,
   `supplier_id` INT DEFAULT null,
   `create_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   update_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
@@ -78,11 +89,13 @@ CREATE TABLE `ingredients` (
 DROP TABLE IF EXISTS recipes;
 CREATE TABLE `recipes` (
   `recipe_id` INT PRIMARY KEY NOT NULL AUTO_INCREMENT,
-  `pd_id` INT NOT NULL,
-  `category_id` INT DEFAULT null,
+  `name` VARCHAR(150) NOT NULL,
+  `pd_id` INT DEFAULT null,
   `version` INT NOT NULL DEFAULT 1,
   `description` TEXT DEFAULT null,
-  `yield` DECIMAL(12,2) DEFAULT 1,
+  `yield` DECIMAL(12,4) DEFAULT 1,
+  `instructions` TEXT NOT NULL,
+  `status` VARCHAR(50) NOT NULL DEFAULT 'ACTIVE',
   `create_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   update_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
@@ -92,8 +105,8 @@ CREATE TABLE `recipe_items` (
   `id` INT PRIMARY KEY NOT NULL AUTO_INCREMENT,
   `recipe_id` INT NOT NULL,
   `ingredient_id` INT NOT NULL,
-  `qty` DECIMAL(12,2) NOT NULL DEFAULT 0,
-  `unit` VARCHAR(50) DEFAULT null,
+  `qty` DECIMAL(12,4) NOT NULL DEFAULT 0,
+  `unit_code` VARCHAR(20) NOT NULL,
   `note` VARCHAR(255) DEFAULT null,
   `create_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   update_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
@@ -106,7 +119,7 @@ CREATE TABLE `purchase_orders` (
   `supplier_id` INT NOT NULL,
   `branch_id` INT DEFAULT null,
   `status` VARCHAR(50) NOT NULL DEFAULT 'CREATED',
-  `total_amount` DECIMAL(12,2) NOT NULL DEFAULT 0,
+  `total_amount` DECIMAL(12,4) NOT NULL DEFAULT 0,
   `create_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   update_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
@@ -116,9 +129,12 @@ CREATE TABLE `purchase_order_details` (
   `id` INT PRIMARY KEY NOT NULL AUTO_INCREMENT,
   `po_id` INT NOT NULL,
   `ingredient_id` INT NOT NULL,
-  `qty` DECIMAL(12,2) NOT NULL DEFAULT 0,
+  `unit_code` VARCHAR(20) NOT NULL,
+  `qty` DECIMAL(12,4) NOT NULL DEFAULT 0,
   `unit_price` DECIMAL(12,2) NOT NULL DEFAULT 0,
-  `line_total` DECIMAL(12,2) NOT NULL DEFAULT 0
+  `line_total` DECIMAL(12,2) NOT NULL DEFAULT 0,
+  `create_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  update_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
 DROP TABLE IF EXISTS stocks;
@@ -126,9 +142,9 @@ CREATE TABLE `stocks` (
   `stock_id` INT PRIMARY KEY NOT NULL AUTO_INCREMENT,
   `ingredient_id` INT NOT NULL,
   `branch_id` INT DEFAULT null,
-  `quantity` DECIMAL(12,2) NOT NULL DEFAULT 0,
-  `unit` VARCHAR(50) DEFAULT null,
-  `threshold` DECIMAL(12,2) NOT NULL DEFAULT 0,
+  `quantity` DECIMAL(12,4) NOT NULL DEFAULT 0,
+  `unit_code` VARCHAR(20) NOT NULL,
+  `threshold` DECIMAL(12,4) NOT NULL DEFAULT 0,
   `last_updated` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -166,7 +182,6 @@ ALTER TABLE `product_details` ADD CONSTRAINT `fk_pd_size` FOREIGN KEY (`size_id`
 ALTER TABLE `ingredients` ADD CONSTRAINT `fk_ingredients_supplier` FOREIGN KEY (`supplier_id`) REFERENCES `suppliers` (`supplier_id`) ON DELETE SET NULL ON UPDATE NO ACTION;
 
 ALTER TABLE `recipes` ADD CONSTRAINT `fk_recipes_pd` FOREIGN KEY (`pd_id`) REFERENCES `product_details` (`pd_id`) ON DELETE CASCADE;
-ALTER TABLE `recipes` ADD CONSTRAINT `fk_recipes_category` FOREIGN KEY (`category_id`) REFERENCES `categories` (`category_id`) ON DELETE SET NULL;
 
 ALTER TABLE `recipe_items` ADD CONSTRAINT `fk_ri_recipe` FOREIGN KEY (`recipe_id`) REFERENCES `recipes` (`recipe_id`) ON DELETE CASCADE;
 
@@ -179,6 +194,16 @@ ALTER TABLE `purchase_order_details` ADD CONSTRAINT `fk_pod_po` FOREIGN KEY (`po
 ALTER TABLE `purchase_order_details` ADD CONSTRAINT `fk_pod_ingredient` FOREIGN KEY (`ingredient_id`) REFERENCES `ingredients` (`ingredient_id`) ON DELETE RESTRICT;
 
 ALTER TABLE `stocks` ADD CONSTRAINT `fk_stocks_ingredient` FOREIGN KEY (`ingredient_id`) REFERENCES `ingredients` (`ingredient_id`) ON DELETE CASCADE ON UPDATE NO ACTION;
+
+ALTER TABLE ingredients ADD CONSTRAINT fk_ingredients_unit_code FOREIGN KEY (unit_code) REFERENCES units(code) ON DELETE RESTRICT;
+
+ALTER TABLE recipe_items ADD CONSTRAINT fk_recipe_items_unit_code FOREIGN KEY (unit_code) REFERENCES units(code) ON DELETE RESTRICT;
+
+ALTER TABLE stocks ADD CONSTRAINT fk_stocks_unit_code FOREIGN KEY (unit_code) REFERENCES units(code) ON DELETE RESTRICT;
+
+ALTER TABLE purchase_order_details ADD CONSTRAINT fk_pod_unit_code FOREIGN KEY (unit_code) REFERENCES units(code) ON DELETE RESTRICT;
+
+ALTER TABLE units ADD CONSTRAINT fk_units_base_unit FOREIGN KEY (base_unit_code) REFERENCES units(code) ON DELETE CASCADE;
 
 ALTER TABLE sizes ADD UNIQUE uq_sizes_name (name);
 
@@ -193,3 +218,18 @@ ALTER TABLE stocks ADD UNIQUE uq_stock_ingredient_branch (ingredient_id, branch_
 
 -- Example seeds (optional)
 INSERT INTO categories (name, description) VALUES ('Coffee', 'Coffee drinks'), ('Tea', 'Tea drinks'), ('Snacks', 'Food & snacks');
+
+-- Units data
+INSERT INTO units (code, name, dimension, factor_to_base, base_unit_code) VALUES 
+('kg', 'Kilogram', 'MASS', 1.00000000, 'kg'),
+('g', 'Gram', 'MASS', 0.00100000, 'kg'),
+('lb', 'Pound', 'MASS', 0.45359237, 'kg'),
+('oz', 'Ounce', 'MASS', 0.02834952, 'kg'),
+('l', 'Liter', 'VOLUME', 1.00000000, 'l'),
+('ml', 'Milliliter', 'VOLUME', 0.00100000, 'l'),
+('cup', 'Cup', 'VOLUME', 0.23658824, 'l'),
+('tbsp', 'Tablespoon', 'VOLUME', 0.01478676, 'l'),
+('tsp', 'Teaspoon', 'VOLUME', 0.00492892, 'l'),
+('pcs', 'Pieces', 'COUNT', 1.00000000, 'pcs'),
+('box', 'Box', 'COUNT', 1.00000000, 'pcs'),
+('pack', 'Pack', 'COUNT', 1.00000000, 'pcs');

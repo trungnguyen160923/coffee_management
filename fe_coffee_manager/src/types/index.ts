@@ -192,7 +192,7 @@ export interface CreateSupplierRequest {
 export interface CatalogIngredient {
   ingredientId: number;
   name: string;
-  unit?: string | null;
+  unit?: CatalogUnit | null;
   unitPrice: number;
   supplier?: CatalogSupplier | null;
   createAt: string;
@@ -232,6 +232,119 @@ export interface UpdateIngredientRequest {
   unit?: string | null;
   unitPrice?: number;
   supplierId?: number;
+}
+
+// Unit types
+export interface CatalogUnit {
+  code: string;
+  name: string;
+  dimension: string;
+  factorToBase: number;
+  baseUnitCode?: string | null;
+  createAt: string;
+  updateAt: string;
+}
+
+// Recipe types (catalog service)
+export interface CatalogRecipeItem {
+  id?: number;
+  ingredient: CatalogIngredient;
+  qty: number;
+  unit: CatalogUnit;
+  note?: string | null;
+  createAt: string;
+  updateAt: string;
+}
+
+export interface CatalogRecipe {
+  recipeId: number;
+  name: string;
+  productDetail: CatalogProductDetail;
+  category?: CatalogCategory | null;
+  version: number;
+  description?: string | null;
+  yield?: number | null;
+  instructions: string;
+  status: string;
+  items: CatalogRecipeItem[];
+  createAt: string;
+  updateAt: string;
+}
+
+export interface RecipePageResponse {
+  content: CatalogRecipe[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  first: boolean;
+  last: boolean;
+  hasNext: boolean;
+  hasPrevious: boolean;
+}
+
+export interface RecipeSearchParams {
+  keyword?: string;
+  status?: string;
+  pdId?: number;
+  productId?: number;
+  categoryId?: number;
+  page?: number;
+  size?: number;
+  sortBy?: string;
+  sortDir?: 'asc' | 'desc';
+}
+
+export interface CreateRecipeItemRequest {
+  ingredientId: number;
+  qty: number;
+  unitCode: string;
+  note?: string | null;
+}
+
+export interface CreateRecipeRequest {
+  pdId: number;
+  name: string;
+  version: number;
+  description?: string | null;
+  yield?: number | null;
+  instructions: string;
+  status?: string;
+  items: CreateRecipeItemRequest[];
+}
+
+export interface UpdateRecipeItemRequest {
+  id?: number; // if present => update, else create
+  ingredientId: number;
+  qty: number;
+  unitCode: string;
+  note?: string | null;
+}
+
+export interface UpdateRecipeRequest {
+  pdId?: number;
+  name?: string;
+  version?: number;
+  description?: string | null;
+  yield?: number | null;
+  instructions?: string;
+  status?: string;
+  items?: UpdateRecipeItemRequest[];
+}
+
+export interface CreateUnitRequest {
+  code: string;
+  name: string;
+  dimension: string;
+  factorToBase: number;
+  baseUnitCode?: string | null;
+}
+
+export interface UpdateUnitRequest {
+  name?: string;
+  dimension?: string;
+  factorToBase?: number;
+  baseUnitCode?: string | null;
 }
   
   export interface Order {
