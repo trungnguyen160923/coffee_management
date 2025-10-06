@@ -59,11 +59,31 @@ public class UserController {
         return ApiResponse.<UserResponse>builder().result(result).build();
     }
 
+    @GetMapping("/staffs/{userId}")
+    ApiResponse<UserResponse> getStaffById(@PathVariable Integer userId) {
+        var result = userService.getStaffById(userId);
+        return ApiResponse.<UserResponse>builder().result(result).build();
+    }
+
+    @GetMapping("/staffs/branch/{branchId}")
+    ApiResponse<List<UserResponse>> getStaffsByBranch(@PathVariable Integer branchId) {
+        var result = userService.getStaffsByBranch(branchId);
+        return ApiResponse.<List<UserResponse>>builder().result(result).build();
+    }
+
     @GetMapping("/managers/paged")
     ApiResponse<PagedResponse<UserResponse>> getManagersPaged(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
         var result = userService.getManagersPaged(page, size);
+        return ApiResponse.<PagedResponse<UserResponse>>builder().result(result).build();
+    }
+
+    @GetMapping("/staffs/paged")
+    ApiResponse<PagedResponse<UserResponse>> getStaffsPaged(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        var result = userService.getStaffsPaged(page, size);
         return ApiResponse.<PagedResponse<UserResponse>>builder().result(result).build();
     }
 

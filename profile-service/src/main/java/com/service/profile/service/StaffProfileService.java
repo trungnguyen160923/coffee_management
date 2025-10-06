@@ -10,6 +10,8 @@ import com.service.profile.mapper.StaffProfileMapper;
 import com.service.profile.repository.StaffProfileRepository;
 import com.service.profile.repository.http_client.BranchClient;
 
+import java.util.List;
+
 import jakarta.transaction.Transactional;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -40,6 +42,25 @@ public class StaffProfileService {
         return staffProfileMapper.toStaffProfileResponse(staffProfile);
     }
 
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    public List<StaffProfileResponse> getAllStaffProfiles(){
+        List<StaffProfile> staffProfiles = staffProfileRepository.findAll();
+        return staffProfiles.stream()
+                .map(staffProfile -> {
+                    StaffProfileResponse response = staffProfileMapper.toStaffProfileResponse(staffProfile);
+                    if (staffProfile.getBranchId() != null) {
+                        try {
+                            BranchResponse branch = branchClient.getBranchById(staffProfile.getBranchId()).getResult();
+                            response.setBranch(branch);
+                        } catch (Exception e) {
+                            log.warn("Failed to fetch branch for staff {}: {}", staffProfile.getUserId(), e.getMessage());
+                        }
+                    }
+                    return response;
+                })
+                .toList();
+    }
+
     @PreAuthorize("hasRole('STAFF')")
     public StaffProfileResponse getStaffProfile(Integer userId){
         StaffProfile staffProfile = staffProfileRepository.findById(userId).orElseThrow(() -> new AppException(ErrorCode.USER_ID_NOT_FOUND));
@@ -54,6 +75,23 @@ public class StaffProfileService {
         } catch (Exception e) {
             throw new AppException(ErrorCode.BRANCH_NOT_FOUND);
         }
+    }
+
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    public List<StaffProfileResponse> getStaffProfilesByBranch(Integer branchId){
+        List<StaffProfile> staffProfiles = staffProfileRepository.findByBranchId(branchId);
+        return staffProfiles.stream()
+                .map(staffProfile -> {
+                    StaffProfileResponse response = staffProfileMapper.toStaffProfileResponse(staffProfile);
+                    try {
+                        BranchResponse branch = branchClient.getBranchById(branchId).getResult();
+                        response.setBranch(branch);
+                    } catch (Exception e) {
+                        log.warn("Failed to fetch branch for staff {}: {}", staffProfile.getUserId(), e.getMessage());
+                    }
+                    return response;
+                })
+                .toList();
     }
 
 }

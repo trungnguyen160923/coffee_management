@@ -53,4 +53,7 @@ public interface ProfileClient {
 
     @GetMapping(value = "/staff-profiles", produces = MediaType.APPLICATION_JSON_VALUE)
     ApiResponse<List<StaffProfileResponse>> getAllStaffProfiles();
+
+    @GetMapping(value = "/staff-profiles/branch/{branchId}", produces = MediaType.APPLICATION_JSON_VALUE)
+    ApiResponse<List<StaffProfileResponse>> getStaffProfilesByBranch(@PathVariable Integer branchId);
 }

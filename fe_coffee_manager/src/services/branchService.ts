@@ -144,6 +144,7 @@ export const branchService: BranchService = {
     return (resp as any).result || [];
   },
 
+
   async unassignManagerInternal(branchId: number | string, managerUserId: number | string): Promise<Branch> {
     return await apiClient.put<Branch>(API_ENDPOINTS.BRANCHES.UNASSIGN_MANAGER_INTERNAL(branchId), { managerUserId });
   },

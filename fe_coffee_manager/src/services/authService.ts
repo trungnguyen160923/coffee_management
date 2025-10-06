@@ -125,7 +125,17 @@ export const authService: AuthService = {
           name: string;
         };
         identityCard: string | null;
-        branchId: number | null;
+        branch: {
+          branchId: number;
+          name: string;
+          address: string;
+          phone: string;
+          managerUserId: number;
+          openHours: string;
+          endHours: string;
+          createAt: string;
+          updateAt: string;
+        } | null;
         hireDate: string | null;
         position: string | null;
         salary: number | null;
@@ -145,7 +155,21 @@ export const authService: AuthService = {
       name: userData.fullname,
       role: roleName as 'admin' | 'manager' | 'staff',
       avatar: userData.avatarUrl || '',
-      branchId: userData.branchId?.toString()
+      branchId: userData.branch?.branchId?.toString(),
+      branch: userData.branch || undefined,
+      // Map all backend fields
+      user_id: userData.user_id,
+      fullname: userData.fullname,
+      phoneNumber: userData.phoneNumber,
+      dob: userData.dob || undefined,
+      avatarUrl: userData.avatarUrl || undefined,
+      bio: userData.bio || undefined,
+      identityCard: userData.identityCard || undefined,
+      hireDate: userData.hireDate || undefined,
+      position: userData.position || undefined,
+      salary: userData.salary || undefined,
+      adminLevel: userData.adminLevel || undefined,
+      notes: userData.notes || undefined
     };
   },
 

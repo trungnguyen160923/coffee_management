@@ -5,8 +5,10 @@ import { UserResponseDto } from '../../types';
 import CreateStaffModal from '../../components/common/modal/CreateStaffModal';
 import ConfirmModal from '../../components/common/modal/ConfirmModal';
 import { toast } from 'react-hot-toast';
+import { useAuth } from '../../context/AuthContext';
 
 const StaffManagement: React.FC = () => {
+  const { managerBranch } = useAuth();
   const [staff, setStaff] = useState<UserResponseDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -31,20 +33,30 @@ const StaffManagement: React.FC = () => {
 
   useEffect(() => {
     fetchStaff();
-  }, [page, size]);
+  }, [page, size, managerBranch]);
 
   useEffect(() => {
     fetchStaffStats();
-  }, []);
+  }, [managerBranch]);
 
   const fetchStaff = async () => {
     try {
       setLoading(true);
       setError(null);
-      const resp = await staffService.getStaffProfilesPaged(page, size);
-      setStaff(resp.data);
-      setTotal(resp.total);
-      setTotalPages(resp.totalPages);
+      
+      if (managerBranch?.branchId) {
+        // Fetch staff by branch for manager
+        const staffList = await staffService.getStaffProfilesByBranch(managerBranch.branchId);
+        setStaff(staffList);
+        setTotal(staffList.length);
+        setTotalPages(1);
+      } else {
+        // Fallback to paged API if no branch info
+        const resp = await staffService.getStaffProfilesPaged(page, size);
+        setStaff(resp.data);
+        setTotal(resp.total);
+        setTotalPages(resp.totalPages);
+      }
     } catch (err) {
       setError('Failed to load staff list');
       console.error('Error fetching staff:', err);
@@ -55,11 +67,21 @@ const StaffManagement: React.FC = () => {
 
   const fetchStaffStats = async () => {
     try {
-      const all = await staffService.getStaffProfiles();
-      setTotalStaff(all.length);
-      const active = all.filter(s => s.active !== false).length;
-      setActiveStaff(active);
-      setInactiveStaff(all.length - active);
+      if (managerBranch?.branchId) {
+        // Get stats for current branch only
+        const branchStaff = await staffService.getStaffProfilesByBranch(managerBranch.branchId);
+        setTotalStaff(branchStaff.length);
+        const active = branchStaff.length; // Assume all staff are active for now
+        setActiveStaff(active);
+        setInactiveStaff(branchStaff.length - active);
+      } else {
+        // Fallback to all staff if no branch info
+        const all = await staffService.getStaffProfiles();
+        setTotalStaff(all.length);
+        const active = all.length; // Assume all staff are active for now
+        setActiveStaff(active);
+        setInactiveStaff(all.length - active);
+      }
     } catch (err) {
       console.error('Error fetching staff stats:', err);
     }
@@ -148,11 +170,8 @@ const StaffManagement: React.FC = () => {
       setStaff(prevStaff => prevStaff.filter(s => s.user_id !== staff.user_id));
       setTotal(prevTotal => prevTotal - 1);
       setTotalStaff(prevTotal => prevTotal - 1);
-      if (staff.active !== false) {
-        setActiveStaff(prev => prev - 1);
-      } else {
-        setInactiveStaff(prev => prev - 1);
-      }
+      // Assume all staff are active for now
+      setActiveStaff(prev => prev - 1);
       toast.success('Staff deleted successfully');
       setDeletingLoading(false);
       setIsDeleting(false);
@@ -366,6 +385,8 @@ const StaffManagement: React.FC = () => {
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID Card</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Branch</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Position</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Hire date</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
@@ -412,12 +433,22 @@ const StaffManagement: React.FC = () => {
                             )}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                              staffMember.active !== false 
-                                ? 'bg-green-100 text-green-800' 
-                                : 'bg-red-100 text-red-800'
-                            }`}>
-                              {staffMember.active !== false ? 'Active' : 'Inactive'}
+                            {staffMember.branch ? (
+                              <div>
+                                <div className="font-medium text-gray-900">{staffMember.branch.name}</div>
+                                <div className="text-gray-500">{staffMember.branch.address}</div>
+                                <div className="text-gray-500">{staffMember.branch.phone}</div>
+                              </div>
+                            ) : (
+                              <span className="text-yellow-600 font-medium">No branch</span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <span className="font-medium text-gray-900">{staffMember.position ?? '-'}</span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                              Active
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">

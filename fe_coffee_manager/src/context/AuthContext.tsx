@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { User } from '../types';
+import { User, Branch } from '../types';
 import { authService } from '../services';
 import { apiClient } from '../config/api';
 import { setLocalStorageItem, clearAllAuthData } from '../utils/localStorage';
@@ -8,6 +8,7 @@ import { decodeJWT, extractUserFromJWT } from '../utils/jwt';
 
 interface AuthContextType {
   user: User | null;
+  managerBranch: Branch | null;
   login: (email: string, password: string) => Promise<{ user: User; token: string; refreshToken?: string }>;
   logout: () => void;
   loading: boolean;
@@ -19,7 +20,9 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [managerBranch, setManagerBranch] = useState<Branch | null>(null);
   const [loading, setLoading] = useState(true);
+
 
   useEffect(() => {
     const initializeAuth = async () => {
@@ -35,7 +38,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Call /me API to get current user information
           try {
             const currentUser = await authService.getCurrentUser();
+            console.log('Full API response for /me:', currentUser);
+            console.log('Current user details:', JSON.stringify(currentUser, null, 2));
             setUser(currentUser);
+            
+            // If user is a manager, set branch info directly from user data
+            if (currentUser.role === 'manager' && currentUser.branch) {
+              console.log('Setting branch info from user data:', currentUser.branch);
+              setManagerBranch(currentUser.branch);
+            } else {
+              console.log('Not setting branch - role:', currentUser.role, 'branch:', currentUser.branch);
+            }
           } catch (error) {
             console.error('Failed to get current user:', error);
             // Fallback: derive minimal user from JWT to preserve routing/guards
@@ -81,7 +94,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (email: string, password: string) => {
     try {
       const response = await authService.login({ email, password });
+      console.log('Full login API response:', response);
+      console.log('Login user details:', JSON.stringify(response.user, null, 2));
       setUser(response.user);
+      
+      // If user is a manager, set branch info directly from user data
+      if (response.user.role === 'manager' && response.user.branch) {
+        setManagerBranch(response.user.branch);
+      }
+      
       // Save both user and token to localStorage using helper functions
       setLocalStorageItem('coffee-user', response.user);
       setLocalStorageItem('coffee-token', response.token);
@@ -114,6 +135,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error('Logout error:', error);
     } finally {
       setUser(null);
+      setManagerBranch(null);
       // Clear both user and token from localStorage using helper function
       clearAllAuthData();
     }
@@ -134,7 +156,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, loading }}>
+    <AuthContext.Provider value={{ user, managerBranch, login, logout, loading }}>
       {children}
     </AuthContext.Provider>
   );
