@@ -24,6 +24,9 @@ import { StaffDashboard } from './pages/staff/StaffDashboard';
 import SupplierConfirmPage from './pages/supplier/SupplierConfirmPage';
 import SupplierSuccessPage from './pages/supplier/SupplierSuccessPage';
 import SupplierCancelledPage from './pages/supplier/SupplierCancelledPage';
+import StaffOrders from './pages/staff/StaffOrders';
+import StaffReservations from './pages/staff/StaffReservations';
+import StaffRecipes from './pages/staff/StaffRecipes';
 
 function AppRoutes() {
   const { user, loading } = useAuth();
@@ -69,7 +72,7 @@ function AppRoutes() {
     <Routes>
       {/* Root redirect - chuyển hướng đến trang tương ứng với role */}
       <Route path="/" element={<RoleRedirect />} />
-      
+
       {/* Admin routes */}
       <Route path="/admin" element={
         <ProtectedRoute allowedRoles={['admin']}>
@@ -93,7 +96,7 @@ function AppRoutes() {
           </Routes>
         </ProtectedRoute>
       } />
-      
+
       {/* Manager routes */}
       <Route path="/manager" element={
         <ProtectedRoute allowedRoles={['manager']}>
@@ -116,7 +119,7 @@ function AppRoutes() {
           </Routes>
         </ProtectedRoute>
       } />
-      
+
       {/* Staff routes */}
       <Route path="/staff" element={
         <ProtectedRoute allowedRoles={['staff']}>
@@ -128,14 +131,14 @@ function AppRoutes() {
       <Route path="/staff/*" element={
         <ProtectedRoute allowedRoles={['staff']}>
           <Routes>
-            <Route path="orders" element={<Layout><div className="p-8"><h1 className="text-2xl font-bold">Quản lý đơn hàng</h1></div></Layout>} />
-            <Route path="reservations" element={<Layout><div className="p-8"><h1 className="text-2xl font-bold">Quản lý đặt bàn</h1></div></Layout>} />
-            <Route path="recipes" element={<Layout><div className="p-8"><h1 className="text-2xl font-bold">Xem công thức</h1></div></Layout>} />
+            <Route path="orders" element={<Layout><StaffOrders /></Layout>} />
+            <Route path="reservations" element={<Layout><StaffReservations /></Layout>} />
+            <Route path="recipes" element={<Layout><StaffRecipes /></Layout>} />
             <Route path="*" element={<NotFoundPage showLoginButton={false} />} />
           </Routes>
         </ProtectedRoute>
       } />
-      
+
       {/* Global 404 */}
       <Route path="*" element={<NotFoundPage showLoginButton={false} />} />
     </Routes>

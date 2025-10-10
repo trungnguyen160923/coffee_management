@@ -144,6 +144,23 @@ export const catalogService = {
     if (r && typeof r === 'object') return [r as CatalogProduct];
     return [];
   },
+
+  // Non-paginated supplier list (for dropdowns, etc.)
+  async getAllSuppliers(): Promise<CatalogSupplier[]> {
+    try {
+      const resp = await apiClient.get<ApiEnvelope<CatalogSupplier[]>>(API_ENDPOINTS.CATALOGS.SUPPLIERS);
+      const r = (resp && (resp as any).result) as any;
+      return Array.isArray(r) ? (r as CatalogSupplier[]) : [];
+    } catch (error: any) {
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+      if (error.message) {
+        throw new Error(error.message);
+      }
+      throw new Error('Không thể kết nối đến server');
+    }
+  },
   async getCategories(): Promise<CatalogCategory[]> {
     try {
       const resp = await apiClient.get<ApiEnvelope<CatalogCategory[]>>(API_ENDPOINTS.CATALOGS.CATEGORIES);
@@ -219,7 +236,7 @@ export const catalogService = {
   },
   async searchProducts(params: ProductSearchParams = {}): Promise<ProductPageResponse> {
     const queryParams = new URLSearchParams();
-    
+
     if (params.page !== undefined) queryParams.append('page', params.page.toString());
     if (params.size !== undefined) queryParams.append('size', params.size.toString());
     if (params.search) queryParams.append('search', params.search);
@@ -227,7 +244,7 @@ export const catalogService = {
     if (params.active !== undefined) queryParams.append('active', params.active.toString());
     if (params.sortBy) queryParams.append('sortBy', params.sortBy);
     if (params.sortDirection) queryParams.append('sortDirection', params.sortDirection);
-    
+
     const url = `${API_ENDPOINTS.CATALOGS.PRODUCTS}/search${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
     const resp = await apiClient.get<ApiEnvelope<ProductPageResponse>>(url);
     return resp?.result || {
@@ -246,13 +263,13 @@ export const catalogService = {
   // Supplier management functions
   async getSuppliers(params: SupplierSearchParams = {}): Promise<SupplierPageResponse> {
     const queryParams = new URLSearchParams();
-    
+
     if (params.page !== undefined) queryParams.append('page', params.page.toString());
     if (params.size !== undefined) queryParams.append('size', params.size.toString());
     if (params.search) queryParams.append('search', params.search);
     if (params.sortBy) queryParams.append('sortBy', params.sortBy);
     if (params.sortDirection) queryParams.append('sortDirection', params.sortDirection);
-    
+
     const url = `${API_ENDPOINTS.CATALOGS.SUPPLIERS}/search${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
     const resp = await apiClient.get<ApiEnvelope<SupplierPageResponse>>(url);
     return resp?.result || {
@@ -481,6 +498,21 @@ export const catalogService = {
     const resp = await apiClient.post<ApiEnvelope<CatalogRecipe>>(API_ENDPOINTS.CATALOGS.RECIPES, payload);
     if (resp?.result) return resp.result;
     throw new Error((resp as any)?.message || 'Create recipe failed');
+  },
+
+  // Non-paginated recipe list
+  async getRecipes(): Promise<CatalogRecipe[]> {
+    try {
+      const resp = await apiClient.get<ApiEnvelope<CatalogRecipe[] | CatalogRecipe>>(API_ENDPOINTS.CATALOGS.RECIPES);
+      const r = (resp && (resp as any).result) as any;
+      if (Array.isArray(r)) return r as CatalogRecipe[];
+      if (r && typeof r === 'object') return [r as CatalogRecipe];
+      return [];
+    } catch (error: any) {
+      if (error.response?.data?.message) throw new Error(error.response.data.message);
+      if (error.message) throw new Error(error.message);
+      throw new Error('Không thể kết nối đến server');
+    }
   },
 
   async updateRecipe(recipeId: number, payload: UpdateRecipeRequest): Promise<CatalogRecipe> {

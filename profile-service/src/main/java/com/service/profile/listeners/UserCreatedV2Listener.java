@@ -41,20 +41,24 @@ public class UserCreatedV2Listener {
     private final KafkaTemplate<String, String> kafkaTemplate;
 
     public UserCreatedV2Listener(ObjectMapper json, ProcessedEventRepository processed,
-                                 BranchClient branchClient,
-                                 ManagerProfileService managerProfileService,
-                                 StaffProfileService staffProfileService,
-                                 ManagerProfileRepository managerProfileRepository,
-                                 StaffProfileRepository staffProfileRepository,
-                                 KafkaTemplate<String, String> kafkaTemplate) {
-        this.json = json; this.processed = processed; this.branchClient = branchClient;
-        this.managerProfileService = managerProfileService; this.staffProfileService = staffProfileService;
-        this.managerProfileRepository = managerProfileRepository; this.staffProfileRepository = staffProfileRepository;
+            BranchClient branchClient,
+            ManagerProfileService managerProfileService,
+            StaffProfileService staffProfileService,
+            ManagerProfileRepository managerProfileRepository,
+            StaffProfileRepository staffProfileRepository,
+            KafkaTemplate<String, String> kafkaTemplate) {
+        this.json = json;
+        this.processed = processed;
+        this.branchClient = branchClient;
+        this.managerProfileService = managerProfileService;
+        this.staffProfileService = staffProfileService;
+        this.managerProfileRepository = managerProfileRepository;
+        this.staffProfileRepository = staffProfileRepository;
         this.kafkaTemplate = kafkaTemplate;
     }
 
-    @KafkaListener(topics = "user.created.v2", groupId = "profile-user-v2")
-    @Transactional
+    // @KafkaListener(topics = "user.created.v2", groupId = "profile-user-v2")
+    // @Transactional
     public void onUserCreated(String payload) throws Exception {
         System.out.println("=== UserCreatedV2Listener triggered ===");
         System.out.println("Received event: " + payload);
@@ -66,96 +70,107 @@ public class UserCreatedV2Listener {
         }
 
         try {
-            // Validate branch exists
-            ApiResponse<?> br = branchClient.getBranchById(evt.branchId);
-            if (br == null || br.getResult() == null) {
-                throw new RuntimeException("BRANCH_NOT_FOUND");
-            }
+            // Validate branch exists - DISABLED FOR NOW
+            // ApiResponse<?> br = branchClient.getBranchById(evt.branchId);
+            // if (br == null || br.getResult() == null) {
+            //     throw new RuntimeException("BRANCH_NOT_FOUND");
+            // }
 
-            // Assign a temporary Authentication so method security passes during background processing
+            // Assign a temporary Authentication so method security passes during background
+            // processing
             List<SimpleGrantedAuthority> authorities = Objects.equals(evt.role, "MANAGER")
                     ? List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))
                     : List.of(new SimpleGrantedAuthority("ROLE_MANAGER"));
             var systemAuth = new UsernamePasswordAuthenticationToken("system", null, authorities);
             SecurityContextHolder.getContext().setAuthentication(systemAuth);
-            // Assign manager first (idempotent). For STAFF we do not assign manager to branch.
-            if (Objects.equals(evt.role, "MANAGER")) {
-                AssignManagerRequest req = new AssignManagerRequest();
-                req.setManagerUserId(evt.userId);
-                branchClient.assignManager(evt.branchId, req);
-            }
+            // Assign manager first (idempotent). For STAFF we do not assign manager to
+            // branch. - DISABLED FOR NOW
+            // if (Objects.equals(evt.role, "MANAGER")) {
+            //     AssignManagerRequest req = new AssignManagerRequest();
+            //     req.setManagerUserId(evt.userId);
+            //     branchClient.assignManager(evt.branchId, req);
+            // }
 
             switch (evt.role) {
                 case "MANAGER" -> managerProfileService.createManagerProfile(
-                    ManagerProfileCreationRequest.builder()
-                        .userId(evt.userId)
-                        .branchId(evt.branchId)
-                        .hireDate(evt.hireDate)
-                        .identityCard(evt.identityCard)
-                        .build()
-                );
+                        ManagerProfileCreationRequest.builder()
+                                .userId(evt.userId)
+                                .branchId(evt.branchId)
+                                .hireDate(evt.hireDate)
+                                .identityCard(evt.identityCard)
+                                .build());
                 case "STAFF" -> staffProfileService.createStaffProfile(
-                    StaffProfileCreationRequest.builder()
-                        .userId(evt.userId)
-                        .branchId(evt.branchId)
-                        .identityCard(evt.identityCard)
-                        .position(evt.position)
-                        .hireDate(evt.hireDate)
-                        .salary(java.math.BigDecimal.valueOf(evt.salary))
-                        .build()
-                );
-                default -> {}
+                        StaffProfileCreationRequest.builder()
+                                .userId(evt.userId)
+                                .branchId(evt.branchId)
+                                .identityCard(evt.identityCard)
+                                .position(evt.position)
+                                .hireDate(evt.hireDate)
+                                .salary(java.math.BigDecimal.valueOf(evt.salary))
+                                .build());
+                default -> {
+                }
             }
 
             // publish completed
-            try {
-                UserProfileCompletedEvent done = new UserProfileCompletedEvent();
-                done.sagaId = evt.sagaId;
-                done.userId = evt.userId;
-                done.occurredAt = Instant.now();
-                kafkaTemplate.send("user.profile.completed", json.writeValueAsString(done));
-            } catch (Exception ignore) {}
+            // try {
+            //     UserProfileCompletedEvent done = new UserProfileCompletedEvent();
+            //     done.sagaId = evt.sagaId;
+            //     done.userId = evt.userId;
+            //     done.occurredAt = Instant.now();
+            //     kafkaTemplate.send("user.profile.completed", json.writeValueAsString(done));
+            // } catch (Exception ignore) {
+            // }
         } catch (Exception ex) {
-            // Compensation and failure notification
+            // Compensation and failure notification - DISABLED FOR NOW
             try {
                 if (Objects.equals(evt.role, "MANAGER")) {
-                    AssignManagerRequest undo = new AssignManagerRequest();
-                    undo.setManagerUserId(evt.userId);
-                    branchClient.unassignManager(evt.branchId, undo);
+                    // AssignManagerRequest undo = new AssignManagerRequest();
+                    // undo.setManagerUserId(evt.userId);
+                    // branchClient.unassignManager(evt.branchId, undo);
                     // delete manager profile if created
-                    try { managerProfileRepository.deleteById(evt.userId); } catch (Exception ignore2) {}
+                    try {
+                        managerProfileRepository.deleteById(evt.userId);
+                    } catch (Exception ignore2) {
+                    }
                 }
                 if (Objects.equals(evt.role, "STAFF")) {
-                    try { staffProfileRepository.deleteById(evt.userId); } catch (Exception ignore3) {}
+                    try {
+                        staffProfileRepository.deleteById(evt.userId);
+                    } catch (Exception ignore3) {
+                    }
                 }
             } catch (Exception ignore) {
                 // swallow compensation errors
             }
 
             // publish failure event for auth to delete user
-            try {
-                UserProfileFailedEvent failed = new UserProfileFailedEvent();
-                failed.sagaId = evt.sagaId;
-                failed.userId = evt.userId;
-                Integer code = 9999;
-                String reason = ex.getMessage();
-                if (ex instanceof FeignException fe) {
-                    String content = fe.contentUTF8();
-                    try {
-                        java.util.Map<?,?> body = json.readValue(content, java.util.Map.class);
-                        Object c = body.get("code");
-                        Object m = body.get("message");
-                        if (c instanceof Number) code = ((Number) c).intValue();
-                        if (m instanceof String s) reason = s;
-                    } catch (Exception ignoreParse) {}
-                }
-                failed.code = code;
-                failed.reason = reason;
-                failed.occurredAt = Instant.now();
-                kafkaTemplate.send("user.profile.failed", json.writeValueAsString(failed));
-            } catch (Exception ignore) {
-                // ignore publish errors
-            }
+            // try {
+            //     UserProfileFailedEvent failed = new UserProfileFailedEvent();
+            //     failed.sagaId = evt.sagaId;
+            //     failed.userId = evt.userId;
+            //     Integer code = 9999;
+            //     String reason = ex.getMessage();
+            //     if (ex instanceof FeignException fe) {
+            //         String content = fe.contentUTF8();
+            //         try {
+            //             java.util.Map<?, ?> body = json.readValue(content, java.util.Map.class);
+            //             Object c = body.get("code");
+            //             Object m = body.get("message");
+            //             if (c instanceof Number)
+            //                 code = ((Number) c).intValue();
+            //             if (m instanceof String s)
+            //                 reason = s;
+            //         } catch (Exception ignoreParse) {
+            //         }
+            //     }
+            //     failed.code = code;
+            //     failed.reason = reason;
+            //     failed.occurredAt = Instant.now();
+            //     kafkaTemplate.send("user.profile.failed", json.writeValueAsString(failed));
+            // } catch (Exception ignore) {
+            //     // ignore publish errors
+            // }
 
             System.err.println("Saga compensation executed for sagaId=" + evt.sagaId + ", reason=" + ex.getMessage());
             processed.save(new ProcessedEvent(evt.sagaId, "user.created.v2", Instant.now()));
@@ -167,5 +182,3 @@ public class UserCreatedV2Listener {
         processed.save(new ProcessedEvent(evt.sagaId, "user.created.v2", Instant.now()));
     }
 }
-
-

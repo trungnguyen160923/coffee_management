@@ -457,6 +457,19 @@ public class UserService {
         return userMapper.toUserResponse(user);
     }
 
+    @Transactional(readOnly = true)
+    public UserResponse getCustomerById(Integer userId) {
+        var user = userRepository.findById(userId)
+                .orElseThrow(() -> new AppException(ErrorCode.EMAIL_NOT_EXISTED));
+        
+        // Check if user is a customer
+        if (!user.getRole().getName().equals(PredefinedRole.CUSTOMER_ROLE)) {
+            throw new AppException(ErrorCode.USER_NOT_FOUND);
+        }
+        
+        return userMapper.toUserResponse(user);
+    }
+
     public UserResponse createCustomer(UserCreationRequest request) {
         if (userRepository.existsByEmail(request.getEmail()))
             throw new AppException(ErrorCode.EMAIL_EXISTED);

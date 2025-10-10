@@ -94,6 +94,27 @@ public class OrderController {
         }
     }
 
+    @GetMapping("/branch/{branchId}")
+    public ResponseEntity<ApiResponse<List<OrderResponse>>> getOrdersByBranch(
+            @PathVariable Integer branchId) {
+        try {
+            List<OrderResponse> orders = orderService.getOrdersByBranch(branchId);
+            ApiResponse<List<OrderResponse>> response = ApiResponse.<List<OrderResponse>>builder()
+                    .code(200)
+                    .message("Orders retrieved successfully")
+                    .result(orders)
+                    .build();
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            ApiResponse<List<OrderResponse>> response = ApiResponse.<List<OrderResponse>>builder()
+                    .code(500)
+                    .message("Failed to retrieve orders: " + e.getMessage())
+                    .result(null)
+                    .build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
     @GetMapping("/{orderId}")
     public ResponseEntity<ApiResponse<OrderResponse>> getOrderById(@PathVariable Integer orderId) {
         try {
@@ -130,6 +151,26 @@ public class OrderController {
             ApiResponse<OrderResponse> response = ApiResponse.<OrderResponse>builder()
                     .code(500)
                     .message("Failed to update order status: " + e.getMessage())
+                    .result(null)
+                    .build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    @DeleteMapping("/{orderId}")
+    public ResponseEntity<ApiResponse<Void>> deleteOrder(@PathVariable Integer orderId) {
+        try {
+            orderService.deleteOrder(orderId);
+            ApiResponse<Void> response = ApiResponse.<Void>builder()
+                    .code(200)
+                    .message("Order deleted successfully")
+                    .result(null)
+                    .build();
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            ApiResponse<Void> response = ApiResponse.<Void>builder()
+                    .code(500)
+                    .message("Failed to delete order: " + e.getMessage())
                     .result(null)
                     .build();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);

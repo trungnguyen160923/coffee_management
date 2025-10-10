@@ -39,12 +39,13 @@ public class UserDeleteRequestedV1Listener {
         this.json = json; this.branchClient = branchClient; this.managerProfileRepository = managerProfileRepository; this.staffProfileRepository = staffProfileRepository; this.kafkaTemplate = kafkaTemplate;
     }
 
-    @KafkaListener(topics = "user.delete.requested.v1", groupId = "profile-user-delete-v1")
-    @Transactional
+    // @KafkaListener(topics = "user.delete.requested.v1", groupId = "profile-user-delete-v1")
+    // @Transactional
     public void onUserDeleteRequested(String payload) throws Exception {
         UserDeleteRequestedEvent evt = json.readValue(payload, UserDeleteRequestedEvent.class);
         try {
-            // Assign temporary ADMIN authentication so method security passes during background processing
+            // Assign temporary ADMIN authentication so method security passes during
+            // background processing
             var systemAuth = new UsernamePasswordAuthenticationToken(
                     "system", null, List.of(new SimpleGrantedAuthority("ROLE_ADMIN")));
             SecurityContextHolder.getContext().setAuthentication(systemAuth);
@@ -64,13 +65,15 @@ public class UserDeleteRequestedV1Listener {
             done.sagaId = evt.sagaId; done.userId = evt.userId; done.occurredAt = Instant.now();
             kafkaTemplate.send("user.delete.profile.completed.v1", json.writeValueAsString(done));
         } catch (Exception ex) {
-            UserDeleteFailedEvent failed = new UserDeleteFailedEvent();
-            failed.sagaId = evt.sagaId; failed.userId = evt.userId; failed.code = 400; failed.reason = ex.getMessage(); failed.occurredAt = Instant.now();
-            kafkaTemplate.send("user.delete.failed.v1", json.writeValueAsString(failed));
+            // UserDeleteFailedEvent failed = new UserDeleteFailedEvent();
+            // failed.sagaId = evt.sagaId;
+            // failed.userId = evt.userId;
+            // failed.code = 400;
+            // failed.reason = ex.getMessage();
+            // failed.occurredAt = Instant.now();
+            // kafkaTemplate.send("user.delete.failed.v1", json.writeValueAsString(failed));
         } finally {
             SecurityContextHolder.clearContext();
         }
     }
 }
-
-

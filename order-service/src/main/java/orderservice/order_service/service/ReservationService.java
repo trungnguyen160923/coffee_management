@@ -22,7 +22,6 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
-@Slf4j
 @Transactional
 public class ReservationService {
 
@@ -123,6 +122,12 @@ public class ReservationService {
         } else {
             throw new AppException(ErrorCode.RESERVATION_CANNOT_BE_CANCELLED);
         }
+    }
+
+    public void deleteReservation(Integer reservationId) {
+        Reservation reservation = reservationRepository.findById(reservationId)
+                .orElseThrow(() -> new AppException(ErrorCode.RESERVATION_NOT_FOUND));
+        reservationRepository.delete(reservation);
     }
 
     private void validateReservationRequest(CreateReservationRequest request) {

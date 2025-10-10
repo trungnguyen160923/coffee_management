@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { cartService } from '../../services/cartService';
 import { orderService } from '../../services/orderService';
 import { emailService } from '../../services/emailService';
+import MomoPaymentPage from './MomoPaymentPage';
 import axios from 'axios';
 
 const GuestCheckout = () => {
@@ -28,6 +29,8 @@ const GuestCheckout = () => {
 
     const [submitting, setSubmitting] = useState(false);
     const [cartItems, setCartItems] = useState([]);
+    const [showMomoPayment, setShowMomoPayment] = useState(false);
+    const [orderInfo, setOrderInfo] = useState(null);
 
     // Fetch provinces and cart items on mount
     useEffect(() => {
@@ -140,14 +143,8 @@ const GuestCheckout = () => {
         );
     };
 
-    const onSubmit = async (e) => {
-        e.preventDefault();
-
-        if (!validateRequired()) {
-            alert('Please fill all the required fields (Name, Province, District, Phone) !!');
-            return;
-        }
-
+    // Function to proceed with order creation (after payment success)
+    const proceedWithOrder = async () => {
         try {
             setSubmitting(true);
             // Fetch cart to build order items
@@ -217,6 +214,67 @@ const GuestCheckout = () => {
             setSubmitting(false);
         }
     };
+
+    const onSubmit = async (e) => {
+        e.preventDefault();
+
+        if (!validateRequired()) {
+            alert('Please fill all the required fields (Name, Province, District, Phone) !!');
+            return;
+        }
+
+        // Check if Momo payment is selected
+        if (formData.paymentMethod === 'CARD') {
+            // Prepare order info for Momo payment
+            const totalAmount = cartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
+            const orderId = `ORD${Date.now()}`;
+
+            setOrderInfo({
+                orderId: orderId,
+                description: `Coffee Order - ${formData.name}`,
+                totalAmount: totalAmount,
+                customerName: formData.name,
+                phone: formData.phone,
+                email: formData.email
+            });
+
+            setShowMomoPayment(true);
+            return;
+        }
+
+        // For cash payment, proceed directly
+        await proceedWithOrder();
+    };
+
+    // Handle Momo payment success
+    const handleMomoPaymentSuccess = () => {
+        setShowMomoPayment(false);
+        proceedWithOrder();
+    };
+
+    // Handle Momo payment failure
+    const handleMomoPaymentFailure = () => {
+        setShowMomoPayment(false);
+        alert('Payment failed. Please try again.');
+    };
+
+    // Handle go back from Momo payment
+    const handleMomoGoBack = () => {
+        setShowMomoPayment(false);
+        setOrderInfo(null);
+    };
+
+    // Show Momo payment page if selected
+    if (showMomoPayment && orderInfo) {
+        return (
+            <MomoPaymentPage
+                orderInfo={orderInfo}
+                onPaymentSuccess={handleMomoPaymentSuccess}
+                onPaymentFailure={handleMomoPaymentFailure}
+                onGoBack={handleMomoGoBack}
+            />
+        );
+    }
 
     return (
         <>
@@ -291,9 +349,9 @@ const GuestCheckout = () => {
                                                 onChange={onChange}
                                                 className="form-control"
                                             >
-                                                <option value="CASH">Cash</option>
-                                                <option value="CARD">Card</option>
-                                                <option value="BANK_TRANSFER">Bank Transfer</option>
+                                                <option value="CASH">Cash On Delivery (COD)</option>
+                                                <option value="CARD">Momo e-wallet</option>
+
                                             </select>
                                         </div>
                                     </div>
@@ -479,7 +537,7 @@ const GuestCheckout = () => {
                                                 <div key={index} className="order-item mb-3 pb-3 border-bottom">
                                                     <div className="d-flex">
                                                         {/* Product Image */}
-                                                        <div className="product-image me-3">
+                                                        <div className="product-image me-4" style={{ minWidth: '60px' }}>
                                                             <img
                                                                 src={item.imageUrl || '/images/menu-1.jpg'}
                                                                 alt={item.name}
@@ -498,7 +556,7 @@ const GuestCheckout = () => {
                                                         </div>
 
                                                         {/* Product Info */}
-                                                        <div className="product-info flex-grow-1">
+                                                        <div className="product-info flex-grow-1" style={{ paddingLeft: '10px' }}>
                                                             <h6 className="mb-1 text-primary">{item.name}</h6>
                                                             {item.size && (
                                                                 <small className="text-muted d-block mb-1">
@@ -515,7 +573,7 @@ const GuestCheckout = () => {
                                                                 </div>
                                                                 <div className="item-price">
                                                                     <span className="price fw-bold text-primary">
-                                                                        ${(item.price * item.quantity).toFixed(2)}
+                                                                        {(item.price * item.quantity).toFixed(2)}
                                                                     </span>
                                                                 </div>
                                                             </div>
@@ -554,7 +612,7 @@ const GuestCheckout = () => {
                                             <div className="d-flex justify-content-between align-items-center">
                                                 <h5 className="mb-0">Total:</h5>
                                                 <h5 className="mb-0 text-primary">
-                                                    ${cartItems.reduce((total, item) => total + (item.price * item.quantity), 0).toFixed(2)}
+                                                    {cartItems.reduce((total, item) => total + (item.price * item.quantity), 0).toFixed(2)}
                                                 </h5>
                                             </div>
                                         </div>

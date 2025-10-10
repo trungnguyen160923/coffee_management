@@ -61,8 +61,7 @@ public class BranchService {
                     branch.setLongitude(BigDecimal.valueOf(coordinates.getLongitude()));
                 }
             } catch (Exception e) {
-                // Log the error but don't fail the branch creation
-                System.err.println("⚠️ Geocoding failed for address: " + request.getAddress() + " - " + e.getMessage());
+                // Geocoding failed but don't fail the branch creation
             }
         }
 
@@ -162,11 +161,9 @@ public class BranchService {
                 if (coordinates != null) {
                     branch.setLatitude(BigDecimal.valueOf(coordinates.getLatitude()));
                     branch.setLongitude(BigDecimal.valueOf(coordinates.getLongitude()));
-                    System.out.println("✅ Geocoding successful for branch " + branchId + ": " + request.getAddress() + " → (" + coordinates.getLatitude() + ", " + coordinates.getLongitude() + ")");
                 }
             } catch (Exception e) {
-                // Log the error but don't fail the branch update
-                System.err.println("⚠️ Geocoding failed for address: " + request.getAddress() + " - " + e.getMessage());
+                // Geocoding failed but don't fail the branch update
             }
         }
 
@@ -210,7 +207,6 @@ public class BranchService {
                     return branchRepository.save(branch);
                 }
             } catch (Exception e) {
-                System.err.println("⚠️ Geocoding failed for branch " + branchId + " address: " + branch.getAddress() + " - " + e.getMessage());
                 throw new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION);
             }
         }
@@ -233,7 +229,7 @@ public class BranchService {
                         branch.setLongitude(BigDecimal.valueOf(coordinates.getLongitude()));
                     }
                 } catch (Exception e) {
-                    System.err.println("⚠️ Geocoding failed for branch " + branch.getBranchId() + " address: " + branch.getAddress() + " - " + e.getMessage());
+                    // Geocoding failed for this branch
                 }
             }
         }

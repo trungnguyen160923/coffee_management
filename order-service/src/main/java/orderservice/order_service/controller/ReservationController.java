@@ -162,6 +162,26 @@ public class ReservationController {
         }
     }
 
+    @DeleteMapping("/{reservationId}")
+    public ResponseEntity<ApiResponse<Void>> deleteReservation(@PathVariable Integer reservationId) {
+        try {
+            reservationService.deleteReservation(reservationId);
+            ApiResponse<Void> response = ApiResponse.<Void>builder()
+                    .code(200)
+                    .message("Reservation deleted successfully")
+                    .result(null)
+                    .build();
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            ApiResponse<Void> response = ApiResponse.<Void>builder()
+                    .code(500)
+                    .message("Failed to delete reservation: " + e.getMessage())
+                    .result(null)
+                    .build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
     private String getCurrentToken() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication != null && authentication.getCredentials() != null) {
