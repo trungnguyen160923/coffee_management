@@ -97,18 +97,41 @@ const ProductDetail = () => {
                             <p className="text-muted">{product.description}</p>
 
                             <div className="row mt-4">
-                                <div className="col-md-6">
-                                    <div className="form-group d-flex">
-                                        <div className="select-wrap">
-                                            <div className="icon"><span className="ion-ios-arrow-down"></span></div>
-                                            <select value={selectedDetailId || ''} onChange={(e) => setSelectedDetailId(Number(e.target.value))} className="form-control">
-                                                {product.productDetails?.map(detail => (
-                                                    <option key={detail.pdId} value={detail.pdId}>{detail.size?.name} - {formatPrice(detail.price)}</option>
-                                                ))}
-                                            </select>
+                                {/* Chỉ hiển thị size section nếu sản phẩm có size */}
+                                {product.productDetails &&
+                                    product.productDetails.some(detail => detail.size?.name) && (
+                                        <div className="col-md-12">
+                                            <div className="form-group">
+                                                <label>Size:</label>
+                                                <div className="d-flex flex-wrap" role="radiogroup" aria-label="Size options">
+                                                    {product.productDetails?.map(detail => {
+                                                        const isActive = selectedDetailId === detail.pdId;
+                                                        return (
+                                                            <button
+                                                                key={detail.pdId}
+                                                                type="button"
+                                                                onClick={() => setSelectedDetailId(detail.pdId)}
+                                                                aria-pressed={isActive}
+                                                                className="btn btn-outline-secondary mr-2 mb-2"
+                                                                data-custom-style="true"
+                                                                style={{
+                                                                    backgroundColor: isActive ? '#c49b63' : 'transparent',
+                                                                    color: '#ffffff !important',
+                                                                    border: '1px solid #c49b63',
+                                                                    fontWeight: 'bold !important',
+                                                                    textShadow: '2px 2px 4px rgba(0,0,0,1) !important',
+                                                                    WebkitTextStroke: '0.5px #000000 !important'
+                                                                }}
+                                                            >
+                                                                {detail.size?.name || 'Default'}
+                                                            </button>
+
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
                                         </div>
-                                    </div>
-                                </div>
+                                    )}
                                 <div className="w-100"></div>
                                 <div className="input-group col-md-6 d-flex mb-3">
                                     <span className="input-group-btn mr-2">

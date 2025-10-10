@@ -23,11 +23,9 @@ public class BranchSelectionService {
      */
     public Branch findNearestBranch(String customerAddress) {
         try {
-            log.info("Finding nearest branch for address: {}", customerAddress);
 
             // 1️⃣ Geocoding địa chỉ khách hàng
             GeocodingService.Coordinates customerLocation = geocodingService.geocodeAddress(customerAddress);
-            log.info("Customer location: {}", customerLocation);
 
             // 2️⃣ Lấy danh sách chi nhánh, sắp xếp theo branch_id để đảm bảo kết quả ổn
             // định
@@ -38,11 +36,8 @@ public class BranchSelectionService {
                     .toList();
 
             if (allBranches.isEmpty()) {
-                log.error("No branches with coordinates found in database");
                 return null;
             }
-
-            log.info("Found {} branches with coordinates", allBranches.size());
 
             // 3️⃣ Tìm chi nhánh gần nhất (ưu tiên branch_id nhỏ nếu khoảng cách bằng nhau)
             Branch nearestBranch = null;
@@ -54,7 +49,6 @@ public class BranchSelectionService {
                         branch.getLongitude().doubleValue());
 
                 double distance = geocodingService.calculateDistance(customerLocation, branchLocation);
-                log.info("Branch {} (ID={}): distance = {} km", branch.getName(), branch.getBranchId(), distance);
 
                 // So sánh ổn định: khoảng cách nhỏ hơn, hoặc bằng nhưng ID nhỏ hơn
                 if (distance < minDistance - 0.05 ||
@@ -65,18 +59,13 @@ public class BranchSelectionService {
                 }
             }
 
-            if (nearestBranch != null) {
-                log.info("✅ Selected branch: {} (ID={}) - distance: {} km",
-                        nearestBranch.getName(), nearestBranch.getBranchId(), minDistance);
-            } else {
-                log.warn("No suitable branch found, returning first available");
+            if (nearestBranch == null) {
                 nearestBranch = allBranches.get(0);
             }
 
             return nearestBranch;
 
         } catch (Exception e) {
-            log.error("Error finding nearest branch for address: {}", customerAddress, e);
 
             // Fallback: chọn chi nhánh đầu tiên có tọa độ (sau khi sắp xếp)
             List<Branch> allBranches = branchRepository.findAll()
@@ -87,7 +76,6 @@ public class BranchSelectionService {
 
             if (!allBranches.isEmpty()) {
                 Branch fallback = allBranches.get(0);
-                log.warn("Fallback to branch: {} (ID={})", fallback.getName(), fallback.getBranchId());
                 return fallback;
             }
 
@@ -111,11 +99,10 @@ public class BranchSelectionService {
                 double distance = geocodingService.calculateDistance(customerLocation, branchLocation);
 
                 if (distance > maxDistanceKm) {
-                    log.warn("Nearest branch is {} km away, exceeds limit of {} km", distance, maxDistanceKm);
                     return null; // Không có chi nhánh trong phạm vi
                 }
             } catch (Exception e) {
-                log.error("Error calculating distance for branch selection", e);
+                // Error calculating distance for branch selection
             }
         }
 

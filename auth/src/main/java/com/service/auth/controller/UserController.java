@@ -131,4 +131,10 @@ public class UserController {
         var result = userService.getMe();
         return ApiResponse.<UserResponse>builder().result(result).build();
     }
+
+    @GetMapping("/customers/{userId}")
+    ApiResponse<UserResponse> getCustomerById(@PathVariable Integer userId) {
+        var result = userService.getCustomerById(userId);
+        return ApiResponse.<UserResponse>builder().result(result).build();
+    }
 }
