@@ -49,9 +49,11 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/reservations")
                 .permitAll() // Allow both authenticated and non-authenticated users
                 .requestMatchers(HttpMethod.GET, "/api/reservations/**")
-                .hasAnyRole("ADMIN", "MANAGER", "CUSTOMER")
+                .hasAnyRole("ADMIN", "MANAGER", "CUSTOMER", "STAFF")
                 .requestMatchers(HttpMethod.PUT, "/api/reservations/**")
-                .hasAnyRole("ADMIN", "MANAGER")
+                .hasAnyRole("ADMIN", "MANAGER", "STAFF")
+                .requestMatchers(HttpMethod.DELETE, "/api/reservations/**")
+                .hasAnyRole("ADMIN", "MANAGER", "STAFF")
                 .anyRequest()
                 .authenticated());
 

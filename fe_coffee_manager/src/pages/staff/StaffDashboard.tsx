@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { 
-  Coffee, 
-  Clock, 
-  CheckCircle, 
-  AlertCircle, 
+import {
+  Coffee,
+  Clock,
+  CheckCircle,
+  AlertCircle,
   Plus,
   Calendar,
   Users,
@@ -22,75 +22,75 @@ export function StaffDashboard() {
   ];
 
   const currentOrders = [
-    { 
-      id: '#001', 
-      items: ['Cà phê đá x2', 'Bánh mì x1'], 
-      total: 85000, 
-      status: 'preparing', 
-      time: '2 phút', 
+    {
+      id: '#001',
+      items: ['Cà phê đá x2', 'Bánh mì x1'],
+      total: 85000,
+      status: 'preparing',
+      time: '2 phút',
       customer: 'Khách hàng A',
       type: 'dine-in'
     },
-    { 
-      id: '#002', 
-      items: ['Cappuccino x1', 'Croissant x1'], 
-      total: 120000, 
-      status: 'ready', 
-      time: '5 phút', 
+    {
+      id: '#002',
+      items: ['Cappuccino x1', 'Croissant x1'],
+      total: 120000,
+      status: 'ready',
+      time: '5 phút',
       customer: 'Nguyễn Văn B',
       type: 'takeaway'
     },
-    { 
-      id: '#003', 
-      items: ['Latte x3', 'Bánh ngọt x2'], 
-      total: 210000, 
-      status: 'pending', 
-      time: '1 phút', 
+    {
+      id: '#003',
+      items: ['Latte x3', 'Bánh ngọt x2'],
+      total: 210000,
+      status: 'pending',
+      time: '1 phút',
       customer: 'Trần Thị C',
       type: 'online'
     }
   ];
 
   const todayReservations = [
-    { 
-      id: 'R001', 
-      customerName: 'Lê Văn D', 
-      phone: '0901234567', 
-      table: 5, 
-      guests: 4, 
-      time: '14:30', 
-      status: 'confirmed' 
+    {
+      id: 'R001',
+      customerName: 'Lê Văn D',
+      phone: '0901234567',
+      table: 5,
+      guests: 4,
+      time: '14:30',
+      status: 'confirmed'
     },
-    { 
-      id: 'R002', 
-      customerName: 'Phạm Thị E', 
-      phone: '0912345678', 
-      table: 3, 
-      guests: 2, 
-      time: '16:00', 
-      status: 'seated' 
+    {
+      id: 'R002',
+      customerName: 'Phạm Thị E',
+      phone: '0912345678',
+      table: 3,
+      guests: 2,
+      time: '16:00',
+      status: 'seated'
     },
-    { 
-      id: 'R003', 
-      customerName: 'Hoàng Văn F', 
-      phone: '0923456789', 
-      table: 8, 
-      guests: 6, 
-      time: '19:00', 
-      status: 'confirmed' 
+    {
+      id: 'R003',
+      customerName: 'Hoàng Văn F',
+      phone: '0923456789',
+      table: 8,
+      guests: 6,
+      time: '19:00',
+      status: 'confirmed'
     }
   ];
 
   const popularRecipes = [
-    { 
-      name: 'Cà phê đá', 
-      ingredients: ['Cà phê robusta 20g', 'Nước đá', 'Đường 10g'], 
+    {
+      name: 'Cà phê đá',
+      ingredients: ['Cà phê robusta 20g', 'Nước đá', 'Đường 10g'],
       steps: ['Pha cà phê với nước nóng 90°C', 'Thêm đường khuấy đều', 'Cho đá và phục vụ'],
       prepTime: '3 phút'
     },
-    { 
-      name: 'Cappuccino', 
-      ingredients: ['Espresso 30ml', 'Sữa tươi 150ml', 'Bột ca cao'], 
+    {
+      name: 'Cappuccino',
+      ingredients: ['Espresso 30ml', 'Sữa tươi 150ml', 'Bột ca cao'],
       steps: ['Pha espresso', 'Đánh sữa tạo foam', 'Rót sữa vào espresso', 'Trang trí với ca cao'],
       prepTime: '4 phút'
     }
@@ -187,11 +187,10 @@ export function StaffDashboard() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
-                activeTab === tab.id 
-                  ? 'bg-white text-blue-600 shadow-sm' 
+              className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 ${activeTab === tab.id
+                  ? 'bg-white text-blue-600 shadow-sm'
                   : 'text-gray-600 hover:text-gray-900'
-              }`}
+                }`}
             >
               <tab.icon className="h-4 w-4" />
               <span>{tab.label}</span>

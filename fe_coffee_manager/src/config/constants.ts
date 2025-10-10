@@ -23,10 +23,15 @@ export const API_ENDPOINTS = {
     RECIPES: '/api/catalogs/recipes',
   },
   ORDERS: {
-    BASE: '/api/orders',
-    STATS: '/api/orders/stats',
-    STATUS: (id: string) => `/api/orders/${id}/status`,
-    ITEMS: (id: string) => `/api/orders/${id}/items`,
+    BASE: '/api/order-service/api/orders',
+    STATS: '/api/order-service/api/orders/stats',
+    STATUS: (id: string) => `/api/order-service/api/orders/${id}/status`,
+    ITEMS: (id: string) => `/api/order-service/api/orders/${id}/items`,
+  },
+  RESERVATIONS: {
+    BASE: '/api/order-service/api/reservations',
+    BY_BRANCH: (id: number | string) => `/api/order-service/api/reservations/branch/${id}`,
+    STATUS: (id: number | string) => `/api/order-service/api/reservations/${id}/status`,
   },
   BRANCHES: {
     BASE: '/api/order-service/api/branches',

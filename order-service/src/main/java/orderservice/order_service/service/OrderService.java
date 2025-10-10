@@ -37,9 +37,6 @@ public class OrderService {
 
         @Transactional
         public OrderResponse createOrder(CreateOrderRequest request, String token) {
-                log.info("=== STARTING ORDER CREATION ===");
-                log.info("Request: customerId={}, deliveryAddress={}", request.getCustomerId(),
-                                request.getDeliveryAddress());
                 try {
                         // Validate products and calculate subtotal
                         BigDecimal subtotal = BigDecimal.ZERO;
@@ -103,7 +100,9 @@ public class OrderService {
                                                 .order(order)
                                                 .productId(itemRequest.getProductId())
                                                 .productDetailId(itemRequest.getProductDetailId())
-                                                .sizeId(productDetail.getSize().getSizeId())
+                                                .sizeId(productDetail.getSize() != null
+                                                                ? productDetail.getSize().getSizeId()
+                                                                : null)
                                                 .quantity(itemRequest.getQuantity())
                                                 .unitPrice(productDetail.getPrice())
                                                 .totalPrice(productDetail.getPrice()
@@ -114,16 +113,21 @@ public class OrderService {
                                 orderItemRepository.save(orderItem);
                         }
 
-                        log.info("Order created successfully: orderId={}", order.getOrderId());
                         return convertToOrderResponse(order);
                 } catch (Exception e) {
-                        log.error("Failed to create order: {}", e.getMessage());
                         throw new AppException(ErrorCode.ORDER_CREATION_FAILED);
                 }
         }
 
         public List<OrderResponse> getOrdersByCustomer(Integer customerId) {
                 List<Order> orders = orderRepository.findByCustomerIdOrderByOrderDateDesc(customerId);
+                return orders.stream()
+                                .map(this::convertToOrderResponse)
+                                .collect(Collectors.toList());
+        }
+
+        public List<OrderResponse> getOrdersByBranch(Integer branchId) {
+                List<Order> orders = orderRepository.findByBranchIdOrderByOrderDateDesc(branchId);
                 return orders.stream()
                                 .map(this::convertToOrderResponse)
                                 .collect(Collectors.toList());
@@ -144,6 +148,21 @@ public class OrderService {
                 order = orderRepository.save(order);
 
                 return convertToOrderResponse(order);
+        }
+
+        @Transactional
+        public void deleteOrder(Integer orderId) {
+                Order order = orderRepository.findById(orderId)
+                                .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
+
+                // Ensure order items are removed before deleting order in case cascade isn't
+                // configured
+                List<OrderItem> items = orderItemRepository.findByOrderOrderId(orderId);
+                if (items != null && !items.isEmpty()) {
+                        orderItemRepository.deleteAll(items);
+                }
+
+                orderRepository.delete(order);
         }
 
         private OrderResponse convertToOrderResponse(Order order) {
@@ -211,9 +230,6 @@ public class OrderService {
 
         @Transactional
         public OrderResponse createGuestOrder(CreateGuestOrderRequest request) {
-                log.info("=== STARTING GUEST ORDER CREATION ===");
-                log.info("Request: customerName={}, phone={}, deliveryAddress={}",
-                                request.getCustomerName(), request.getPhone(), request.getDeliveryAddress());
                 try {
                         // Validate products and calculate subtotal
                         BigDecimal subtotal = BigDecimal.ZERO;
@@ -242,8 +258,6 @@ public class OrderService {
                         if (selectedBranch == null) {
                                 throw new AppException(ErrorCode.BRANCH_NOT_FOUND);
                         }
-                        log.info("Selected branch: {} for branch selection address: {}", selectedBranch.getName(),
-                                        addressForBranchSelection);
 
                         // Create order (customerId = null for guest)
                         Order order = Order.builder()
@@ -276,7 +290,9 @@ public class OrderService {
                                                 .order(order)
                                                 .productId(itemRequest.getProductId())
                                                 .productDetailId(itemRequest.getProductDetailId())
-                                                .sizeId(productDetail.getSize().getSizeId())
+                                                .sizeId(productDetail.getSize() != null
+                                                                ? productDetail.getSize().getSizeId()
+                                                                : null)
                                                 .quantity(itemRequest.getQuantity())
                                                 .unitPrice(productDetail.getPrice())
                                                 .totalPrice(productDetail.getPrice()
@@ -287,11 +303,9 @@ public class OrderService {
                                 orderItemRepository.save(orderItem);
                         }
 
-                        log.info("✅ Guest order created successfully: Order ID = {}", order.getOrderId());
                         return convertToOrderResponse(order);
 
                 } catch (Exception e) {
-                        log.error("❌ Error creating guest order", e);
                         throw e;
                 }
         }

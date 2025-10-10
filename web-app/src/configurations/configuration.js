@@ -5,6 +5,7 @@ export const CONFIG = {
 export const API = {
   LOGIN: "/auth-service/auth/token",
   MY_INFO: "/profile/users/my-profile",
+  GET_USER_BY_ID: "/auth-service/users",
   MY_POST: "/post/my-posts",
   CREATE_POST: "/post/create",
   UPDATE_PROFILE: "/profile/users/my-profile",
@@ -39,4 +40,9 @@ export const API = {
   GET_ORDERS_BY_CUSTOMER: "/order-service/api/orders/customer",
   // Email service
   SEND_ORDER_CONFIRMATION_EMAIL: "/order-service/api/email/send-order-confirmation",
+  // Address APIs (via API Gateway)
+  CREATE_ADDRESS: "/profiles/addresses",
+  GET_CUSTOMER_ADDRESSES: "/profiles/customer-addresses",
+  UPDATE_CUSTOMER_ADDRESS: "/profiles/customer-addresses",
+  DELETE_CUSTOMER_ADDRESS: "/profiles/customer-addresses",
 };
