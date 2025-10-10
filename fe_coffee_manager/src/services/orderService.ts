@@ -52,11 +52,12 @@ export interface OrderService {
   createOrder: (order: CreateOrderRequest) => Promise<Order>;
   updateOrder: (id: string, order: UpdateOrderRequest) => Promise<Order>;
   deleteOrder: (id: string) => Promise<void>;
-  
+  getOrdersByBranch: (branchId: number | string) => Promise<any[]>;
+
   // Order management
   updateOrderStatus: (id: string, status: Order['status']) => Promise<Order>;
   getOrderStats: (filters?: { branchId?: string; dateFrom?: string; dateTo?: string }) => Promise<OrderStats>;
-  
+
   // Order items
   addOrderItem: (orderId: string, item: Omit<OrderItem, 'productName'>) => Promise<Order>;
   updateOrderItem: (orderId: string, itemId: string, item: Partial<OrderItem>) => Promise<Order>;
@@ -67,7 +68,7 @@ export interface OrderService {
 export const orderService: OrderService = {
   async getOrders(filters: OrderFilters = {}): Promise<OrderListResponse> {
     const params = new URLSearchParams();
-    
+
     if (filters.status) params.append('status', filters.status);
     if (filters.type) params.append('type', filters.type);
     if (filters.branchId) params.append('branchId', filters.branchId);
@@ -79,7 +80,7 @@ export const orderService: OrderService = {
 
     const queryString = params.toString();
     const endpoint = `${API_ENDPOINTS.ORDERS.BASE}${queryString ? `?${queryString}` : ''}`;
-    
+
     return await apiClient.get<OrderListResponse>(endpoint);
   },
 
@@ -100,19 +101,38 @@ export const orderService: OrderService = {
   },
 
   async updateOrderStatus(id: string, status: Order['status']): Promise<Order> {
-    return await apiClient.patch<Order>(API_ENDPOINTS.ORDERS.STATUS(id), { status });
+    const endpoint = `${API_ENDPOINTS.ORDERS.STATUS(id)}?status=${encodeURIComponent(status)}`;
+    const resp = await apiClient.put<any>(endpoint);
+    // Support both wrapped and unwrapped responses
+    if (resp && typeof resp === 'object' && 'result' in resp) {
+      return resp.result as Order;
+    }
+    return resp as Order;
+  },
+
+  async getOrdersByBranch(branchId: number | string): Promise<any[]> {
+    const endpoint = `${API_ENDPOINTS.ORDERS.BASE}/branch/${branchId}`;
+    const resp = await apiClient.get<{ code: number; result: any[] }>(endpoint);
+    // Gateway-wrapped response
+    // When using apiClient.get with generic T, most services return the unwrapped body already.
+    // But to be safe, support both shapes.
+    const maybeWrapped: any = resp as any;
+    if (maybeWrapped && typeof maybeWrapped.code === 'number' && 'result' in maybeWrapped) {
+      return maybeWrapped.result || [];
+    }
+    return (resp as unknown as any[]) || [];
   },
 
   async getOrderStats(filters: { branchId?: string; dateFrom?: string; dateTo?: string } = {}): Promise<OrderStats> {
     const params = new URLSearchParams();
-    
+
     if (filters.branchId) params.append('branchId', filters.branchId);
     if (filters.dateFrom) params.append('dateFrom', filters.dateFrom);
     if (filters.dateTo) params.append('dateTo', filters.dateTo);
 
     const queryString = params.toString();
     const endpoint = `${API_ENDPOINTS.ORDERS.STATS}${queryString ? `?${queryString}` : ''}`;
-    
+
     return await apiClient.get<OrderStats>(endpoint);
   },
 

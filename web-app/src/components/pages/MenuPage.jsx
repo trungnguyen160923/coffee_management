@@ -380,32 +380,36 @@ const MenuPage = () => {
                                         <p style={{ color: '#fff' }}>{selectedProduct.description}</p>
 
                                         <div className="row mt-4">
-                                            <div className="col-md-12">
-                                                <div className="form-group">
-                                                    <label style={{ color: '#c49b63' }}>Size:</label>
-                                                    <div className="d-flex flex-wrap" role="radiogroup" aria-label="Size options">
-                                                        {selectedProduct.productDetails?.map(detail => {
-                                                            const isActive = selectedDetailId === detail.pdId;
-                                                            return (
-                                                                <button
-                                                                    key={detail.pdId}
-                                                                    type="button"
-                                                                    onClick={() => setSelectedDetailId(detail.pdId)}
-                                                                    aria-pressed={isActive}
-                                                                    className="btn btn-outline-secondary mr-2 mb-2"
-                                                                    style={{
-                                                                        backgroundColor: isActive ? '#c49b63' : 'rgba(21, 17, 17, 0.8)',
-                                                                        color: isActive ? '#151111' : '#fff',
-                                                                        border: '1px solid #c49b63'
-                                                                    }}
-                                                                >
-                                                                    {detail.size?.name} - {formatPrice(detail.price)}
-                                                                </button>
-                                                            );
-                                                        })}
+                                            {/* Chỉ hiển thị size section nếu sản phẩm có size */}
+                                            {selectedProduct.productDetails &&
+                                                selectedProduct.productDetails.some(detail => detail.size?.name) && (
+                                                    <div className="col-md-12">
+                                                        <div className="form-group">
+                                                            <label style={{ color: '#c49b63' }}>Size:</label>
+                                                            <div className="d-flex flex-wrap" role="radiogroup" aria-label="Size options">
+                                                                {selectedProduct.productDetails?.map(detail => {
+                                                                    const isActive = selectedDetailId === detail.pdId;
+                                                                    return (
+                                                                        <button
+                                                                            key={detail.pdId}
+                                                                            type="button"
+                                                                            onClick={() => setSelectedDetailId(detail.pdId)}
+                                                                            aria-pressed={isActive}
+                                                                            className="btn btn-outline-secondary mr-2 mb-2"
+                                                                            style={{
+                                                                                backgroundColor: isActive ? '#c49b63' : 'rgba(21, 17, 17, 0.8)',
+                                                                                color: isActive ? '#151111' : '#fff',
+                                                                                border: '1px solid #c49b63'
+                                                                            }}
+                                                                        >
+                                                                            {detail.size?.name || 'Default'}
+                                                                        </button>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            </div>
+                                                )}
                                             <div className="col-md-12">
                                                 <label style={{ color: '#c49b63' }}>Quantity:</label>
                                                 <div className="input-group d-flex mb-3">

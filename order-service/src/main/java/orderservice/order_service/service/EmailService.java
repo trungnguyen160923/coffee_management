@@ -44,9 +44,7 @@ public class EmailService {
             helper.setText(htmlContent, true);
 
             mailSender.send(message);
-            log.info("Order confirmation email sent successfully to: {}", toEmail);
         } catch (MessagingException e) {
-            log.error("Failed to send order confirmation email to: {}", toEmail, e);
             throw new RuntimeException("Failed to send email", e);
         }
     }

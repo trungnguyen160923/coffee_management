@@ -46,7 +46,9 @@ public enum ErrorCode {
     IDENTITY_CARD_SIZE(4005, "Identity card must be at least {min} characters", HttpStatus.BAD_REQUEST),
     USER_NOT_ASSIGNED_TO_BRANCH(4006, "User not assigned to branch", HttpStatus.BAD_REQUEST),
     EMPTY_MANAGER_USER_ID(4007, "Manager user id is required", HttpStatus.BAD_REQUEST),
-    MANAGER_ASSIGNED_TO_BRANCH(4008, "Manager assigned to branch, please unassign the manager from the branch first", HttpStatus.BAD_REQUEST),
+    MANAGER_ASSIGNED_TO_BRANCH(4008, "Manager assigned to branch, please unassign the manager from the branch first",
+            HttpStatus.BAD_REQUEST),
+    ADDRESS_NOT_FOUND(4009, "Address not found", HttpStatus.NOT_FOUND),
     ;
 
     ErrorCode(int code, String message, HttpStatusCode statusCode) {
@@ -58,7 +60,7 @@ public enum ErrorCode {
     private final int code;
     private final String message;
     private final HttpStatusCode statusCode;
-    
+
     public HttpStatus getHttpStatus() {
         return (HttpStatus) statusCode;
     }

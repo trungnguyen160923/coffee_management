@@ -6,3 +6,19 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+/* Force white text for size buttons */
+button[data-custom-style="true"] {
+  color: #ffffff !important;
+  font-weight: bold !important;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 1) !important;
+  -webkit-text-stroke: 0.5px #000000 !important;
+}
+
+button[data-custom-style="true"]:hover,
+button[data-custom-style="true"]:focus,
+button[data-custom-style="true"]:active {
+  color: #dddddd !important;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 1) !important;
+  -webkit-text-stroke: 0.5px #000000 !important;
+}

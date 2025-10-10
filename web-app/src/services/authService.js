@@ -13,5 +13,10 @@ export const authService = {
   logout: async () => {
     const response = await httpClient.post(API.LOGOUT);
     return response.data;
+  },
+
+  getUserById: async (userId) => {
+    const response = await httpClient.get(`${API.GET_USER_BY_ID}/${userId}`);
+    return response.data;
   }
 };

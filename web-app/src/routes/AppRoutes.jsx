@@ -11,9 +11,9 @@ import CartPage from "../components/pages/CartPage";
 import LoginPage from "../components/pages/auth/LoginPage";
 import RegisterPage from "../components/pages/auth/RegisterPage";
 import ForgotPasswordPage from "../components/pages/auth/ForgotPasswordPage";
-import UserDashboard from "../components/pages/users/UserDashboard";
 import OrdersPage from "../components/pages/users/OrdersPage";
 import BookingsPage from "../components/pages/users/BookingsPage";
+import AddressManagement from "../components/pages/users/AddressManagement";
 
 
 const AppRoutes = () => {
@@ -35,9 +35,9 @@ const AppRoutes = () => {
       <Route path="/auth/register" element={<RegisterPage />} />
       <Route path="/auth/forgot-password" element={<ForgotPasswordPage />} />
 
-      <Route path="/users" element={<UserDashboard />} />
       <Route path="/users/orders" element={<OrdersPage />} />
       <Route path="/users/bookings" element={<BookingsPage />} />
+      <Route path="/users/addresses" element={<AddressManagement />} />
     </Routes>
   );
 };

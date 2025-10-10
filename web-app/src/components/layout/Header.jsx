@@ -195,6 +195,11 @@ const Header = () => {
                                         </Link>
                                     </li>
                                     <li>
+                                        <Link className="dropdown-item" to="/users/addresses" onClick={() => setShowDropdown(false)}>
+                                            Manage Addresses
+                                        </Link>
+                                    </li>
+                                    <li>
                                         <hr className="dropdown-divider" />
                                     </li>
                                     <li>

@@ -46,7 +46,6 @@ public class GeocodingService {
             return execution.execute(request, body);
         });
         this.restTemplate.setInterceptors(interceptors);
-        log.info("✅ Geocoding RestTemplate configured for OpenCage Data API (Accept-Language=vi)");
     }
 
     /**
@@ -54,25 +53,21 @@ public class GeocodingService {
      * Tự động chuẩn hóa địa chỉ tiếng Việt để cải thiện khả năng tìm kiếm
      */
     public Coordinates geocodeAddress(String address) {
-        log.info("📍 Đang geocoding địa chỉ: {}", address);
 
         if (apiKey == null || apiKey.trim().isEmpty()) {
-            throw new RuntimeException("❌ OpenCage API key chưa được cấu hình!");
+            throw new RuntimeException("OpenCage API key chưa được cấu hình!");
         }
 
         // Chuẩn hóa địa chỉ tiếng Việt để cải thiện khả năng geocoding
         String normalizedAddress = address;
         if (VietnameseNormalizer.containsVietnameseAccents(address)) {
             normalizedAddress = VietnameseNormalizer.normalizeVietnameseAddress(address);
-            log.info("🔄 Địa chỉ đã chuẩn hóa: {} → {}", address, normalizedAddress);
         }
 
         String encodedAddress = URLEncoder.encode(normalizedAddress, StandardCharsets.UTF_8);
-        log.info("🔍 Encoded address: {}", encodedAddress);
         String url = String.format(
                 "%s?q=%s&key=%s&limit=1&countrycode=vn&language=vi",
                 OPENCAGE_URL, encodedAddress, apiKey);
-        log.info("🌐 Geocoding URL: {}", url);
 
         int maxAttempts = 3;
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -82,27 +77,19 @@ public class GeocodingService {
                     throw new RuntimeException("Phản hồi rỗng từ OpenCage API");
                 }
 
-                log.info("🔍 Raw API response: {}", response);
-
                 JsonNode jsonNode = objectMapper.readTree(response);
                 JsonNode results = jsonNode.path("results");
 
-                log.info("🔍 Results node: {}", results);
-
                 if (results.isArray() && results.size() > 0) {
                     JsonNode geometry = results.get(0).path("geometry");
-                    log.info("🔍 Geometry node: {}", geometry);
 
                     if (geometry.has("lat") && geometry.has("lng")) {
                         double lat = geometry.get("lat").asDouble();
                         double lng = geometry.get("lng").asDouble();
-                        log.info("🔍 Parsed coordinates: lat={}, lng={}", lat, lng);
-                        log.info("✅ Geocoding thành công: {} → ({}, {})", address, lat, lng);
                         return new Coordinates(lat, lng);
                     }
                 }
 
-                log.warn("⚠️ Không tìm thấy kết quả hợp lệ trong phản hồi: {}", response);
                 throw new RuntimeException("Không tìm thấy tọa độ hợp lệ cho địa chỉ: " + address);
 
             } catch (HttpStatusCodeException httpEx) {
@@ -110,18 +97,15 @@ public class GeocodingService {
                 boolean retryable = status.value() == 429 || status.is5xxServerError();
 
                 if (status.value() == 401) {
-                    log.error("❌ API key không hợp lệ: {}", httpEx.getResponseBodyAsString());
                     throw new RuntimeException("OpenCage API key không hợp lệ!");
                 }
 
-                log.warn("🌐 Lỗi HTTP (status={}): {}", status.value(), httpEx.getMessage());
                 if (retryable && attempt < maxAttempts) {
                     sleepBackoff(attempt);
                     continue;
                 }
                 throw new RuntimeException("Geocoding thất bại (" + status.value() + ")");
             } catch (Exception e) {
-                log.warn("❌ Lần thử {} thất bại: {}", attempt, e.getMessage());
                 if (attempt < maxAttempts) {
                     sleepBackoff(attempt);
                     continue;
@@ -131,7 +115,6 @@ public class GeocodingService {
         }
 
         // Nếu không có kết quả sau 3 lần thử → trả null (để bên gọi xử lý fallback)
-        log.error("❌ Geocoding thất bại sau {} lần thử cho địa chỉ: {}", maxAttempts, address);
         return null;
     }
 
@@ -142,36 +125,31 @@ public class GeocodingService {
      * @return Tọa độ nếu thành công, null nếu thất bại
      */
     public Coordinates geocodeAddressWithFallback(String address) {
-        log.info("🔄 Geocoding với fallback strategy cho địa chỉ: {}", address);
 
         // Thử với địa chỉ gốc trước
         try {
             Coordinates result = geocodeAddressOriginal(address);
             if (result != null) {
-                log.info("✅ Geocoding thành công với địa chỉ gốc: {}", address);
                 return result;
             }
         } catch (Exception e) {
-            log.warn("⚠️ Geocoding với địa chỉ gốc thất bại: {}", e.getMessage());
+            // Geocoding với địa chỉ gốc thất bại
         }
 
         // Nếu thất bại, thử với địa chỉ đã chuẩn hóa
         if (VietnameseNormalizer.containsVietnameseAccents(address)) {
             String normalizedAddress = VietnameseNormalizer.normalizeVietnameseAddress(address);
-            log.info("🔄 Thử geocoding với địa chỉ đã chuẩn hóa: {}", normalizedAddress);
 
             try {
                 Coordinates result = geocodeAddressOriginal(normalizedAddress);
                 if (result != null) {
-                    log.info("✅ Geocoding thành công với địa chỉ đã chuẩn hóa: {} → {}", address, normalizedAddress);
                     return result;
                 }
             } catch (Exception e) {
-                log.warn("⚠️ Geocoding với địa chỉ đã chuẩn hóa thất bại: {}", e.getMessage());
+                // Geocoding với địa chỉ đã chuẩn hóa thất bại
             }
         }
 
-        log.error("❌ Geocoding thất bại hoàn toàn cho địa chỉ: {}", address);
         return null;
     }
 
@@ -180,7 +158,7 @@ public class GeocodingService {
      */
     private Coordinates geocodeAddressOriginal(String address) {
         if (apiKey == null || apiKey.trim().isEmpty()) {
-            throw new RuntimeException("❌ OpenCage API key chưa được cấu hình!");
+            throw new RuntimeException("OpenCage API key chưa được cấu hình!");
         }
 
         String encodedAddress = URLEncoder.encode(address, StandardCharsets.UTF_8);
