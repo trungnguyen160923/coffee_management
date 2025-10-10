@@ -21,6 +21,7 @@ export const API_ENDPOINTS = {
     INGREDIENTS: '/api/catalogs/ingredients',
     UNITS: '/api/catalogs/units',
     RECIPES: '/api/catalogs/recipes',
+    PURCHASE_ORDERS_BULK: '/api/catalogs/purchase-orders/bulk',
   },
   ORDERS: {
     BASE: '/api/orders',

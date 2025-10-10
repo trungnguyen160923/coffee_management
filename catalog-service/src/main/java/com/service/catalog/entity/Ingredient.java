@@ -31,7 +31,7 @@ public class Ingredient {
 
 
     @ManyToOne
-    @JoinColumn(name = "unit_code", referencedColumnName = "code")
+    @JoinColumn(name = "unit_code", referencedColumnName = "code", nullable = false)
     Unit unit;
 
 

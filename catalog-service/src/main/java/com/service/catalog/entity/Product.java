@@ -15,7 +15,9 @@ import java.util.List;
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @Entity
-@Table(name = "products")
+@Table(name = "products", uniqueConstraints = {
+        @UniqueConstraint(name = "ux_products_sku", columnNames = {"sku"})
+})
 public class Product {
 
 

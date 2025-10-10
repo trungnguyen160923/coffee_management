@@ -17,6 +17,7 @@ import com.service.profile.exception.ErrorCode;
 import com.service.profile.events.UserDeleteProfileCompletedEvent;
 import com.service.profile.events.UserDeleteFailedEvent;
 import com.service.profile.repository.ManagerProfileRepository;
+import com.service.profile.repository.StaffProfileRepository;
 import com.service.profile.repository.http_client.BranchClient;
 
 import java.time.Instant;
@@ -27,13 +28,15 @@ public class UserDeleteRequestedV1Listener {
     private final ObjectMapper json;
     private final BranchClient branchClient;
     private final ManagerProfileRepository managerProfileRepository;
+    private final StaffProfileRepository staffProfileRepository;
     private final KafkaTemplate<String, String> kafkaTemplate;
 
     public UserDeleteRequestedV1Listener(ObjectMapper json,
                                          BranchClient branchClient,
                                          ManagerProfileRepository managerProfileRepository,
+                                         StaffProfileRepository staffProfileRepository,
                                          KafkaTemplate<String, String> kafkaTemplate) {
-        this.json = json; this.branchClient = branchClient; this.managerProfileRepository = managerProfileRepository; this.kafkaTemplate = kafkaTemplate;
+        this.json = json; this.branchClient = branchClient; this.managerProfileRepository = managerProfileRepository; this.staffProfileRepository = staffProfileRepository; this.kafkaTemplate = kafkaTemplate;
     }
 
     @KafkaListener(topics = "user.delete.requested.v1", groupId = "profile-user-delete-v1")
@@ -46,13 +49,16 @@ public class UserDeleteRequestedV1Listener {
                     "system", null, List.of(new SimpleGrantedAuthority("ROLE_ADMIN")));
             SecurityContextHolder.getContext().setAuthentication(systemAuth);
 
-            ApiResponse<List<BranchResponse>> resp = branchClient.getBranchesByManagerInternal(evt.userId);
-            List<BranchResponse> branches = resp != null ? resp.getResult() : null;
-            if (branches != null && !branches.isEmpty()) {
-                throw new AppException(ErrorCode.MANAGER_ASSIGNED_TO_BRANCH);
+            if ("MANAGER".equalsIgnoreCase(evt.role)) {
+                ApiResponse<List<BranchResponse>> resp = branchClient.getBranchesByManagerInternal(evt.userId);
+                List<BranchResponse> branches = resp != null ? resp.getResult() : null;
+                if (branches != null && !branches.isEmpty()) {
+                    throw new AppException(ErrorCode.MANAGER_ASSIGNED_TO_BRANCH);
+                }
+                try { managerProfileRepository.deleteById(evt.userId); } catch (Exception ignore) {}
+            } else if ("STAFF".equalsIgnoreCase(evt.role)) {
+                try { staffProfileRepository.deleteById(evt.userId); } catch (Exception ignore) {}
             }
-
-            try { managerProfileRepository.deleteById(evt.userId); } catch (Exception ignore) {}
 
             UserDeleteProfileCompletedEvent done = new UserDeleteProfileCompletedEvent();
             done.sagaId = evt.sagaId; done.userId = evt.userId; done.occurredAt = Instant.now();

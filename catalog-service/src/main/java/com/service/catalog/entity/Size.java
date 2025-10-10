@@ -13,7 +13,9 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @Entity
-@Table(name = "sizes")
+@Table(name = "sizes", uniqueConstraints = {
+        @UniqueConstraint(name = "uq_sizes_name", columnNames = {"name"})
+})
 public class Size {
 
 

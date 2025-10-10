@@ -14,6 +14,8 @@ import {
   Calendar,
   Archive,
   Truck,
+  FileText,
+  ArrowLeft,
   UtensilsCrossed
 } from 'lucide-react';
 
@@ -27,11 +29,7 @@ export function Layout({ children }: LayoutProps) {
   const { user, managerBranch, logout } = useAuth();
   const location = useLocation();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-
-  // Debug logs
-  console.log('Layout - user:', user);
-  console.log('Layout - user details:', JSON.stringify(user, null, 2));
-  console.log('Layout - managerBranch:', managerBranch);
+  const [showMoreNav, setShowMoreNav] = useState(false);
 
 
   const getNavigationItems = () => {
@@ -50,6 +48,10 @@ export function Layout({ children }: LayoutProps) {
       return [
         { icon: Home, label: 'Overview', path: '/manager' },
         { icon: Users, label: 'Staff', path: '/manager/staff' },
+        { icon: Package, label: 'Products', path: '/manager/products' },
+        { icon: Truck, label: 'Procurement', path: '/manager/procurement' },
+        { icon: FileText, label: 'Purchase Orders', path: '/manager/purchase-orders' },
+        { icon: Truck, label: 'Suppliers', path: '/manager/suppliers' },
         { icon: Archive, label: 'Inventory', path: '/manager/inventory' },
         { icon: BarChart3, label: 'Statistics', path: '/manager/statistics' },
       ];
@@ -124,25 +126,50 @@ export function Layout({ children }: LayoutProps) {
           </div>
 
           <nav className="mt-6 px-3">
-            {navigationItems.map((item) => {
-              const isActive = location.pathname === item.path;
+            {(() => {
+              const firstCount = 6;
+              const primary = navigationItems.slice(0, firstCount);
+              const secondary = navigationItems.slice(firstCount);
+              const itemsToRender = showMoreNav ? secondary : primary;
               return (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  className={`flex items-center space-x-3 px-4 py-3 mx-2 rounded-lg transition-all duration-200 group ${
-                    isActive
-                      ? 'bg-gradient-to-r from-amber-600 to-amber-700 text-white shadow-lg border-l-4 border-amber-300'
-                      : 'text-amber-100 hover:bg-amber-700/50 hover:text-white hover:shadow-md'
-                  }`}
-                >
-                  <item.icon className={`h-5 w-5 transition-colors duration-200 ${
-                    isActive ? 'text-amber-100' : 'text-amber-300 group-hover:text-amber-100'
-                  }`} />
-                  <span className="font-medium">{item.label}</span>
-                </Link>
+                <>
+                  {itemsToRender.map((item) => {
+                    const isActive = location.pathname === item.path;
+                    return (
+                      <Link
+                        key={item.path}
+                        to={item.path}
+                        className={`flex items-center space-x-3 px-4 py-3 mx-2 rounded-lg transition-all duration-200 group ${
+                          isActive
+                            ? 'bg-gradient-to-r from-amber-600 to-amber-700 text-white shadow-lg border-l-4 border-amber-300'
+                            : 'text-amber-100 hover:bg-amber-700/50 hover:text-white hover:shadow-md'
+                        }`}
+                      >
+                        <item.icon className={`h-5 w-5 transition-colors duration-200 ${
+                          isActive ? 'text-amber-100' : 'text-amber-300 group-hover:text-amber-100'
+                        }`} />
+                        <span className="font-medium">{item.label}</span>
+                      </Link>
+                    );
+                  })}
+                  {navigationItems.length > firstCount && (
+                    <button
+                      onClick={() => setShowMoreNav(v => !v)}
+                      className={`w-full flex items-center justify-between px-4 py-3 mx-2 mt-2 rounded-lg transition-all duration-200 ${
+                        showMoreNav ? 'bg-amber-700/50 text-white' : 'text-amber-100 hover:bg-amber-700/50 hover:text-white'
+                      }`}
+                      title={showMoreNav ? 'Back' : 'More'}
+                    >
+                      <span className="flex items-center gap-2">
+                        {showMoreNav ? <ArrowLeft className="h-5 w-5 text-amber-300" /> : <Archive className="h-5 w-5 text-amber-300" />}
+                        <span className="font-medium">{showMoreNav ? 'Back' : 'More'}</span>
+                      </span>
+                      <span className="text-xs text-amber-300">{showMoreNav ? 'Show primary' : `+${secondary.length}`}</span>
+                    </button>
+                  )}
+                </>
               );
-            })}
+            })()}
           </nav>
 
           <div className="absolute bottom-0 left-0 right-0 w-64 p-4 border-t border-amber-700/30 bg-gradient-to-t from-amber-900/80 to-transparent backdrop-blur-sm">

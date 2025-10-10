@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Plus, Pencil, Trash2, X, Check, Users, UserCheck, UserX } from 'lucide-react';
 import { staffService } from '../../services';
+import CreateStaffModal from '../../components/manager/staff/CreateStaffModal';
 import { UserResponseDto } from '../../types';
-import CreateStaffModal from '../../components/common/modal/CreateStaffModal';
 import ConfirmModal from '../../components/common/modal/ConfirmModal';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
@@ -28,7 +28,7 @@ const StaffManagement: React.FC = () => {
   const tableRef = useRef<HTMLTableElement | null>(null);
   const topInnerRef = useRef<HTMLDivElement | null>(null);
   const syncingRef = useRef(false);
-  const [editing, setEditing] = useState<{ id: number; field: 'email' | 'identityCard' | 'hireDate' } | null>(null);
+  const [editing, setEditing] = useState<{ id: number; field: 'email' | 'identityCard' | 'hireDate' | 'phoneNumber' | 'position' | 'salary' } | null>(null);
   const [editValue, setEditValue] = useState('');
 
   useEffect(() => {
@@ -47,13 +47,15 @@ const StaffManagement: React.FC = () => {
       if (managerBranch?.branchId) {
         // Fetch staff by branch for manager
         const staffList = await staffService.getStaffProfilesByBranch(managerBranch.branchId);
-        setStaff(staffList);
+        const sorted = sortStaffNewestFirst(staffList);
+        setStaff(sorted);
         setTotal(staffList.length);
         setTotalPages(1);
       } else {
         // Fallback to paged API if no branch info
         const resp = await staffService.getStaffProfilesPaged(page, size);
-        setStaff(resp.data);
+        const sorted = sortStaffNewestFirst(resp.data);
+        setStaff(sorted);
         setTotal(resp.total);
         setTotalPages(resp.totalPages);
       }
@@ -63,6 +65,22 @@ const StaffManagement: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const sortStaffNewestFirst = (list: UserResponseDto[]): UserResponseDto[] => {
+    const getTs = (u: any): number => {
+      const t = u?.updateAt || u?.createAt || u?.hireDate;
+      const ts = t ? Date.parse(t) : 0;
+      return Number.isNaN(ts) ? 0 : ts;
+    };
+    return [...list].sort((a: any, b: any) => {
+      const bt = getTs(b);
+      const at = getTs(a);
+      if (bt !== at) return bt - at; // newest first
+      const bid = Number(b.user_id || b.id || 0);
+      const aid = Number(a.user_id || a.id || 0);
+      return bid - aid;
+    });
   };
 
   const fetchStaffStats = async () => {
@@ -91,7 +109,7 @@ const StaffManagement: React.FC = () => {
     setIsCreating(true);
   };
 
-  const startInlineEdit = (s: UserResponseDto, field: 'email' | 'identityCard' | 'hireDate') => {
+  const startInlineEdit = (s: UserResponseDto, field: 'email' | 'identityCard' | 'hireDate' | 'phoneNumber' | 'position' | 'salary') => {
     setEditing({ id: s.user_id, field });
     setEditValue(String((s as any)[field] ?? ''));
   };
@@ -106,8 +124,11 @@ const StaffManagement: React.FC = () => {
     try {
       if (editing.field === 'email') {
         // Gọi Auth Service API
-        await staffService.updateUser(s.user_id, { email: editValue });
+        await staffService.updateStaffProfile(s.user_id, { email: editValue });
         toast.success('Email updated successfully');
+      } else if (editing.field === 'phoneNumber') {
+        await staffService.updateStaffProfile(s.user_id, { phone: editValue });
+        toast.success('Phone updated successfully');
       } else if (editing.field === 'identityCard') {
         // Gọi Profile Service API
         await staffService.updateStaffProfile(s.user_id, { identityCard: editValue });
@@ -116,6 +137,17 @@ const StaffManagement: React.FC = () => {
         // Gọi Profile Service API
         await staffService.updateStaffProfile(s.user_id, { hireDate: editValue });
         toast.success('Hire date updated successfully');
+      } else if (editing.field === 'position') {
+        await staffService.updateStaffProfile(s.user_id, { position: editValue });
+        toast.success('Position updated successfully');
+      } else if (editing.field === 'salary') {
+        const salaryNum = Number(editValue);
+        if (Number.isNaN(salaryNum)) {
+          toast.error('Salary must be a number');
+          return;
+        }
+        await staffService.updateStaffProfile(s.user_id, { salary: salaryNum });
+        toast.success('Salary updated successfully');
       }
       
       // Cập nhật local state thay vì reload toàn bộ
@@ -385,9 +417,8 @@ const StaffManagement: React.FC = () => {
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID Card</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Branch</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Position</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Salary</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Hire date</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                       </tr>
@@ -416,7 +447,18 @@ const StaffManagement: React.FC = () => {
                             )}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {staffMember.phoneNumber}
+                            {editing && editing.id === staffMember.user_id && editing.field === 'phoneNumber' ? (
+                              <div className="flex items-center gap-2">
+                                <input className="border rounded px-2 py-1 text-sm" value={editValue} onChange={(e) => setEditValue(e.target.value.replace(/[^0-9+]/g, ''))} />
+                                <button onClick={() => saveInlineEdit(staffMember)} className="text-emerald-600 hover:text-emerald-700" title="Save"><Check className="w-4 h-4" /></button>
+                                <button onClick={cancelInlineEdit} className="text-gray-500 hover:text-gray-700" title="Cancel"><X className="w-4 h-4" /></button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                <span>{staffMember.phoneNumber}</span>
+                                <button onClick={() => startInlineEdit(staffMember, 'phoneNumber')} className="text-blue-600 hover:text-blue-700" title="Edit phone"><Pencil className="w-4 h-4" /></button>
+                              </div>
+                            )}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             {editing && editing.id === staffMember.user_id && editing.field === 'identityCard' ? (
@@ -433,23 +475,36 @@ const StaffManagement: React.FC = () => {
                             )}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {staffMember.branch ? (
-                              <div>
-                                <div className="font-medium text-gray-900">{staffMember.branch.name}</div>
-                                <div className="text-gray-500">{staffMember.branch.address}</div>
-                                <div className="text-gray-500">{staffMember.branch.phone}</div>
+                            {editing && editing.id === staffMember.user_id && editing.field === 'position' ? (
+                              <div className="flex items-center gap-2">
+                                <select className="border rounded px-2 py-1 text-sm" value={editValue} onChange={(e) => setEditValue(e.target.value)}>
+                                  <option value="Pha Chế">Pha Chế</option>
+                                  <option value="Thu Ngân">Thu Ngân</option>
+                                  <option value="Phục Vụ">Phục Vụ</option>
+                                </select>
+                                <button onClick={() => saveInlineEdit(staffMember)} className="text-emerald-600 hover:text-emerald-700" title="Save"><Check className="w-4 h-4" /></button>
+                                <button onClick={cancelInlineEdit} className="text-gray-500 hover:text-gray-700" title="Cancel"><X className="w-4 h-4" /></button>
                               </div>
                             ) : (
-                              <span className="text-yellow-600 font-medium">No branch</span>
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium text-gray-900">{staffMember.position ?? '-'}</span>
+                                <button onClick={() => startInlineEdit(staffMember, 'position')} className="text-blue-600 hover:text-blue-700" title="Edit position"><Pencil className="w-4 h-4" /></button>
+                              </div>
                             )}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            <span className="font-medium text-gray-900">{staffMember.position ?? '-'}</span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                              Active
-                            </span>
+                            {editing && editing.id === staffMember.user_id && editing.field === 'salary' ? (
+                              <div className="flex items-center gap-2">
+                                <input className="border rounded px-2 py-1 text-sm" type="number" value={editValue} onChange={(e) => setEditValue(e.target.value)} />
+                                <button onClick={() => saveInlineEdit(staffMember)} className="text-emerald-600 hover:text-emerald-700" title="Save"><Check className="w-4 h-4" /></button>
+                                <button onClick={cancelInlineEdit} className="text-gray-500 hover:text-gray-700" title="Cancel"><X className="w-4 h-4" /></button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">{staffMember.salary}</span>
+                                <button onClick={() => startInlineEdit(staffMember, 'salary')} className="text-blue-600 hover:text-blue-700" title="Edit salary"><Pencil className="w-4 h-4" /></button>
+                              </div>
+                            )}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             {editing && editing.id === staffMember.user_id && editing.field === 'hireDate' ? (
@@ -526,51 +581,13 @@ const StaffManagement: React.FC = () => {
           <CreateStaffModal
             open={isCreating}
             onClose={() => setIsCreating(false)}
-            onSubmit={async (payload) => {
-              try {
-                const resp = await staffService.createStaff(payload);
-                if ((resp as any).code === 400) {
-                  toast.error((resp as any).message || 'Failed to create staff');
-                  return;
-                }
-                toast.success('Staff created successfully');
-                setIsCreating(false);
-                
-                // Optimistic update - get full staff info and add to local state
-                const userId = resp.result?.userId || resp.result?.user_id || resp.userId || resp.user_id;
-                if (userId) {
-                  try {
-                    const fullStaffInfo = await staffService.getStaffProfile(userId);
-                    setStaff(prevStaff => [fullStaffInfo, ...prevStaff]);
-                    setTotal(prevTotal => prevTotal + 1);
-                    setTotalStaff(prevTotal => prevTotal + 1);
-                    
-                    // Update stats based on active status
-                    if (payload.active !== false) {
-                      setActiveStaff(prev => prev + 1);
-                    } else {
-                      setInactiveStaff(prev => prev + 1);
-                    }
-                    
-                    // If current page is not first page, go to first page to see new staff
-                    if (page > 0) {
-                      setPage(0);
-                    }
-                  } catch (fetchError) {
-                    console.error('Failed to fetch staff details:', fetchError);
-                    // Fallback: reload toàn bộ danh sách nếu không lấy được thông tin
-                    await fetchStaff();
-                    await fetchStaffStats();
-                  }
-                } else {
-                  // Fallback nếu không có userId
-                  await fetchStaff();
-                  await fetchStaffStats();
-                }
-              } catch (e: any) {
-                const msg = e?.response?.message || e?.message || 'Failed to create staff';
-                toast.error(msg);
-              }
+            onCreated={async (created) => {
+              setStaff(prev => [created, ...prev]);
+              setTotal(prev => prev + 1);
+              setTotalStaff(prev => prev + 1);
+              setActiveStaff(prev => prev + 1);
+              if (page > 0) setPage(0);
+              await fetchStaffStats();
             }}
           />
           <ConfirmModal

@@ -5,6 +5,7 @@ import { toast } from 'react-hot-toast';
 import { UtensilsCrossed, Plus, Settings, Loader, Trash2, RefreshCw, Eye } from 'lucide-react';
 import { IngredientModal, IngredientDetailModal } from '../../components/ingredient';
 import UnitManager from '../../components/unit/UnitManager';
+import AdvancedConversionModal from '../../components/unit/AdvancedConversionModal';
 import ConfirmModal from '../../components/common/ConfirmModal';
 
 type ModalType = 'create' | 'edit' | 'view' | null;
@@ -35,11 +36,15 @@ const IngredientManagement: React.FC = () => {
   });
   const [showUnitManager, setShowUnitManager] = useState(false);
   const [editingUnit, setEditingUnit] = useState<CatalogUnit | null>(null);
+  const [showAdvancedConversion, setShowAdvancedConversion] = useState(false);
+  const [conversions, setConversions] = useState<any[]>([]);
+  const [conversionsLoading, setConversionsLoading] = useState(false);
 
   useEffect(() => {
     loadSuppliers();
     loadUnits();
     loadIngredients();
+    loadConversions();
   }, []);
 
   useEffect(() => {
@@ -70,6 +75,18 @@ const IngredientManagement: React.FC = () => {
       setUnits(resp);
     } catch (error) {
       console.error('Error loading units:', error);
+    }
+  };
+
+  const loadConversions = async () => {
+    try {
+      setConversionsLoading(true);
+      const resp = await catalogService.getAllGlobalConversions();
+      setConversions(resp);
+    } catch (error) {
+      console.error('Error loading conversions:', error);
+    } finally {
+      setConversionsLoading(false);
     }
   };
 
@@ -197,7 +214,7 @@ const IngredientManagement: React.FC = () => {
   const handleRefresh = async () => {
     try {
       setLoading(true);
-      await Promise.all([loadSuppliers(), loadUnits(), loadIngredients()]);
+      await Promise.all([loadSuppliers(), loadUnits(), loadIngredients(), loadConversions()]);
       toast.success('Data refreshed');
     } catch (error) {
       toast.error('Failed to refresh');
@@ -218,6 +235,16 @@ const IngredientManagement: React.FC = () => {
 
   const handleUnitsUpdated = () => {
     loadUnits();
+  };
+
+  const handleAdvancedConversion = () => {
+    setShowAdvancedConversion(true);
+  };
+
+  const handleCloseAdvancedConversion = () => {
+    setShowAdvancedConversion(false);
+    // Refresh conversions when modal closes
+    loadConversions();
   };
 
   
@@ -282,7 +309,6 @@ const IngredientManagement: React.FC = () => {
                       <span>Manage Units</span>
                     </button>
                   </div>
-                  
                   {/* Unit Statistics */}
                   <div className="grid grid-cols-2 gap-4 mb-4">
                     <div className="bg-blue-50 rounded-lg p-3">
@@ -347,24 +373,118 @@ const IngredientManagement: React.FC = () => {
                 </div>
               </div>
 
-              <div className="bg-white shadow rounded-lg">
-                <div className="px-4 py-5 sm:p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-medium text-gray-900">Actions</h2>
+               {/* Advanced Conversion Management */}
+               <div className="bg-white shadow rounded-lg">
+                
+                 <div className="px-4 py-5 sm:p-6">
+                 <div className="flex items-center justify-between mb-3">
+                    <h2 className="text-base font-medium text-gray-900">Advanced Conversion</h2>
                     <button
-                      onClick={openCreate}
-                      className="flex items-center space-x-1 text-sm bg-amber-600 text-white px-3 py-1.5 rounded-lg hover:bg-amber-700 transition-colors"
+                      onClick={handleAdvancedConversion}
+                      className="flex items-center space-x-1 text-sm bg-purple-600 text-white px-3 py-1.5 rounded-lg hover:bg-purple-700 transition-colors"
                     >
-                      <Plus className="w-4 h-4" />
-                      <span>Add New</span>
+                      <span>Manage Conversions</span>
                     </button>
                   </div>
-                  <div className="bg-purple-50 rounded-lg p-3">
-                    <div className="text-xl font-bold text-purple-600">{ingredients.filter(i => i.createAt).length}</div>
-                    <div className="text-xs text-purple-800">Tracked entries</div>
-                  </div>
-                </div>
-              </div>
+                  
+                   {/* Conversion Statistics */}
+                   <div className="grid grid-cols-2 gap-4 mb-4">
+                     <div className="bg-purple-50 rounded-lg p-3">
+                       <div className="text-xl font-bold text-purple-600">
+                         {conversionsLoading ? (
+                           <Loader className="w-5 h-5 animate-spin mx-auto" />
+                         ) : (
+                           conversions.length
+                         )}
+                       </div>
+                       <div className="text-xs text-purple-800">Total Conversions</div>
+                     </div>
+                     <div className="bg-indigo-50 rounded-lg p-3">
+                       <div className="text-xl font-bold text-indigo-600">
+                         {conversionsLoading ? (
+                           <Loader className="w-5 h-5 animate-spin mx-auto" />
+                         ) : (
+                           conversions.filter(c => c.isActive).length
+                         )}
+                       </div>
+                       <div className="text-xs text-indigo-800">Active Rules</div>
+                     </div>
+                   </div>
+                   
+                   <div className="overflow-x-auto max-h-32 overflow-y-auto">
+                     <table className="w-full text-sm">
+                       <thead>
+                         <tr className="border-b border-gray-200">
+                           <th className="text-left py-2 font-medium text-gray-700">Ingredient</th>
+                           <th className="text-left py-2 font-medium text-gray-700">From → To</th>
+                           <th className="text-center py-2 font-medium text-gray-700">Actions</th>
+                         </tr>
+                       </thead>
+                       <tbody>
+                         {conversionsLoading ? (
+                           <tr>
+                             <td colSpan={3} className="py-4 text-center text-gray-500">
+                               <Loader className="w-4 h-4 animate-spin mx-auto" />
+                               <span className="ml-2">Loading conversions...</span>
+                             </td>
+                           </tr>
+                         ) : conversions.length === 0 ? (
+                           <tr>
+                             <td colSpan={3} className="py-4 text-center text-gray-500">
+                               No conversions available
+                             </td>
+                           </tr>
+                         ) : (
+                           conversions.slice(0, 5).map((conversion, index) => (
+                             <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
+                               <td className="py-2 text-gray-900 max-w-[120px] truncate" title={conversion.ingredientId}>
+                                 Ingredient #{conversion.ingredientId}
+                               </td>
+                               <td className="py-2 text-gray-600">
+                                 {conversion.fromUnitCode} → {conversion.toUnitCode}
+                                 <span className="text-xs text-gray-400 ml-1">
+                                   ({Number(conversion.factor).toFixed(2)})
+                                 </span>
+                               </td>
+                               <td className="py-2 text-center">
+                                 <div className="flex items-center justify-center space-x-1">
+                                   <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                     conversion.isActive 
+                                       ? 'bg-green-100 text-green-800' 
+                                       : 'bg-red-100 text-red-800'
+                                   }`}>
+                                     {conversion.isActive ? 'Active' : 'Inactive'}
+                                   </span>
+                                 </div>
+                               </td>
+                             </tr>
+                           ))
+                         )}
+                       </tbody>
+                     </table>
+                     {conversions.length > 5 && (
+                       <div className="text-center mt-2">
+                         <button
+                           onClick={handleAdvancedConversion}
+                           className="text-sm text-purple-600 hover:text-purple-800 font-medium"
+                         >
+                           View all {conversions.length} conversions
+                         </button>
+                       </div>
+                     )}
+                     {conversions.length > 0 && conversions.length <= 5 && (
+                       <div className="text-center mt-2">
+                         <button
+                           onClick={handleAdvancedConversion}
+                           className="text-sm text-purple-600 hover:text-purple-800 font-medium"
+                         >
+                           Manage conversions
+                         </button>
+                       </div>
+                     )}
+                   </div>
+                 </div>
+               </div>
             </div>
 
             {/* Search & Filter */}
@@ -564,6 +684,15 @@ const IngredientManagement: React.FC = () => {
           onClose={handleCloseUnitManager}
           onUnitsUpdated={handleUnitsUpdated}
           editingUnit={editingUnit}
+        />
+      )}
+
+      {/* Advanced Conversion Modal */}
+      {showAdvancedConversion && (
+        <AdvancedConversionModal
+          isOpen={showAdvancedConversion}
+          onClose={handleCloseAdvancedConversion}
+          suppliers={suppliers}
         />
       )}
     </div>

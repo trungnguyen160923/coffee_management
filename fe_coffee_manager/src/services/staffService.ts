@@ -4,6 +4,8 @@ import { UsersListResponseDto, UserResponseDto } from '../types';
 class StaffService {
   private baseUrl = '/api/auth-service/users/staffs';
   private v2Url = '/api/auth-service/users-v2';
+  private userUrl = '/api/auth-service/users';
+  private staffProfileUrl = '/api/profiles/staff-profiles';
 
   async getStaffProfiles(): Promise<UserResponseDto[]> {
     try {
@@ -83,6 +85,28 @@ class StaffService {
     }
   }
 
+  async createStaffV2(payload: {
+    fullname: string;
+    email: string;
+    password: string;
+    phoneNumber: string;
+    role: 'STAFF';
+    branchId: number;
+    salary?: number;
+    position?: string;
+    hireDate?: string;
+    identityCard?: string;
+    active?: boolean;
+  }): Promise<any> {
+    try {
+      const response = await apiClient.post('/api/auth-service/users-v2/create-staff', payload);
+      return response;
+    } catch (error) {
+      console.error('Error creating staff (v2):', error);
+      throw error;
+    }
+  }
+
   async updateUser(userId: number, payload: { email?: string; password?: string }): Promise<any> {
     try {
       const response = await apiClient.put(`${this.v2Url}/${userId}`, payload);
@@ -94,13 +118,21 @@ class StaffService {
   }
 
   async updateStaffProfile(userId: number, payload: { 
-    identityCard?: string; 
+    identityCard?: string;
+    phone?: string;
     hireDate?: string; 
-    active?: boolean;
+    email?: string;
+    position?: string;
+    salary?: number;
   }): Promise<any> {
     try {
-      const response = await apiClient.put(`${this.baseUrl}/${userId}/profile`, payload);
-      return response;
+      if(payload.phone || payload.email){
+        const response = await apiClient.put(`${this.userUrl}/${userId}`, payload);
+        return response;
+      } else {
+        const response = await apiClient.put(`${this.staffProfileUrl}/${userId}`, payload);
+        return response;
+      }
     } catch (error) {
       console.error('Error updating staff profile:', error);
       throw error;
@@ -109,7 +141,7 @@ class StaffService {
 
   async deleteStaff(userId: number): Promise<any> {
     try {
-      const response = await apiClient.delete(`${this.baseUrl}/${userId}`);
+      const response = await apiClient.delete(`${this.v2Url}/delete-staff/${userId}`);
       return response;
     } catch (error) {
       console.error('Error deleting staff:', error);

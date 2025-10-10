@@ -25,6 +25,19 @@ spring:
       pool:
         size: 2
       thread-name-prefix: "scheduled-"
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: nguyenthanht632@gmail.com
+    password: xxhh uiyr wzxg txbq
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+          ssl:
+            trust: smtp.gmail.com
 
 # File upload configuration
 app:

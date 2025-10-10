@@ -523,9 +523,137 @@ export const catalogService = {
       if (error.message) throw new Error(error.message);
       throw new Error('Không thể kết nối đến server');
     }
+  },
+  // Purchase Orders
+  async createPurchaseOrdersBulk(payload: { branchId?: number; items: Array<{ ingredientId: number; qty: number; unitCode: string; unitPrice: number; supplierId: number; }> }): Promise<any[]> {
+    const resp = await apiClient.post<any>(API_ENDPOINTS.CATALOGS.PURCHASE_ORDERS_BULK, payload as any);
+    // unwrap ApiResponse { code, result }
+    if ((resp as any)?.result) return (resp as any).result;
+    return (Array.isArray(resp) ? resp : []) as any[];
+  },
+  async getPurchaseOrdersByBranch(branchId: number): Promise<any[]> {
+    const resp = await apiClient.get<any>(`/api/catalogs/purchase-orders/branch/${branchId}`);
+    // unwrap ApiResponse { code, result }
+    if ((resp as any)?.result) return (resp as any).result;
+    return (Array.isArray(resp) ? resp : []) as any[];
+  },
+  async searchPurchaseOrders(params: { page?: number; size?: number; search?: string; status?: string; supplierId?: number; branchId?: number; sortBy?: string; sortDir?: string } = {}): Promise<{ content: any[]; totalPages: number; totalElements: number; page: number; size: number; }> {
+    const q = new URLSearchParams();
+    if (params.page !== undefined) q.append('page', String(params.page));
+    if (params.size !== undefined) q.append('size', String(params.size));
+    if (params.search) q.append('search', params.search);
+    if (params.status) q.append('status', params.status);
+    if (params.supplierId !== undefined) q.append('supplierId', String(params.supplierId));
+    if (params.branchId !== undefined) q.append('branchId', String(params.branchId));
+    if (params.sortBy) q.append('sortBy', params.sortBy);
+    if (params.sortDir) q.append('sortDir', params.sortDir);
+    const url = `/api/catalogs/purchase-orders/search${q.toString() ? `?${q.toString()}` : ''}`;
+    const resp = await apiClient.get<any>(url);
+    return (resp as any)?.result ?? resp ?? { content: [], totalPages: 0, totalElements: 0, page: 0, size: 10 };
+  },
+  async updatePurchaseOrder(poId: number, payload: { status?: string }): Promise<any> {
+    const resp = await apiClient.put<any>(`/api/catalogs/purchase-orders/${poId}`, payload as any);
+    return (resp as any)?.result ?? resp;
+  },
+  async deletePurchaseOrder(poId: number): Promise<void> {
+    const resp = await apiClient.delete<any>(`/api/catalogs/purchase-orders/${poId}`);
+    return (resp as any)?.result ?? resp;
+  },
+  async updatePurchaseOrderStatus(poId: number, status: string): Promise<any> {
+    const resp = await apiClient.put<any>(`/api/catalogs/purchase-orders/${poId}/status/${status}`);
+    return (resp as any)?.result ?? resp;
+  },
+  
+  // Purchase Order Detail management
+  async updatePurchaseOrderDetail(detailId: number, payload: { ingredientId?: number; qty?: number; unitCode?: string; unitPrice?: number }): Promise<any> {
+    const resp = await apiClient.put<any>(`/api/catalogs/purchase-orders/details/${detailId}`, payload);
+    return (resp as any)?.result ?? resp;
+  },
+  
+  async deletePurchaseOrderDetail(detailId: number): Promise<void> {
+    const resp = await apiClient.delete<any>(`/api/catalogs/purchase-orders/details/${detailId}`);
+    return (resp as any)?.result ?? resp;
+  },
+  
+  // Send PO to supplier
+  async sendToSupplier(poId: number, data: { toEmail: string; cc?: string; subject?: string; message?: string }): Promise<any> {
+    const resp = await apiClient.post<any>(`/api/catalogs/purchase-orders/${poId}/send-to-supplier`, data);
+    return (resp as any)?.result ?? resp;
+  },
+
+  // Goods Receipt methods
+  async createGoodsReceipt(data: {
+    poId: number;
+    supplierId: number;
+    branchId: number;
+    receivedBy: number;
+    details: Array<{
+      poDetailId: number;
+      ingredientId: number;
+      unitCodeInput: string;
+      qtyInput: number;
+      unitPrice: number;
+      lotNumber: string;
+      mfgDate: string | null;
+      expDate: string | null;
+      status: string;
+      note: string;
+    }>;
+  }) {
+    const resp = await apiClient.post<any>('/api/catalogs/goods-receipts', data);
+    return (resp as any)?.result ?? resp;
+  },
+
+  async getGoodsReceiptsByPo(poId: number) {
+    const resp = await apiClient.get<any>(`/api/catalogs/goods-receipts/po/${poId}`);
+    return (resp as any)?.result ?? resp;
+  },
+
+  async validateUnitConversion(data: {
+    ingredientId: number;
+    fromUnitCode: string;
+    toUnitCode: string;
+    quantity: number;
+  }) {
+    const resp = await apiClient.post<any>('/api/catalogs/goods-receipts/validate-unit-conversion', data);
+    return (resp as any)?.result ?? resp;
+  },
+
+  async createUnitConversion(data: {
+    ingredientId: number;
+    fromUnitCode: string;
+    toUnitCode: string;
+    factor: number;
+    description?: string;
+  }) {
+    const resp = await apiClient.post<any>('/api/catalogs/goods-receipts/create-unit-conversion', data);
+    return (resp as any)?.result ?? resp;
+  },
+
+  async updateUnitConversionStatus(conversionId: number, isActive: boolean) {
+    const resp = await apiClient.put<any>(`/api/catalogs/goods-receipts/conversions/${conversionId}/status`, { isActive });
+    return (resp as any)?.result ?? resp;
+  },
+
+  async getAllGlobalConversions(): Promise<any[]> {
+    const resp = await apiClient.get<any>('/api/catalogs/goods-receipts/conversions/global');
+    return (resp as any)?.result ?? resp;
+  },
+
+  async updateUnitConversion(conversionId: number, data: {
+    ingredientId: number;
+    fromUnitCode: string;
+    toUnitCode: string;
+    factor: number;
+    description?: string;
+    scope?: string;
+    branchId?: number | null;
+  }) {
+    const resp = await apiClient.put<any>(`/api/catalogs/goods-receipts/conversions/${conversionId}`, data);
+    return (resp as any)?.result ?? resp;
   }
 };
-
 export default catalogService;
+
 
 
