@@ -57,7 +57,14 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
             "/order-service/api/email/send-order-confirmation",
             "/order-service/api/email/send-order-confirmation/.*",
             // Provinces proxy endpoints (public)
-            "/provinces/.*"
+            "/provinces/.*",
+
+            // Public purchase order endpoints
+            "/catalogs/public/purchase-orders/.*",
+            "/catalogs/public/purchase-orders",
+            "/catalogs/public/purchase-orders/*",
+            "/catalogs/public/purchase-orders/*/*",
+            "/catalogs/public/purchase-orders/*/*/*"
     };
 
     @Value("${app.api-prefix}")

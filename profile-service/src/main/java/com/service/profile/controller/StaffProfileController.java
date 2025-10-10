@@ -3,6 +3,7 @@ package com.service.profile.controller;
 
 import com.service.profile.dto.ApiResponse;
 import com.service.profile.dto.request.StaffProfileCreationRequest;
+import com.service.profile.dto.request.StaffProfileUpdateRequest;
 import com.service.profile.dto.response.StaffProfileResponse;
 import com.service.profile.service.StaffProfileService;
 
@@ -14,9 +15,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -32,6 +35,12 @@ public class StaffProfileController {
     @PostMapping
     ApiResponse<StaffProfileResponse> createStaffProfile(@Valid @RequestBody StaffProfileCreationRequest request) {
         StaffProfileResponse result = staffProfileService.createStaffProfile(request);
+        return ApiResponse.<StaffProfileResponse>builder().result(result).build();
+    }
+
+    @PutMapping("/{userId}")
+    ApiResponse<StaffProfileResponse> updateStaffProfile(@PathVariable Integer userId, @Valid @RequestBody StaffProfileUpdateRequest request) {
+        StaffProfileResponse result = staffProfileService.updateStaffProfile(userId, request);
         return ApiResponse.<StaffProfileResponse>builder().result(result).build();
     }
 
@@ -51,5 +60,11 @@ public class StaffProfileController {
     ApiResponse<List<StaffProfileResponse>> getStaffProfilesByBranch(@PathVariable Integer branchId) {
         List<StaffProfileResponse> result = staffProfileService.getStaffProfilesByBranch(branchId);
         return ApiResponse.<List<StaffProfileResponse>>builder().result(result).build();
+    }
+
+    @DeleteMapping("/{userId}")
+    ApiResponse<Void> deleteStaffProfile(@PathVariable Integer userId) {
+        staffProfileService.deleteStaffProfile(userId);
+        return ApiResponse.<Void>builder().build();
     }
 }

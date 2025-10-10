@@ -48,4 +48,12 @@ public class PurchaseOrderDetail {
 
     @Column(name = "line_total", nullable = false, columnDefinition = "DECIMAL(12,2) DEFAULT 0.00")
     BigDecimal lineTotal;
+
+    @Column(name = "create_at", nullable = false, updatable = false,
+            columnDefinition = "DATETIME DEFAULT CURRENT_TIMESTAMP")
+    LocalDateTime createAt;
+
+    @Column(name = "update_at", nullable = false,
+            columnDefinition = "DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+    LocalDateTime updateAt;
 }

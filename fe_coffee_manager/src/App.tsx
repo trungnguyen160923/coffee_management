@@ -15,7 +15,15 @@ import IngredientManagement from './pages/admin/IngredientManagement';
 import RecipeManagement from './pages/admin/RecipeManagement';
 import { ManagerDashboard } from './pages/manager/ManagerDashboard';
 import StaffManagement from './pages/manager/StaffManagement';
+import ManagerSupplierManagement from './pages/manager/SupplierManagement';
+import ManagerProductManagement from './pages/manager/ProductManagement';
+import IngredientProcurement from './pages/manager/IngredientProcurement';
+import PurchaseOrders from './pages/manager/PurchaseOrders';
+import StockManagement from './pages/manager/StockManagement';
 import { StaffDashboard } from './pages/staff/StaffDashboard';
+import SupplierConfirmPage from './pages/supplier/SupplierConfirmPage';
+import SupplierSuccessPage from './pages/supplier/SupplierSuccessPage';
+import SupplierCancelledPage from './pages/supplier/SupplierCancelledPage';
 
 function AppRoutes() {
   const { user, loading } = useAuth();
@@ -33,8 +41,25 @@ function AppRoutes() {
     );
   }
 
-  // Only show Login if there is no token at all. If a token exists but user
-  // is not yet resolved, keep routes so 404/guards can render appropriately.
+  // Check if current path is a public supplier route
+  const isPublicSupplierRoute = window.location.pathname.startsWith('/supplier/');
+  console.log('AppRoutes - current path:', window.location.pathname, 'isPublicSupplierRoute:', isPublicSupplierRoute);
+  
+  // For public supplier routes, always allow access
+  if (isPublicSupplierRoute) {
+    console.log('Rendering public supplier routes');
+    return (
+      <Routes>
+        <Route path="/supplier/po/:poId/confirm" element={<SupplierConfirmPage />} />
+        <Route path="/supplier/po/:poId/cancel" element={<SupplierConfirmPage />} />
+        <Route path="/supplier/success" element={<SupplierSuccessPage />} />
+        <Route path="/supplier/cancelled" element={<SupplierCancelledPage />} />
+        <Route path="*" element={<NotFoundPage showLoginButton={false} />} />
+      </Routes>
+    );
+  }
+  
+  // Only show Login if there is no token at all
   const hasToken = !!localStorage.getItem('coffee-token');
   if (!user && !hasToken) {
     return <Login />;
@@ -81,7 +106,11 @@ function AppRoutes() {
         <ProtectedRoute allowedRoles={['manager']}>
           <Routes>
             <Route path="staff" element={<Layout><StaffManagement /></Layout>} />
-            <Route path="inventory" element={<Layout><div className="p-8"><h1 className="text-2xl font-bold">Quản lý kho</h1></div></Layout>} />
+            <Route path="products" element={<Layout><ManagerProductManagement /></Layout>} />
+            <Route path="procurement" element={<Layout><IngredientProcurement /></Layout>} />
+            <Route path="suppliers" element={<Layout><ManagerSupplierManagement /></Layout>} />
+            <Route path="purchase-orders" element={<Layout><PurchaseOrders /></Layout>} />
+            <Route path="inventory" element={<Layout><StockManagement /></Layout>} />
             <Route path="statistics" element={<Layout><div className="p-8"><h1 className="text-2xl font-bold">Thống kê chi nhánh</h1></div></Layout>} />
             <Route path="*" element={<NotFoundPage showLoginButton={false} />} />
           </Routes>

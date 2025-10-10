@@ -1,6 +1,7 @@
 package com.service.profile.service;
 
 import com.service.profile.dto.request.StaffProfileCreationRequest;
+import com.service.profile.dto.request.StaffProfileUpdateRequest;
 import com.service.profile.dto.response.BranchResponse;
 import com.service.profile.dto.response.StaffProfileResponse;
 import com.service.profile.entity.StaffProfile;
@@ -39,7 +40,45 @@ public class StaffProfileService {
         staffProfile.setCreateAt(LocalDateTime.now());
         staffProfile.setUpdateAt(LocalDateTime.now());
         staffProfileRepository.save(staffProfile);
-        return staffProfileMapper.toStaffProfileResponse(staffProfile);
+        StaffProfileResponse response = staffProfileMapper.toStaffProfileResponse(staffProfile);
+        if (staffProfile.getBranchId() != null) {
+            try {
+                BranchResponse branch = branchClient.getBranchById(staffProfile.getBranchId()).getResult();
+                response.setBranch(branch);
+            } catch (Exception e) {
+                log.warn("Failed to fetch branch for staff {}: {}", staffProfile.getUserId(), e.getMessage());
+            }
+        }
+        return response;
+    }
+
+    @PreAuthorize("hasRole('MANAGER')")
+    public StaffProfileResponse updateStaffProfile(Integer userId, StaffProfileUpdateRequest request){
+        StaffProfile staffProfile = staffProfileRepository.findById(userId).orElseThrow(() -> new AppException(ErrorCode.USER_ID_NOT_FOUND));
+        if(request.getIdentityCard() != null){
+            staffProfile.setIdentityCard(request.getIdentityCard());
+        }
+        if(request.getPosition() != null){
+            staffProfile.setPosition(request.getPosition());
+        }
+        if(request.getHireDate() != null){
+            staffProfile.setHireDate(request.getHireDate());
+        }
+        if(request.getSalary() != null){
+            staffProfile.setSalary(request.getSalary());
+        }
+        staffProfile.setUpdateAt(LocalDateTime.now());
+        staffProfileRepository.save(staffProfile);
+        StaffProfileResponse response = staffProfileMapper.toStaffProfileResponse(staffProfile);
+        if (staffProfile.getBranchId() != null) {
+            try {
+                BranchResponse branch = branchClient.getBranchById(staffProfile.getBranchId()).getResult();
+                response.setBranch(branch);
+            } catch (Exception e) {
+                log.warn("Failed to fetch branch for staff {}: {}", staffProfile.getUserId(), e.getMessage());
+            }
+        }
+        return response;
     }
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
@@ -94,4 +133,8 @@ public class StaffProfileService {
                 .toList();
     }
 
+    @PreAuthorize("hasRole('MANAGER')")
+    public void deleteStaffProfile(Integer userId){
+        staffProfileRepository.deleteById(userId);
+    }
 }

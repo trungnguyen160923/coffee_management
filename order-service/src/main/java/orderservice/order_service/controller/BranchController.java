@@ -53,8 +53,6 @@ public class BranchController {
         try {
             List<Branch> branches = branchService.getAllBranches();
             ApiResponse<List<Branch>> response = ApiResponse.<List<Branch>>builder()
-                    .code(200)
-                    .message("Branches retrieved successfully")
                     .result(branches)
                     .build();
             return ResponseEntity.ok(response);
@@ -82,8 +80,6 @@ public class BranchController {
                     .totalPages(branchPage.getTotalPages())
                     .build();
             var response = ApiResponse.<PagedResponse<Branch>>builder()
-                    .code(200)
-                    .message("Branches retrieved successfully")
                     .result(payload)
                     .build();
             return ResponseEntity.ok(response);
@@ -153,8 +149,6 @@ public class BranchController {
         try {
             List<Branch> branches = branchService.getBranchesByManager(managerUserId);
             ApiResponse<List<Branch>> response = ApiResponse.<List<Branch>>builder()
-                    .code(200)
-                    .message("Branches retrieved successfully")
                     .result(branches)
                     .build();
             return ResponseEntity.ok(response);
@@ -174,8 +168,6 @@ public class BranchController {
         try {
             List<Branch> branches = branchService.getBranchesByManager(managerUserId);
             ApiResponse<List<Branch>> response = ApiResponse.<List<Branch>>builder()
-                    .code(200)
-                    .message("Branches retrieved successfully")
                     .result(branches)
                     .build();
             return ResponseEntity.ok(response);

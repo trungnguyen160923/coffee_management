@@ -172,7 +172,18 @@ class ApiClient {
         }
       }
 
-      return await response.json();
+      const result = await response.json();
+      
+      // Check if ApiResponse has error code
+      if (result.code && result.code !== 1000) {
+        const error = new Error(result.message || `API error! code: ${result.code}`);
+        (error as any).status = response.status;
+        (error as any).code = result.code;
+        (error as any).response = result;
+        throw error;
+      }
+      
+      return result;
     } catch (error) {
       console.error('API request failed:', error);
       throw error;

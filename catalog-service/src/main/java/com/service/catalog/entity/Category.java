@@ -17,7 +17,9 @@ Feel free to ask to split them into separate files or to tweak relationship/casc
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @Entity
-@Table(name = "categories")
+@Table(name = "categories", uniqueConstraints = {
+        @UniqueConstraint(name = "uq_categories_name", columnNames = {"name"})
+})
 public class Category {
 
 

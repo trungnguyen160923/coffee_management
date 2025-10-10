@@ -81,6 +81,11 @@ public class UserV2Service {
 
     @Transactional
     public Object createStaffUser(StaffProfileCreationRequest req) {
+
+        if (userRepository.existsByEmail(req.getEmail())) {
+            throw new RuntimeException("Email already exists");
+        }
+
         User user = new User();
         user.setEmail(req.getEmail());
         user.setPassword(passwordEncoder.encode(req.getPassword()));
@@ -132,6 +137,37 @@ public class UserV2Service {
         evt.sagaId = java.util.UUID.randomUUID().toString();
         evt.userId = user.getUserId();
         evt.role = "MANAGER";
+        evt.occurredAt = java.time.Instant.now();
+
+        OutboxEvent ob = new OutboxEvent();
+        ob.setId(java.util.UUID.randomUUID().toString());
+        ob.setAggregateType("USER");
+        ob.setAggregateId(String.valueOf(user.getUserId()));
+        ob.setType("UserDeleteRequestedV1");
+        try {
+            ob.setPayload(json.writeValueAsString(evt));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        ob.setStatus("NEW");
+        ob.setAttempts(0);
+        ob.setCreatedAt(java.time.Instant.now());
+        outboxRepo.save(ob);
+
+        return java.util.Map.of("userId", user.getUserId(), "sagaId", evt.sagaId);
+    }
+
+    @Transactional
+    public Object deleteStaffUser(Integer userId) {
+        var user = userRepository.findById(userId).orElseThrow();
+        if (user.getRole() == null || user.getRole().getName() == null || !"STAFF".equals(user.getRole().getName())) {
+            throw new RuntimeException("USER_NOT_STAFF");
+        }
+
+        var evt = new com.service.auth.events.UserDeleteRequestedEvent();
+        evt.sagaId = java.util.UUID.randomUUID().toString();
+        evt.userId = user.getUserId();
+        evt.role = "STAFF";
         evt.occurredAt = java.time.Instant.now();
 
         OutboxEvent ob = new OutboxEvent();

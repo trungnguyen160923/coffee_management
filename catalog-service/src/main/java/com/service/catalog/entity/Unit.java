@@ -33,7 +33,7 @@ public class Unit {
     BigDecimal factorToBase;
 
     @ManyToOne
-    @JoinColumn(name = "base_unit_code", referencedColumnName = "code")
+    @JoinColumn(name = "base_unit_code", referencedColumnName = "code", nullable = false)
     Unit baseUnit;
 
     @Column(name = "create_at", nullable = false, updatable = false,

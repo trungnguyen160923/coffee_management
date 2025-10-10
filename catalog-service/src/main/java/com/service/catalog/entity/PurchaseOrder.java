@@ -16,7 +16,9 @@ import java.util.List;
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @Entity
-@Table(name = "purchase_orders")
+@Table(name = "purchase_orders", uniqueConstraints = {
+        @UniqueConstraint(name = "ux_po_number", columnNames = {"po_number"})
+})
 public class PurchaseOrder {
 
 
@@ -45,6 +47,24 @@ public class PurchaseOrder {
 
     @Column(name = "total_amount", nullable = false, columnDefinition = "DECIMAL(12,4) DEFAULT 0.0000")
     BigDecimal totalAmount;
+
+
+	@Column(name = "expected_delivery_at")
+	LocalDateTime expectedDeliveryAt;
+
+
+
+
+	@Column(name = "sent_at")
+	LocalDateTime sentAt;
+
+
+	@Column(name = "confirmed_at")
+	LocalDateTime confirmedAt;
+
+
+	@Column(name = "supplier_response", columnDefinition = "TEXT")
+	String supplierResponse;
 
 
     @Column(name = "create_at", nullable = false, updatable = false,
