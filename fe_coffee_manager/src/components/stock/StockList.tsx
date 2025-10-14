@@ -51,8 +51,8 @@ const StockList: React.FC<StockListProps> = ({
   if (!data.content || data.content.length === 0) {
     return (
       <div className="text-center py-12">
-        <div className="text-gray-500 text-lg">Không có dữ liệu kho</div>
-        <div className="text-gray-400 text-sm mt-2">Thử thay đổi bộ lọc để tìm kiếm</div>
+        <div className="text-gray-500 text-lg">Don't have stock data</div>
+        <div className="text-gray-400 text-sm mt-2">Try changing filters to search</div>
       </div>
     );
   }
@@ -67,22 +67,22 @@ const StockList: React.FC<StockListProps> = ({
                 className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                 onClick={() => onSort('ingredientName', 'asc')}
               >
-                Nguyên liệu
+                Ingredient
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 SKU
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Số lượng
+                Quantity
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Đơn vị
+                Unit
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Ngưỡng
+                Threshold
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Trạng thái
+                Status
               </th>
               <th 
                 className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
@@ -94,7 +94,7 @@ const StockList: React.FC<StockListProps> = ({
                 className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                 onClick={() => onSort('lastUpdated', 'desc')}
               >
-                Cập nhật cuối
+                Last Updated
               </th>
             </tr>
           </thead>
@@ -155,28 +155,28 @@ const StockList: React.FC<StockListProps> = ({
             disabled={data.first}
             className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Trước
+            Previous
           </button>
           <button
             onClick={() => onPageChange(data.number + 1)}
             disabled={data.last}
             className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Sau
+            Next
           </button>
         </div>
         <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
           <div>
             <p className="text-sm text-gray-700">
-              Hiển thị{' '}
+              Display{' '}
               <span className="font-medium">{data.number * data.size + 1}</span>
               {' '}đến{' '}
               <span className="font-medium">
                 {Math.min((data.number + 1) * data.size, data.totalElements)}
               </span>
-              {' '}trong tổng số{' '}
+              {' '}out of{' '}
               <span className="font-medium">{data.totalElements}</span>
-              {' '}kết quả
+              {' '}results
             </p>
           </div>
           <div>
@@ -186,7 +186,7 @@ const StockList: React.FC<StockListProps> = ({
                 disabled={data.first}
                 className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <span className="sr-only">Trước</span>
+                  <span className="sr-only">Previous</span>
                 <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                   <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
                 </svg>
@@ -217,7 +217,7 @@ const StockList: React.FC<StockListProps> = ({
                 disabled={data.last}
                 className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <span className="sr-only">Sau</span>
+                <span className="sr-only">Next</span>
                 <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                   <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
                 </svg>

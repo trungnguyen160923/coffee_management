@@ -73,19 +73,19 @@ const ManagerManagement: React.FC = () => {
     }
   };
 
-  const openCreateModal = async () => {
-    setIsCreating(true);
-    setLoadingBranches(true);
-    try {
-      const branches = await branchService.getUnassignedBranches();
-      setUnassignedBranches(branches);
-    } catch (e) {
-      console.error(e);
-      toast.error('Failed to load branches');
-    } finally {
-      setLoadingBranches(false);
-    }
-  };
+    const openCreateModal = async () => {
+      setIsCreating(true);
+      setLoadingBranches(true);
+      try {
+        const branches = await branchService.getUnassignedBranches();
+        setUnassignedBranches(branches);
+      } catch (e) {
+        console.error('Error fetching branches:', e);
+        toast.error('Failed to load branches');
+      } finally {
+        setLoadingBranches(false);
+      }
+    };
 
   const openAssignModal = async (manager: UserResponseDto) => {
     setAssigningManager(manager);
@@ -608,7 +608,10 @@ const ManagerManagement: React.FC = () => {
         open={isCreating}
         branches={unassignedBranches}
         loadingBranches={loadingBranches}
-        onClose={() => setIsCreating(false)}
+        onClose={() => {
+          setIsCreating(false);
+          setUnassignedBranches([]);
+        }}
         onSubmit={async (payload) => {
           try {
             const resp = await managerService.createManager(payload);

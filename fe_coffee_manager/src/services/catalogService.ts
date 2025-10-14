@@ -145,6 +145,100 @@ export const catalogService = {
     return [];
   },
 
+  // Return Goods APIs
+  async createReturnGoods(payload: {
+    poId: number;
+    supplierId: number;
+    branchId: number;
+    returnReason: string;
+    details: Array<{
+      ingredientId: number;
+      unitCode: string;
+      qty: number;
+      unitPrice: number;
+      returnReason: string;
+    }>;
+  }): Promise<any> {
+    const resp = await apiClient.post<ApiEnvelope<any>>('/api/catalogs/return-goods', payload);
+    if (resp?.result) return resp.result;
+    throw new Error((resp as any)?.message || 'Create return goods failed');
+  },
+
+  async searchGoodsReceipts(params: {
+    poId?: number;
+    supplierId?: number;
+    branchId?: number;
+    grnNumber?: string;
+    status?: string;
+    fromDate?: string; // YYYY-MM-DD
+    toDate?: string;   // YYYY-MM-DD
+    page?: number;
+    size?: number;
+    sortBy?: string;
+    sortDirection?: 'ASC' | 'DESC';
+  }): Promise<any> {
+    const query = new URLSearchParams();
+    if (params.poId != null) query.set('poId', String(params.poId));
+    if (params.supplierId != null) query.set('supplierId', String(params.supplierId));
+    if (params.branchId != null) query.set('branchId', String(params.branchId));
+    if (params.grnNumber) query.set('grnNumber', params.grnNumber);
+    if (params.status) query.set('status', params.status);
+    if (params.fromDate) query.set('fromDate', params.fromDate);
+    if (params.toDate) query.set('toDate', params.toDate);
+    query.set('page', String(params.page ?? 0));
+    query.set('size', String(params.size ?? 10));
+    query.set('sortBy', params.sortBy ?? 'createAt');
+    query.set('sortDirection', params.sortDirection ?? 'DESC');
+    const resp = await apiClient.get<ApiEnvelope<any>>(`/api/catalogs/goods-receipts?${query.toString()}`);
+    return resp?.result;
+  },
+
+  async searchReturnGoods(params: {
+    poId?: number;
+    supplierId?: number;
+    branchId?: number;
+    returnNumber?: string;
+    status?: string;
+    fromDate?: string;
+    toDate?: string;
+    page?: number;
+    size?: number;
+    sortBy?: string;
+    sortDirection?: 'ASC' | 'DESC';
+  }): Promise<any> {
+    const query = new URLSearchParams();
+    if (params.poId != null) query.set('poId', String(params.poId));
+    if (params.supplierId != null) query.set('supplierId', String(params.supplierId));
+    if (params.branchId != null) query.set('branchId', String(params.branchId));
+    if (params.returnNumber) query.set('returnNumber', params.returnNumber);
+    if (params.status) query.set('status', params.status);
+    if (params.fromDate) query.set('fromDate', params.fromDate);
+    if (params.toDate) query.set('toDate', params.toDate);
+    query.set('page', String(params.page ?? 0));
+    query.set('size', String(params.size ?? 10));
+    query.set('sortBy', params.sortBy ?? 'createAt');
+    query.set('sortDirection', params.sortDirection ?? 'DESC');
+    const resp = await apiClient.get<ApiEnvelope<any>>(`/api/catalogs/return-goods?${query.toString()}`);
+    return resp?.result;
+  },
+
+  async getReturnGoodsById(returnId: number): Promise<any> {
+    const resp = await apiClient.get<ApiEnvelope<any>>(`/api/catalogs/return-goods/${returnId}`);
+    return resp?.result;
+  },
+
+  async approveReturnGoods(returnId: number): Promise<any> {
+    const resp = await apiClient.post<ApiEnvelope<any>>(`/api/catalogs/return-goods/${returnId}/approve`, {} as any);
+    if (resp?.result) return resp.result;
+    throw new Error((resp as any)?.message || 'Approve return goods failed');
+  },
+
+  async processReturnGoods(returnId: number): Promise<any> {
+    const resp = await apiClient.post<ApiEnvelope<any>>(`/api/catalogs/return-goods/${returnId}/process`, {} as any);
+    if (resp?.result) return resp.result;
+    throw new Error((resp as any)?.message || 'Process return goods failed');
+  },
+
   // Non-paginated supplier list (for dropdowns, etc.)
   async getAllSuppliers(): Promise<CatalogSupplier[]> {
     try {
@@ -682,6 +776,12 @@ export const catalogService = {
     branchId?: number | null;
   }) {
     const resp = await apiClient.put<any>(`/api/catalogs/goods-receipts/conversions/${conversionId}`, data);
+    return (resp as any)?.result ?? resp;
+  },
+
+  // Get receipt status for PO details
+  async getPoDetailReceiptStatuses(poId: number) {
+    const resp = await apiClient.get<any>(`/api/catalogs/purchase-orders/${poId}/receipt-status`);
     return (resp as any)?.result ?? resp;
   }
 };

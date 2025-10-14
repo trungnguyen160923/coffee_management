@@ -8,12 +8,32 @@ export function formatApiError(error: any): string {
   return 'An unexpected error occurred';
 }
 
-// Format currency
+// Format currency - Vietnamese format: 1.000.000,00 VND
 export function formatCurrency(amount: number, currency = 'VND'): string {
   return new Intl.NumberFormat('vi-VN', {
     style: 'currency',
     currency: currency,
   }).format(amount);
+}
+
+// Format number - Vietnamese format: 1.000.000,00
+export function formatNumber(num: number, decimals = 2): string {
+  return new Intl.NumberFormat('vi-VN', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(num);
+}
+
+// Format quantity - Simple format: 5 or 5,5
+export function formatQuantity(qty: number): string {
+  if (Number.isInteger(qty)) {
+    return qty.toString();
+  } else {
+    return new Intl.NumberFormat('vi-VN', {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 2,
+    }).format(qty);
+  }
 }
 
 // Format date

@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import PurchaseOrderDetailModal from '../../components/purchase_order/PurchaseOrderDetailModal';
 import SendToSupplierModal from '../../components/purchase_order/SendToSupplierModal';
 import GoodsReceiptModal from '../../components/purchase_order/GoodsReceiptModal';
+import { formatCurrency } from '../../utils/helpers';
 
 export default function PurchaseOrders() {
   const { managerBranch } = useAuth();
@@ -32,9 +33,15 @@ export default function PurchaseOrders() {
       // Prefer fast branch fetch if no filters, else fallback to search
       if (!debounced && !status && !supplierId && managerBranch?.branchId) {
         const list = await catalogService.getPurchaseOrdersByBranch(managerBranch.branchId);
-        setData({ content: list, totalPages: 1, totalElements: list.length, page: 0, size });
+        // Sort by createAt DESC to show newest first
+        const sortedList = list.sort((a, b) => new Date(b.createAt).getTime() - new Date(a.createAt).getTime());
+        setData({ content: sortedList, totalPages: 1, totalElements: sortedList.length, page: 0, size });
       } else {
         const res = await catalogService.searchPurchaseOrders({ page, size, search: debounced || undefined, status: status || undefined, supplierId, branchId: managerBranch?.branchId, sortBy: 'createAt', sortDir: 'DESC' });
+        // Ensure the search results are also sorted by newest first
+        if (res.content) {
+          res.content.sort((a, b) => new Date(b.createAt).getTime() - new Date(a.createAt).getTime());
+        }
         setData(res);
       }
     } finally { setLoading(false); }
@@ -70,6 +77,16 @@ export default function PurchaseOrders() {
         if (po) {
           setSendingPo(po);
           setSendModalOpen(true);
+        }
+        return;
+      }
+      
+      // If changing to PARTIALLY_RECEIVED, open goods receipt modal
+      if (newStatus === 'PARTIALLY_RECEIVED') {
+        const po = data?.content.find(p => p.poId === poId);
+        if (po) {
+          setGoodsReceiptPo(po);
+          setGoodsReceiptModalOpen(true);
         }
         return;
       }
@@ -141,8 +158,6 @@ export default function PurchaseOrders() {
                       <th className="px-4 py-3 font-medium text-gray-700">Supplier</th>
                       <th className="px-4 py-3 font-medium text-gray-700">Status</th>
                       <th className="px-4 py-3 font-medium text-gray-700">Total</th>
-                      <th className="px-4 py-3 font-medium text-gray-700">ETA</th>
-                      <th className="px-4 py-3 font-medium text-gray-700">Created</th>
                       <th className="px-4 py-3 font-medium text-gray-700 text-right">Actions</th>
                     </tr>
                   </thead>
@@ -151,8 +166,21 @@ export default function PurchaseOrders() {
                       <tr key={po.poId} className="border-t hover:bg-gray-50">
                         <td className="px-4 py-2 font-medium">
                           <div className="flex flex-col">
-                            <span>{po.poNumber}</span>
-                            <span className="text-xs text-gray-400">{po.sentAt ? `Sent: ${new Date(po.sentAt).toLocaleString()}` : ''}{po.confirmedAt ? ` • Confirmed: ${new Date(po.confirmedAt).toLocaleString()}` : ''}</span>
+                            <div className="flex items-center gap-2">
+                              <span>{po.poNumber}</span>
+                              {/* Show "NEW" indicator for recent POs (within last 24 hours) */}
+                              {new Date().getTime() - new Date(po.createAt).getTime() < 24 * 60 * 60 * 1000 && (
+                                <span className="px-2 py-0.5 bg-green-100 text-green-800 text-xs rounded-full font-medium">NEW</span>
+                              )}
+                            </div>
+                            <div className="text-xs text-gray-400 space-y-0.5">
+                              {po.sentAt && (
+                                <div>Sent: {new Date(po.sentAt).toLocaleString()}</div>
+                              )}
+                              {po.confirmedAt && (
+                                <div>Confirmed: {new Date(po.confirmedAt).toLocaleString()}</div>
+                              )}
+                            </div>
                           </div>
                         </td>
                         <td className="px-4 py-2">{po.supplier?.name}</td>
@@ -170,13 +198,7 @@ export default function PurchaseOrders() {
                             'bg-gray-100 text-gray-700'
                           }`}>{po.status}</span>
                         </td>
-                        <td className="px-4 py-2">{Number(po.totalAmount).toLocaleString('vi-VN')}đ</td>
-                        <td className="px-4 py-2">
-                          <div className="flex flex-col text-xs text-gray-600">
-                            <span>{po.expectedDeliveryAt ? new Date(po.expectedDeliveryAt).toLocaleDateString() : '-'}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-2">{new Date(po.createAt).toLocaleString()}</td>
+                        <td className="px-4 py-2">{formatCurrency(Number(po.totalAmount))}</td>
                         <td className="px-4 py-2">
                           <div className="flex gap-2 justify-end">
                             <button className="p-2 rounded hover:bg-gray-100" title="View" onClick={() => { setViewing(po); setDetailOpen(true); }}><Eye className="w-4 h-4" /></button>
@@ -213,8 +235,6 @@ export default function PurchaseOrders() {
                                 {po.status === 'SENT_TO_SUPPLIER' && (
                                   <>
                                     <option value="SENT_TO_SUPPLIER">SENT_TO_SUPPLIER</option>
-                                    <option value="SUPPLIER_CONFIRMED">SUPPLIER_CONFIRMED</option>
-                                    <option value="SUPPLIER_CANCELLED">SUPPLIER_CANCELLED</option>
                                     <option value="CANCELLED">CANCELLED</option>
                                   </>
                                 )}
@@ -223,14 +243,11 @@ export default function PurchaseOrders() {
                                     <option value="SUPPLIER_CONFIRMED">SUPPLIER_CONFIRMED</option>
                                     <option value="PARTIALLY_RECEIVED">PARTIALLY_RECEIVED</option>
                                     <option value="RECEIVED">RECEIVED</option>
-                                    <option value="CANCELLED">CANCELLED</option>
                                   </>
                                 )}
                                 {po.status === 'PARTIALLY_RECEIVED' && (
                                   <>
                                     <option value="PARTIALLY_RECEIVED">PARTIALLY_RECEIVED</option>
-                                    <option value="RECEIVED">RECEIVED</option>
-                                    <option value="CANCELLED">CANCELLED</option>
                                   </>
                                 )}
                                 {po.status === 'RECEIVED' && (
@@ -254,7 +271,7 @@ export default function PurchaseOrders() {
                               <button className="p-2 rounded hover:bg-red-50 text-red-600" title="Delete" onClick={() => onDelete(po.poId)}><Trash2 className="w-4 h-4" /></button>
                             )}
                             {po.status === 'PARTIALLY_RECEIVED' && (
-                              <button className="p-2 rounded hover:bg-blue-50 text-blue-600" title="Create Goods Receipt" onClick={() => onCreateGoodsReceipt(po)}><Package className="w-4 h-4" /></button>
+                              <button className="p-2 rounded hover:bg-blue-50 text-blue-600" title="Create Additional Goods Receipt" onClick={() => onCreateGoodsReceipt(po)}><Package className="w-4 h-4" /></button>
                             )}
                           </div>
                         </td>
@@ -262,7 +279,7 @@ export default function PurchaseOrders() {
                     ))}
                     {(!data || data.content.length === 0) && (
                       <tr>
-                        <td colSpan={6} className="px-4 py-6 text-center text-gray-500">Không có dữ liệu</td>
+                        <td colSpan={5} className="px-4 py-6 text-center text-gray-500">No data available</td>
                       </tr>
                     )}
                   </tbody>
@@ -314,6 +331,7 @@ export default function PurchaseOrders() {
           />
           
           <GoodsReceiptModal
+            key={goodsReceiptPo?.poId || 'new'}
             isOpen={goodsReceiptModalOpen}
             onClose={() => setGoodsReceiptModalOpen(false)}
             purchaseOrder={goodsReceiptPo}

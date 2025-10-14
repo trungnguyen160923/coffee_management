@@ -55,6 +55,7 @@ public enum ErrorCode {
     CART_ITEM_NOT_FOUND(1042, "Cart item not found", HttpStatus.NOT_FOUND),
     VALIDATION_FAILED(4000, "Validation failed", HttpStatus.BAD_REQUEST),
     BRANCH_IN_USE(1040, "Branch is in use", HttpStatus.BAD_REQUEST),
+    GEOCODING_FAILED(1043, "Geocoding failed", HttpStatus.BAD_REQUEST),
     ;
 
     ErrorCode(int code, String message, HttpStatusCode statusCode) {

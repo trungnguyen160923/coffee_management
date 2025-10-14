@@ -29,7 +29,7 @@ import java.time.format.DateTimeFormatter;
 @Slf4j
 public class PDFService {
 
-    public String generatePOPDF(PurchaseOrder po) {
+    public String generatePOPDF(PurchaseOrder po, com.service.catalog.dto.response.BranchResponse branchInfo, com.service.catalog.dto.response.UserResponse managerInfo) {
         try {
             // Create PDF file path in uploads/pdfs directory
             String fileName = "PO_" + po.getPoNumber() + "_" + System.currentTimeMillis() + ".pdf";
@@ -57,7 +57,17 @@ public class PDFService {
                     .setFont(font);
             document.add(title);
             
-            // Add PO information
+            // Add branch information first
+            if (branchInfo != null) {
+                addBranchInfo(document, branchInfo, font);
+            }
+            
+            // Add manager information second
+            if (managerInfo != null) {
+                addManagerInfo(document, managerInfo, font);
+            }
+            
+            // Add PO information third
             addPOInfo(document, po, font);
             
             // Add line items table
@@ -129,7 +139,7 @@ public class PDFService {
             String unitName = handleVietnameseText(detail.getUnit().getName());
             
             table.addCell(new Cell().add(new Paragraph(ingredientName).setFont(font)));
-            table.addCell(new Cell().add(new Paragraph(detail.getQty().toString()).setFont(font)));
+            table.addCell(new Cell().add(new Paragraph(formatQuantity(detail.getQty())).setFont(font)));
             table.addCell(new Cell().add(new Paragraph(unitName).setFont(font)));
             table.addCell(new Cell().add(new Paragraph(formatCurrency(detail.getUnitPrice())).setFont(font)));
             table.addCell(new Cell().add(new Paragraph(formatCurrency(detail.getLineTotal())).setFont(font)));
@@ -165,7 +175,20 @@ public class PDFService {
     }
     
     private String formatCurrency(BigDecimal amount) {
-        return String.format("%,.2f VND", amount);
+        // Vietnamese format: 1.000.000,00 VND (dot for thousands, comma for decimal)
+        // Example: 90000 -> "90.000,00 VND"
+        return String.format("%,.2f VND", amount).replace(",", "X").replace(".", ",").replace("X", ".");
+    }
+    
+    private String formatQuantity(BigDecimal quantity) {
+        // For quantity, use simple format without decimal places if it's a whole number
+        // Example: 5 -> "5", 5.5 -> "5,5"
+        if (quantity.stripTrailingZeros().scale() <= 0) {
+            return String.format("%.0f", quantity);
+        } else {
+            // If has decimal, show with 2 decimal places using Vietnamese format
+            return String.format("%.2f", quantity).replace(".", ",");
+        }
     }
     
     private PdfFont getVietnameseFont() throws IOException {
@@ -335,6 +358,64 @@ public class PDFService {
         } catch (Exception e) {
             log.error("Failed to cleanup PDF files: {}", e.getMessage());
         }
+    }
+    
+    private void addBranchInfo(Document document, com.service.catalog.dto.response.BranchResponse branchInfo, PdfFont font) throws IOException {
+        // Add branch section header
+        Paragraph branchHeader = new Paragraph("BRANCH INFORMATION")
+                .setTextAlignment(TextAlignment.LEFT)
+                .setFontSize(14)
+                .setBold()
+                .setFont(font);
+        document.add(branchHeader);
+        
+        // Branch Name
+        String branchName = handleVietnameseText(branchInfo.getName());
+        document.add(new Paragraph("Branch Name: " + branchName).setFont(font));
+        
+        // Address
+        if (branchInfo.getAddress() != null) {
+            String address = handleVietnameseText(branchInfo.getAddress());
+            document.add(new Paragraph("Address: " + address).setFont(font));
+        }
+        
+        // Phone
+        if (branchInfo.getPhone() != null) {
+            document.add(new Paragraph("Phone: " + branchInfo.getPhone()).setFont(font));
+        }
+        
+        // Business Hours
+        if (branchInfo.getOpenHours() != null && branchInfo.getEndHours() != null) {
+            String hours = branchInfo.getOpenHours().format(DateTimeFormatter.ofPattern("HH:mm")) + 
+                          " - " + branchInfo.getEndHours().format(DateTimeFormatter.ofPattern("HH:mm"));
+            document.add(new Paragraph("Business Hours: " + hours).setFont(font));
+        }
+        
+        document.add(new Paragraph("\n"));
+    }
+    
+    private void addManagerInfo(Document document, com.service.catalog.dto.response.UserResponse managerInfo, PdfFont font) throws IOException {
+        // Add manager section header
+        Paragraph managerHeader = new Paragraph("CONTACT INFORMATION")
+                .setTextAlignment(TextAlignment.LEFT)
+                .setFontSize(14)
+                .setBold()
+                .setFont(font);
+        document.add(managerHeader);
+        
+        // Manager Name
+        String managerName = handleVietnameseText(managerInfo.getFullname());
+        document.add(new Paragraph("Manager Name: " + managerName).setFont(font));
+        
+        // Phone
+        if (managerInfo.getPhoneNumber() != null) {
+            document.add(new Paragraph("Phone: " + managerInfo.getPhoneNumber()).setFont(font));
+        }
+        
+        // Email
+        document.add(new Paragraph("Email: " + managerInfo.getEmail()).setFont(font));
+        
+        document.add(new Paragraph("\n"));
     }
     
 }

@@ -63,6 +63,45 @@ public class PublicPurchaseOrderController {
                 .build();
     }
     
+    @GetMapping("/{poId}/status")
+    public ApiResponse<Map<String, Object>> getPurchaseOrderStatus(@PathVariable Integer poId, 
+                                                                  @RequestParam String token) {
+        if (!validateToken(poId, token)) {
+            throw new AppException(ErrorCode.UNAUTHORIZED, "Invalid or expired token");
+        }
+        
+        PurchaseOrderResponse po = purchaseOrderService.getPurchaseOrderForSupplier(poId);
+        String status = po.getStatus();
+        
+        Map<String, Object> statusInfo = new java.util.HashMap<>();
+        statusInfo.put("status", status);
+        statusInfo.put("canTakeAction", "SENT_TO_SUPPLIER".equals(status));
+        
+        if ("CANCELLED".equals(status)) {
+            statusInfo.put("message", "This Purchase Order has been cancelled by the system and cannot be modified.");
+            statusInfo.put("showSuccessInfo", false);
+        } else if ("SUPPLIER_CANCELLED".equals(status)) {
+            statusInfo.put("message", "You have cancelled this Purchase Order. The order has been cancelled.");
+            statusInfo.put("showSuccessInfo", false);
+        } else if ("SUPPLIER_CONFIRMED".equals(status) || "PARTIALLY_RECEIVED".equals(status) || "RECEIVED".equals(status)) {
+            statusInfo.put("message", "✅ This Purchase Order has been successfully processed. Thank you for your response!");
+            statusInfo.put("showSuccessInfo", true);
+        } else if ("DELIVERED".equals(status) || "COMPLETED".equals(status)) {
+            statusInfo.put("message", "📦 This Purchase Order has been completed. Thank you for your service!");
+            statusInfo.put("showSuccessInfo", true);
+        } else if ("SENT_TO_SUPPLIER".equals(status)) {
+            statusInfo.put("message", "This Purchase Order is ready for your response.");
+            statusInfo.put("showSuccessInfo", false);
+        } else {
+            statusInfo.put("message", "This Purchase Order is in " + status + " status and cannot be modified.");
+            statusInfo.put("showSuccessInfo", false);
+        }
+        
+        return ApiResponse.<Map<String, Object>>builder()
+                .result(statusInfo)
+                .build();
+    }
+    
     private boolean validateToken(Integer poId, String token) {
         try {
             // Basic validation
@@ -80,12 +119,17 @@ public class PublicPurchaseOrderController {
                 
                 var purchaseOrder = po.get();
                 
-                // Check if PO is in correct status for supplier response
-                // Allow SENT_TO_SUPPLIER (for action) and SUPPLIER_CONFIRMED/SUPPLIER_CANCELLED (for viewing)
+                // Check if PO is in correct status for supplier access
+                // Allow viewing for any status after SENT_TO_SUPPLIER
                 String status = purchaseOrder.getStatus();
                 if (!"SENT_TO_SUPPLIER".equals(status) && 
                     !"SUPPLIER_CONFIRMED".equals(status) && 
-                    !"SUPPLIER_CANCELLED".equals(status)) {
+                    !"SUPPLIER_CANCELLED".equals(status) &&
+                    !"CANCELLED".equals(status) &&
+                    !"PARTIALLY_RECEIVED".equals(status) &&
+                    !"RECEIVED".equals(status) &&
+                    !"DELIVERED".equals(status) &&
+                    !"COMPLETED".equals(status)) {
                     return false;
                 }
                 

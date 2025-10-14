@@ -24,14 +24,16 @@ public class EmailService {
     private final JavaMailSender mailSender;
     private final PDFService pdfService;
 
-    public EmailResult sendPOToSupplier(PurchaseOrder po, String toEmail, String cc, String subject, String message) {
+    public EmailResult sendPOToSupplier(PurchaseOrder po, String toEmail, String cc, String subject, String message, 
+                                        com.service.catalog.dto.response.BranchResponse branchInfo, 
+                                        com.service.catalog.dto.response.UserResponse managerInfo) {
         try {
             // Generate PDF
-            String pdfPath = pdfService.generatePOPDF(po);
+            String pdfPath = pdfService.generatePOPDF(po, branchInfo, managerInfo);
             File pdfFile = new File(pdfPath);
             
             // Build email content
-            String emailBody = buildEmailBody(po, message);
+            String emailBody = buildEmailBody(po, message, branchInfo, managerInfo);
             
             // Create MIME message for attachment support
             MimeMessage mimeMessage = mailSender.createMimeMessage();
@@ -64,12 +66,45 @@ public class EmailService {
         }
     }
 
-    private String buildEmailBody(PurchaseOrder po, String customMessage) {
+    private String buildEmailBody(PurchaseOrder po, String customMessage, 
+                                 com.service.catalog.dto.response.BranchResponse branchInfo, 
+                                 com.service.catalog.dto.response.UserResponse managerInfo) {
         StringBuilder body = new StringBuilder();
         body.append("<html><body>");
         body.append("<h2>Purchase Order</h2>");
         body.append("<p>Dear Supplier,</p>");
         body.append("<p>Please find attached our Purchase Order details:</p>");
+        // Add branch information if available (first)
+        if (branchInfo != null) {
+            body.append("<h3>Branch Information</h3>");
+            body.append("<p><strong>Branch Name:</strong> ").append(branchInfo.getName()).append("</p>");
+            if (branchInfo.getAddress() != null) {
+                body.append("<p><strong>Address:</strong> ").append(branchInfo.getAddress()).append("</p>");
+            }
+            if (branchInfo.getPhone() != null) {
+                body.append("<p><strong>Phone:</strong> ").append(branchInfo.getPhone()).append("</p>");
+            }
+            if (branchInfo.getOpenHours() != null && branchInfo.getEndHours() != null) {
+                body.append("<p><strong>Business Hours:</strong> ")
+                    .append(branchInfo.getOpenHours().format(DateTimeFormatter.ofPattern("HH:mm")))
+                    .append(" - ")
+                    .append(branchInfo.getEndHours().format(DateTimeFormatter.ofPattern("HH:mm")))
+                    .append("</p>");
+            }
+        }
+        
+        // Add manager information if available (second)
+        if (managerInfo != null) {
+            body.append("<h3>Contact Information</h3>");
+            body.append("<p><strong>Manager Name:</strong> ").append(managerInfo.getFullname()).append("</p>");
+            if (managerInfo.getPhoneNumber() != null) {
+                body.append("<p><strong>Phone:</strong> ").append(managerInfo.getPhoneNumber()).append("</p>");
+            }
+            body.append("<p><strong>Email:</strong> ").append(managerInfo.getEmail()).append("</p>");
+        }
+        
+        // Add purchase order information (third)
+        body.append("<h3>Purchase Order Information</h3>");
         body.append("<table border='1' style='border-collapse: collapse; width: 100%;'>");
         body.append("<tr><td><strong>PO Number:</strong></td><td>").append(po.getPoNumber()).append("</td></tr>");
         body.append("<tr><td><strong>Supplier:</strong></td><td>").append(po.getSupplier().getName()).append("</td></tr>");

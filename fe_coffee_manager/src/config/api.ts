@@ -175,7 +175,7 @@ class ApiClient {
       const result = await response.json();
       
       // Check if ApiResponse has error code
-      if (result.code && result.code !== 1000) {
+      if (result.code && result.code !== 1000 && result.code !== 200) {
         const error = new Error(result.message || `API error! code: ${result.code}`);
         (error as any).status = response.status;
         (error as any).code = result.code;

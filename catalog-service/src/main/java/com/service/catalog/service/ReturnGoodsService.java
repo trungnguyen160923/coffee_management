@@ -10,6 +10,9 @@ import com.service.catalog.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -185,6 +188,37 @@ public class ReturnGoodsService {
         return returns.stream()
                 .map(returnGoodsMapper::toReturnGoodsResponse)
                 .toList();
+    }
+
+    @PreAuthorize("hasRole('STAFF') or hasRole('MANAGER')")
+    public ReturnGoodsResponse getReturnGoodsById(Integer returnId) {
+        ReturnGoods entity = returnGoodsRepository.findById(returnId)
+                .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_FOUND, "Return Goods not found"));
+        return returnGoodsMapper.toReturnGoodsResponse(entity);
+    }
+
+    @PreAuthorize("hasRole('STAFF') or hasRole('MANAGER')")
+    public Page<ReturnGoodsResponse> searchReturnGoods(Integer poId,
+                                                       Integer supplierId,
+                                                       Integer branchId,
+                                                       String returnNumber,
+                                                       String status,
+                                                       java.time.LocalDate fromDate,
+                                                       java.time.LocalDate toDate,
+                                                       Pageable pageable) {
+        Specification<ReturnGoods> spec = (root, query, cb) -> {
+            List<jakarta.persistence.criteria.Predicate> predicates = new ArrayList<>();
+            if (poId != null) predicates.add(cb.equal(root.get("purchaseOrder").get("poId"), poId));
+            if (supplierId != null) predicates.add(cb.equal(root.get("supplier").get("supplierId"), supplierId));
+            if (branchId != null) predicates.add(cb.equal(root.get("branchId"), branchId));
+            if (returnNumber != null && !returnNumber.isBlank()) predicates.add(cb.like(cb.lower(root.get("returnNumber")), "%" + returnNumber.toLowerCase() + "%"));
+            if (status != null && !status.isBlank()) predicates.add(cb.equal(root.get("status"), status));
+            if (fromDate != null) predicates.add(cb.greaterThanOrEqualTo(root.get("createAt"), fromDate.atStartOfDay()));
+            if (toDate != null) predicates.add(cb.lessThanOrEqualTo(root.get("createAt"), toDate.atTime(23,59,59)));
+            return cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
+        };
+        Page<ReturnGoods> page = returnGoodsRepository.findAll(spec, pageable);
+        return page.map(returnGoodsMapper::toReturnGoodsResponse);
     }
 
     private String generateReturnNumber() {

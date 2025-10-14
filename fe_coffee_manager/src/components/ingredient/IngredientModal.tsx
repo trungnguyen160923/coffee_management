@@ -153,7 +153,6 @@ const IngredientModal: React.FC<IngredientModalProps> = ({
       onSubmit(form);
     } else {
       // Show error message if validation fails
-      console.log('Form validation failed');
     }
   };
 

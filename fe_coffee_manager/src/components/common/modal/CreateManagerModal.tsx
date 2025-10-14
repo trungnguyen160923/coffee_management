@@ -203,11 +203,20 @@ const CreateManagerModal: React.FC<CreateManagerModalProps> = ({ open, branches,
           <div className="col-span-2">
             <label className="block text-sm text-gray-600 mb-1">Assign to branch</label>
             <select className="w-full border rounded px-3 py-2" value={branchId} onChange={(e) => setBranchId(e.target.value ? Number(e.target.value) : '')}>
-              <option value="" disabled>{loadingBranches ? 'Loading branches...' : 'Select a branch'}</option>
+              <option value="" disabled>
+                {loadingBranches ? 'Loading branches...' : 
+                 branches.length === 0 ? 'No unassigned branches available' : 
+                 'Select a branch'}
+              </option>
               {branches.map((b) => (
                 <option key={b.branchId} value={b.branchId}>{b.name} — {b.address}</option>
               ))}
             </select>
+            {!loadingBranches && branches.length === 0 && (
+              <p className="mt-1 text-xs text-orange-600">
+                All branches are already assigned to managers. Create a new branch first.
+              </p>
+            )}
           </div>
         </div>
         <div className="mt-6 flex justify-end gap-2">

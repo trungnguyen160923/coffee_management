@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { CheckCircle, XCircle, Calendar, MessageSquare } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { formatCurrency, formatQuantity } from '../../utils/helpers';
 
 export default function SupplierConfirmPage() {
   const BASE_URL = "http://localhost:8000/api/catalogs/public/purchase-orders";
@@ -65,9 +66,11 @@ export default function SupplierConfirmPage() {
       const data = await response.json();
       setPo(data.result);
       
-      // Check if PO is already processed
+      // Check if PO is already processed or cancelled
       const status = data.result.status;
-      if (status === 'SUPPLIER_CONFIRMED' || status === 'SUPPLIER_CANCELLED') {
+      if (status === 'SUPPLIER_CONFIRMED' || status === 'SUPPLIER_CANCELLED' || 
+          status === 'CANCELLED' || status === 'PARTIALLY_RECEIVED' || 
+          status === 'RECEIVED' || status === 'DELIVERED' || status === 'COMPLETED') {
         setIsProcessed(true);
       }
       
@@ -203,22 +206,39 @@ export default function SupplierConfirmPage() {
         <div className="max-w-4xl mx-auto px-4">
           <div className="bg-white rounded-lg shadow-lg p-6">
             <div className="text-center mb-6">
-              {po.status === 'SUPPLIER_CONFIRMED' ? (
+              {po.status === 'SUPPLIER_CONFIRMED' || po.status === 'PARTIALLY_RECEIVED' || po.status === 'RECEIVED' ? (
                 <div className="flex items-center justify-center mb-4">
                   <CheckCircle className="h-16 w-16 text-green-500" />
                 </div>
-              ) : (
+              ) : po.status === 'CANCELLED' || po.status === 'SUPPLIER_CANCELLED' ? (
                 <div className="flex items-center justify-center mb-4">
                   <XCircle className="h-16 w-16 text-red-500" />
                 </div>
+              ) : (
+                <div className="flex items-center justify-center mb-4">
+                  <CheckCircle className="h-16 w-16 text-blue-500" />
+                </div>
               )}
               <h1 className="text-2xl font-bold text-gray-900 mb-2">
-                {po.status === 'SUPPLIER_CONFIRMED' ? 'Purchase Order Confirmed' : 'Purchase Order Cancelled'}
+                {po.status === 'SUPPLIER_CONFIRMED' ? 'Purchase Order Confirmed' :
+                 po.status === 'PARTIALLY_RECEIVED' ? 'Purchase Order Partially Received' :
+                 po.status === 'RECEIVED' ? 'Purchase Order Received' :
+                 po.status === 'DELIVERED' ? 'Purchase Order Delivered' :
+                 po.status === 'COMPLETED' ? 'Purchase Order Completed' :
+                 po.status === 'CANCELLED' ? 'Purchase Order Cancelled by System' :
+                 po.status === 'SUPPLIER_CANCELLED' ? 'Purchase Order Cancelled by You' :
+                 'Purchase Order Status'}
               </h1>
               <p className="text-gray-600">
-                {po.status === 'SUPPLIER_CONFIRMED' 
-                  ? 'Thank you for confirming this purchase order.' 
-                  : 'This purchase order has been cancelled.'}
+                {po.status === 'SUPPLIER_CONFIRMED' || po.status === 'PARTIALLY_RECEIVED' || po.status === 'RECEIVED' 
+                  ? '✅ This Purchase Order has been successfully processed. Thank you for your response!' 
+                  : po.status === 'DELIVERED' || po.status === 'COMPLETED'
+                  ? '📦 This Purchase Order has been completed. Thank you for your service!'
+                  : po.status === 'CANCELLED'
+                  ? '❌ This Purchase Order has been cancelled by the system and cannot be modified.'
+                  : po.status === 'SUPPLIER_CANCELLED'
+                  ? '❌ You have cancelled this Purchase Order. The order has been cancelled.'
+                  : 'This Purchase Order is in ' + po.status + ' status.'}
               </p>
             </div>
 
@@ -239,17 +259,30 @@ export default function SupplierConfirmPage() {
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Status</label>
                   <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                    po.status === 'SUPPLIER_CONFIRMED' 
+                    po.status === 'SUPPLIER_CONFIRMED' || po.status === 'PARTIALLY_RECEIVED' || po.status === 'RECEIVED'
                       ? 'bg-green-100 text-green-800' 
-                      : 'bg-red-100 text-red-800'
+                      : po.status === 'DELIVERED' || po.status === 'COMPLETED'
+                      ? 'bg-blue-100 text-blue-800'
+                      : po.status === 'CANCELLED'
+                      ? 'bg-red-100 text-red-800'
+                      : po.status === 'SUPPLIER_CANCELLED'
+                      ? 'bg-orange-100 text-orange-800'
+                      : 'bg-gray-100 text-gray-800'
                   }`}>
-                    {po.status === 'SUPPLIER_CONFIRMED' ? 'Confirmed' : 'Cancelled'}
+                    {po.status === 'SUPPLIER_CONFIRMED' ? 'Confirmed' :
+                     po.status === 'PARTIALLY_RECEIVED' ? 'Partially Received' :
+                     po.status === 'RECEIVED' ? 'Received' :
+                     po.status === 'DELIVERED' ? 'Delivered' :
+                     po.status === 'COMPLETED' ? 'Completed' :
+                     po.status === 'CANCELLED' ? 'Cancelled by System' :
+                     po.status === 'SUPPLIER_CANCELLED' ? 'Cancelled by You' :
+                     po.status}
                   </span>
                 </div>
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Total Amount</label>
-                  <p className="mt-1 text-sm text-gray-900">${po.totalAmount?.toLocaleString() || '0'}</p>
+                  <p className="mt-1 text-sm text-gray-900">{formatCurrency(Number(po.totalAmount) || 0)}</p>
                 </div>
                 
                 {po.expectedDeliveryAt && (
@@ -296,10 +329,10 @@ export default function SupplierConfirmPage() {
                           {detail.unitCode || 'N/A'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          ${detail.unitPrice?.toLocaleString() || '0'}
+                          {formatCurrency(Number(detail.unitPrice) || 0)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          ${detail.lineTotal?.toLocaleString() || '0'}
+                          {formatCurrency(Number(detail.lineTotal) || 0)}
                         </td>
                       </tr>
                     ))}
@@ -414,26 +447,52 @@ export default function SupplierConfirmPage() {
                 </div>
               </div>
 
-              {/* Action Buttons */}
-              <div className="flex flex-col sm:flex-row gap-4 justify-end">
-                <button
-                  type="button"
-                  onClick={handleCancelClick}
-                  disabled={submitting}
-                  className="px-6 py-3 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50 flex items-center justify-center"
-                >
-                  <XCircle className="w-4 h-4 mr-2" />
-                  Cancel Order
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="px-6 py-3 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 flex items-center justify-center"
-                >
-                  <CheckCircle className="w-4 h-4 mr-2" />
-                  {submitting ? 'Confirming...' : 'Confirm Order'}
-                </button>
-              </div>
+              {/* Action Buttons - Only show if not cancelled */}
+              {po && po.status !== 'CANCELLED' && po.status !== 'SUPPLIER_CANCELLED' && (
+                <div className="flex flex-col sm:flex-row gap-4 justify-end">
+                  <button
+                    type="button"
+                    onClick={handleCancelClick}
+                    disabled={submitting}
+                    className="px-6 py-3 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50 flex items-center justify-center"
+                  >
+                    <XCircle className="w-4 h-4 mr-2" />
+                    Cancel Order
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="px-6 py-3 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 flex items-center justify-center"
+                  >
+                    <CheckCircle className="w-4 h-4 mr-2" />
+                    {submitting ? 'Confirming...' : 'Confirm Order'}
+                  </button>
+                </div>
+              )}
+              
+              {/* Show message for cancelled orders */}
+              {po && po.status === 'CANCELLED' && (
+                <div className="bg-red-50 border border-red-200 rounded-md p-4">
+                  <div className="flex items-center">
+                    <XCircle className="h-5 w-5 text-red-400 mr-2" />
+                    <p className="text-red-800">
+                      This Purchase Order has been cancelled by the system and cannot be modified.
+                    </p>
+                  </div>
+                </div>
+              )}
+              
+              {/* Show message for supplier cancelled orders */}
+              {po && po.status === 'SUPPLIER_CANCELLED' && (
+                <div className="bg-orange-50 border border-orange-200 rounded-md p-4">
+                  <div className="flex items-center">
+                    <XCircle className="h-5 w-5 text-orange-400 mr-2" />
+                    <p className="text-orange-800">
+                      You have cancelled this Purchase Order. The order has been cancelled.
+                    </p>
+                  </div>
+                </div>
+              )}
             </form>
           </div>
         </div>

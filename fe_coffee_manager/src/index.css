@@ -2,6 +2,20 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Base typography */
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  body {
+    @apply font-sans text-gray-800 bg-gray-50;
+  }
+  h1 { @apply text-3xl font-bold; }
+  h2 { @apply text-2xl font-semibold; }
+  h3 { @apply text-xl font-semibold; }
+}
+
 /* Global thin scrollbar styles */
 * {
   scrollbar-width: thin;
@@ -31,4 +45,14 @@
 * {
   scrollbar-width: thin;
   scrollbar-color: #d1d5db #f3f4f6;
+}
+
+/* Hide scrollbar but keep functionality */
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* Internet Explorer 10+ */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;  /* Safari and Chrome */
 }
