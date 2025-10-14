@@ -36,6 +36,8 @@ public class CreateOrderRequest {
 
     java.math.BigDecimal subtotal;
     java.math.BigDecimal discount;
+    java.math.BigDecimal vat;
+    String discountCode;
 
     @NotEmpty(message = "Order items cannot be empty")
     @Valid

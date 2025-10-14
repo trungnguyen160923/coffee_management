@@ -16,7 +16,7 @@ export default function RecipeDetailModal({ open, onClose, recipe }: Props) {
   // Initialize position when modal opens
   useEffect(() => {
     if (open) {
-      setPosition({ 
+      setPosition({
         x: window.innerWidth / 2 - 400, // Center horizontally (assuming modal width ~800px)
         y: 50 // 50px from top
       });
@@ -70,7 +70,7 @@ export default function RecipeDetailModal({ open, onClose, recipe }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 pointer-events-none">
-      <div 
+      <div
         className="absolute bg-white rounded-xl shadow-2xl transform transition-all pointer-events-auto max-w-4xl w-full max-h-[90vh] overflow-hidden"
         style={{
           left: `${position.x}px`,
@@ -79,28 +79,28 @@ export default function RecipeDetailModal({ open, onClose, recipe }: Props) {
         }}
       >
         <div className="bg-white px-6 pt-6 pb-4">
-            {/* Header - Draggable area */}
-            <div 
-              className="flex items-center justify-between mb-6 cursor-grab active:cursor-grabbing select-none"
-              onMouseDown={handleMouseDown}
-            >
-              <div className="flex items-center space-x-3">
-                <div className="bg-amber-50 p-2 rounded-lg">
-                  <ChefHat className="w-6 h-6 text-amber-600" />
-                </div>
-                <div>
-                  <h3 className="text-2xl font-bold text-gray-900">{recipe.name}</h3>
-                  <div className="text-sm text-gray-500">Recipe ID #{recipe.recipeId}</div>
-                </div>
+          {/* Header - Draggable area */}
+          <div
+            className="flex items-center justify-between mb-6 cursor-grab active:cursor-grabbing select-none"
+            onMouseDown={handleMouseDown}
+          >
+            <div className="flex items-center space-x-3">
+              <div className="bg-amber-50 p-2 rounded-lg">
+                <ChefHat className="w-6 h-6 text-amber-600" />
               </div>
-              <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors" aria-label="Close">
-                <X className="w-6 h-6" />
-              </button>
+              <div>
+                <h3 className="text-2xl font-bold text-gray-900">{recipe.name}</h3>
+                <div className="text-sm text-gray-500">Recipe ID #{recipe.recipeId}</div>
+              </div>
             </div>
+            <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors" aria-label="Close">
+              <X className="w-6 h-6" />
+            </button>
+          </div>
 
-            {/* Scrollable content area */}
-            <div className="overflow-y-auto max-h-[calc(90vh-120px)]">
-              {/* Summary badges */}
+          {/* Scrollable content area */}
+          <div className="overflow-y-auto max-h-[calc(90vh-120px)]">
+            {/* Summary badges */}
             <div className="mb-4 flex flex-wrap gap-2 items-center">
               <span className={`px-2 py-1 rounded text-xs ${recipe.status === 'ACTIVE' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>{recipe.status}</span>
               <span className="px-2 py-1 rounded text-xs bg-blue-100 text-blue-700">Version {recipe.version}</span>
@@ -173,13 +173,13 @@ export default function RecipeDetailModal({ open, onClose, recipe }: Props) {
                 </table>
               </div>
             </div>
-            </div>
+          </div>
 
-            {/* Timestamps */}
-            <div className="mt-4 flex items-center gap-4 text-xs text-gray-500">
-              <div className="flex items-center gap-1"><Clock className="w-4 h-4" /> Created: {new Date(recipe.createAt).toLocaleString()}</div>
-              <div className="flex items-center gap-1"><Clock className="w-4 h-4" /> Updated: {new Date(recipe.updateAt).toLocaleString()}</div>
-            </div>
+          {/* Timestamps */}
+          <div className="mt-4 flex items-center gap-4 text-xs text-gray-500">
+            <div className="flex items-center gap-1"><Clock className="w-4 h-4" /> Created: {new Date(recipe.createAt).toLocaleString()}</div>
+            <div className="flex items-center gap-1"><Clock className="w-4 h-4" /> Updated: {new Date(recipe.updateAt).toLocaleString()}</div>
+          </div>
         </div>
       </div>
     </div>

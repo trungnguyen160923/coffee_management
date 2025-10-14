@@ -185,7 +185,31 @@ export default function StaffRecipes() {
                             </div>
                             <div>
                                 <h4 className="font-semibold mb-2">Instructions</h4>
-                                <div className="whitespace-pre-wrap bg-gray-50 border border-gray-100 rounded-xl p-3 text-gray-700">{detail.instructions || '-'}</div>
+                                {(() => {
+                                    const steps = (detail.instructions || '')
+                                        .split(/\r?\n/)
+                                        .map(s => s.trim())
+                                        .filter(Boolean);
+
+                                    return steps.length === 0 ? (
+                                        <div className="text-gray-500 italic text-xs">No instructions provided</div>
+                                    ) : (
+                                        <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-lg">
+                                            <div className="space-y-2 p-2">
+                                                {steps.map((step, idx) => (
+                                                    <div key={idx} className="flex items-start gap-2 p-2 bg-amber-50 border border-amber-200 rounded text-xs">
+                                                        <div className="flex-shrink-0 w-4 h-4 bg-amber-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
+                                                            {idx + 1}
+                                                        </div>
+                                                        <div className="flex-1 text-gray-800 text-xs leading-relaxed">
+                                                            {step}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
                             </div>
                             <div>
                                 <h4 className="font-semibold mb-2">Ingredients</h4>

@@ -1,6 +1,5 @@
 package orderservice.order_service.service;
 
-import lombok.extern.slf4j.Slf4j;
 import orderservice.order_service.client.AuthServiceClient;
 import orderservice.order_service.dto.request.CreateReservationRequest;
 import orderservice.order_service.dto.response.ApiResponse;
@@ -28,14 +27,17 @@ public class ReservationService {
     private final ReservationRepository reservationRepository;
     private final BranchRepository branchRepository;
     private final AuthServiceClient authServiceClient;
+    private final EmailService emailService;
 
     @Autowired
     public ReservationService(ReservationRepository reservationRepository,
             BranchRepository branchRepository,
-            AuthServiceClient authServiceClient) {
+            AuthServiceClient authServiceClient,
+            EmailService emailService) {
         this.reservationRepository = reservationRepository;
         this.branchRepository = branchRepository;
         this.authServiceClient = authServiceClient;
+        this.emailService = emailService;
     }
 
     public ReservationResponse createReservation(CreateReservationRequest request, String token) {
@@ -49,6 +51,24 @@ public class ReservationService {
         // Validate reservation time
         validateReservationTime(request.getReservedAt());
 
+        // Enforce branch business hours (local time comparison)
+        java.time.LocalTime reservedTime = request.getReservedAt().toLocalTime();
+        if (branch.getOpenHours() != null && branch.getEndHours() != null) {
+            boolean withinHours;
+            if (branch.getEndHours().isAfter(branch.getOpenHours())) {
+                // Normal same-day window
+                withinHours = !reservedTime.isBefore(branch.getOpenHours())
+                        && !reservedTime.isAfter(branch.getEndHours());
+            } else {
+                // Overnight window (e.g., 20:00 -> 02:00)
+                withinHours = !reservedTime.isBefore(branch.getOpenHours())
+                        || !reservedTime.isAfter(branch.getEndHours());
+            }
+            if (!withinHours) {
+                throw new AppException(ErrorCode.RESERVATION_OUTSIDE_BUSINESS_HOURS);
+            }
+        }
+
         Reservation reservation = new Reservation();
 
         // Handle customer information
@@ -61,6 +81,7 @@ public class ReservationService {
                     reservation.setCustomerId(request.getCustomerId());
                     reservation.setCustomerName(userInfo.getFullname());
                     reservation.setPhone(userInfo.getPhoneNumber());
+                    reservation.setEmail(userInfo.getEmail());
                 } else {
                     throw new AppException(ErrorCode.EMAIL_NOT_EXISTED);
                 }
@@ -71,6 +92,7 @@ public class ReservationService {
             // Non-authenticated user - use provided information
             reservation.setCustomerName(request.getCustomerName());
             reservation.setPhone(request.getPhone());
+            reservation.setEmail(request.getEmail());
         }
 
         // Set reservation details
@@ -81,6 +103,21 @@ public class ReservationService {
         reservation.setStatus("PENDING");
 
         Reservation savedReservation = reservationRepository.save(reservation);
+
+        // Send confirmation email if we have an email
+        String toEmail = reservation.getEmail();
+        if (toEmail != null && !toEmail.trim().isEmpty()) {
+            String customerName = reservation.getCustomerName();
+            String branchName = branch.getName();
+            emailService.sendReservationConfirmationEmail(
+                    toEmail,
+                    customerName,
+                    branchName,
+                    reservation.getReservedAt(),
+                    reservation.getPartySize(),
+                    reservation.getNotes());
+        }
+
         return convertToResponse(savedReservation, branch);
     }
 
@@ -169,6 +206,7 @@ public class ReservationService {
         response.setCustomerId(reservation.getCustomerId());
         response.setCustomerName(reservation.getCustomerName());
         response.setPhone(reservation.getPhone());
+        response.setEmail(reservation.getEmail());
         response.setBranchId(reservation.getBranchId());
         response.setBranchName(branch != null ? branch.getName() : null);
         response.setReservedAt(reservation.getReservedAt());

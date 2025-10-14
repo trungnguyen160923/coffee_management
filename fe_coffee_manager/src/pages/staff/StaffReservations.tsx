@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import reservationService, { Reservation } from '../../services/reservationService';
+import { tableService } from '../../services';
+import { Table } from '../../types';
+import { TableAssignmentModal } from '../../components/table';
 
 export default function StaffReservations() {
     const { user } = useAuth();
@@ -13,6 +16,15 @@ export default function StaffReservations() {
     const [detailOpen, setDetailOpen] = useState<boolean>(false);
     const [detail, setDetail] = useState<Reservation | null>(null);
     const [detailLoading, setDetailLoading] = useState<boolean>(false);
+    const [showTableAssignment, setShowTableAssignment] = useState<boolean>(false);
+    const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
+    const [assignedTables, setAssignedTables] = useState<Record<number, Table[]>>({});
+    const [toast, setToast] = useState<{ message: string; type?: 'error' | 'success' } | null>(null);
+
+    const showToast = (message: string, type: 'error' | 'success' = 'error') => {
+        setToast({ message, type });
+        window.setTimeout(() => setToast(null), 2500);
+    };
 
     const branchId = useMemo(() => {
         if (user?.branch?.branchId) return user.branch.branchId;
@@ -32,8 +44,9 @@ export default function StaffReservations() {
                 setError(null);
                 const data = await reservationService.getByBranch(branchId);
                 setReservations(Array.isArray(data) ? data : []);
-            } catch (e) {
-                setError('Failed to load reservations.');
+            } catch (e: any) {
+                console.error('Failed to load reservations by branch', e);
+                setError(`Failed to load reservations: ${e.message || 'Unknown error'}`);
             } finally {
                 setLoading(false);
             }
@@ -56,6 +69,30 @@ export default function StaffReservations() {
         };
         return reservations.filter(r => byStatus(r) && bySearch(r));
     }, [reservations, statusFilter, debouncedSearch]);
+
+    // Auto-load assigned tables for visible reservations so the column shows after reload
+    useEffect(() => {
+        const missingIds = filteredReservations
+            .map(r => r.reservationId)
+            .filter(id => !(id in assignedTables));
+        if (missingIds.length === 0) return;
+
+        let cancelled = false;
+        const load = async () => {
+            for (const id of missingIds) {
+                try {
+                    const tables = await tableService.getTableAssignments(id);
+                    if (cancelled) return;
+                    setAssignedTables(prev => ({ ...prev, [id]: tables }));
+                } catch (e) {
+                    // ignore row-level failure; keep UI responsive
+                    // console.error('Failed to load tables for reservation', id, e);
+                }
+            }
+        };
+        load();
+        return () => { cancelled = true; };
+    }, [filteredReservations, assignedTables]);
 
     const formatDate = (d?: string) => {
         if (!d) return '';
@@ -87,23 +124,31 @@ export default function StaffReservations() {
     const updateStatus = async (id: number | string, status: string) => {
         try {
             setError(null);
+            const normalizedTarget = String(status).toUpperCase();
+            const currentAssigned = assignedTables[Number(id)] || [];
+            // Block promoting to CONFIRMED/SEATED without any assigned tables
+            if ((normalizedTarget === 'CONFIRMED' || normalizedTarget === 'SEATED') && currentAssigned.length === 0) {
+                showToast('Please assign at least one table before changing to CONFIRMED/SEATED.', 'error');
+                return;
+            }
             const updated = await reservationService.updateStatus(id, status);
             setReservations(prev => prev.map(r => String(r.reservationId) === String(id) ? { ...r, status: updated.status } : r));
+
+            // If status becomes PENDING or CANCELLED, release any assigned tables
+            const normalized = String(updated.status || status).toUpperCase();
+            if (normalized === 'PENDING' || normalized === 'CANCELLED') {
+                try {
+                    await tableService.removeTableAssignments(id);
+                } catch (e) {
+                    // non-blocking: UI still updates; backend cleanup might fail silently
+                }
+                setAssignedTables(prev => ({ ...prev, [Number(id)]: [] }));
+            }
         } catch (e) {
             setError('Failed to update status.');
         }
     };
 
-    const remove = async (id: number | string) => {
-        if (!confirm('Delete this reservation?')) return;
-        try {
-            setError(null);
-            await reservationService.delete(id);
-            setReservations(prev => prev.filter(r => String(r.reservationId) !== String(id)));
-        } catch (e) {
-            setError('Failed to delete reservation.');
-        }
-    };
 
     const openDetail = async (id: number | string) => {
         try {
@@ -120,8 +165,43 @@ export default function StaffReservations() {
     };
     const closeDetail = () => { setDetailOpen(false); setDetail(null); };
 
+    const openTableAssignment = (reservation: Reservation) => {
+        setSelectedReservation(reservation);
+        setShowTableAssignment(true);
+    };
+
+    const closeTableAssignment = () => {
+        setShowTableAssignment(false);
+        setSelectedReservation(null);
+    };
+
+    const handleTableAssignmentSuccess = async () => {
+        if (selectedReservation) {
+            try {
+                const tables = await tableService.getTableAssignments(selectedReservation.reservationId);
+                setAssignedTables(prev => ({
+                    ...prev,
+                    [selectedReservation.reservationId]: tables
+                }));
+                // Refresh reservations to update status
+                const data = await reservationService.getByBranch(branchId!);
+                setReservations(Array.isArray(data) ? data : []);
+            } catch (e) {
+                console.error('Failed to load assigned tables', e);
+            }
+        }
+    };
+
+    // Removed unused helper to avoid linter warning; row-level loads are handled in effect above
+
     return (
         <>
+            {toast && (
+                <div className={`fixed top-4 right-4 z-[60] px-4 py-3 rounded-lg shadow-lg text-sm border ${toast.type === 'error' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-green-50 text-green-700 border-green-200'
+                    }`}>
+                    {toast.message}
+                </div>
+            )}
             <div className="p-8">
                 <div className="mb-6">
                     <h1 className="text-2xl font-bold text-gray-800">Branch Reservations</h1>
@@ -172,6 +252,7 @@ export default function StaffReservations() {
                                             <th className="px-6 py-3 font-medium">Party Size</th>
                                             <th className="px-6 py-3 font-medium">Reserved At</th>
                                             <th className="px-6 py-3 font-medium">Status</th>
+                                            <th className="px-6 py-3 font-medium">Tables</th>
                                             <th className="px-6 py-3 font-medium">Actions</th>
                                         </tr>
                                     </thead>
@@ -186,6 +267,19 @@ export default function StaffReservations() {
                                                 <td className="px-6 py-4">
                                                     <span className={`px-3 py-1 rounded-full text-xs font-medium border ${statusClass(r.status)}`}>{r.status}</span>
                                                 </td>
+                                                <td className="px-6 py-4">
+                                                    {assignedTables[r.reservationId]?.length > 0 ? (
+                                                        <div className="flex flex-wrap gap-1">
+                                                            {assignedTables[r.reservationId].map(table => (
+                                                                <span key={table.tableId} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">
+                                                                    {table.label}
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-gray-400 text-xs">No tables assigned</span>
+                                                    )}
+                                                </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <div className="flex items-center gap-2">
                                                         <button
@@ -196,6 +290,16 @@ export default function StaffReservations() {
                                                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
                                                                 <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
                                                                 <circle cx="12" cy="12" r="3" />
+                                                            </svg>
+                                                        </button>
+                                                        <button
+                                                            onClick={() => openTableAssignment(r)}
+                                                            className="px-2 py-1 text-xs rounded-lg border border-amber-200 text-amber-700 hover:bg-amber-50 inline-flex"
+                                                            title="Assign tables"
+                                                        >
+                                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
+                                                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                                                                <path d="M9 9h6v6H9z" />
                                                             </svg>
                                                         </button>
                                                         <button
@@ -224,16 +328,6 @@ export default function StaffReservations() {
                                                                 ))}
                                                             </select>
                                                         )}
-                                                        <button
-                                                            onClick={() => remove(r.reservationId)}
-                                                            className="px-2 py-1 text-xs rounded-lg border border-red-200 text-red-700 hover:bg-red-50 inline-flex"
-                                                            title="Delete"
-                                                        >
-                                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
-                                                                <path d="M18 6L6 18" />
-                                                                <path d="M6 6l12 12" />
-                                                            </svg>
-                                                        </button>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -276,6 +370,18 @@ export default function StaffReservations() {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* Table Assignment Modal */}
+            {showTableAssignment && selectedReservation && (
+                <TableAssignmentModal
+                    reservationId={selectedReservation.reservationId}
+                    branchId={Number(branchId)}
+                    partySize={selectedReservation.partySize || 1}
+                    reservedAt={selectedReservation.reservedAt}
+                    onClose={closeTableAssignment}
+                    onSuccess={handleTableAssignmentSuccess}
+                />
             )}
         </>
     );

@@ -57,8 +57,14 @@ public class Order {
     @Column(name = "discount", nullable = false, precision = 12, scale = 2)
     BigDecimal discount;
 
+    @Column(name = "vat", nullable = false, precision = 12, scale = 2)
+    BigDecimal vat;
+
     @Column(name = "total_amount", nullable = false, precision = 12, scale = 2)
     BigDecimal totalAmount;
+
+    @Column(name = "discount_code", length = 50)
+    String discountCode;
 
     @Column(columnDefinition = "TEXT")
     String notes;

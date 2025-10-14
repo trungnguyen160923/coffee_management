@@ -34,6 +34,7 @@ public enum ErrorCode {
     EMPTY_SALARY(1021, "Salary is required", HttpStatus.BAD_REQUEST),
     INCORRECT_PASSWORD(1022, "Incorrect password", HttpStatus.BAD_REQUEST),
     USER_ID_NOT_FOUND(1023, "User id not found", HttpStatus.NOT_FOUND),
+    USER_NOT_FOUND(1024, "User not found", HttpStatus.NOT_FOUND),
     ;
 
     ErrorCode(int code, String message, HttpStatusCode statusCode) {

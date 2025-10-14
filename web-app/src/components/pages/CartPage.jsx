@@ -6,8 +6,7 @@ const CartPage = () => {
     const [cartItems, setCartItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [subtotal, setSubtotal] = useState(0);
-    const [delivery, setDelivery] = useState(5.00);
-    const [discount, setDiscount] = useState(3.00);
+    const [vat, setVat] = useState(0);
     const [total, setTotal] = useState(0);
     const [error, setError] = useState(null);
     const [totalItems, setTotalItems] = useState(0); // Track totalItems from API
@@ -27,8 +26,11 @@ const CartPage = () => {
             setCartItems(items || []);
             setTotalItems(totals?.result?.totalItems || 0); // Store totalItems
             if (totals && typeof totals.result?.totalAmount !== 'undefined') {
-                setSubtotal(Number(totals.result.totalAmount || 0));
-                setTotal(Number(totals.result.totalAmount || 0) + delivery - discount);
+                const amount = Number(totals.result.totalAmount || 0);
+                setSubtotal(amount);
+                const computedVat = amount * 0.1;
+                setVat(computedVat);
+                setTotal(amount + computedVat);
             } else {
                 calculateTotals(items || []);
             }
@@ -44,7 +46,9 @@ const CartPage = () => {
     const calculateTotals = (items) => {
         const subtotalValue = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
         setSubtotal(subtotalValue);
-        setTotal(subtotalValue + delivery - discount);
+        const computedVat = subtotalValue * 0.1;
+        setVat(computedVat);
+        setTotal(subtotalValue + computedVat);
     };
 
     const removeItem = async (productId) => {
@@ -89,7 +93,7 @@ const CartPage = () => {
     };
 
     const formatPrice = (value) => {
-        return new Intl.NumberFormat('vi-VN').format(Number(value || 0));
+        return new Intl.NumberFormat('vi-VN').format(Number(value || 0)) + ' VND';
     };
 
     const handleCheckout = () => {
@@ -275,12 +279,8 @@ const CartPage = () => {
                                         <span style={{ color: '#c49b63' }}>{formatPrice(subtotal)}</span>
                                     </p>
                                     <p className="d-flex">
-                                        <span style={{ color: '#fff' }}>Delivery</span>
-                                        <span style={{ color: '#c49b63' }}>{formatPrice(delivery)}</span>
-                                    </p>
-                                    <p className="d-flex">
-                                        <span style={{ color: '#fff' }}>Discount</span>
-                                        <span style={{ color: '#c49b63' }}>-{formatPrice(discount)}</span>
+                                        <span style={{ color: '#fff' }}>VAT (10%)</span>
+                                        <span style={{ color: '#c49b63' }}>{formatPrice(vat)}</span>
                                     </p>
                                     <hr style={{ borderColor: '#c49b63' }} />
                                     <p className="d-flex total-price">
