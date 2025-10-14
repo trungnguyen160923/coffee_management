@@ -18,5 +18,6 @@ public class GoodsReceiptDetailRequest {
     private LocalDate mfgDate;
     private LocalDate expDate;
     private String status; // OK, SHORT, OVER, DAMAGE
+    private BigDecimal damageQty;
     private String note;
 }

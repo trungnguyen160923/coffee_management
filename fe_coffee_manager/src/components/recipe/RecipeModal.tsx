@@ -141,18 +141,12 @@ export default function RecipeModal({ open, onClose, onSaved, recipe }: Props) {
     // Auto scroll to bottom of ingredients table after adding new row
     setTimeout(() => {
       if (ingredientsTableRef.current) {
-        console.log('Ingredients table ref found, scrolling...', {
-          scrollHeight: ingredientsTableRef.current.scrollHeight,
-          clientHeight: ingredientsTableRef.current.clientHeight,
-          scrollTop: ingredientsTableRef.current.scrollTop
-        });
         // Smooth scroll to bottom
         ingredientsTableRef.current.scrollTo({
           top: ingredientsTableRef.current.scrollHeight,
           behavior: 'smooth'
         });
       } else {
-        console.log('Ingredients table ref not found');
       }
     }, 200);
   };

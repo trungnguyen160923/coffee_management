@@ -2,7 +2,20 @@
 export default {
     content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
     theme: {
-      extend: {},
+      extend: {
+        fontFamily: {
+          sans: [
+            'Inter',
+            'system-ui',
+            'Segoe UI',
+            'Roboto',
+            'Helvetica',
+            'Arial',
+            'Apple Color Emoji',
+            'Segoe UI Emoji'
+          ]
+        }
+      },
     },
     plugins: [],
   };

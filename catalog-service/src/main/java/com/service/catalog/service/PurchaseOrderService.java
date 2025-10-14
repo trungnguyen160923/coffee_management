@@ -13,8 +13,9 @@ import com.service.catalog.exception.AppException;
 import com.service.catalog.exception.ErrorCode;
 
 import com.service.catalog.repository.PurchaseOrderRepository;
-import com.service.catalog.repository.PoOutboxLogRepository;
 import com.service.catalog.repository.PurchaseOrderStatusHistoryRepository;
+import com.service.catalog.repository.http_client.BranchClient;
+import com.service.catalog.repository.http_client.UserClient;
 
 import jakarta.transaction.Transactional;
 
@@ -25,7 +26,6 @@ import com.service.catalog.dto.request.purchaseOrder.SendToSupplierRequest;
 import com.service.catalog.dto.request.purchaseOrder.SupplierResponseRequest;
 import com.service.catalog.dto.response.PurchaseOrderResponse;
 import com.service.catalog.dto.EmailResult;
-import com.service.catalog.entity.PoOutboxLog;
 import com.service.catalog.entity.PurchaseOrderStatusHistory;
 import com.service.catalog.entity.PurchaseOrder;
 import com.service.catalog.entity.PurchaseOrderDetail;
@@ -54,10 +54,11 @@ public class PurchaseOrderService {
     SupplierRepository supplierRepository;
     IngredientRepository ingredientRepository;
     UnitRepository unitRepository;
-    PoOutboxLogRepository poOutboxLogRepository;
     PurchaseOrderStatusHistoryRepository statusHistoryRepository;
     EmailService emailService;
     PDFService pdfService;
+    BranchClient branchClient;
+    UserClient userClient;
 
     @PreAuthorize("hasRole('MANAGER')")
     public List<PurchaseOrderResponse> getPurchaseOrders(Integer branchId) {
@@ -88,7 +89,10 @@ public class PurchaseOrderService {
             po.setPoNumber("PO-" + System.currentTimeMillis());
             po.setSupplier(supplier);
             po.setBranchId(request.getBranchId());
-            po.setStatus("DRAFT");
+            // Temporary: set status to SUPPLIER_CONFIRMED to allow immediate goods receipt testing
+            po.setStatus("SUPPLIER_CONFIRMED");
+            po.setSentAt(LocalDateTime.now());
+            po.setConfirmedAt(LocalDateTime.now());
             po.setCreateAt(LocalDateTime.now());
             po.setUpdateAt(LocalDateTime.now());
             // Ensure NOT NULL DB columns have defaults
@@ -331,38 +335,49 @@ public class PurchaseOrderService {
             throw new RuntimeException("Only APPROVED Purchase Orders can be sent to supplier. Current status: " + po.getStatus());
         }
 
+        // 2. Get branch and manager information
+        com.service.catalog.dto.response.BranchResponse branchInfo = null;
+        com.service.catalog.dto.response.UserResponse managerInfo = null;
+        
+        try {
+            // Get branch information
+            var branchResponse = branchClient.getBranchById(po.getBranchId());
+            if (branchResponse != null && branchResponse.getResult() != null) {
+                branchInfo = branchResponse.getResult();
+                
+                // Get manager information if branch has manager
+                if (branchInfo.getManagerUserId() != null) {
+                    var userResponse = userClient.getUserById(branchInfo.getManagerUserId());
+                    if (userResponse != null && userResponse.getResult() != null) {
+                        managerInfo = userResponse.getResult();
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to get branch or manager information: {}", e.getMessage());
+            // Continue with email sending even if branch/manager info fails
+        }
+
         EmailResult emailResult;
         try {
-            // 2. Send email to supplier
+            // 3. Send email to supplier with branch and manager info
             emailResult = emailService.sendPOToSupplier(po, request.getToEmail(), 
-                    request.getCc(), request.getSubject(), request.getMessage());
+                    request.getCc(), request.getSubject(), request.getMessage(), branchInfo, managerInfo);
         } catch (Exception e) {
             log.error("Failed to send email: {}", e.getMessage());
             emailResult = EmailResult.failure(e.getMessage());
         }
 
-        // 3. Log to po_outbox_logs (always save, even if email failed)
-        PoOutboxLog outboxLog = PoOutboxLog.builder()
-                .purchaseOrder(po)
-                .toEmail(request.getToEmail())
-                .cc(request.getCc())
-                .subject(request.getSubject() != null ? request.getSubject() : "Purchase Order: " + po.getPoNumber())
-                .sentAt(LocalDateTime.now())
-                .status(emailResult.isSuccess() ? "SENT" : "FAILED")
-                .messageId(emailResult.getMessageId())
-                .error(emailResult.getError())
-                .createAt(LocalDateTime.now())
-                .build();
-        poOutboxLogRepository.save(outboxLog);
+        // 4. (Removed) Outbox log persistence
 
-        // 4. Update PO status and sent_at (only if email was successful)
+        // 5. Update PO status and sent_at (only if email was successful)
         if (emailResult.isSuccess()) {
             po.setStatus("SENT_TO_SUPPLIER");
             po.setSentAt(LocalDateTime.now());
             po.setUpdateAt(LocalDateTime.now());
             purchaseOrderRepository.save(po);
 
-            // 5. Record status history
+            // 6. Record status history
             recordStatusHistory(po, "APPROVED", "SENT_TO_SUPPLIER", "Sent to supplier via email");
         }
 
@@ -380,10 +395,17 @@ public class PurchaseOrderService {
                 .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_FOUND, "Purchase Order not found with ID: " + poId));
 
         String status = po.getStatus();
+        
+        // Allow viewing for any status after SENT_TO_SUPPLIER
         if (!"SENT_TO_SUPPLIER".equals(status) && 
             !"SUPPLIER_CONFIRMED".equals(status) && 
-            !"SUPPLIER_CANCELLED".equals(status)) {
-            throw new AppException(ErrorCode.VALIDATION_FAILED, "Purchase Order is not available for supplier response. Current status: " + status);
+            !"SUPPLIER_CANCELLED".equals(status) &&
+            !"CANCELLED".equals(status) &&
+            !"PARTIALLY_RECEIVED".equals(status) &&
+            !"RECEIVED".equals(status) &&
+            !"DELIVERED".equals(status) &&
+            !"COMPLETED".equals(status)) {
+            throw new AppException(ErrorCode.VALIDATION_FAILED, "Purchase Order is not available for supplier. Current status: " + status);
         }
 
         return purchaseOrderMapper.toPurchaseOrderResponse(po);
@@ -395,8 +417,16 @@ public class PurchaseOrderService {
         PurchaseOrder po = purchaseOrderRepository.findById(poId)
                 .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_FOUND, "Purchase Order not found with ID: " + poId));
 
-        if (!po.getStatus().equals("SENT_TO_SUPPLIER")) {
-            throw new AppException(ErrorCode.VALIDATION_FAILED, "Only SENT_TO_SUPPLIER Purchase Orders can be updated with supplier response. Current status: " + po.getStatus());
+        String currentStatus = po.getStatus();
+        
+        // Check if order is cancelled
+        if ("CANCELLED".equals(currentStatus) || "SUPPLIER_CANCELLED".equals(currentStatus)) {
+            throw new AppException(ErrorCode.VALIDATION_FAILED, "This Purchase Order has been cancelled and cannot be modified. Current status: " + currentStatus);
+        }
+        
+        // Only allow action on SENT_TO_SUPPLIER status
+        if (!"SENT_TO_SUPPLIER".equals(currentStatus)) {
+            throw new AppException(ErrorCode.VALIDATION_FAILED, "This Purchase Order cannot be modified. Current status: " + currentStatus + ". Only orders with status 'SENT_TO_SUPPLIER' can be updated.");
         }
 
         if (!isValidSupplierResponseStatus(request.getStatus())) {
@@ -436,8 +466,16 @@ public class PurchaseOrderService {
         PurchaseOrder po = purchaseOrderRepository.findById(poId)
                 .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_FOUND, "Purchase Order not found with ID: " + poId));
 
-        if (!po.getStatus().equals("SENT_TO_SUPPLIER")) {
-            throw new AppException(ErrorCode.VALIDATION_FAILED, "Only SENT_TO_SUPPLIER Purchase Orders can be cancelled by supplier. Current status: " + po.getStatus());
+        String currentStatus = po.getStatus();
+        
+        // Check if order is already cancelled
+        if ("CANCELLED".equals(currentStatus) || "SUPPLIER_CANCELLED".equals(currentStatus)) {
+            throw new AppException(ErrorCode.VALIDATION_FAILED, "This Purchase Order has already been cancelled. Current status: " + currentStatus);
+        }
+        
+        // Only allow cancellation on SENT_TO_SUPPLIER status
+        if (!"SENT_TO_SUPPLIER".equals(currentStatus)) {
+            throw new AppException(ErrorCode.VALIDATION_FAILED, "This Purchase Order cannot be cancelled. Current status: " + currentStatus + ". Only orders with status 'SENT_TO_SUPPLIER' can be cancelled.");
         }
 
         String fromStatus = po.getStatus();

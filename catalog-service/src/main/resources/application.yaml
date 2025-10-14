@@ -6,7 +6,7 @@ spring:
   application:
     name: catalog-service
   datasource:
-    url: "jdbc:mysql://localhost:3306/catalog_db2"
+    url: "jdbc:mysql://localhost:3306/catalog_db"
     driver-class-name: com.mysql.cj.jdbc.Driver
     username: root
     password: 12345678
@@ -43,6 +43,9 @@ spring:
 app:
   upload:
     dir: ./uploads
+  services:
+    order: http://localhost:8002
+    auth: http://localhost:8001
   
   # kafka:
   #   bootstrap-servers: localhost:9094
@@ -60,3 +63,8 @@ app:
 
 jwt:
   signerKey: "1TjXchw5FloESb63Kc+DFhTARvpWL4jUGCwfGWxuG5SIf/1y/LgJxHnMqaF6A/ij"
+
+# Logging configuration
+logging:
+  level:
+    com.service.catalog: INFO

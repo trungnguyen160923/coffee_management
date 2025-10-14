@@ -12,6 +12,10 @@ import com.service.catalog.entity.GoodsReceiptDetail;
 public interface GoodsReceiptMapper {
     @Mapping(target = "poId", source = "purchaseOrder.poId")
     @Mapping(target = "supplier", source = "supplier")
+    @Mapping(target = "branchId", source = "branchId")
+    @Mapping(target = "branchName", source = "purchaseOrder.branchId")
+    @Mapping(target = "receivedBy", source = "receivedBy")
+    @Mapping(target = "receivedByName", expression = "java(goodsReceipt.getReceivedBy() != null ? String.valueOf(goodsReceipt.getReceivedBy()) : null)")
     GoodsReceiptResponse toGoodsReceiptResponse(GoodsReceipt goodsReceipt);
     
     @Mapping(target = "grnId", source = "goodsReceipt.grnId")
@@ -20,5 +24,7 @@ public interface GoodsReceiptMapper {
     @Mapping(target = "ingredient", source = "ingredient")
     @Mapping(target = "mfgDate", source = "mfgDate")
     @Mapping(target = "expDate", source = "expDate")
+    @Mapping(target = "damageQty", source = "damageQty")
+    @Mapping(target = "statusLabel", expression = "java(goodsReceiptDetail.getStatus())")
     GoodsReceiptDetailResponse toGoodsReceiptDetailResponse(GoodsReceiptDetail goodsReceiptDetail);
 }

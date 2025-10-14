@@ -12,6 +12,13 @@ import com.service.catalog.service.UnitConversionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import java.math.BigDecimal;
+import java.time.LocalDate;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -239,5 +246,26 @@ public class GoodsReceiptController {
                     .message("Failed to update conversion: " + e.getMessage())
                     .build();
         }
+    }
+
+    @GetMapping
+    @PreAuthorize("hasRole('STAFF') or hasRole('MANAGER')")
+    public ApiResponse<Page<GoodsReceiptResponse>> search(
+            @RequestParam(required = false) Integer poId,
+            @RequestParam(required = false) Integer supplierId,
+            @RequestParam(required = false) Integer branchId,
+            @RequestParam(required = false) String grnNumber,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "createAt") String sortBy,
+            @RequestParam(defaultValue = "DESC") String sortDirection
+    ) {
+        Sort sort = Sort.by("DESC".equalsIgnoreCase(sortDirection) ? Sort.Direction.DESC : Sort.Direction.ASC, sortBy);
+        Pageable pageable = PageRequest.of(page, size, sort);
+        Page<GoodsReceiptResponse> result = goodsReceiptService.searchGoodsReceipts(poId, supplierId, branchId, grnNumber, status, fromDate, toDate, pageable);
+        return ApiResponse.<Page<GoodsReceiptResponse>>builder().result(result).build();
     }
 }

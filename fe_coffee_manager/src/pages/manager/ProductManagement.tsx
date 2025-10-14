@@ -209,7 +209,7 @@ export default function ProductManagement() {
                     })}
                     {(!data || data.content.length === 0) && (
                       <tr>
-                        <td colSpan={5} className="px-4 py-6 text-center text-gray-500">Không có dữ liệu</td>
+                        <td colSpan={5} className="px-4 py-6 text-center text-gray-500">No data available</td>
                       </tr>
                     )}
                   </tbody>

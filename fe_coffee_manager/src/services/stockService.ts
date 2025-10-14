@@ -2,11 +2,6 @@ import { apiClient } from '../config/api';
 
 const baseUrl = '/api/catalogs';
 
-interface ApiResponse<T> {
-  data: T;
-  status: number;
-  statusText: string;
-}
 
 export interface StockSearchParams {
   search?: string;
@@ -80,23 +75,20 @@ export const stockService = {
     if (params.sortBy) queryParams.append('sortBy', params.sortBy);
     if (params.sortDirection) queryParams.append('sortDirection', params.sortDirection);
 
-    console.log('Making API call to:', `${baseUrl}/stocks/search?${queryParams.toString()}`);
-    const response = await apiClient.get(`${baseUrl}/stocks/search?${queryParams.toString()}`) as ApiResponse<StockPageResponse>;
-    console.log('API response:', response);
-    console.log('Response data:', response.data);
-    return response.data;
+    const response = await apiClient.get(`${baseUrl}/stocks/search?${queryParams.toString()}`) as StockPageResponse;
+    return response;
   },
 
   // Lấy danh sách hàng tồn kho thấp
   getLowStockItems: async (branchId: number): Promise<StockResponse[]> => {
-    const response = await apiClient.get(`${baseUrl}/stocks/low-stock?branchId=${branchId}`) as ApiResponse<StockResponse[]>;
-    return response.data;
+    const response = await apiClient.get(`${baseUrl}/stocks/low-stock?branchId=${branchId}`) as StockResponse[];
+    return response;
   },
 
   // Lấy thông tin chi tiết một kho
   getStockById: async (stockId: number): Promise<StockResponse> => {
-    const response = await apiClient.get(`${baseUrl}/stocks/${stockId}`) as ApiResponse<StockResponse>;
-    return response.data;
+    const response = await apiClient.get(`${baseUrl}/stocks/${stockId}`) as StockResponse;
+    return response;
   },
 
   // Lấy kho theo chi nhánh
@@ -111,7 +103,7 @@ export const stockService = {
     queryParams.append('size', size.toString());
     if (search) queryParams.append('search', search);
 
-    const response = await apiClient.get(`${baseUrl}/stocks/branch/${branchId}?${queryParams.toString()}`) as ApiResponse<StockPageResponse>;
-    return response.data;
+    const response = await apiClient.get(`${baseUrl}/stocks/branch/${branchId}?${queryParams.toString()}`) as StockPageResponse;
+    return response;
   }
 };

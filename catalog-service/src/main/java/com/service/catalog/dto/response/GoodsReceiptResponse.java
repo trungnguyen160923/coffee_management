@@ -18,9 +18,13 @@ public class GoodsReceiptResponse {
     Integer poId;
     SupplierResponse supplier;
     Integer branchId;
+    String branchName;
     BigDecimal totalAmount;
     LocalDateTime receivedAt;
     Integer receivedBy;
+    String receivedByName;
+    String status;
+    String notes;
     List<GoodsReceiptDetailResponse> details;
     LocalDateTime createAt;
 }

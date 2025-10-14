@@ -69,6 +69,9 @@ public class GoodsReceiptDetail {
     @Column(name = "status", nullable = false, length = 20)
     String status; // OK, SHORT, OVER, DAMAGE
 
+    @Column(name = "damage_qty", nullable = false, columnDefinition = "DECIMAL(12,4) DEFAULT 0.0000")
+    BigDecimal damageQty;
+
     @Column(name = "note", length = 255)
     String note;
 

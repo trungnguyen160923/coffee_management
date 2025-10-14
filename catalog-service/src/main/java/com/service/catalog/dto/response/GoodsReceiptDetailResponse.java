@@ -22,12 +22,14 @@ public class GoodsReceiptDetailResponse {
     BigDecimal qtyInput;
     BigDecimal conversionFactor;
     BigDecimal qtyBase;
+    BigDecimal damageQty;
     BigDecimal unitPrice;
     BigDecimal lineTotal;
     String lotNumber;
     LocalDate mfgDate;
     LocalDate expDate;
     String status;
+    String statusLabel;
     String note;
     LocalDateTime createAt;
 }

@@ -298,6 +298,7 @@ CREATE TABLE goods_receipt_details (
   mfg_date         DATE DEFAULT NULL,
   exp_date         DATE DEFAULT NULL,
   status           ENUM('OK','SHORT','OVER','DAMAGE') NOT NULL DEFAULT 'OK',
+  damage_qty       DECIMAL(12,4) DEFAULT 0,
   note             VARCHAR(255) DEFAULT NULL,
   create_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CHECK (qty_input >= 0),
@@ -358,25 +359,7 @@ CREATE INDEX idx_posh_po ON purchase_order_status_history(po_id, changed_at);
 ALTER TABLE purchase_order_status_history
   ADD CONSTRAINT fk_posh_po FOREIGN KEY (po_id) REFERENCES purchase_orders(po_id) ON DELETE CASCADE;
 
--- Outbox logs for sending PO to supplier (email/API)
-DROP TABLE IF EXISTS po_outbox_logs;
-CREATE TABLE po_outbox_logs (
-  id          BIGINT PRIMARY KEY NOT NULL AUTO_INCREMENT,
-  po_id       INT NOT NULL,
-  to_email    VARCHAR(200) NOT NULL,
-  cc          VARCHAR(500) DEFAULT NULL,
-  subject     VARCHAR(200) DEFAULT NULL,
-  sent_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  status      VARCHAR(50) NOT NULL DEFAULT 'SENT',
-  message_id  VARCHAR(200) DEFAULT NULL,
-  error       VARCHAR(500) DEFAULT NULL,
-  create_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX idx_poo_po ON po_outbox_logs(po_id, sent_at);
-
-ALTER TABLE po_outbox_logs
-  ADD CONSTRAINT fk_poo_po FOREIGN KEY (po_id) REFERENCES purchase_orders(po_id) ON DELETE CASCADE;
+-- (Removed) Outbox logs for sending PO to supplier (email/API)
 
 -- Return Goods tables
 DROP TABLE IF EXISTS return_goods;

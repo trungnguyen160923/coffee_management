@@ -38,16 +38,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Call /me API to get current user information
           try {
             const currentUser = await authService.getCurrentUser();
-            console.log('Full API response for /me:', currentUser);
-            console.log('Current user details:', JSON.stringify(currentUser, null, 2));
             setUser(currentUser);
             
             // If user is a manager, set branch info directly from user data
             if (currentUser.role === 'manager' && currentUser.branch) {
-              console.log('Setting branch info from user data:', currentUser.branch);
               setManagerBranch(currentUser.branch);
             } else {
-              console.log('Not setting branch - role:', currentUser.role, 'branch:', currentUser.branch);
             }
           } catch (error) {
             console.error('Failed to get current user:', error);
@@ -94,8 +90,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (email: string, password: string) => {
     try {
       const response = await authService.login({ email, password });
-      console.log('Full login API response:', response);
-      console.log('Login user details:', JSON.stringify(response.user, null, 2));
       setUser(response.user);
       
       // If user is a manager, set branch info directly from user data

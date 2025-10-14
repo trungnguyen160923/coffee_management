@@ -16,7 +16,9 @@ import com.service.catalog.dto.ApiResponse;
 import com.service.catalog.dto.request.purchaseOrder.PurchaseOrderResquest;
 import com.service.catalog.dto.request.purchaseOrder.PurchaseOrderDetailUpdateRequest;
 import com.service.catalog.dto.request.purchaseOrder.SendToSupplierRequest;
+import com.service.catalog.dto.response.PoDetailReceiptStatus;
 import com.service.catalog.dto.response.PurchaseOrderResponse;
+import com.service.catalog.service.GoodsReceiptService;
 import com.service.catalog.service.PurchaseOrderService;
 
 import lombok.RequiredArgsConstructor;
@@ -27,6 +29,7 @@ import lombok.RequiredArgsConstructor;
 public class PurchaseOrderController {
 
     private final PurchaseOrderService purchaseOrderService;
+    private final GoodsReceiptService goodsReceiptService;
 
     @GetMapping("/branch/{branchId}")
     @PreAuthorize("hasRole('MANAGER')")
@@ -112,6 +115,15 @@ public class PurchaseOrderController {
                 .build();
     }
 
+        
+    @GetMapping("/{poId}/receipt-status")
+    public ApiResponse<List<PoDetailReceiptStatus>> getReceiptStatus(@PathVariable Integer poId ) {
+        
+        List<PoDetailReceiptStatus> statuses = goodsReceiptService.getPoDetailReceiptStatuses(poId);
+        return ApiResponse.<List<PoDetailReceiptStatus>>builder()
+                .result(statuses)
+                .build();
+    }
 }
 
 

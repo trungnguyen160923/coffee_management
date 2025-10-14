@@ -86,3 +86,4 @@ nominatim:
 geocoding:
   api:
     key: "dd6d33ea0b6b467b9b2ffed8e92c4e1a"
+  mandatory: true  # Set to false to allow branch creation without geocoding

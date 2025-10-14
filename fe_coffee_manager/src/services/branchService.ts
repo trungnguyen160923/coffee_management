@@ -137,11 +137,20 @@ export const branchService: BranchService = {
   },
 
   async getUnassignedBranches(): Promise<Branch[]> {
-    const resp = await apiClient.get<{ code: number; result: Branch[] }>(API_ENDPOINTS.BRANCHES.UNASSIGNED);
-    if ((resp as any).code && (resp as any).code !== 200 && (resp as any).code !== 1000) {
-      throw new Error((resp as any).message || 'Failed to fetch unassigned branches');
+    try {
+      const resp = await apiClient.get<{ code: number; result: Branch[]; message: string }>(API_ENDPOINTS.BRANCHES.UNASSIGNED);
+      
+      // Check if response has error code
+      if (resp.code && resp.code !== 200 && resp.code !== 1000) {
+        throw new Error(resp.message || 'Failed to fetch unassigned branches');
+      }
+      
+      // Return the result array
+      return resp.result || [];
+    } catch (error) {
+      console.error('Error in getUnassignedBranches:', error);
+      throw error;
     }
-    return (resp as any).result || [];
   },
 
 

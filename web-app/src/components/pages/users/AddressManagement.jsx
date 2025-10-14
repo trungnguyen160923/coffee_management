@@ -478,7 +478,7 @@ const AddressManagement = () => {
                                 {/* Alert Messages */}
                                 {error && (
                                     <div className="alert alert-warning" role="alert" style={{ marginBottom: '20px' }}>
-                                        <strong>⚠️ Demo Mode:</strong> {error}
+                                        <strong>Demo Mode:</strong> {error}
                                         <br />
                                         <small>Showing demo data. To use full functionality, please start Profile Service.</small>
                                     </div>

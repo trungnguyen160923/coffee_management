@@ -6,6 +6,7 @@ import orderservice.order_service.exception.AppException;
 import orderservice.order_service.exception.ErrorCode;
 import orderservice.order_service.repository.BranchRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.data.domain.Page;
@@ -22,6 +23,9 @@ public class BranchService {
 
     private final BranchRepository branchRepository;
     private final GeocodingService geocodingService;
+    
+    @Value("${geocoding.mandatory:true}")
+    private boolean geocodingMandatory;
 
     @Autowired
     public BranchService(BranchRepository branchRepository, GeocodingService geocodingService) {
@@ -52,16 +56,31 @@ public class BranchService {
         branch.setOpenHours(openHours);
         branch.setEndHours(endHours);
 
-        // Geocode address to get coordinates
+        // Geocode address to get coordinates - with rollback on failure if mandatory
         if (request.getAddress() != null && !request.getAddress().trim().isEmpty()) {
             try {
                 GeocodingService.Coordinates coordinates = geocodingService.geocodeAddressWithFallback(request.getAddress());
                 if (coordinates != null) {
                     branch.setLatitude(BigDecimal.valueOf(coordinates.getLatitude()));
                     branch.setLongitude(BigDecimal.valueOf(coordinates.getLongitude()));
+                } else if (geocodingMandatory) {
+                    // Geocoding failed and it's mandatory - rollback by throwing exception
+                    throw new AppException(ErrorCode.GEOCODING_FAILED, 
+                        "Không thể lấy tọa độ cho địa chỉ: " + request.getAddress() + 
+                        ". Vui lòng kiểm tra lại địa chỉ hoặc thử địa chỉ khác.");
                 }
+                // If geocoding is not mandatory and fails, continue without coordinates
+            } catch (AppException e) {
+                // Re-throw AppException as is
+                throw e;
             } catch (Exception e) {
-                // Geocoding failed but don't fail the branch creation
+                if (geocodingMandatory) {
+                    // Geocoding failed and it's mandatory - rollback by throwing exception
+                    throw new AppException(ErrorCode.GEOCODING_FAILED, 
+                        "Lỗi khi lấy tọa độ cho địa chỉ: " + request.getAddress() + 
+                        ". Chi tiết: " + e.getMessage());
+                }
+                // If geocoding is not mandatory and fails, continue without coordinates
             }
         }
 
@@ -153,7 +172,7 @@ public class BranchService {
         branch.setOpenHours(openHours);
         branch.setEndHours(endHours);
 
-        // Geocode address to get coordinates if address has changed
+        // Geocode address to get coordinates if address has changed - with rollback on failure if mandatory
         if (request.getAddress() != null && !request.getAddress().trim().isEmpty() 
             && !request.getAddress().equals(originalAddress)) {
             try {
@@ -161,9 +180,24 @@ public class BranchService {
                 if (coordinates != null) {
                     branch.setLatitude(BigDecimal.valueOf(coordinates.getLatitude()));
                     branch.setLongitude(BigDecimal.valueOf(coordinates.getLongitude()));
+                } else if (geocodingMandatory) {
+                    // Geocoding failed and it's mandatory - rollback by throwing exception
+                    throw new AppException(ErrorCode.GEOCODING_FAILED, 
+                        "Không thể lấy tọa độ cho địa chỉ: " + request.getAddress() + 
+                        ". Vui lòng kiểm tra lại địa chỉ hoặc thử địa chỉ khác.");
                 }
+                // If geocoding is not mandatory and fails, continue without coordinates
+            } catch (AppException e) {
+                // Re-throw AppException as is
+                throw e;
             } catch (Exception e) {
-                // Geocoding failed but don't fail the branch update
+                if (geocodingMandatory) {
+                    // Geocoding failed and it's mandatory - rollback by throwing exception
+                    throw new AppException(ErrorCode.GEOCODING_FAILED, 
+                        "Lỗi khi lấy tọa độ cho địa chỉ: " + request.getAddress() + 
+                        ". Chi tiết: " + e.getMessage());
+                }
+                // If geocoding is not mandatory and fails, continue without coordinates
             }
         }
 

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { X, FileText, Truck, Edit, Trash2 } from 'lucide-react';
 import catalogService from '../../services/catalogService';
 import toast from 'react-hot-toast';
+import { formatCurrency, formatQuantity } from '../../utils/helpers';
 
 interface PurchaseOrderDetailModalProps {
   open: boolean;
@@ -104,12 +105,12 @@ export default function PurchaseOrderDetailModal({ open, onClose, po, onRefresh 
                 <div className="text-sm text-gray-600">Status / Total</div>
                 <div className="mt-1 flex items-center gap-2">
                   <span className={`px-2 py-1 rounded text-xs ${localPo.status === 'DRAFT' ? 'bg-gray-100 text-gray-700' : localPo.status === 'APPROVED' ? 'bg-blue-100 text-blue-700' : localPo.status === 'RECEIVED' ? 'bg-green-100 text-green-700' : localPo.status === 'CANCELLED' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'}`}>{localPo.status}</span>
-                  <span className="text-gray-900 font-semibold">{Number(localPo.totalAmount).toLocaleString('vi-VN')}đ</span>
+                  <span className="text-gray-900 font-semibold">{formatCurrency(Number(localPo.totalAmount))}</span>
                 </div>
                 <div className="text-xs text-gray-500 mt-1">Branch #{localPo.branchId}</div>
                 <div className="text-xs text-gray-500 mt-1 space-x-2">
                   {localPo.expectedDeliveryAt && (<span>ETA: {new Date(localPo.expectedDeliveryAt).toLocaleDateString()}</span>)}
-                  {localPo.shippingCost !== undefined && (<span>Ship: {Number(localPo.shippingCost).toLocaleString('vi-VN')}đ</span>)}
+                  {localPo.shippingCost !== undefined && (<span>Ship: {formatCurrency(Number(localPo.shippingCost))}</span>)}
                 </div>
                 <div className="text-xs text-gray-400 mt-1 space-x-2">
                   {localPo.sentAt && (<span>Sent: {new Date(localPo.sentAt).toLocaleString()}</span>)}
@@ -148,19 +149,19 @@ export default function PurchaseOrderDetailModal({ open, onClose, po, onRefresh 
                               className="w-20 px-2 py-1 border rounded text-sm"
                             />
                           ) : (
-                            Number(d.qty).toLocaleString('vi-VN')
+                            formatQuantity(Number(d.qty))
                           )}
                         </td>
                         <td className="px-3 py-2">
-                          {Number(d.unitPrice).toLocaleString('vi-VN') + 'đ'}
+                          {formatCurrency(Number(d.unitPrice))}
                         </td>
                         <td className="px-3 py-2 font-medium">
                           {editingItem?.id === d.id ? (
                             <span className="text-blue-600">
-                              {(parseFloat(editForm.qty || '0') * Number(editingItem?.unitPrice ?? d.unitPrice)).toLocaleString('vi-VN')}đ
+                              {formatCurrency(parseFloat(editForm.qty || '0') * Number(editingItem?.unitPrice ?? d.unitPrice))}
                             </span>
                           ) : (
-                            Number(d.lineTotal).toLocaleString('vi-VN') + 'đ'
+                            formatCurrency(Number(d.lineTotal))
                           )}
                         </td>
                         {canEdit && (

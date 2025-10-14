@@ -148,7 +148,7 @@ export default function SupplierManagement() {
                     ))}
                     {(!data || data.content.length === 0) && (
                       <tr>
-                        <td colSpan={8} className="px-4 py-6 text-center text-gray-500">Không có dữ liệu</td>
+                        <td colSpan={8} className="px-4 py-6 text-center text-gray-500">No data available</td>
                       </tr>
                     )}
                   </tbody>

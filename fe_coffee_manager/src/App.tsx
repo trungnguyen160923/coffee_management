@@ -20,6 +20,8 @@ import ManagerProductManagement from './pages/manager/ProductManagement';
 import IngredientProcurement from './pages/manager/IngredientProcurement';
 import PurchaseOrders from './pages/manager/PurchaseOrders';
 import StockManagement from './pages/manager/StockManagement';
+import GoodsReceipts from './pages/manager/GoodsReceipts';
+import ReturnGoods from './pages/manager/ReturnGoods';
 import { StaffDashboard } from './pages/staff/StaffDashboard';
 import SupplierConfirmPage from './pages/supplier/SupplierConfirmPage';
 import SupplierSuccessPage from './pages/supplier/SupplierSuccessPage';
@@ -46,11 +48,9 @@ function AppRoutes() {
 
   // Check if current path is a public supplier route
   const isPublicSupplierRoute = window.location.pathname.startsWith('/supplier/');
-  console.log('AppRoutes - current path:', window.location.pathname, 'isPublicSupplierRoute:', isPublicSupplierRoute);
   
   // For public supplier routes, always allow access
   if (isPublicSupplierRoute) {
-    console.log('Rendering public supplier routes');
     return (
       <Routes>
         <Route path="/supplier/po/:poId/confirm" element={<SupplierConfirmPage />} />
@@ -114,6 +114,8 @@ function AppRoutes() {
             <Route path="suppliers" element={<Layout><ManagerSupplierManagement /></Layout>} />
             <Route path="purchase-orders" element={<Layout><PurchaseOrders /></Layout>} />
             <Route path="inventory" element={<Layout><StockManagement /></Layout>} />
+            <Route path="goods-receipts" element={<Layout><GoodsReceipts /></Layout>} />
+            <Route path="return-goods" element={<Layout><ReturnGoods /></Layout>} />
             <Route path="statistics" element={<Layout><div className="p-8"><h1 className="text-2xl font-bold">Thống kê chi nhánh</h1></div></Layout>} />
             <Route path="*" element={<NotFoundPage showLoginButton={false} />} />
           </Routes>
