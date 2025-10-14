@@ -49,6 +49,75 @@ public class EmailService {
         }
     }
 
+    public void sendReservationConfirmationEmail(String toEmail, String customerName,
+            String branchName, LocalDateTime reservedAt, Integer partySize, String notes) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+            helper.setFrom(fromEmail);
+            helper.setTo(toEmail);
+            helper.setSubject("Reservation Confirmation - Coffee Shop");
+
+            String formattedDate = reservedAt.format(DateTimeFormatter.ofPattern("MM/dd/yyyy HH:mm"));
+            String htmlContent = String.format(
+                    """
+                            <!DOCTYPE html>
+                            <html>
+                            <head>
+                                <meta charset=\"UTF-8\">
+                                <style>
+                                    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                                    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                                    .header { background-color: #8B4513; color: white; padding: 20px; text-align: center; }
+                                    .content { padding: 20px; background-color: #f9f9f9; }
+                                    .info { background-color: white; padding: 15px; margin: 10px 0; border-radius: 5px; }
+                                    .footer { text-align: center; margin-top: 20px; color: #666; }
+                                </style>
+                            </head>
+                            <body>
+                                <div class=\"container\">
+                                    <div class=\"header\">
+                                        <h1>☕ Coffee Shop</h1>
+                                        <h2>Reservation Confirmed</h2>
+                                    </div>
+                                    <div class=\"content\">
+                                        <p>Hello <strong>%s</strong>,</p>
+                                        <p>Your table reservation has been confirmed. We look forward to serving you!</p>
+                                        <div class=\"info\">
+                                            <p><strong>Branch:</strong> %s</p>
+                                            <p><strong>Date & Time:</strong> %s</p>
+                                            <p><strong>Party Size:</strong> %d</p>
+                                            %s
+                                        </div>
+                                        <div class=\"info\">
+                                            <h3>📞 Customer Support</h3>
+                                            <p>📧 Email: support@coffeeshop.com</p>
+                                            <p>📞 Hotline: 1900-1234</p>
+                                        </div>
+                                    </div>
+                                    <div class=\"footer\">
+                                        <p>Thank you for choosing Coffee Shop!</p>
+                                        <p>© 2025 Coffee Shop. All rights reserved.</p>
+                                    </div>
+                                </div>
+                            </body>
+                            </html>
+                            """,
+                    customerName,
+                    branchName,
+                    formattedDate,
+                    partySize,
+                    (notes != null && !notes.isBlank()) ? ("<p><strong>Notes:</strong> " + notes + "</p>") : "");
+
+            helper.setText(htmlContent, true);
+
+            mailSender.send(message);
+        } catch (MessagingException e) {
+            throw new RuntimeException("Failed to send reservation email", e);
+        }
+    }
+
     private String buildOrderConfirmationHtml(String customerName, Integer orderId,
             List<OrderItemInfo> orderItems, BigDecimal totalAmount,
             String deliveryAddress, String paymentMethod, LocalDateTime orderDate) {

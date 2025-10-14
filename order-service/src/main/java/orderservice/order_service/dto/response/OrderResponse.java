@@ -26,7 +26,9 @@ public class OrderResponse {
     String paymentStatus;
     java.math.BigDecimal subtotal;
     java.math.BigDecimal discount;
+    java.math.BigDecimal vat;
     BigDecimal totalAmount;
+    String discountCode;
     String notes;
     LocalDateTime orderDate;
     LocalDateTime createAt;

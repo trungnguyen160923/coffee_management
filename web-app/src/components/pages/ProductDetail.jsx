@@ -34,7 +34,7 @@ const ProductDetail = () => {
         return product?.productDetails?.find(d => d.pdId === selectedDetailId) || null;
     }, [product, selectedDetailId]);
 
-    const formatPrice = (value) => new Intl.NumberFormat('vi-VN').format(Number(value || 0));
+    const formatPrice = (value) => new Intl.NumberFormat('vi-VN').format(Number(value || 0)) + ' VND';
 
     const handleAddToCart = async (e) => {
         e.preventDefault();

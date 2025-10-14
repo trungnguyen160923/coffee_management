@@ -42,6 +42,7 @@ CREATE TABLE reservations (
   customer_id INT DEFAULT NULL, -- loose reference to customer_profiles/user_id
   customer_name VARCHAR(50) DEFAULT NULL,
   phone VARCHAR(20) DEFAULT NULL,
+  gmail VARCHAR(100) DEFAULT NULL,
   branch_id INT NOT NULL,
   reserved_at DATETIME NOT NULL, -- when the reservation is scheduled for
   status VARCHAR(50) NOT NULL DEFAULT 'PENDING',
@@ -87,6 +88,7 @@ CREATE TABLE orders (
   subtotal DECIMAL(12,2) NOT NULL DEFAULT 0.00,
   discount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
   total_amount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+  discount_code VARCHAR(50) DEFAULT NULL,
   create_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   update_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (order_id),
@@ -167,4 +169,26 @@ CREATE TABLE IF NOT EXISTS cart_items (
 ALTER TABLE branches
 ADD COLUMN latitude DECIMAL(10,8) DEFAULT NULL,
 ADD COLUMN longitude DECIMAL(11,8) DEFAULT NULL;
+-- Tạo bảng discounts
+CREATE TABLE discounts (
+  discount_id INT PRIMARY KEY AUTO_INCREMENT,   
+  code VARCHAR(50) NOT NULL UNIQUE,
+  name VARCHAR(100) NOT NULL,
+  description VARCHAR(255) DEFAULT NULL,
+  discount_type ENUM('PERCENT', 'AMOUNT') NOT NULL,
+  discount_value DECIMAL(10,2) NOT NULL,
+  min_order_amount DECIMAL(12,2) DEFAULT 0.00,
+  max_discount_amount DECIMAL(12,2) DEFAULT NULL,
+  start_date DATETIME NOT NULL,
+  end_date DATETIME NOT NULL,
+  usage_limit INT DEFAULT 0,
+  used_count INT DEFAULT 0,
+  branch_id INT NULL COMMENT 'NULL = toàn hệ thống, != NULL = chỉ áp dụng cho 1 chi nhánh',
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  -- Thời gian tạo và cập nhật
+  create_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  update_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  -- Khóa ngoại liên kết tới bảng branches (nếu có)
+  CONSTRAINT fk_discount_branch FOREIGN KEY (branch_id) REFERENCES branches(branch_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

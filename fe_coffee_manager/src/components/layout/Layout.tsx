@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { 
-  Coffee, 
-  Users, 
-  Package, 
-  BarChart3, 
-  LogOut, 
+import {
+  Coffee,
+  Users,
+  Package,
+  BarChart3,
+  LogOut,
   Home,
   Store,
   BookOpen,
@@ -16,7 +16,9 @@ import {
   Truck,
   FileText,
   ArrowLeft,
-  UtensilsCrossed
+  UtensilsCrossed,
+  Square,
+  Tag
 } from 'lucide-react';
 
 import { DEFAULT_IMAGES } from '../../config/constants';
@@ -46,6 +48,7 @@ export function Layout({ children }: LayoutProps) {
         { icon: BookOpen, label: 'Recipes', path: '/admin/recipes' },
         { icon: Store, label: 'Branches', path: '/admin/branches' },
         { icon: Users, label: 'Managers', path: '/admin/managers' },
+        { icon: Tag, label: 'Discounts', path: '/admin/discounts' },
         { icon: BarChart3, label: 'Statistics', path: '/admin/statistics' },
       ];
     } else if (user?.role === 'manager') {
@@ -53,6 +56,8 @@ export function Layout({ children }: LayoutProps) {
         { icon: Home, label: 'Overview', path: '/manager' },
         { icon: Users, label: 'Staff', path: '/manager/staff' },
         { icon: Package, label: 'Products', path: '/manager/products' },
+        { icon: Square, label: 'Tables', path: '/manager/tables' },
+        { icon: Tag, label: 'Discounts', path: '/manager/discounts' },
         { icon: Truck, label: 'Procurement', path: '/manager/procurement' },
         { icon: FileText, label: 'Purchase Orders', path: '/manager/purchase-orders' },
         { icon: Truck, label: 'Suppliers', path: '/manager/suppliers' },
@@ -66,6 +71,7 @@ export function Layout({ children }: LayoutProps) {
         { icon: Home, label: 'Overview', path: '/staff' },
         { icon: ShoppingCart, label: 'Orders', path: '/staff/orders' },
         { icon: Calendar, label: 'Reservations', path: '/staff/reservations' },
+        { icon: Square, label: 'Tables', path: '/staff/tables' },
         { icon: BookOpen, label: 'Recipes', path: '/staff/recipes' },
       ];
     }
@@ -134,7 +140,7 @@ export function Layout({ children }: LayoutProps) {
 
   const handleLogout = async () => {
     if (isLoggingOut) return;
-    
+
     setIsLoggingOut(true);
     try {
       logout();

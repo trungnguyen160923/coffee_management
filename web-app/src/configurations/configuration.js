@@ -40,6 +40,10 @@ export const API = {
   GET_ORDERS_BY_CUSTOMER: "/order-service/api/orders/customer",
   // Email service
   SEND_ORDER_CONFIRMATION_EMAIL: "/order-service/api/email/send-order-confirmation",
+  // Discount APIs (via API Gateway)
+  VALIDATE_DISCOUNT: "/order-service/api/discounts/validate",
+  APPLY_DISCOUNT: "/order-service/api/discounts/apply",
+  GET_AVAILABLE_DISCOUNTS: "/order-service/api/discounts/available",
   // Address APIs (via API Gateway)
   CREATE_ADDRESS: "/profiles/addresses",
   GET_CUSTOMER_ADDRESSES: "/profiles/customer-addresses",

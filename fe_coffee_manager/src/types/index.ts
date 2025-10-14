@@ -1,52 +1,52 @@
 export interface User {
-    id: string;
-    name: string;
-    email: string;
-    role: 'admin' | 'manager' | 'staff';
-    branchId?: string; // Keep for backward compatibility
-    branch?: Branch;   // New field from backend
-    avatar?: string;
-    // Additional fields from backend API
-    user_id?: number;
-    fullname?: string;
-    phoneNumber?: string;
-    dob?: string | null;
-    avatarUrl?: string | null;
-    bio?: string | null;
-    identityCard?: string;
-    hireDate?: string;
-    position?: string | null;
-    salary?: number | null;
-    adminLevel?: number | null;
-    notes?: string | null;
-  }
-  
-  export interface Branch {
-    branchId: number;
-    name: string;
-    address: string;
-    phone: string;
-    managerUserId: number;
-    openHours: string;
-    endHours: string;
-    createAt: string;
-    updateAt: string;
-  }
+  id: string;
+  name: string;
+  email: string;
+  role: 'admin' | 'manager' | 'staff';
+  branchId?: string; // Keep for backward compatibility
+  branch?: Branch;   // New field from backend
+  avatar?: string;
+  // Additional fields from backend API
+  user_id?: number;
+  fullname?: string;
+  phoneNumber?: string;
+  dob?: string | null;
+  avatarUrl?: string | null;
+  bio?: string | null;
+  identityCard?: string;
+  hireDate?: string;
+  position?: string | null;
+  salary?: number | null;
+  adminLevel?: number | null;
+  notes?: string | null;
+}
 
-  export interface ManagerProfile {
-    userId: number;
-    branchId: number;
-    hireDate: string;
-    identityCard: string;
-    createAt: string;
-    updateAt: string;
-    branch: Branch | null;
-  }
+export interface Branch {
+  branchId: number;
+  name: string;
+  address: string;
+  phone: string;
+  managerUserId: number;
+  openHours: string;
+  endHours: string;
+  createAt: string;
+  updateAt: string;
+}
 
-  export interface ManagerListResponse {
-    code: number;
-    result: ManagerProfile[];
-  }
+export interface ManagerProfile {
+  userId: number;
+  branchId: number;
+  hireDate: string;
+  identityCard: string;
+  createAt: string;
+  updateAt: string;
+  branch: Branch | null;
+}
+
+export interface ManagerListResponse {
+  code: number;
+  result: ManagerProfile[];
+}
 
 export interface RoleDto {
   roleId: number;
@@ -76,31 +76,31 @@ export interface UsersListResponseDto<T> {
   code: number;
   result: T[];
 }
-  
-  export interface Product {
-    id: string;
-    name: string;
-    category: string;
-    basePrice: number;
-    description: string;
-    image: string;
-    status: 'active' | 'inactive';
-  }
-  
-  export interface Recipe {
-    id: string;
-    productId: string;
-    size: 'S' | 'M' | 'L';
-    ingredients: Ingredient[];
-    instructions: string;
-    prepTime: number;
-  }
-  
-  export interface Ingredient {
-    name: string;
-    quantity: number;
-    unit: string;
-  }
+
+export interface Product {
+  id: string;
+  name: string;
+  category: string;
+  basePrice: number;
+  description: string;
+  image: string;
+  status: 'active' | 'inactive';
+}
+
+export interface Recipe {
+  id: string;
+  productId: string;
+  size: 'S' | 'M' | 'L';
+  ingredients: Ingredient[];
+  instructions: string;
+  prepTime: number;
+}
+
+export interface Ingredient {
+  name: string;
+  quantity: number;
+  unit: string;
+}
 
 // Catalog service shapes
 export interface CatalogSize {
@@ -361,47 +361,50 @@ export interface UpdateUnitRequest {
   factorToBase?: number;
   baseUnitCode?: string | null;
 }
-  
-  export interface Order {
-    id: string;
-    customerId?: string;
-    items: OrderItem[];
-    total: number;
-    status: 'pending' | 'preparing' | 'ready' | 'completed' | 'cancelled';
-    type: 'dine-in' | 'takeaway' | 'online';
-    branchId: string;
-    staffId: string;
-    createdAt: string;
-  }
-  
-  export interface OrderItem {
-    productId: string;
-    productName: string;
-    size: 'S' | 'M' | 'L';
-    quantity: number;
-    price: number;
-    notes?: string;
-  }
-  
-  export interface Reservation {
-    id: string;
-    customerName: string;
-    customerPhone: string;
-    tableNumber: number;
-    guestCount: number;
-    date: string;
-    time: string;
-    status: 'confirmed' | 'seated' | 'completed' | 'cancelled';
-    branchId: string;
-  }
-  
-  export interface InventoryItem {
-    id: string;
-    name: string;
-    category: string;
-    currentStock: number;
-    minStock: number;
-    unit: string;
-    lastUpdated: string;
-    branchId: string;
-  }
+
+export interface Order {
+  id: string;
+  customerId?: string;
+  items: OrderItem[];
+  total: number;
+  status: 'pending' | 'preparing' | 'ready' | 'completed' | 'cancelled';
+  type: 'dine-in' | 'takeaway' | 'online';
+  branchId: string;
+  staffId: string;
+  createdAt: string;
+}
+
+export interface OrderItem {
+  productId: string;
+  productName: string;
+  size: 'S' | 'M' | 'L';
+  quantity: number;
+  price: number;
+  notes?: string;
+}
+
+export interface Reservation {
+  id: string;
+  customerName: string;
+  customerPhone: string;
+  tableNumber: number;
+  guestCount: number;
+  date: string;
+  time: string;
+  status: 'confirmed' | 'seated' | 'completed' | 'cancelled';
+  branchId: string;
+}
+
+export interface InventoryItem {
+  id: string;
+  name: string;
+  category: string;
+  currentStock: number;
+  minStock: number;
+  unit: string;
+  lastUpdated: string;
+  branchId: string;
+}
+
+// Table Management Types
+export * from './table';

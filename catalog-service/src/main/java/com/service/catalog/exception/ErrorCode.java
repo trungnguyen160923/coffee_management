@@ -55,8 +55,10 @@ public enum ErrorCode {
     EMPTY_ADDRESS(1053, "Address is required", HttpStatus.BAD_REQUEST),
     SUPPLIER_NOT_FOUND(1054, "Supplier not found", HttpStatus.NOT_FOUND),
     INVALID_NOTE(1055, "Note must be at most {max} characters", HttpStatus.BAD_REQUEST),
-    SUPPLIER_IN_USE(1056, "Cannot delete supplier. Supplier is currently being used in purchase orders", HttpStatus.BAD_REQUEST),
-    SUPPLIER_IN_USE_INGREDIENTS(1057, "Cannot delete supplier. Supplier is currently being used in ingredients", HttpStatus.BAD_REQUEST),
+    SUPPLIER_IN_USE(1056, "Cannot delete supplier. Supplier is currently being used in purchase orders",
+            HttpStatus.BAD_REQUEST),
+    SUPPLIER_IN_USE_INGREDIENTS(1057, "Cannot delete supplier. Supplier is currently being used in ingredients",
+            HttpStatus.BAD_REQUEST),
 
     // Ingredient errors (1058-1068)
     EMPTY_NAME_INGREDIENT(1058, "Name ingredient is required", HttpStatus.BAD_REQUEST),
@@ -79,12 +81,15 @@ public enum ErrorCode {
     UNIT_NOT_FOUND(1073, "Unit not found", HttpStatus.NOT_FOUND),
     UNIT_ALREADY_EXISTS(1074, "Unit already exists", HttpStatus.BAD_REQUEST),
     BASE_UNIT_CODE_NOT_FOUND(1075, "Base unit code not found", HttpStatus.BAD_REQUEST),
-    UNIT_IN_USE_AS_BASE(1076, "Cannot delete unit. Unit is being used as base unit by other units", HttpStatus.BAD_REQUEST),
+    UNIT_IN_USE_AS_BASE(1076, "Cannot delete unit. Unit is being used as base unit by other units",
+            HttpStatus.BAD_REQUEST),
 
     // recipe errors (1077-1085)
     EMPTY_NAME_RECIPE(1077, "Name recipe is required", HttpStatus.BAD_REQUEST),
     INVALID_NAME_RECIPE(1078, "Name recipe must be at most {max} characters", HttpStatus.BAD_REQUEST),
-    RECIPE_NAME_ALREADY_EXISTS(1079, "A recipe with this name already exists for the selected product and version. Please choose a different name or increase the version number.", HttpStatus.BAD_REQUEST),
+    RECIPE_NAME_ALREADY_EXISTS(1079,
+            "A recipe with this name already exists for the selected product and version. Please choose a different name or increase the version number.",
+            HttpStatus.BAD_REQUEST),
     RECIPE_IN_USE(1080, "Recipe is currently being used in products", HttpStatus.BAD_REQUEST),
     RECIPE_NOT_FOUND(1081, "Recipe not found", HttpStatus.NOT_FOUND),
     EMPTY_PD_ID(1082, "Product detail id is required", HttpStatus.BAD_REQUEST),
@@ -105,6 +110,18 @@ public enum ErrorCode {
     INVALID_UNIT_CODE(1097, "Unit code must be at most {max} characters", HttpStatus.BAD_REQUEST),
     EMPTY_NOTE(1098, "Note is required", HttpStatus.BAD_REQUEST),
     RECIPE_NOT_DELETED(1099, "Recipe is not deleted", HttpStatus.BAD_REQUEST),
+
+    // Table errors (1100-1109)
+    TABLE_NOT_FOUND(1100, "Table not found", HttpStatus.NOT_FOUND),
+    TABLE_LABEL_EXISTS(1101, "Table label already exists in this branch", HttpStatus.BAD_REQUEST),
+    EMPTY_TABLE_LABEL(1102, "Table label is required", HttpStatus.BAD_REQUEST),
+    INVALID_TABLE_LABEL(1103, "Table label must be at most {max} characters", HttpStatus.BAD_REQUEST),
+    EMPTY_CAPACITY(1104, "Capacity is required", HttpStatus.BAD_REQUEST),
+    INVALID_CAPACITY(1105, "Capacity must be between 1 and 20", HttpStatus.BAD_REQUEST),
+    EMPTY_BRANCH_ID(1106, "Branch ID is required", HttpStatus.BAD_REQUEST),
+    INVALID_BRANCH_ID(1107, "Branch ID must be a positive number", HttpStatus.BAD_REQUEST),
+    TABLE_IN_USE(1108, "Table is currently in use and cannot be deleted", HttpStatus.BAD_REQUEST),
+    INVALID_TABLE_STATUS(1109, "Invalid table status", HttpStatus.BAD_REQUEST),
     ;
 
     ErrorCode(int code, String message, HttpStatusCode statusCode) {

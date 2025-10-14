@@ -103,10 +103,10 @@ class ApiClient {
     options: RequestInit = {}
   ): Promise<T> {
     const url = `${this.baseURL}${endpoint}`;
-    
+
     // Proactive refresh if token is about to expire
     if (this.token && this.refreshToken && this.isAccessExpiringSoon()) {
-      try { await this.refreshAccessToken(); } catch {}
+      try { await this.refreshAccessToken(); } catch { }
     }
 
     const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
@@ -124,10 +124,10 @@ class ApiClient {
 
     try {
       let response = await fetch(url, config);
-      
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        
+
         // If unauthorized, try one-time refresh then retry
         if (response.status === 401 && this.refreshToken) {
           try {
@@ -158,7 +158,7 @@ class ApiClient {
             (error as any).code = errorData.code;
             (error as any).response = errorData;
             // Notify app to force logout
-            try { window.dispatchEvent(new CustomEvent('auth-refresh-failed', { detail: 'unauthenticated' })); } catch {}
+            try { window.dispatchEvent(new CustomEvent('auth-refresh-failed', { detail: 'unauthenticated' })); } catch { }
             throw error;
           }
         } else {
@@ -167,26 +167,31 @@ class ApiClient {
           (error as any).status = response.status;
           (error as any).code = errorData.code;
           (error as any).response = errorData;
-          
+
           throw error;
         }
       }
 
       const result = await response.json();
-      
-      // Check if ApiResponse has error code
-      if (result.code && result.code !== 1000 && result.code !== 200) {
+
+      // Check if ApiResponse has error code (only throw error for non-success codes)
+      if (result.code && result.code !== 1000 && result.code !== 200 && result.code !== 2000) {
         const error = new Error(result.message || `API error! code: ${result.code}`);
         (error as any).status = response.status;
         (error as any).code = result.code;
         (error as any).response = result;
         throw error;
       }
-      
+
       return result;
     } catch (error) {
       console.error('API request failed:', error);
-      throw error;
+      // Don't re-throw if it's already an Error object with proper message
+      if (error instanceof Error) {
+        throw error;
+      }
+      // Create a proper Error object for other cases
+      throw new Error(typeof error === 'string' ? error : 'API request failed');
     }
   }
 
