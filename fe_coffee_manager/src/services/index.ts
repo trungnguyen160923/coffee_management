@@ -7,29 +7,44 @@ export { default as managerService } from './managerService';
 export { default as staffService } from './staffService';
 export { default as catalogService } from './catalogService';
 export { stockService } from './stockService';
+export { default as tableService } from './tableService';
+export { default as discountService } from './discountService';
 
 // Export API client
 export { default as apiClient } from '../config/api';
 
 // Export types
 export type { LoginRequest, LoginResponse, RegisterRequest } from './authService';
-export type { 
-  CreateProductRequest, 
-  UpdateProductRequest, 
-  ProductFilters, 
-  ProductListResponse 
+export type {
+  CreateProductRequest,
+  UpdateProductRequest,
+  ProductFilters,
+  ProductListResponse
 } from './productService';
-export type { 
-  CreateOrderRequest, 
-  UpdateOrderRequest, 
-  OrderFilters, 
-  OrderListResponse, 
-  OrderStats 
+export type {
+  CreateOrderRequest,
+  UpdateOrderRequest,
+  OrderFilters,
+  OrderListResponse,
+  OrderStats
 } from './orderService';
-export type { 
-  CreateBranchRequest, 
-  UpdateBranchRequest, 
-  BranchFilters, 
-  BranchListResponse, 
-  BranchStats 
+export type {
+  CreateBranchRequest,
+  UpdateBranchRequest,
+  BranchFilters,
+  BranchListResponse,
+  BranchStats
 } from './branchService';
+export type {
+  DiscountFilters,
+  DiscountListResponse,
+  DiscountStats
+} from './discountService';
+export type {
+  Discount,
+  CreateDiscountRequest,
+  UpdateDiscountRequest,
+  ApplyDiscountRequest,
+  DiscountApplicationResponse,
+  DiscountPageResponse
+} from '../types/discount';

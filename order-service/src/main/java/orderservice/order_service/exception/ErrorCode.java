@@ -49,12 +49,35 @@ public enum ErrorCode {
     RESERVATION_TIME_TOO_EARLY(1036, "Reservation must be at least 1 hour in advance", HttpStatus.BAD_REQUEST),
     RESERVATION_TIME_TOO_LATE(1037, "Reservation cannot be more than 30 days in advance", HttpStatus.BAD_REQUEST),
     RESERVATION_CANNOT_BE_CANCELLED(1038, "Reservation cannot be cancelled", HttpStatus.BAD_REQUEST),
+    RESERVATION_OUTSIDE_BUSINESS_HOURS(1039, "Reservation time is outside branch business hours",
+            HttpStatus.BAD_REQUEST),
     PRODUCT_NOT_FOUND(1039, "Product not found", HttpStatus.NOT_FOUND),
     ORDER_NOT_FOUND(1040, "Order not found", HttpStatus.NOT_FOUND),
     ORDER_CREATION_FAILED(1041, "Order creation failed", HttpStatus.INTERNAL_SERVER_ERROR),
     CART_ITEM_NOT_FOUND(1042, "Cart item not found", HttpStatus.NOT_FOUND),
     VALIDATION_FAILED(4000, "Validation failed", HttpStatus.BAD_REQUEST),
     BRANCH_IN_USE(1040, "Branch is in use", HttpStatus.BAD_REQUEST),
+
+    // Table Management Error Codes
+    TABLE_NOT_FOUND(2001, "Table not found", HttpStatus.NOT_FOUND),
+    TABLE_LABEL_EXISTS(2002, "Table label already exists in this branch", HttpStatus.BAD_REQUEST),
+    TABLE_NOT_AVAILABLE(2003, "Table is not available", HttpStatus.BAD_REQUEST),
+    TABLE_BRANCH_MISMATCH(2004, "Table does not belong to the same branch as reservation", HttpStatus.BAD_REQUEST),
+    INSUFFICIENT_TABLE_CAPACITY(2005, "Insufficient table capacity for party size", HttpStatus.BAD_REQUEST),
+    RESERVATION_CANNOT_BE_ASSIGNED(2006, "Reservation cannot be assigned tables in current status",
+            HttpStatus.BAD_REQUEST),
+    TABLE_CANNOT_BE_DELETED(2007, "Table cannot be deleted while occupied or reserved", HttpStatus.BAD_REQUEST),
+
+    // Discount Error Codes
+    DISCOUNT_NOT_FOUND(3001, "Discount not found", HttpStatus.NOT_FOUND),
+    DISCOUNT_CODE_EXISTED(3002, "Discount code already exists", HttpStatus.BAD_REQUEST),
+    INVALID_DISCOUNT_DATE(3003, "Start date must be before end date", HttpStatus.BAD_REQUEST),
+    INVALID_DISCOUNT_VALUE(3004, "Invalid discount value", HttpStatus.BAD_REQUEST),
+    DISCOUNT_EXPIRED(3005, "Discount has expired", HttpStatus.BAD_REQUEST),
+    DISCOUNT_NOT_ACTIVE(3006, "Discount is not active", HttpStatus.BAD_REQUEST),
+    DISCOUNT_USAGE_LIMIT_EXCEEDED(3007, "Discount usage limit exceeded", HttpStatus.BAD_REQUEST),
+    DISCOUNT_MIN_ORDER_NOT_MET(3008, "Minimum order amount not met", HttpStatus.BAD_REQUEST),
+    DISCOUNT_BRANCH_MISMATCH(3009, "Discount not applicable for this branch", HttpStatus.BAD_REQUEST),
     ;
 
     ErrorCode(int code, String message, HttpStatusCode statusCode) {

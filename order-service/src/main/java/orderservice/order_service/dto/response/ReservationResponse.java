@@ -8,6 +8,7 @@ public class ReservationResponse {
     private Integer customerId;
     private String customerName;
     private String phone;
+    private String email;
     private Integer branchId;
     private String branchName;
     private LocalDateTime reservedAt;
@@ -22,13 +23,14 @@ public class ReservationResponse {
     }
 
     public ReservationResponse(Integer reservationId, Integer customerId, String customerName,
-            String phone, Integer branchId, String branchName, LocalDateTime reservedAt,
+            String phone, String email, Integer branchId, String branchName, LocalDateTime reservedAt,
             String status, Integer partySize, String notes, LocalDateTime createAt,
             LocalDateTime updateAt) {
         this.reservationId = reservationId;
         this.customerId = customerId;
         this.customerName = customerName;
         this.phone = phone;
+        this.email = email;
         this.branchId = branchId;
         this.branchName = branchName;
         this.reservedAt = reservedAt;
@@ -70,6 +72,14 @@ public class ReservationResponse {
 
     public void setPhone(String phone) {
         this.phone = phone;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
     }
 
     public Integer getBranchId() {

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { reservationService } from '../../services/reservationService';
+import { showToast } from '../../utils/toast';
 
 const BookTableForm = () => {
     const [formData, setFormData] = useState({
@@ -8,6 +9,7 @@ const BookTableForm = () => {
         date: '',
         time: '',
         phone: '',
+        email: '',
         partySize: 1,
         branchId: '',
         message: ''
@@ -62,6 +64,7 @@ const BookTableForm = () => {
                 setBranches(response.result || []);
             } catch (err) {
                 setError('Unable to load branches. Please try again later.');
+                showToast('Unable to load branches. Please try again later.', 'error');
             }
         };
 
@@ -92,6 +95,7 @@ const BookTableForm = () => {
         const date = (formData.date || '').trim();
         const time = (formData.time || '').trim();
         const phone = (formData.phone || '').trim();
+        const email = (formData.email || '').trim();
         const branchId = (formData.branchId || '').toString().trim();
 
         const missing = [];
@@ -107,10 +111,11 @@ const BookTableForm = () => {
             if (!date) missing.push('Date');
             if (!time) missing.push('Time');
             if (!phone) missing.push('Phone');
+            if (!email) missing.push('Email');
             if (!branchId) missing.push('Branch');
         }
 
-        return { valid: missing.length === 0, missing, values: { firstName, date, time, phone, branchId } };
+        return { valid: missing.length === 0, missing, values: { firstName, date, time, phone, email, branchId } };
     };
 
     const handleSubmit = async (e) => {
@@ -119,7 +124,9 @@ const BookTableForm = () => {
         const check = validateFields();
 
         if (!check.valid) {
-            setError(`Please fill all the Mandatory details !! Missing: ${check.missing.join(', ')}`);
+            const msg = `Please fill all the Mandatory details !! Missing: ${check.missing.join(', ')}`;
+            setError(msg);
+            showToast(msg, 'error');
             return;
         }
 
@@ -161,6 +168,7 @@ const BookTableForm = () => {
                 payload = {
                     customerName,
                     phone: check.values.phone,
+                    email: check.values.email,
                     branchId,
                     reservedAt,
                     partySize: formData.partySize,
@@ -180,12 +188,17 @@ const BookTableForm = () => {
             const resp = await reservationService.createReservation(payload);
 
             if ((resp && resp.code === 200) || (resp && resp.code === 201)) {
-                setSuccess(resp.message || 'Table booking request submitted successfully!');
+                const msg = resp.message || 'Table booking request submitted successfully!';
+                setSuccess(msg);
+                showToast(msg, 'success');
             } else if (resp && resp.message) {
                 // API returned non-200 code but has message
                 setError(resp.message);
+                showToast(resp.message, 'error');
             } else {
-                setSuccess('Table booking request submitted successfully!');
+                const msg = 'Table booking request submitted successfully!';
+                setSuccess(msg);
+                showToast(msg, 'success');
             }
 
             // Reset form
@@ -195,13 +208,16 @@ const BookTableForm = () => {
                 date: '',
                 time: '',
                 phone: '',
+                email: '',
                 partySize: 1,
                 branchId: '',
                 message: ''
             });
         } catch (err) {
             const apiMsg = err?.response?.data?.message;
-            setError(apiMsg || 'Failed to submit booking. Please try again.');
+            const msg = apiMsg || 'Failed to submit booking. Please try again.';
+            setError(msg);
+            showToast(msg, 'error');
         } finally {
             setLoading(false);
         }
@@ -210,209 +226,257 @@ const BookTableForm = () => {
     const minTime = getMinTimeForSelectedDate();
 
     return (
-        <div className="book p-4" style={{ color: 'white' }}>
-            <h3 style={{ color: 'white', fontSize: '1.5rem' }}>Book a Table</h3>
+        <>
+            <style>{`
+                /* Custom styles for date and time inputs */
+                input[type="date"]::-webkit-calendar-picker-indicator,
+                input[type="time"]::-webkit-calendar-picker-indicator {
+                    filter: invert(1); /* Makes the icon white */
+                    cursor: pointer;
+                }
+                
+                input[type="date"]::-webkit-calendar-picker-indicator:hover,
+                input[type="time"]::-webkit-calendar-picker-indicator:hover {
+                    filter: invert(1) brightness(0.8); /* Slightly darker on hover */
+                }
+                
+                /* Custom styles for party size buttons - scoped to this component */
+                .book .btn-outline-secondary {
+                    background-color: transparent !important;
+                    border: 1px solid white !important;
+                    color: white !important;
+                }
+                
+                .book .btn-outline-secondary:hover {
+                    background-color: rgba(255, 255, 255, 0.1) !important;
+                    border: 1px solid white !important;
+                    color: white !important;
+                }
+                
+                .book .btn-outline-secondary:disabled {
+                    background-color: transparent !important;
+                    border: 1px solid rgba(255, 255, 255, 0.3) !important;
+                    color: rgba(255, 255, 255, 0.5) !important;
+                }
+            `}</style>
+            <div className="book p-4" style={{ color: 'white' }}>
+                <h3 style={{ color: 'white', fontSize: '1.5rem' }}>Book a Table</h3>
 
-            {/* Error Message */}
-            {error && (
-                <div className="alert alert-danger" role="alert">
-                    {error}
-                </div>
-            )}
+                {/* Toast notifications are used instead of inline alerts */}
 
-            {/* Success Message */}
-            {success && (
-                <div className="alert alert-success" role="alert">
-                    {success}
-                </div>
-            )}
-
-            <form onSubmit={handleSubmit} className="appointment-form">
-                {/* Show user info if authenticated */}
-                {isAuthenticated && user && (
-                    <div className="mb-3">
-                        <p style={{ color: 'white', fontSize: '0.9rem' }}>
-                            Booking as: <strong>{user.username}</strong> ({user.email})
-                        </p>
-                    </div>
-                )}
-
-                {/* Name fields - only show for guest users */}
-                {!isAuthenticated && (
-                    <div className="d-md-flex">
-                        <div className="form-group">
-                            <input
-                                type="text"
-                                name="firstName"
-                                value={formData.firstName}
-                                onChange={handleInputChange}
-                                className="form-control"
-                                placeholder="First Name*"
-                                style={{ color: 'white', fontSize: '1rem' }}
-                            />
-                        </div>
-                        <div className="form-group ml-md-4">
-                            <input
-                                type="text"
-                                name="lastName"
-                                value={formData.lastName}
-                                onChange={handleInputChange}
-                                className="form-control"
-                                placeholder="Last Name"
-                                style={{ color: 'white', fontSize: '1rem' }}
-                            />
-                        </div>
-                    </div>
-                )}
-                <div className="d-md-flex">
-                    <div className="form-group">
-                        <div className="input-wrap">
-                            <input
-                                type="date"
-                                name="date"
-                                value={formData.date}
-                                onChange={handleInputChange}
-                                className="form-control"
-                                placeholder="Date* (YYYY-MM-DD)"
-                                style={{ color: 'white', fontSize: '1rem' }}
-                                min={todayStr}
-                                max={maxDateStr}
-                            />
-                        </div>
-                    </div>
-                    <div className="form-group ml-md-4">
-                        <div className="input-wrap">
-                            <input
-                                type="time"
-                                name="time"
-                                value={formData.time}
-                                onChange={handleInputChange}
-                                className="form-control"
-                                placeholder="Time* (HH:mm)"
-                                style={{ color: 'white', fontSize: '1rem' }}
-                                step="60"
-                                min={minTime}
-                            />
-                        </div>
-                    </div>
-                    {/* Phone field - only show for guest users */}
-                    {!isAuthenticated && (
-                        <div className="form-group ml-md-4">
-                            <input
-                                type="text"
-                                name="phone"
-                                value={formData.phone}
-                                onChange={handleInputChange}
-                                className="form-control"
-                                placeholder="Phone*"
-                                style={{ color: 'white', fontSize: '1rem' }}
-                            />
+                <form onSubmit={handleSubmit} className="appointment-form">
+                    {/* Show user info if authenticated */}
+                    {isAuthenticated && user && (
+                        <div className="mb-3">
+                            <p style={{ color: 'white', fontSize: '0.9rem' }}>
+                                Booking as: <strong>{user.username}</strong> ({user.email})
+                            </p>
                         </div>
                     )}
-                </div>
-                <div className="d-md-flex">
-                    <div className="form-group d-flex align-items-center">
-                        <span className="me-2" style={{ color: 'white', fontSize: '1rem' }}>Party Size*</span>
-                        <button
-                            type="button"
-                            className="btn btn-outline-secondary me-1"
-                            onClick={() => handlePartySizeChange(-1)}
-                            disabled={formData.partySize <= 1}
-                            style={{
-                                padding: '1px 2px',
-                                fontSize: '0.7rem',
-                                minWidth: '16px',
-                                width: '16px',
-                                height: '24px'
-                            }}
-                        >
-                            -
-                        </button>
-                        <input
-                            type="text"
-                            className="form-control text-center me-1"
-                            value={`${formData.partySize}`}
-                            readOnly
-                            style={{
-                                color: 'white',
-                                fontSize: '1rem',
-                                padding: '2px 4px',
-                                minWidth: '40px',
-                                width: '50px'
-                            }}
-                        />
-                        <button
-                            type="button"
-                            className="btn btn-outline-secondary"
-                            onClick={() => handlePartySizeChange(1)}
-                            disabled={formData.partySize >= 10}
-                            style={{
-                                padding: '1px 2px',
-                                fontSize: '0.7rem',
-                                minWidth: '16px',
-                                width: '16px',
-                                height: '24px'
-                            }}
-                        >
-                            +
-                        </button>
+
+                    {/* Name fields - only show for guest users */}
+                    {!isAuthenticated && (
+                        <div className="d-md-flex">
+                            <div className="form-group">
+                                <input
+                                    type="text"
+                                    name="firstName"
+                                    value={formData.firstName}
+                                    onChange={handleInputChange}
+                                    className="form-control"
+                                    placeholder="First Name*"
+                                    style={{ color: 'white', fontSize: '1rem' }}
+                                />
+                            </div>
+                            <div className="form-group ml-md-4">
+                                <input
+                                    type="text"
+                                    name="lastName"
+                                    value={formData.lastName}
+                                    onChange={handleInputChange}
+                                    className="form-control"
+                                    placeholder="Last Name"
+                                    style={{ color: 'white', fontSize: '1rem' }}
+                                />
+                            </div>
+                        </div>
+                    )}
+                    <div className="d-md-flex">
+                        <div className="form-group">
+                            <div className="input-wrap">
+                                <input
+                                    type="date"
+                                    name="date"
+                                    value={formData.date}
+                                    onChange={handleInputChange}
+                                    className="form-control"
+                                    placeholder="Date* (YYYY-MM-DD)"
+                                    style={{
+                                        color: 'white',
+                                        fontSize: '1rem',
+                                        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                                        border: '1px solid rgba(255, 255, 255, 0.3)',
+                                        borderRadius: '4px',
+                                        padding: '8px 12px'
+                                    }}
+                                    min={todayStr}
+                                    max={maxDateStr}
+                                />
+                            </div>
+                        </div>
+                        <div className="form-group ml-md-4">
+                            <div className="input-wrap">
+                                <input
+                                    type="time"
+                                    name="time"
+                                    value={formData.time}
+                                    onChange={handleInputChange}
+                                    className="form-control"
+                                    placeholder="Time* (HH:mm)"
+                                    style={{ color: 'white', fontSize: '1rem' }}
+                                    step="60"
+                                    min={minTime}
+                                />
+                            </div>
+                        </div>
+                        {/* Phone field - only show for guest users */}
+                        {!isAuthenticated && (
+                            <div className="form-group ml-md-4">
+                                <input
+                                    type="text"
+                                    name="phone"
+                                    value={formData.phone}
+                                    onChange={handleInputChange}
+                                    className="form-control"
+                                    placeholder="Phone*"
+                                    style={{ color: 'white', fontSize: '1rem' }}
+                                />
+                            </div>
+                        )}
                     </div>
-                </div>
-                <div className="d-md-flex">
-                    <div className="form-group">
-                        <select
-                            name="branchId"
-                            value={formData.branchId}
-                            onChange={handleInputChange}
-                            className="form-control"
-                            style={{
-                                color: 'white',
-                                fontSize: '1rem',
-                                backgroundColor: 'rgba(0, 0, 0, 0.7)',
-                                border: '1px solid rgba(255, 255, 255, 0.3)',
-                                borderRadius: '4px',
-                                padding: '8px 12px'
-                            }}
-                            required
-                        >
-                            <option value="" style={{ backgroundColor: '#333', color: 'white' }}>Select Branch*</option>
-                            {branches.length > 0 ? (
-                                branches.map(branch => (
-                                    <option
-                                        key={branch.branchId}
-                                        value={branch.branchId}
-                                        style={{ backgroundColor: '#333', color: 'white' }}
-                                    >
-                                        {branch.name} - {branch.address}
-                                    </option>
-                                ))
-                            ) : (
-                                <option value="" disabled style={{ backgroundColor: '#333', color: 'white' }}>Loading branches...</option>
-                            )}
-                        </select>
+                    {/* Email field - only show for guest users */}
+                    {!isAuthenticated && (
+                        <div className="d-md-flex">
+                            <div className="form-group">
+                                <input
+                                    type="email"
+                                    name="email"
+                                    value={formData.email}
+                                    onChange={handleInputChange}
+                                    className="form-control"
+                                    placeholder="Email*"
+                                    style={{ color: 'white', fontSize: '1rem' }}
+                                />
+                            </div>
+                        </div>
+                    )}
+                    <div className="d-md-flex">
+                        <div className="form-group d-flex align-items-center">
+                            <span className="me-2" style={{ color: 'white', fontSize: '1rem' }}>Party Size*</span>
+                            <button
+                                type="button"
+                                className="btn btn-outline-secondary me-1"
+                                onClick={() => handlePartySizeChange(-1)}
+                                disabled={formData.partySize <= 1}
+                                style={{
+                                    padding: '1px 2px',
+                                    fontSize: '0.7rem',
+                                    minWidth: '16px',
+                                    width: '16px',
+                                    height: '24px'
+                                }}
+                            >
+                                -
+                            </button>
+                            <input
+                                type="text"
+                                className="form-control text-center me-1"
+                                value={`${formData.partySize}`}
+                                readOnly
+                                style={{
+                                    color: 'white',
+                                    fontSize: '1rem',
+                                    padding: '2px 4px',
+                                    minWidth: '40px',
+                                    width: '50px',
+                                    backgroundColor: 'transparent',
+                                    border: '1px solid white',
+                                    borderRadius: '4px'
+                                }}
+                            />
+                            <button
+                                type="button"
+                                className="btn btn-outline-secondary"
+                                onClick={() => handlePartySizeChange(1)}
+                                disabled={formData.partySize >= 10}
+                                style={{
+                                    padding: '1px 2px',
+                                    fontSize: '0.7rem',
+                                    minWidth: '16px',
+                                    width: '16px',
+                                    height: '24px'
+                                }}
+                            >
+                                +
+                            </button>
+                        </div>
                     </div>
-                </div>
-                <div className="d-md-flex">
-                    <div className="form-group">
-                        <textarea
-                            name="message"
-                            value={formData.message}
-                            onChange={handleInputChange}
-                            cols="30"
-                            rows="2"
-                            className="form-control"
-                            placeholder="Message"
-                            style={{ color: 'white', fontSize: '1rem' }}
-                        ></textarea>
+                    <div className="d-md-flex">
+                        <div className="form-group">
+                            <select
+                                name="branchId"
+                                value={formData.branchId}
+                                onChange={handleInputChange}
+                                className="form-control"
+                                style={{
+                                    color: 'white',
+                                    fontSize: '1rem',
+                                    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                                    border: '1px solid rgba(255, 255, 255, 0.3)',
+                                    borderRadius: '4px',
+                                    padding: '8px 12px'
+                                }}
+                                required
+                            >
+                                <option value="" style={{ backgroundColor: '#333', color: 'white' }}>Select Branch*</option>
+                                {branches.length > 0 ? (
+                                    branches.map(branch => (
+                                        <option
+                                            key={branch.branchId}
+                                            value={branch.branchId}
+                                            style={{ backgroundColor: '#333', color: 'white' }}
+                                        >
+                                            {branch.name} - {branch.address}
+                                        </option>
+                                    ))
+                                ) : (
+                                    <option value="" disabled style={{ backgroundColor: '#333', color: 'white' }}>Loading branches...</option>
+                                )}
+                            </select>
+                        </div>
                     </div>
-                    <div className="form-group ml-md-4">
-                        <button type="submit" className="btn btn-white py-3 px-4" style={{ fontSize: '1rem' }} disabled={loading}>
-                            {loading ? 'Booking...' : 'Book a Table'}
-                        </button>
+                    <div className="d-md-flex">
+                        <div className="form-group">
+                            <textarea
+                                name="message"
+                                value={formData.message}
+                                onChange={handleInputChange}
+                                cols="30"
+                                rows="2"
+                                className="form-control"
+                                placeholder="Message"
+                                style={{ color: 'white', fontSize: '1rem' }}
+                            ></textarea>
+                        </div>
+                        <div className="form-group ml-md-4">
+                            <button type="submit" className="btn btn-white py-3 px-4" style={{ fontSize: '1rem' }} disabled={loading}>
+                                {loading ? 'Booking...' : 'Book a Table'}
+                            </button>
+                        </div>
                     </div>
-                </div>
-            </form>
-        </div>
+                </form>
+            </div>
+        </>
     );
 };
 

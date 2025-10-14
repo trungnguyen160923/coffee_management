@@ -15,7 +15,7 @@ const MomoPaymentPage = ({
         if (timeLeft > 0 && paymentStep === 'qr') {
             const timer = setTimeout(() => {
                 setTimeLeft(timeLeft - 1);
-            }, 1000);
+            }, 3000);
             return () => clearTimeout(timer);
         } else if (timeLeft === 0 && paymentStep === 'qr') {
             // Time expired
@@ -49,7 +49,7 @@ const MomoPaymentPage = ({
         if (paymentStep === 'success') {
             const redirectTimer = setTimeout(() => {
                 onPaymentSuccess();
-            }, 1000); // Show success message for 3 seconds then redirect
+            }, 3000); // Show success message for 3 seconds then redirect
 
             return () => clearTimeout(redirectTimer);
         }

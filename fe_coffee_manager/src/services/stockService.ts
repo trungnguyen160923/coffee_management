@@ -69,7 +69,7 @@ export const stockService = {
   // Tìm kiếm kho với phân trang
   searchStocks: async (params: StockSearchParams): Promise<StockPageResponse> => {
     const queryParams = new URLSearchParams();
-    
+
     if (params.search) queryParams.append('search', params.search);
     if (params.branchId) queryParams.append('branchId', params.branchId.toString());
     if (params.ingredientId) queryParams.append('ingredientId', params.ingredientId.toString());
@@ -80,10 +80,7 @@ export const stockService = {
     if (params.sortBy) queryParams.append('sortBy', params.sortBy);
     if (params.sortDirection) queryParams.append('sortDirection', params.sortDirection);
 
-    console.log('Making API call to:', `${baseUrl}/stocks/search?${queryParams.toString()}`);
     const response = await apiClient.get(`${baseUrl}/stocks/search?${queryParams.toString()}`) as ApiResponse<StockPageResponse>;
-    console.log('API response:', response);
-    console.log('Response data:', response.data);
     return response.data;
   },
 
@@ -101,9 +98,9 @@ export const stockService = {
 
   // Lấy kho theo chi nhánh
   getStocksByBranch: async (
-    branchId: number, 
-    page: number = 0, 
-    size: number = 10, 
+    branchId: number,
+    page: number = 0,
+    size: number = 10,
     search?: string
   ): Promise<StockPageResponse> => {
     const queryParams = new URLSearchParams();

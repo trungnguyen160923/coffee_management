@@ -5,8 +5,10 @@ import { orderService } from '../../services/orderService';
 import { emailService } from '../../services/emailService';
 import { addressService } from '../../services/addressService';
 import { authService } from '../../services/authService';
+import { discountService } from '../../services/discountService';
 import MomoPaymentPage from './MomoPaymentPage';
 import axios from 'axios';
+import { showToast } from '../../utils/toast';
 
 const CheckoutPage = () => {
     const navigate = useNavigate();
@@ -26,6 +28,9 @@ const CheckoutPage = () => {
     const [loading, setLoading] = useState(true);
     const [showMomoPayment, setShowMomoPayment] = useState(false);
     const [orderInfo, setOrderInfo] = useState(null);
+    const [discountCode, setDiscountCode] = useState('');
+    const [appliedDiscount, setAppliedDiscount] = useState(null);
+    const [discountError, setDiscountError] = useState(null);
 
     // Fetch user info, addresses and cart items on mount
     useEffect(() => {
@@ -101,6 +106,64 @@ const CheckoutPage = () => {
         }
     };
 
+    const handleApplyDiscount = async () => {
+        if (!discountCode.trim()) {
+            setDiscountError('Please enter a discount code');
+            showToast('Please enter a discount code', 'warning');
+            return;
+        }
+
+        try {
+            setDiscountError(null);
+            const cartTotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+            const result = await discountService.validateDiscount(discountCode, cartTotal);
+
+            if (result.result && result.result.isValid) {
+                const discountData = result.result;
+
+                const appliedDiscountData = {
+                    code: discountData.discountCode,
+                    name: discountData.discountName,
+                    amount: Number(discountData.discountAmount),
+                    type: discountData.discountType,
+                    originalAmount: Number(discountData.originalAmount),
+                    finalAmount: Number(discountData.finalAmount)
+                };
+
+                setAppliedDiscount(appliedDiscountData);
+                showToast(`Applied code ${appliedDiscountData.code} successfully`, 'success');
+            } else {
+                const errorMessage = result.result?.message || result.message || 'Invalid discount code';
+                setDiscountError(errorMessage);
+                showToast(errorMessage, 'error');
+            }
+        } catch (error) {
+            setDiscountError('Failed to apply discount. Please try again.');
+            showToast('Failed to apply discount. Please try again.', 'error');
+        }
+    };
+
+    const handleRemoveDiscount = async () => {
+        try {
+            // Remove discount from frontend state
+            setAppliedDiscount(null);
+            setDiscountCode('');
+            setDiscountError(null);
+            showToast('Discount removed', 'info');
+
+            // Optional: Call service for logging/cleanup
+            await discountService.removeDiscount();
+        } catch (error) {
+            console.error('Error removing discount:', error);
+            // Even if service call fails, still remove from UI
+            setAppliedDiscount(null);
+            setDiscountCode('');
+            setDiscountError(null);
+            showToast('Discount removed', 'info');
+        }
+    };
+
 
     const onChange = (e) => {
         const { name, value } = e.target;
@@ -161,7 +224,8 @@ const CheckoutPage = () => {
                 branchSelectionAddress: deliveryAddress, // Chỉ dùng để tìm chi nhánh
                 // branchId sẽ được tự động chọn bởi backend
                 paymentMethod: formData.paymentMethod,
-                discount: 0,
+                discount: appliedDiscount ? appliedDiscount.amount : 0,
+                discountCode: appliedDiscount ? appliedDiscount.code : null,
                 orderItems: cartItems.map(it => ({
                     productId: it.productId,
                     productDetailId: it.productDetailId,
@@ -169,6 +233,7 @@ const CheckoutPage = () => {
                 })),
                 notes: formData.notes
             };
+
 
             const orderResult = await orderService.createOrder(payload);
             try { await cartService.clearCart(); } catch (_) { }
@@ -534,7 +599,7 @@ const CheckoutPage = () => {
                                                                 </div>
                                                                 <div className="item-price">
                                                                     <span className="price fw-bold text-primary">
-                                                                        {(item.price * item.quantity).toFixed(2)}
+                                                                        {(item.price * item.quantity).toLocaleString('vi-VN')}
                                                                     </span>
                                                                 </div>
                                                             </div>
@@ -550,28 +615,119 @@ const CheckoutPage = () => {
                                                 <i className="fa fa-tag me-2"></i>
                                                 Discount Code
                                             </h6>
-                                            <div className="input-group mb-2">
-                                                <input
-                                                    type="text"
-                                                    className="form-control form-control-sm"
-                                                    placeholder="Enter code"
-                                                    disabled
-                                                />
-                                                <button
-                                                    type="button"
-                                                    className="btn btn-primary btn-sm fw-bold"
-                                                    disabled
-                                                >
-                                                    Apply
-                                                </button>
-                                            </div>
+
+                                            {appliedDiscount ? (
+                                                <div className="applied-discount">
+                                                    <div className="discount-applied-card" style={{
+                                                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                                                        border: '2px solid #C39C5E',
+                                                        color: '#ffffff',
+                                                        padding: '12px',
+                                                        borderRadius: '8px',
+                                                        marginBottom: '12px',
+                                                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                                                    }}>
+                                                        <div className="d-flex align-items-center mb-2">
+                                                            <i className="fa fa-check-circle me-2" style={{ color: '#C39C5E' }}></i>
+                                                            <strong style={{ color: '#ffffff' }}>Discount Applied</strong>
+                                                        </div>
+                                                        <div className="discount-code" style={{
+                                                            fontSize: '16px',
+                                                            fontWeight: '600',
+                                                            color: '#ffffff',
+                                                            marginBottom: '4px'
+                                                        }}>
+                                                            {appliedDiscount.code}
+                                                        </div>
+                                                        <div className="discount-amount" style={{
+                                                            fontSize: '14px',
+                                                            color: '#ffffff'
+                                                        }}>
+                                                            You saved: <span style={{ fontWeight: '600', color: '#C39C5E' }}>{appliedDiscount.amount.toLocaleString('vi-VN')} VND</span>
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        onClick={handleRemoveDiscount}
+                                                        className="btn btn-sm"
+                                                        style={{
+                                                            backgroundColor: 'transparent',
+                                                            color: '#C39C5E',
+                                                            border: '1px solid #C39C5E',
+                                                            width: '100%',
+                                                            borderRadius: '6px',
+                                                            padding: '8px 12px',
+                                                            fontSize: '14px',
+                                                            transition: 'all 0.2s ease'
+                                                        }}
+                                                        onMouseEnter={(e) => {
+                                                            e.target.style.backgroundColor = '#C39C5E';
+                                                            e.target.style.color = '#ffffff';
+                                                        }}
+                                                        onMouseLeave={(e) => {
+                                                            e.target.style.backgroundColor = 'transparent';
+                                                            e.target.style.color = '#C39C5E';
+                                                        }}
+                                                    >
+                                                        <i className="fa fa-times me-1"></i>
+                                                        Remove Discount
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <div className="discount-input">
+                                                    <div className="input-group mb-2">
+                                                        <input
+                                                            type="text"
+                                                            className="form-control form-control-sm"
+                                                            placeholder="Enter code"
+                                                            value={discountCode}
+                                                            onChange={(e) => setDiscountCode(e.target.value)}
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-primary btn-sm fw-bold"
+                                                            onClick={handleApplyDiscount}
+                                                        >
+                                                            Apply
+                                                        </button>
+                                                    </div>
+                                                    {/* Toast will show messages instead of inline error */}
+                                                </div>
+                                            )}
+                                        </div>
+                                        {/* VAT + Totals */}
+                                        <div className="mt-3">
+                                            {(() => {
+                                                const subtotal = cartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
+                                                const vat = subtotal * 0.1; // 10% VAT on products subtotal
+                                                const discountedSubtotal = appliedDiscount ? appliedDiscount.finalAmount : subtotal;
+                                                return (
+                                                    <>
+                                                        <div className="d-flex justify-content-between align-items-center mb-2">
+                                                            <span className="mb-0" style={{ color: '#ffffff' }}>Subtotal</span>
+                                                            <span className="mb-0" style={{ color: '#ffffff' }}>{subtotal.toLocaleString('vi-VN')} VND</span>
+                                                        </div>
+                                                        <div className="d-flex justify-content-between align-items-center">
+                                                            <span className="mb-0" style={{ color: '#ffffff' }}>VAT (10%)</span>
+                                                            <span className="mb-0" style={{ color: '#ffffff' }}>{vat.toLocaleString('vi-VN')} VND</span>
+                                                        </div>
+                                                    </>
+                                                );
+                                            })()}
                                         </div>
 
-                                        <div className="order-total mt-4 pt-3 border-top">
+                                        <div className="order-total mt-3 pt-3 border-top">
                                             <div className="d-flex justify-content-between align-items-center">
-                                                <h5 className="mb-0">Total:</h5>
-                                                <h5 className="mb-0 text-primary">
-                                                    {cartItems.reduce((total, item) => total + (item.price * item.quantity), 0).toFixed(2)}
+                                                <h5 className="mb-0" style={{ color: '#C39C5E' }}>Total:</h5>
+                                                <h5 className="mb-0" style={{ color: '#C39C5E' }}>
+                                                    {(() => {
+                                                        const subtotal = cartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
+                                                        const vat = subtotal * 0.1; // 10% VAT on products subtotal
+                                                        const discountedSubtotal = appliedDiscount
+                                                            ? appliedDiscount.finalAmount
+                                                            : subtotal;
+                                                        const totalWithVat = discountedSubtotal + vat;
+                                                        return totalWithVat.toLocaleString('vi-VN');
+                                                    })()} VND
                                                 </h5>
                                             </div>
                                         </div>

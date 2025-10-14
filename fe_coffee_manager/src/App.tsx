@@ -13,6 +13,7 @@ import ProductManagement from './pages/admin/ProductManagement';
 import SupplierManagement from './pages/admin/SupplierManagement';
 import IngredientManagement from './pages/admin/IngredientManagement';
 import RecipeManagement from './pages/admin/RecipeManagement';
+import AdminDiscountManagementPage from './pages/admin/DiscountManagement';
 import { ManagerDashboard } from './pages/manager/ManagerDashboard';
 import StaffManagement from './pages/manager/StaffManagement';
 import ManagerSupplierManagement from './pages/manager/SupplierManagement';
@@ -20,6 +21,8 @@ import ManagerProductManagement from './pages/manager/ProductManagement';
 import IngredientProcurement from './pages/manager/IngredientProcurement';
 import PurchaseOrders from './pages/manager/PurchaseOrders';
 import StockManagement from './pages/manager/StockManagement';
+import { TableManagement } from './pages/manager/TableManagement';
+import DiscountManagementPage from './pages/manager/DiscountManagement';
 import { StaffDashboard } from './pages/staff/StaffDashboard';
 import SupplierConfirmPage from './pages/supplier/SupplierConfirmPage';
 import SupplierSuccessPage from './pages/supplier/SupplierSuccessPage';
@@ -27,6 +30,7 @@ import SupplierCancelledPage from './pages/supplier/SupplierCancelledPage';
 import StaffOrders from './pages/staff/StaffOrders';
 import StaffReservations from './pages/staff/StaffReservations';
 import StaffRecipes from './pages/staff/StaffRecipes';
+import StaffTables from './pages/staff/StaffTables';
 
 function AppRoutes() {
   const { user, loading } = useAuth();
@@ -47,7 +51,7 @@ function AppRoutes() {
   // Check if current path is a public supplier route
   const isPublicSupplierRoute = window.location.pathname.startsWith('/supplier/');
   console.log('AppRoutes - current path:', window.location.pathname, 'isPublicSupplierRoute:', isPublicSupplierRoute);
-  
+
   // For public supplier routes, always allow access
   if (isPublicSupplierRoute) {
     console.log('Rendering public supplier routes');
@@ -61,7 +65,7 @@ function AppRoutes() {
       </Routes>
     );
   }
-  
+
   // Only show Login if there is no token at all
   const hasToken = !!localStorage.getItem('coffee-token');
   if (!user && !hasToken) {
@@ -90,6 +94,7 @@ function AppRoutes() {
             <Route path="recipes" element={<Layout><RecipeManagement /></Layout>} />
             <Route path="branches" element={<Layout><BranchManagement /></Layout>} />
             <Route path="managers" element={<Layout><ManagerManagement /></Layout>} />
+            <Route path="discounts" element={<Layout><AdminDiscountManagementPage /></Layout>} />
             <Route path="statistics" element={<Layout><div className="p-8"><h1 className="text-2xl font-bold">Thống kê</h1></div></Layout>} />
             {/* Unknown admin subroute: show 404 without Layout */}
             <Route path="*" element={<NotFoundPage showLoginButton={false} />} />
@@ -110,6 +115,8 @@ function AppRoutes() {
           <Routes>
             <Route path="staff" element={<Layout><StaffManagement /></Layout>} />
             <Route path="products" element={<Layout><ManagerProductManagement /></Layout>} />
+            <Route path="tables" element={<Layout><TableManagement /></Layout>} />
+            <Route path="discounts" element={<Layout><DiscountManagementPage /></Layout>} />
             <Route path="procurement" element={<Layout><IngredientProcurement /></Layout>} />
             <Route path="suppliers" element={<Layout><ManagerSupplierManagement /></Layout>} />
             <Route path="purchase-orders" element={<Layout><PurchaseOrders /></Layout>} />
@@ -133,6 +140,7 @@ function AppRoutes() {
           <Routes>
             <Route path="orders" element={<Layout><StaffOrders /></Layout>} />
             <Route path="reservations" element={<Layout><StaffReservations /></Layout>} />
+            <Route path="tables" element={<Layout><StaffTables /></Layout>} />
             <Route path="recipes" element={<Layout><StaffRecipes /></Layout>} />
             <Route path="*" element={<NotFoundPage showLoginButton={false} />} />
           </Routes>

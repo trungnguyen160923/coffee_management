@@ -23,7 +23,10 @@ public class SecurityConfig {
             "/api/cart",
             "/api/cart/**",
             "/api/orders/guest", // Allow guest checkout without authentication
-            "/api/email/send-order-confirmation" // Allow public access to email confirmation
+            "/api/email/send-order-confirmation", // Allow public access to email confirmation
+            "/api/discounts/validate", // Allow public access to discount validation
+            "/api/discounts/apply", // Allow public access to discount application
+            "/api/discounts/available" // Allow public access to available discounts
     };
 
     private final CustomJwtDecoder customJwtDecoder;
@@ -53,6 +56,9 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.PUT, "/api/reservations/**")
                 .hasAnyRole("ADMIN", "MANAGER", "STAFF")
                 .requestMatchers(HttpMethod.DELETE, "/api/reservations/**")
+                .hasAnyRole("ADMIN", "MANAGER", "STAFF")
+                // Table management access rules for Manager
+                .requestMatchers("/api/staff/tables/**")
                 .hasAnyRole("ADMIN", "MANAGER", "STAFF")
                 .anyRequest()
                 .authenticated());

@@ -16,6 +16,10 @@ public class CreateReservationRequest {
     @Pattern(regexp = "^[0-9+\\-\\s()]*$", message = "Phone number contains invalid characters")
     private String phone;
 
+    @Size(max = 100, message = "Email must not exceed 100 characters")
+    @Email(message = "Invalid email format")
+    private String email;
+
     @NotNull(message = "Branch ID is required")
     private Integer branchId;
 
@@ -70,6 +74,14 @@ public class CreateReservationRequest {
         this.phone = phone;
     }
 
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
+    }
+
     public Integer getBranchId() {
         return branchId;
     }
@@ -105,6 +117,7 @@ public class CreateReservationRequest {
     // Business validation method
     public boolean isValidCustomerInfo() {
         return customerId != null || (customerName != null && !customerName.trim().isEmpty()
-                && phone != null && !phone.trim().isEmpty());
+                && phone != null && !phone.trim().isEmpty()
+                && email != null && !email.trim().isEmpty());
     }
 }

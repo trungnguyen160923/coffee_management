@@ -34,6 +34,7 @@ public class OrderService {
         OrderItemRepository orderItemRepository;
         CatalogServiceClient catalogServiceClient;
         BranchSelectionService branchSelectionService;
+        DiscountService discountService;
 
         @Transactional
         public OrderResponse createOrder(CreateOrderRequest request, String token) {
@@ -54,9 +55,6 @@ public class OrderService {
                                 subtotal = subtotal.add(itemTotal);
                         }
 
-                        BigDecimal discount = request.getDiscount() != null ? request.getDiscount() : BigDecimal.ZERO;
-                        BigDecimal totalAmount = subtotal.subtract(discount);
-
                         // Tự động chọn chi nhánh dựa trên địa chỉ giao hàng (chỉ district + province)
                         String addressForBranchSelection = request.getBranchSelectionAddress() != null
                                         ? request.getBranchSelectionAddress()
@@ -67,6 +65,38 @@ public class OrderService {
                         }
                         log.info("Selected branch: {} for branch selection address: {}", selectedBranch.getName(),
                                         addressForBranchSelection);
+
+                        // Xử lý discount nếu có mã giảm giá
+                        BigDecimal discount = BigDecimal.ZERO;
+                        if (request.getDiscountCode() != null && !request.getDiscountCode().trim().isEmpty()) {
+                                // Áp dụng mã giảm giá
+                                orderservice.order_service.dto.request.ApplyDiscountRequest applyDiscountRequest = orderservice.order_service.dto.request.ApplyDiscountRequest
+                                                .builder()
+                                                .discountCode(request.getDiscountCode())
+                                                .orderAmount(subtotal)
+                                                .branchId(selectedBranch.getBranchId())
+                                                .build();
+
+                                orderservice.order_service.dto.response.DiscountApplicationResponse discountResponse = discountService
+                                                .applyDiscount(applyDiscountRequest);
+
+                                if (discountResponse.getIsValid()) {
+                                        discount = discountResponse.getDiscountAmount();
+                                        // Sử dụng mã giảm giá
+                                        discountService.useDiscount(request.getDiscountCode());
+                                } else {
+                                        throw new AppException(ErrorCode.VALIDATION_FAILED,
+                                                        discountResponse.getMessage());
+                                }
+                        } else {
+                                discount = request.getDiscount() != null ? request.getDiscount() : BigDecimal.ZERO;
+                        }
+
+                        // Compute VAT (10%) on products subtotal
+                        BigDecimal vat = subtotal.multiply(new BigDecimal("0.10"));
+                        vat = vat.setScale(2, java.math.RoundingMode.HALF_UP);
+
+                        BigDecimal totalAmount = subtotal.subtract(discount).add(vat);
 
                         // Create order
                         Order order = Order.builder()
@@ -84,6 +114,8 @@ public class OrderService {
                                         .subtotal(subtotal)
                                         .discount(discount)
                                         .totalAmount(totalAmount)
+                                        .vat(vat)
+                                        .discountCode(request.getDiscountCode())
                                         .notes(request.getNotes())
                                         .build();
 
@@ -186,7 +218,9 @@ public class OrderService {
                                 .paymentStatus(order.getPaymentStatus())
                                 .subtotal(order.getSubtotal())
                                 .discount(order.getDiscount())
+                                .vat(order.getVat())
                                 .totalAmount(order.getTotalAmount())
+                                .discountCode(order.getDiscountCode())
                                 .notes(order.getNotes())
                                 .orderDate(order.getOrderDate())
                                 .createAt(order.getCreateAt())
@@ -247,9 +281,6 @@ public class OrderService {
                                 subtotal = subtotal.add(itemTotal);
                         }
 
-                        BigDecimal discount = request.getDiscount() != null ? request.getDiscount() : BigDecimal.ZERO;
-                        BigDecimal totalAmount = subtotal.subtract(discount);
-
                         // Tự động chọn chi nhánh dựa trên địa chỉ giao hàng (chỉ district + province)
                         String addressForBranchSelection = request.getBranchSelectionAddress() != null
                                         ? request.getBranchSelectionAddress()
@@ -258,6 +289,38 @@ public class OrderService {
                         if (selectedBranch == null) {
                                 throw new AppException(ErrorCode.BRANCH_NOT_FOUND);
                         }
+
+                        // Xử lý discount nếu có mã giảm giá
+                        BigDecimal discount = BigDecimal.ZERO;
+                        if (request.getDiscountCode() != null && !request.getDiscountCode().trim().isEmpty()) {
+                                // Áp dụng mã giảm giá
+                                orderservice.order_service.dto.request.ApplyDiscountRequest applyDiscountRequest = orderservice.order_service.dto.request.ApplyDiscountRequest
+                                                .builder()
+                                                .discountCode(request.getDiscountCode())
+                                                .orderAmount(subtotal)
+                                                .branchId(selectedBranch.getBranchId())
+                                                .build();
+
+                                orderservice.order_service.dto.response.DiscountApplicationResponse discountResponse = discountService
+                                                .applyDiscount(applyDiscountRequest);
+
+                                if (discountResponse.getIsValid()) {
+                                        discount = discountResponse.getDiscountAmount();
+                                        // Sử dụng mã giảm giá
+                                        discountService.useDiscount(request.getDiscountCode());
+                                } else {
+                                        throw new AppException(ErrorCode.VALIDATION_FAILED,
+                                                        discountResponse.getMessage());
+                                }
+                        } else {
+                                discount = request.getDiscount() != null ? request.getDiscount() : BigDecimal.ZERO;
+                        }
+
+                        // Compute VAT (10%) on products subtotal
+                        BigDecimal vat = subtotal.multiply(new BigDecimal("0.10"));
+                        vat = vat.setScale(2, java.math.RoundingMode.HALF_UP);
+
+                        BigDecimal totalAmount = subtotal.subtract(discount).add(vat);
 
                         // Create order (customerId = null for guest)
                         Order order = Order.builder()
@@ -274,7 +337,9 @@ public class OrderService {
                                                         : request.getPaymentStatus())
                                         .subtotal(subtotal)
                                         .discount(discount)
+                                        .vat(vat)
                                         .totalAmount(totalAmount)
+                                        .discountCode(request.getDiscountCode())
                                         .notes(request.getNotes())
                                         .build();
 

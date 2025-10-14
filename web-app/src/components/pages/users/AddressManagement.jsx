@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { addressService } from '../../../services/addressService';
 import axios from 'axios';
+import { showToast } from '../../../utils/toast';
 
 const AddressManagement = () => {
     const [addresses, setAddresses] = useState([]);
@@ -23,6 +24,8 @@ const AddressManagement = () => {
     const [provinces, setProvinces] = useState([]);
     const [districts, setDistricts] = useState([]);
     const [wards, setWards] = useState([]);
+    const [submitting, setSubmitting] = useState(false);
+    const [deletingId, setDeletingId] = useState(null);
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -33,37 +36,33 @@ const AddressManagement = () => {
             return;
         }
 
-        // Add a timeout to prevent infinite loading
-        const timeoutId = setTimeout(() => {
-            if (loading) {
-                console.log('API timeout, showing empty state');
-                setLoading(false);
-                // Only show error if no addresses were loaded
-                if (addresses.length === 0) {
-                    setError('Unable to connect to server. Please try again later.');
-                }
-            }
-        }, 10000); // 10 second timeout
-
         loadAddresses();
         fetchProvinces();
 
-        return () => clearTimeout(timeoutId);
+        return () => { };
     }, [navigate]);
 
     const loadAddresses = async () => {
         try {
             setLoading(true);
             setError(''); // Clear previous errors
-            console.log('Loading addresses...');
             const data = await addressService.getCustomerAddresses();
-            console.log('Addresses loaded:', data);
             setAddresses(data);
         } catch (error) {
-            console.error('Error loading addresses:', error);
             setError('Unable to connect to server. Please check if Profile Service is running.');
+            showToast('Unable to connect to server. Please check if Profile Service is running.', 'error');
         } finally {
             setLoading(false);
+        }
+    };
+
+    // Silent refresh without toggling the global loading spinner
+    const loadAddressesSilent = async () => {
+        try {
+            const data = await addressService.getCustomerAddresses();
+            setAddresses(data);
+        } catch (_) {
+            // keep existing addresses; optionally surface a soft error
         }
     };
 
@@ -71,27 +70,35 @@ const AddressManagement = () => {
         try {
             const response = await axios.get('http://localhost:8000/api/provinces/p');
             setProvinces(response.data);
+            return response.data;
         } catch (error) {
-            console.error('Error fetching provinces:', error);
+            showToast('Failed to load provinces', 'error');
+            return [];
         }
     };
 
     const fetchDistricts = async (provinceCode) => {
         try {
             const response = await axios.get(`http://localhost:8000/api/provinces/p/${provinceCode}?depth=2`);
-            setDistricts(response.data.districts || []);
+            const list = response.data.districts || [];
+            setDistricts(list);
             setWards([]);
+            return list;
         } catch (error) {
-            console.error('Error fetching districts:', error);
+            showToast('Failed to load districts', 'error');
+            return [];
         }
     };
 
     const fetchWards = async (districtCode) => {
         try {
             const response = await axios.get(`http://localhost:8000/api/provinces/d/${districtCode}?depth=2`);
-            setWards(response.data.wards || []);
+            const list = response.data.wards || [];
+            setWards(list);
+            return list;
         } catch (error) {
-            console.error('Error fetching wards:', error);
+            showToast('Failed to load wards', 'error');
+            return [];
         }
     };
 
@@ -206,6 +213,7 @@ const AddressManagement = () => {
 
         setError('');
         setSuccess('');
+        setSubmitting(true);
 
         // Build full address from selected location
         const fullAddress = [
@@ -222,13 +230,21 @@ const AddressManagement = () => {
 
         try {
             if (editingAddress) {
-                // Update existing address
                 await addressService.updateAddress(editingAddress.addressId, updatedFormData);
+                // Optimistic update
+                setAddresses(prev => prev.map(a => (
+                    a.addressId === editingAddress.addressId
+                        ? { ...a, label: updatedFormData.label, fullAddress: updatedFormData.fullAddress }
+                        : a
+                )));
                 setSuccess('Address updated successfully!');
+                showToast('Address updated successfully!', 'success');
             } else {
-                // Create new address
                 await addressService.createAddress(updatedFormData);
+                // Silent refresh to get the new address with id
+                loadAddressesSilent();
                 setSuccess('Address created successfully!');
+                showToast('Address created successfully!', 'success');
             }
 
             setShowModal(false);
@@ -243,33 +259,97 @@ const AddressManagement = () => {
                 ward: '',
                 wardCode: ''
             });
-            loadAddresses();
         } catch (error) {
-            console.error('Error saving address:', error);
             setError('Error occurred while saving address');
+            showToast('Error occurred while saving address', 'error');
+        } finally {
+            setSubmitting(false);
         }
 
         return false;
     };
 
-    const handleEdit = (address) => {
+    const handleEdit = async (address) => {
         setEditingAddress(address);
-        setFormData({
-            label: address.label,
-            fullAddress: address.fullAddress
-        });
         setShowModal(true);
+
+        // Parse fullAddress into ward, district, province (assuming format: "Ward, District, Province")
+        const parts = (address.fullAddress || '').split(',').map(p => p.trim());
+        const provinceName = parts[parts.length - 1] || '';
+        const districtName = parts.length >= 2 ? parts[parts.length - 2] : '';
+        const wardName = parts.length >= 3 ? parts[parts.length - 3] : '';
+
+        // Ensure provinces list is available
+        let provinceList = provinces;
+        if (!provinceList || provinceList.length === 0) {
+            provinceList = await fetchProvinces();
+        }
+
+        const province = provinceList.find(p => p.name === provinceName);
+        const provinceCode = province ? province.code : '';
+
+        // Prefill label and names first
+        setFormData(prev => ({
+            ...prev,
+            label: address.label || '',
+            fullAddress: address.fullAddress || '',
+            province: provinceName,
+            provinceCode: provinceCode,
+            district: '',
+            districtCode: '',
+            ward: '',
+            wardCode: ''
+        }));
+
+        if (!provinceCode) {
+            return;
+        }
+
+        // Fetch districts and set district code/name
+        const districtList = await fetchDistricts(provinceCode);
+        const district = districtList.find(d => d.name === districtName);
+        const districtCode = district ? district.code : '';
+
+        setFormData(prev => ({
+            ...prev,
+            district: districtName,
+            districtCode: districtCode
+        }));
+
+        if (!districtCode) {
+            return;
+        }
+
+        // Fetch wards and set ward code/name
+        const wardList = await fetchWards(districtCode);
+        const ward = wardList.find(w => w.name === wardName);
+        const wardCode = ward ? ward.code : '';
+
+        setFormData(prev => ({
+            ...prev,
+            ward: wardName,
+            wardCode: wardCode
+        }));
     };
 
     const handleDelete = async (addressId) => {
         if (window.confirm('Are you sure you want to delete this address?')) {
             try {
+                setDeletingId(addressId);
+                // Optimistic removal
+                setAddresses(prev => prev.filter(a => a.addressId !== addressId));
                 await addressService.deleteAddress(addressId);
                 setSuccess('Address deleted successfully!');
-                loadAddresses();
+                showToast('Address deleted successfully!', 'success');
+                // Silent refresh in background to ensure consistency
+                loadAddressesSilent();
             } catch (error) {
-                console.error('Error deleting address:', error);
                 setError('Error occurred while deleting address');
+                showToast('Error occurred while deleting address', 'error');
+                // On failure, reload actual list
+                loadAddressesSilent();
+            } finally {
+                setDeletingId(null);
             }
         }
     };
@@ -349,15 +429,7 @@ const AddressManagement = () => {
         }
     ];
 
-    if (loading) {
-        return (
-            <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '50vh' }}>
-                <div className="spinner-border" role="status">
-                    <span className="sr-only">Loading...</span>
-                </div>
-            </div>
-        );
-    }
+    // Removed early return during loading to avoid full-page flash/black screen.
 
     return (
         <>
@@ -470,24 +542,28 @@ const AddressManagement = () => {
                                             color: 'white'
                                         }}
                                     >
+                                        {/* Inline SVG ensures icon shows even if icon font is unavailable */}
+                                        <svg
+                                            xmlns="http://www.w3.org/2000/svg"
+                                            width="16"
+                                            height="16"
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            strokeWidth="2"
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            style={{ marginRight: '8px', verticalAlign: 'middle' }}
+                                        >
+                                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                                        </svg>
                                         Add New Address
                                     </button>
                                 </div>
 
 
-                                {/* Alert Messages */}
-                                {error && (
-                                    <div className="alert alert-warning" role="alert" style={{ marginBottom: '20px' }}>
-                                        <strong>⚠️ Demo Mode:</strong> {error}
-                                        <br />
-                                        <small>Showing demo data. To use full functionality, please start Profile Service.</small>
-                                    </div>
-                                )}
-                                {success && (
-                                    <div className="alert alert-success" role="alert" style={{ marginBottom: '20px' }}>
-                                        {success}
-                                    </div>
-                                )}
+                                {/* Alerts removed; using toast notifications instead */}
 
                                 {loading ? (
                                     <div style={{ textAlign: 'center', padding: '40px', color: 'white' }}>
@@ -547,7 +623,7 @@ const AddressManagement = () => {
                                             </thead>
                                             <tbody>
                                                 {addresses.map((address, index) => (
-                                                    <tr key={index} style={{ backgroundColor: 'transparent' }}>
+                                                    <tr key={index} style={{ backgroundColor: 'transparent', opacity: deletingId === address.addressId ? 0.5 : 1 }}>
                                                         {columns.map((column, colIndex) => (
                                                             <td key={colIndex} style={{
                                                                 color: '#e0e0e0',
@@ -785,10 +861,6 @@ const AddressManagement = () => {
                                             padding: '8px 20px',
                                             borderRadius: '4px',
                                             fontWeight: 'bold'
-                                        }}
-                                        onClick={(e) => {
-                                            e.preventDefault();
-                                            handleSubmit(e);
                                         }}
                                     >
                                         {editingAddress ? 'Update' : 'Add'}
