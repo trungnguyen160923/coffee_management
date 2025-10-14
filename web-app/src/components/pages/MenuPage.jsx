@@ -77,7 +77,7 @@ const MenuPage = () => {
 
     const formatPrice = (value) => {
         if (value === undefined || value === null || isNaN(Number(value))) return 'N/A';
-        return new Intl.NumberFormat('vi-VN').format(Number(value));
+        return new Intl.NumberFormat('vi-VN').format(Number(value)) + ' VND';
     };
 
     const getDisplayPrice = (product) => {

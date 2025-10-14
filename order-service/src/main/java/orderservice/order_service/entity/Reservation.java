@@ -25,6 +25,11 @@ public class Reservation {
     @Pattern(regexp = "^[0-9+\\-\\s()]*$", message = "Phone number contains invalid characters")
     private String phone;
 
+    @Column(name = "gmail", length = 100)
+    @Size(max = 100, message = "Email must not exceed 100 characters")
+    @jakarta.validation.constraints.Email(message = "Invalid email format")
+    private String email;
+
     @Column(name = "branch_id", nullable = false)
     @NotNull(message = "Branch ID is required")
     private Integer branchId;
@@ -88,6 +93,14 @@ public class Reservation {
 
     public void setPhone(String phone) {
         this.phone = phone;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
     }
 
     public Integer getBranchId() {

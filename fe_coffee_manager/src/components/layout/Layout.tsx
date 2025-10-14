@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { 
-  Coffee, 
-  Users, 
-  Package, 
-  BarChart3, 
-  LogOut, 
+import {
+  Coffee,
+  Users,
+  Package,
+  BarChart3,
+  LogOut,
   Home,
   Store,
   BookOpen,
@@ -16,7 +16,9 @@ import {
   Truck,
   FileText,
   ArrowLeft,
-  UtensilsCrossed
+  UtensilsCrossed,
+  Square,
+  Tag
 } from 'lucide-react';
 
 import { DEFAULT_IMAGES } from '../../config/constants';
@@ -42,6 +44,7 @@ export function Layout({ children }: LayoutProps) {
         { icon: BookOpen, label: 'Recipes', path: '/admin/recipes' },
         { icon: Store, label: 'Branches', path: '/admin/branches' },
         { icon: Users, label: 'Managers', path: '/admin/managers' },
+        { icon: Tag, label: 'Discounts', path: '/admin/discounts' },
         { icon: BarChart3, label: 'Statistics', path: '/admin/statistics' },
       ];
     } else if (user?.role === 'manager') {
@@ -49,6 +52,8 @@ export function Layout({ children }: LayoutProps) {
         { icon: Home, label: 'Overview', path: '/manager' },
         { icon: Users, label: 'Staff', path: '/manager/staff' },
         { icon: Package, label: 'Products', path: '/manager/products' },
+        { icon: Square, label: 'Tables', path: '/manager/tables' },
+        { icon: Tag, label: 'Discounts', path: '/manager/discounts' },
         { icon: Truck, label: 'Procurement', path: '/manager/procurement' },
         { icon: FileText, label: 'Purchase Orders', path: '/manager/purchase-orders' },
         { icon: Truck, label: 'Suppliers', path: '/manager/suppliers' },
@@ -60,6 +65,7 @@ export function Layout({ children }: LayoutProps) {
         { icon: Home, label: 'Overview', path: '/staff' },
         { icon: ShoppingCart, label: 'Orders', path: '/staff/orders' },
         { icon: Calendar, label: 'Reservations', path: '/staff/reservations' },
+        { icon: Square, label: 'Tables', path: '/staff/tables' },
         { icon: BookOpen, label: 'Recipes', path: '/staff/recipes' },
       ];
     }
@@ -69,7 +75,7 @@ export function Layout({ children }: LayoutProps) {
 
   const handleLogout = async () => {
     if (isLoggingOut) return;
-    
+
     setIsLoggingOut(true);
     try {
       logout();
@@ -96,7 +102,7 @@ export function Layout({ children }: LayoutProps) {
                 <p className="text-amber-200 text-sm capitalize font-medium">{user?.role} Panel</p>
               </div>
             </div>
-            
+
             {/* Branch Information Card */}
             {user?.role === 'manager' && managerBranch && (
               <div className="mt-4 p-4 bg-gradient-to-r from-amber-800/60 to-amber-700/60 rounded-xl border border-amber-600/30 shadow-lg backdrop-blur-sm">
@@ -108,7 +114,7 @@ export function Layout({ children }: LayoutProps) {
                 </div>
               </div>
             )}
-            
+
             {/* Branch Not Loaded State */}
             {user?.role === 'manager' && !managerBranch && (
               <div className="mt-4 p-4 bg-gradient-to-r from-red-800/60 to-red-700/60 rounded-xl border border-red-600/30 shadow-lg backdrop-blur-sm">
@@ -139,15 +145,13 @@ export function Layout({ children }: LayoutProps) {
                       <Link
                         key={item.path}
                         to={item.path}
-                        className={`flex items-center space-x-3 px-4 py-3 mx-2 rounded-lg transition-all duration-200 group ${
-                          isActive
-                            ? 'bg-gradient-to-r from-amber-600 to-amber-700 text-white shadow-lg border-l-4 border-amber-300'
-                            : 'text-amber-100 hover:bg-amber-700/50 hover:text-white hover:shadow-md'
-                        }`}
+                        className={`flex items-center space-x-3 px-4 py-3 mx-2 rounded-lg transition-all duration-200 group ${isActive
+                          ? 'bg-gradient-to-r from-amber-600 to-amber-700 text-white shadow-lg border-l-4 border-amber-300'
+                          : 'text-amber-100 hover:bg-amber-700/50 hover:text-white hover:shadow-md'
+                          }`}
                       >
-                        <item.icon className={`h-5 w-5 transition-colors duration-200 ${
-                          isActive ? 'text-amber-100' : 'text-amber-300 group-hover:text-amber-100'
-                        }`} />
+                        <item.icon className={`h-5 w-5 transition-colors duration-200 ${isActive ? 'text-amber-100' : 'text-amber-300 group-hover:text-amber-100'
+                          }`} />
                         <span className="font-medium">{item.label}</span>
                       </Link>
                     );
@@ -155,9 +159,8 @@ export function Layout({ children }: LayoutProps) {
                   {navigationItems.length > firstCount && (
                     <button
                       onClick={() => setShowMoreNav(v => !v)}
-                      className={`w-full flex items-center justify-between px-4 py-3 mx-2 mt-2 rounded-lg transition-all duration-200 ${
-                        showMoreNav ? 'bg-amber-700/50 text-white' : 'text-amber-100 hover:bg-amber-700/50 hover:text-white'
-                      }`}
+                      className={`w-full flex items-center justify-between px-4 py-3 mx-2 mt-2 rounded-lg transition-all duration-200 ${showMoreNav ? 'bg-amber-700/50 text-white' : 'text-amber-100 hover:bg-amber-700/50 hover:text-white'
+                        }`}
                       title={showMoreNav ? 'Back' : 'More'}
                     >
                       <span className="flex items-center gap-2">
@@ -186,24 +189,22 @@ export function Layout({ children }: LayoutProps) {
                 <p className="text-sm font-semibold text-white truncate">{user?.name}</p>
                 <p className="text-xs text-amber-200/80 truncate">{user?.email}</p>
                 <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-gradient-to-r from-amber-500/80 to-amber-600/80 text-amber-100 mt-1 shadow-sm">
-                  {user?.role === 'admin' ? 'Administrator' : 
-                   user?.role === 'manager' ? 'Manager' : 
-                   user?.role === 'staff' ? 'Staff' : user?.role}
+                  {user?.role === 'admin' ? 'Administrator' :
+                    user?.role === 'manager' ? 'Manager' :
+                      user?.role === 'staff' ? 'Staff' : user?.role}
                 </span>
               </div>
             </div>
             <button
               onClick={handleLogout}
               disabled={isLoggingOut}
-              className={`group flex items-center justify-center space-x-2 transition-all duration-200 w-full p-2.5 rounded-lg font-medium border ${
-                isLoggingOut 
-                  ? 'text-amber-400 cursor-not-allowed bg-amber-800/20 border-amber-600/20' 
-                  : 'text-amber-200 hover:text-white hover:bg-gradient-to-r hover:from-red-500/10 hover:to-red-600/10 hover:border-red-400/30 hover:shadow-sm border-amber-600/20'
-              }`}
+              className={`group flex items-center justify-center space-x-2 transition-all duration-200 w-full p-2.5 rounded-lg font-medium border ${isLoggingOut
+                ? 'text-amber-400 cursor-not-allowed bg-amber-800/20 border-amber-600/20'
+                : 'text-amber-200 hover:text-white hover:bg-gradient-to-r hover:from-red-500/10 hover:to-red-600/10 hover:border-red-400/30 hover:shadow-sm border-amber-600/20'
+                }`}
             >
-              <LogOut className={`h-4 w-4 transition-colors duration-200 ${
-                isLoggingOut ? 'text-amber-400' : 'text-amber-300 group-hover:text-red-200'
-              }`} />
+              <LogOut className={`h-4 w-4 transition-colors duration-200 ${isLoggingOut ? 'text-amber-400' : 'text-amber-300 group-hover:text-red-200'
+                }`} />
               <span className="text-xs font-medium">{isLoggingOut ? 'Signing out...' : 'Sign Out'}</span>
             </button>
           </div>

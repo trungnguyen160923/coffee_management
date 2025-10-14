@@ -34,6 +34,15 @@ export const API_ENDPOINTS = {
     BY_BRANCH: (id: number | string) => `/api/order-service/api/reservations/branch/${id}`,
     STATUS: (id: number | string) => `/api/order-service/api/reservations/${id}/status`,
   },
+  TABLES: {
+    BASE: '/api/order-service/api/staff/tables',
+    BY_BRANCH: (id: number | string) => `/api/order-service/api/staff/tables/branch/${id}`,
+    AVAILABLE: (id: number | string) => `/api/order-service/api/staff/tables/branch/${id}/available`,
+    ASSIGN: '/api/order-service/api/staff/tables/assign',
+    BY_RESERVATION: (id: number | string) => `/api/order-service/api/staff/tables/reservation/${id}`,
+    STATUS: '/api/order-service/api/staff/tables/status',
+    STATUS_SUMMARY: (id: number | string) => `/api/order-service/api/staff/tables/branch/${id}/status`,
+  },
   BRANCHES: {
     BASE: '/api/order-service/api/branches',
     STATS: '/api/order-service/api/branches/stats',
@@ -42,6 +51,14 @@ export const API_ENDPOINTS = {
     ASSIGN_MANAGER: (id: number | string) => `/api/order-service/api/branches/${id}/assign-manager`,
     UNASSIGN_MANAGER_INTERNAL: (id: number | string) => `/api/order-service/api/branches/internal/${id}/unassign-manager`,
     UNASSIGNED: '/api/order-service/api/branches/unassigned',
+  },
+  DISCOUNTS: {
+    BASE: '/api/order-service/api/discounts',
+    ACTIVE: '/api/order-service/api/discounts/active',
+    APPLY: '/api/order-service/api/discounts/apply',
+    USE: (code: string) => `/api/order-service/api/discounts/${code}/use`,
+    VALIDATE: '/api/order-service/api/discounts/validate',
+    AVAILABLE: '/api/order-service/api/discounts/available',
   },
 } as const;
 
@@ -91,6 +108,27 @@ export const PRODUCT_STATUS = {
 export const BRANCH_STATUS = {
   ACTIVE: 'active',
   INACTIVE: 'inactive',
+} as const;
+
+// Table Status
+export const TABLE_STATUS = {
+  AVAILABLE: 'AVAILABLE',
+  OCCUPIED: 'OCCUPIED',
+  RESERVED: 'RESERVED',
+  MAINTENANCE: 'MAINTENANCE',
+} as const;
+
+// Discount Status
+export const DISCOUNT_STATUS = {
+  ACTIVE: 'active',
+  INACTIVE: 'inactive',
+  EXPIRED: 'expired',
+} as const;
+
+// Discount Types
+export const DISCOUNT_TYPES = {
+  PERCENTAGE: 'percentage',
+  FIXED_AMOUNT: 'fixed_amount',
 } as const;
 
 // Pagination
