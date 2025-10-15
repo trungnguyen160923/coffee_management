@@ -17,14 +17,14 @@ class DiscountService {
      * @param {number} cartTotal - Current cart total amount
      * @returns {Promise<Object>} Validation result with discount details
      */
-    async validateDiscount(discountCode, cartTotal) {
+    async validateDiscount(discountCode, cartTotal, branchId) {
         try {
             const response = await httpClient.post(
                 API.VALIDATE_DISCOUNT,
                 {
                     discountCode: discountCode,
                     orderAmount: cartTotal,
-                    branchId: 1 // Default branch ID, can be made dynamic later
+                    branchId: branchId
                 },
                 { headers: this.buildHeaders() }
             );
@@ -40,14 +40,14 @@ class DiscountService {
      * @param {number} cartTotal - Current cart total amount
      * @returns {Promise<Object>} Application result with updated totals
      */
-    async applyDiscount(discountCode, cartTotal) {
+    async applyDiscount(discountCode, cartTotal, branchId) {
         try {
             const response = await httpClient.post(
                 API.APPLY_DISCOUNT,
                 {
                     discountCode: discountCode,
                     orderAmount: cartTotal,
-                    branchId: 1 // Default branch ID, can be made dynamic later
+                    branchId: branchId
                 },
                 { headers: this.buildHeaders() }
             );

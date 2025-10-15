@@ -6,6 +6,7 @@ import orderservice.order_service.dto.ApiResponse;
 import orderservice.order_service.dto.request.CreateBranchRequest;
 import orderservice.order_service.entity.Branch;
 import orderservice.order_service.service.BranchService;
+import orderservice.order_service.service.BranchSelectionService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -21,10 +22,12 @@ import orderservice.order_service.dto.response.PagedResponse;
 public class BranchController {
 
     private final BranchService branchService;
+    private final BranchSelectionService branchSelectionService;
 
     @Autowired
-    public BranchController(BranchService branchService) {
+    public BranchController(BranchService branchService, BranchSelectionService branchSelectionService) {
         this.branchService = branchService;
+        this.branchSelectionService = branchSelectionService;
     }
 
     @PostMapping
@@ -162,7 +165,8 @@ public class BranchController {
         }
     }
 
-    // Internal endpoint for inter-service background processing (no authentication required)
+    // Internal endpoint for inter-service background processing (no authentication
+    // required)
     @GetMapping("/internal/manager/{managerUserId}")
     public ResponseEntity<ApiResponse<List<Branch>>> getBranchesByManagerInternal(@PathVariable Integer managerUserId) {
         try {
@@ -275,9 +279,11 @@ public class BranchController {
         }
     }
 
-    // Internal compensation endpoint to unassign manager (no authentication required)
+    // Internal compensation endpoint to unassign manager (no authentication
+    // required)
     @PutMapping("/internal/{branchId}/unassign-manager")
-    public ResponseEntity<ApiResponse<Branch>> unassignManagerInternal(@PathVariable Integer branchId,@Valid @RequestBody AssignManagerRequest request ) {
+    public ResponseEntity<ApiResponse<Branch>> unassignManagerInternal(@PathVariable Integer branchId,
+            @Valid @RequestBody AssignManagerRequest request) {
         try {
             Branch branch = branchService.unassignManager(branchId, request.getManagerUserId());
             ApiResponse<Branch> response = ApiResponse.<Branch>builder()
@@ -351,6 +357,35 @@ public class BranchController {
             ApiResponse<List<Branch>> response = ApiResponse.<List<Branch>>builder()
                     .code(500)
                     .message("Failed to geocode branches: " + e.getMessage())
+                    .result(null)
+                    .build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    @GetMapping("/nearest")
+    public ResponseEntity<ApiResponse<Branch>> findNearestBranch(@RequestParam String address) {
+        try {
+            Branch nearestBranch = branchSelectionService.findNearestBranch(address);
+            if (nearestBranch == null) {
+                ApiResponse<Branch> response = ApiResponse.<Branch>builder()
+                        .code(404)
+                        .message("No branch found for the given address")
+                        .result(null)
+                        .build();
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+            }
+
+            ApiResponse<Branch> response = ApiResponse.<Branch>builder()
+                    .code(200)
+                    .message("Nearest branch found successfully")
+                    .result(nearestBranch)
+                    .build();
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            ApiResponse<Branch> response = ApiResponse.<Branch>builder()
+                    .code(500)
+                    .message("Failed to find nearest branch: " + e.getMessage())
                     .result(null)
                     .build();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);

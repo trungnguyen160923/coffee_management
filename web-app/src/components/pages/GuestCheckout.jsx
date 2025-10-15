@@ -4,6 +4,7 @@ import { cartService } from '../../services/cartService';
 import { orderService } from '../../services/orderService';
 import { emailService } from '../../services/emailService';
 import { discountService } from '../../services/discountService';
+import { branchService } from '../../services/branchService';
 import MomoPaymentPage from './MomoPaymentPage';
 import axios from 'axios';
 import { showToast } from '../../utils/toast';
@@ -36,6 +37,7 @@ const GuestCheckout = () => {
     const [discountCode, setDiscountCode] = useState('');
     const [appliedDiscount, setAppliedDiscount] = useState(null);
     const [discountError, setDiscountError] = useState(null);
+    const [selectedBranch, setSelectedBranch] = useState(null);
 
     // Fetch provinces and cart items on mount
     useEffect(() => {
@@ -63,17 +65,43 @@ const GuestCheckout = () => {
     };
 
     const handleApplyDiscount = async () => {
+        // Check if all 3 address fields are filled
+        if (!formData.province || !formData.district || !formData.ward) {
+            showToast('Please fill in all address fields before applying discount', 'warning');
+            return;
+        }
+
         if (!discountCode.trim()) {
-            setDiscountError('Please enter a discount code');
             showToast('Please enter a discount code', 'warning');
             return;
         }
 
         try {
             setDiscountError(null);
+
+            // Step 1: Find nearest branch based on address
+            const fullAddress = `${formData.ward}, ${formData.district}, ${formData.province}`;
+            const branchResult = await branchService.findNearestBranch(fullAddress);
+
+            if (!branchResult.success) {
+                showToast('Failed to find nearest branch. Please check your address.', 'error');
+                return;
+            }
+
+            setSelectedBranch(branchResult.branch);
+            console.log('Selected branch:', branchResult.branch);
+
+            // Step 2: Validate discount with branch ID
             const cartTotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
-            const result = await discountService.validateDiscount(discountCode, cartTotal);
+            // Create discount request with branch ID
+            const discountRequest = {
+                discountCode: discountCode,
+                orderAmount: cartTotal,
+                branchId: branchResult.branch.branchId
+            };
+
+            const result = await discountService.validateDiscount(discountCode, cartTotal, branchResult.branch.branchId);
 
             if (result.result && result.result.isValid) {
                 const discountData = result.result;
@@ -84,13 +112,15 @@ const GuestCheckout = () => {
                     amount: Number(discountData.discountAmount),
                     type: discountData.discountType,
                     originalAmount: Number(discountData.originalAmount),
-                    finalAmount: Number(discountData.finalAmount)
+                    finalAmount: Number(discountData.finalAmount),
+                    branchId: branchResult.branch.branchId,
+                    branchName: branchResult.branch.name
                 };
 
                 setAppliedDiscount(appliedDiscountData);
                 showToast(`Applied code ${appliedDiscountData.code} successfully`, 'success');
             } else {
-                const errorMessage = result.result?.message || result.message || 'Invalid discount code';
+                const errorMessage = result.result?.message || result.message || 'Invalid discount code for this branch';
                 setDiscountError(errorMessage);
                 showToast(errorMessage, 'error');
             }
@@ -162,6 +192,18 @@ const GuestCheckout = () => {
         setDistricts([]);
         setWards([]);
 
+        // Reset discount when address changes
+        if (appliedDiscount) {
+            setAppliedDiscount(null);
+            setDiscountCode('');
+            setDiscountError(null);
+            setSelectedBranch(null);
+            showToast('Discount removed due to address change. Please reapply discount.', 'info');
+        } else {
+            // Clear discount code input when address changes (even if no discount was applied)
+            setDiscountCode('');
+        }
+
         if (provinceCode) {
             fetchDistricts(provinceCode);
         }
@@ -182,6 +224,15 @@ const GuestCheckout = () => {
 
         setWards([]);
 
+        // Reset discount when address changes
+        if (appliedDiscount) {
+            setAppliedDiscount(null);
+            setDiscountCode('');
+            setDiscountError(null);
+            setSelectedBranch(null);
+            showToast('Discount removed due to address change. Please reapply discount.', 'info');
+        }
+
         if (districtCode) {
             fetchWards(districtCode);
         }
@@ -193,6 +244,15 @@ const GuestCheckout = () => {
             ...prev,
             ward: wardName
         }));
+
+        // Reset discount when address changes
+        if (appliedDiscount) {
+            setAppliedDiscount(null);
+            setDiscountCode('');
+            setDiscountError(null);
+            setSelectedBranch(null);
+            showToast('Discount removed due to address change. Please reapply discount.', 'info');
+        }
     };
 
 
@@ -291,8 +351,11 @@ const GuestCheckout = () => {
 
         // Check if Momo payment is selected
         if (formData.paymentMethod === 'CARD') {
-            // Prepare order info for Momo payment
-            const totalAmount = cartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
+            // Prepare order info for Momo payment with VAT and discount
+            const subtotal = cartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
+            const vat = subtotal * 0.1; // 10% VAT
+            const discountedSubtotal = appliedDiscount ? appliedDiscount.finalAmount : subtotal;
+            const totalAmount = discountedSubtotal + vat;
             const orderId = `ORD${Date.now()}`;
 
             setOrderInfo({
@@ -723,6 +786,7 @@ const GuestCheckout = () => {
                                                             placeholder="Enter code"
                                                             value={discountCode}
                                                             onChange={(e) => setDiscountCode(e.target.value)}
+                                                            disabled={!formData.province || !formData.district || !formData.ward}
                                                         />
                                                         <button
                                                             type="button"
