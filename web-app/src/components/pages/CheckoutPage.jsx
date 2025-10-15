@@ -6,6 +6,7 @@ import { emailService } from '../../services/emailService';
 import { addressService } from '../../services/addressService';
 import { authService } from '../../services/authService';
 import { discountService } from '../../services/discountService';
+import { branchService } from '../../services/branchService';
 import MomoPaymentPage from './MomoPaymentPage';
 import axios from 'axios';
 import { showToast } from '../../utils/toast';
@@ -31,6 +32,7 @@ const CheckoutPage = () => {
     const [discountCode, setDiscountCode] = useState('');
     const [appliedDiscount, setAppliedDiscount] = useState(null);
     const [discountError, setDiscountError] = useState(null);
+    const [selectedBranch, setSelectedBranch] = useState(null);
 
     // Fetch user info, addresses and cart items on mount
     useEffect(() => {
@@ -107,17 +109,41 @@ const CheckoutPage = () => {
     };
 
     const handleApplyDiscount = async () => {
+        // Check if address is selected
+        if (!formData.selectedAddressId) {
+            showToast('Please select a delivery address before applying discount', 'warning');
+            return;
+        }
+
         if (!discountCode.trim()) {
-            setDiscountError('Please enter a discount code');
             showToast('Please enter a discount code', 'warning');
             return;
         }
 
         try {
             setDiscountError(null);
+
+            // Step 1: Find nearest branch based on selected address
+            const selectedAddress = addresses.find(addr => addr.addressId.toString() === formData.selectedAddressId);
+            if (!selectedAddress) {
+                showToast('Please select a valid address', 'error');
+                return;
+            }
+
+            const branchResult = await branchService.findNearestBranch(selectedAddress.fullAddress);
+
+            if (!branchResult.success) {
+                showToast('Failed to find nearest branch. Please check your address.', 'error');
+                return;
+            }
+
+            setSelectedBranch(branchResult.branch);
+            console.log('Selected branch:', branchResult.branch);
+
+            // Step 2: Validate discount with branch ID
             const cartTotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
-            const result = await discountService.validateDiscount(discountCode, cartTotal);
+            const result = await discountService.validateDiscount(discountCode, cartTotal, branchResult.branch.branchId);
 
             if (result.result && result.result.isValid) {
                 const discountData = result.result;
@@ -128,13 +154,15 @@ const CheckoutPage = () => {
                     amount: Number(discountData.discountAmount),
                     type: discountData.discountType,
                     originalAmount: Number(discountData.originalAmount),
-                    finalAmount: Number(discountData.finalAmount)
+                    finalAmount: Number(discountData.finalAmount),
+                    branchId: branchResult.branch.branchId,
+                    branchName: branchResult.branch.name
                 };
 
                 setAppliedDiscount(appliedDiscountData);
                 showToast(`Applied code ${appliedDiscountData.code} successfully`, 'success');
             } else {
-                const errorMessage = result.result?.message || result.message || 'Invalid discount code';
+                const errorMessage = result.result?.message || result.message || 'Invalid discount code for this branch';
                 setDiscountError(errorMessage);
                 showToast(errorMessage, 'error');
             }
@@ -176,6 +204,15 @@ const CheckoutPage = () => {
             ...prev,
             selectedAddressId: addressId
         }));
+
+        // Reset discount when address changes
+        if (appliedDiscount) {
+            setAppliedDiscount(null);
+            setDiscountCode('');
+            setDiscountError(null);
+            setSelectedBranch(null);
+            showToast('Discount removed due to address change. Please reapply discount.', 'info');
+        }
     };
 
     const validateRequired = () => {
@@ -286,8 +323,11 @@ const CheckoutPage = () => {
 
         // Check if Momo payment is selected
         if (formData.paymentMethod === 'CARD') {
-            // Prepare order info for Momo payment
-            const totalAmount = cartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
+            // Prepare order info for Momo payment with VAT and discount
+            const subtotal = cartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
+            const vat = subtotal * 0.1; // 10% VAT
+            const discountedSubtotal = appliedDiscount ? appliedDiscount.finalAmount : subtotal;
+            const totalAmount = discountedSubtotal + vat;
             const orderId = `ORD${Date.now()}`;
 
             setOrderInfo({
@@ -681,6 +721,7 @@ const CheckoutPage = () => {
                                                             placeholder="Enter code"
                                                             value={discountCode}
                                                             onChange={(e) => setDiscountCode(e.target.value)}
+                                                            disabled={!formData.selectedAddressId}
                                                         />
                                                         <button
                                                             type="button"
