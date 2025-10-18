@@ -1,14 +1,14 @@
 import React from 'react';
 import { BrowserRouter as Router } from 'react-router-dom';
-import Layout from './components/layout/Layout';
-import AppRoutes from "./routes/AppRoutes";
+import { AuthProvider } from './context/AuthContext';
+import AppContent from './components/AppContent';
 
 function App() {
   return (
     <Router>
-      <Layout pageTitle="Smart Cafe | Delicious Taste">
-        <AppRoutes />
-      </Layout>
+      <AuthProvider>
+        <AppContent pageTitle="Smart Cafe | Delicious Taste" />
+      </AuthProvider>
     </Router>
   );
 }

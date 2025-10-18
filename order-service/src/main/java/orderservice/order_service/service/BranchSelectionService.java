@@ -108,4 +108,79 @@ public class BranchSelectionService {
 
         return nearestBranch;
     }
+
+    /**
+     * Tìm n chi nhánh gần nhất dựa trên địa chỉ khách hàng
+     * @param customerAddress - Địa chỉ khách hàng
+     * @param limit - Số lượng chi nhánh cần lấy
+     * @return Danh sách n chi nhánh gần nhất, sắp xếp theo khoảng cách
+     */
+    public List<Branch> findTopNearestBranches(String customerAddress, int limit) {
+        try {
+            // 1️⃣ Geocoding địa chỉ khách hàng
+            GeocodingService.Coordinates customerLocation = geocodingService.geocodeAddress(customerAddress);
+
+            // 2️⃣ Lấy danh sách chi nhánh, sắp xếp theo branch_id để đảm bảo kết quả ổn định
+            List<Branch> allBranches = branchRepository.findAll()
+                    .stream()
+                    .filter(b -> b.getLatitude() != null && b.getLongitude() != null)
+                    .sorted((a, b) -> a.getBranchId().compareTo(b.getBranchId()))
+                    .toList();
+
+            if (allBranches.isEmpty()) {
+                return List.of();
+            }
+
+            // 3️⃣ Tính khoảng cách cho tất cả chi nhánh và sắp xếp
+            List<BranchWithDistance> branchesWithDistance = allBranches.stream()
+                    .map(branch -> {
+                        GeocodingService.Coordinates branchLocation = new GeocodingService.Coordinates(
+                                branch.getLatitude().doubleValue(),
+                                branch.getLongitude().doubleValue());
+                        double distance = geocodingService.calculateDistance(customerLocation, branchLocation);
+                        return new BranchWithDistance(branch, distance);
+                    })
+                    .sorted((a, b) -> {
+                        // Sắp xếp theo khoảng cách, nếu bằng nhau thì theo branch_id
+                        int distanceComparison = Double.compare(a.distance, b.distance);
+                        if (distanceComparison == 0) {
+                            return a.branch.getBranchId().compareTo(b.branch.getBranchId());
+                        }
+                        return distanceComparison;
+                    })
+                    .toList();
+
+            // 4️⃣ Lấy n chi nhánh gần nhất
+            return branchesWithDistance.stream()
+                    .limit(limit)
+                    .map(branchWithDistance -> branchWithDistance.branch)
+                    .toList();
+
+        } catch (Exception e) {
+            log.error("Error finding top nearest branches: {}", e.getMessage());
+            
+            // Fallback: trả về n chi nhánh đầu tiên có tọa độ
+            List<Branch> allBranches = branchRepository.findAll()
+                    .stream()
+                    .filter(b -> b.getLatitude() != null && b.getLongitude() != null)
+                    .sorted((a, b) -> a.getBranchId().compareTo(b.getBranchId()))
+                    .limit(limit)
+                    .toList();
+
+            return allBranches;
+        }
+    }
+
+    /**
+     * Helper class để lưu trữ chi nhánh và khoảng cách
+     */
+    private static class BranchWithDistance {
+        final Branch branch;
+        final double distance;
+
+        BranchWithDistance(Branch branch, double distance) {
+            this.branch = branch;
+            this.distance = distance;
+        }
+    }
 }

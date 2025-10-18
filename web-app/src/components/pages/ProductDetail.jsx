@@ -15,7 +15,7 @@ const ProductDetail = () => {
         const load = async () => {
             try {
                 setLoading(true);
-                const data = await productService.getProductById(id);
+                const data = await productService.getProductByIdForPublic(id);
                 if (mounted) setProduct(data);
                 if (mounted && data?.productDetails?.length) {
                     setSelectedDetailId(data.productDetails[0].pdId);
@@ -133,14 +133,66 @@ const ProductDetail = () => {
                                         </div>
                                     )}
                                 <div className="w-100"></div>
-                                <div className="input-group col-md-6 d-flex mb-3">
-                                    <span className="input-group-btn mr-2">
-                                        <button type="button" className="quantity-left-minus btn" onClick={dec}><i className="icon-minus"></i></button>
-                                    </span>
-                                    <input type="text" readOnly className="form-control input-number" value={quantity} />
-                                    <span className="input-group-btn ml-2">
-                                        <button type="button" className="quantity-right-plus btn" onClick={inc}><i className="icon-plus"></i></button>
-                                    </span>
+                                <div className="col-md-12">
+                                    <div className="form-group">
+                                        <label>Quantity:</label>
+                                        <div className="input-group d-flex align-items-center" style={{ maxWidth: '200px' }}>
+                                            <button 
+                                                type="button" 
+                                                className="btn btn-outline-secondary" 
+                                                onClick={dec}
+                                                style={{ 
+                                                    border: '1px solid #c49b63', 
+                                                    color: '#c49b63',
+                                                    backgroundColor: 'transparent',
+                                                    minWidth: '40px',
+                                                    height: '40px',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center'
+                                                }}
+                                            >
+                                                <i className="icon-minus"></i>
+                                            </button>
+                                            <input 
+                                                type="text" 
+                                                readOnly 
+                                                className="form-control text-center" 
+                                                value={quantity}
+                                                style={{ 
+                                                    border: '1px solid #c49b63',
+                                                    color: '#fff',
+                                                    backgroundColor: 'transparent',
+                                                    height: '40px',
+                                                    borderRight: 'none',
+                                                    height: '40px',
+                                                    padding: '0 10px',
+                                                    borderLeft: 'none',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    lineHeight: '40px'
+                                                }}
+                                            />
+                                            <button 
+                                                type="button" 
+                                                className="btn btn-outline-secondary" 
+                                                onClick={inc}
+                                                style={{ 
+                                                    border: '1px solid #c49b63', 
+                                                    color: '#c49b63',
+                                                    backgroundColor: 'transparent',
+                                                    minWidth: '40px',
+                                                    height: '40px',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center'
+                                                }}
+                                            >
+                                                <i className="icon-plus"></i>
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 

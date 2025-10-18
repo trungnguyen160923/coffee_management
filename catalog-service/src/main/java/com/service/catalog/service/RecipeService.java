@@ -1,8 +1,13 @@
 package com.service.catalog.service;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -26,19 +31,25 @@ import com.service.catalog.mapper.RecipeMapper;
 import com.service.catalog.repository.RecipeRepository;
 import com.service.catalog.repository.IngredientRepository;
 import com.service.catalog.repository.UnitRepository;
+import com.service.catalog.repository.ProductDetailRepository;
+import com.service.catalog.repository.RecipeItemRepository;
 
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import lombok.extern.slf4j.Slf4j;
 
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = lombok.AccessLevel.PRIVATE, makeFinal = true)
+@Slf4j
 public class RecipeService {
     RecipeRepository recipeRepository;
     RecipeMapper recipeMapper;
     IngredientRepository ingredientRepository;
     UnitRepository unitRepository;
+    ProductDetailRepository productDetailRepository;
+    RecipeItemRepository recipeItemRepository;
 
     @Transactional
     public List<RecipeResponse> getAllRecipes() {
@@ -155,6 +166,12 @@ public class RecipeService {
         recipe.setUpdateAt(LocalDateTime.now());
 
         recipeRepository.save(recipe);
+
+        // Set ProductDetail active = true after successful recipe creation
+        ProductDetail productDetailToUpdate = productDetailRepository.findById(request.getPdId())
+                .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_FOUND, "Product Detail not found"));
+        productDetailToUpdate.setActive(true);
+        productDetailRepository.save(productDetailToUpdate);
 
         // Reload the recipe to ensure associations (productDetail/product/category, items, ingredient, unit) are fully initialized
         Recipe persisted = recipeRepository.findWithAllByRecipeId(recipe.getRecipeId())
@@ -282,5 +299,121 @@ public class RecipeService {
     public Integer getNextVersionForRecipe(String name, Integer pdId) {
         Integer maxVersion = recipeRepository.findMaxVersionByNameAndPdId(name, pdId);
         return maxVersion + 1;
+    }
+
+    /**
+     * Lấy recipe theo product detail ID
+     */
+    @Transactional
+    public Optional<Recipe> getRecipeByProductDetailId(Integer productDetailId) {
+        log.debug("Getting recipe for product detail ID: {}", productDetailId);
+        return recipeRepository.findByProductDetailPdIdAndStatus(productDetailId, "ACTIVE");
+    }
+    
+    /**
+     * Lấy tất cả recipe items theo recipe ID
+     */
+    @Transactional
+    public List<RecipeItem> getRecipeItemsByRecipeId(Integer recipeId) {
+        log.debug("Getting recipe items for recipe ID: {}", recipeId);
+        return recipeItemRepository.findByRecipeRecipeId(recipeId);
+    }
+    
+    /**
+     * Tính toán nguyên liệu cần thiết cho một sản phẩm
+     * @param productDetailId ID của product detail
+     * @param quantity Số lượng sản phẩm cần làm
+     * @return Map<ingredientId, requiredQuantity>
+     */
+    @Transactional
+    public Map<Integer, BigDecimal> calculateRequiredIngredients(Integer productDetailId, BigDecimal quantity) {
+        log.debug("Calculating required ingredients for product detail ID: {}, quantity: {}", productDetailId, quantity);
+        
+        // Lấy recipe
+        Optional<Recipe> recipeOpt = getRecipeByProductDetailId(productDetailId);
+        if (recipeOpt.isEmpty()) {
+            log.warn("No active recipe found for product detail ID: {}", productDetailId);
+            return Map.of();
+        }
+
+        Recipe recipe = recipeOpt.get();
+        List<RecipeItem> recipeItems = getRecipeItemsByRecipeId(recipe.getRecipeId());
+        
+        if (recipeItems.isEmpty()) {
+            log.warn("No recipe items found for recipe ID: {}", recipe.getRecipeId());
+            return Map.of();
+        }
+
+        // Tính toán nguyên liệu cần thiết
+        Map<Integer, BigDecimal> requiredIngredients = recipeItems.stream()
+            .collect(Collectors.toMap(
+                item -> item.getIngredient().getIngredientId(),
+                item -> {
+                    // Tính quantity cần thiết = (item.qty / recipe.yield) * quantity
+                    BigDecimal requiredQty = item.getQty()
+                        .divide(recipe.getYield(), 4, java.math.RoundingMode.HALF_UP)
+                        .multiply(quantity);
+                    
+                    log.debug("Ingredient {}: recipe qty={}, yield={}, required qty={}", 
+                        item.getIngredient().getIngredientId(), item.getQty(), recipe.getYield(), requiredQty);
+                    
+                    return requiredQty;
+                }
+            ));
+        
+        log.debug("Calculated required ingredients: {}", requiredIngredients);
+        return requiredIngredients;
+    }
+    
+    /**
+     * Tính toán nguyên liệu cần thiết cho nhiều sản phẩm
+     * @param items Map<productDetailId, quantity>
+     * @return Map<ingredientId, totalRequiredQuantity>
+     */
+    @Transactional
+    public Map<Integer, BigDecimal> calculateRequiredIngredientsForItems(Map<Integer, BigDecimal> items) {
+        log.debug("Calculating required ingredients for items: {}", items);
+        
+        Map<Integer, BigDecimal> totalRequiredIngredients = new HashMap<>();
+        
+        for (Map.Entry<Integer, BigDecimal> entry : items.entrySet()) {
+            Integer productDetailId = entry.getKey();
+            BigDecimal quantity = entry.getValue();
+            
+            Map<Integer, BigDecimal> itemIngredients = calculateRequiredIngredients(productDetailId, quantity);
+            
+            // Cộng dồn vào total
+            for (Map.Entry<Integer, BigDecimal> ingredient : itemIngredients.entrySet()) {
+                Integer ingredientId = ingredient.getKey();
+                BigDecimal requiredQty = ingredient.getValue();
+                
+                totalRequiredIngredients.merge(ingredientId, requiredQty, BigDecimal::add);
+            }
+        }
+         log.debug("Total required ingredients: {}", totalRequiredIngredients);
+        return totalRequiredIngredients;
+    }
+    
+    /**
+     * Kiểm tra xem có recipe cho product detail không
+     */
+    @Transactional
+    public boolean hasRecipe(Integer productDetailId) {
+        return getRecipeByProductDetailId(productDetailId).isPresent();
+    }
+    
+    /**
+ * Lấy thông tin chi tiết recipe với items
+     */
+@Transactional
+    public Optional<Recipe> getRecipeWithItems(Integer productDetailId) {
+        Optional<Recipe> recipeOpt = getRecipeByProductDetailId(productDetailId);
+        if (recipeOpt.isPresent()) {
+            Recipe recipe = recipeOpt.get();
+            List<RecipeItem> items = getRecipeItemsByRecipeId(recipe.getRecipeId());
+            // Set items vào recipe (nếu có relationship)
+            return Optional.of(recipe);
+        }
+        return Optional.empty();
     }
 }

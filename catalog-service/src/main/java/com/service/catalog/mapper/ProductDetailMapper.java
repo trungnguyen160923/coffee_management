@@ -28,6 +28,7 @@ public class ProductDetailMapper {
                 .pdId(productDetail.getPdId())
                 .size(sizeResponse)
                 .price(productDetail.getPrice())
+                .active(productDetail.getActive())
                 .createAt(productDetail.getCreateAt())
                 .updateAt(productDetail.getUpdateAt())
                 .build();

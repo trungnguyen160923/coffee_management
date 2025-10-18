@@ -68,7 +68,12 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
             "/catalogs/public/purchase-orders",
             "/catalogs/public/purchase-orders/*",
             "/catalogs/public/purchase-orders/*/*",
-            "/catalogs/public/purchase-orders/*/*/*"
+            "/catalogs/public/purchase-orders/*/*/*",
+
+            // Public stock endpoints
+            "/catalogs/stocks/check-and-reserve",
+            "/catalogs/stocks/check-and-reserve/.*",
+            "/catalogs/stocks/.*",
     };
 
     @Value("${app.api-prefix}")
@@ -104,9 +109,20 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
     }
 
     private boolean isPublicEndpoint(ServerHttpRequest request) {
-        log.info("Request Path: {}", request.getURI().getPath());
-        return Arrays.stream(publicEndpoints)
-                .anyMatch(s -> request.getURI().getPath().matches(apiPrefix + s));
+        String requestPath = request.getURI().getPath();
+        log.info("Request Path: {}", requestPath);
+        log.info("API Prefix: {}", apiPrefix);
+        
+        boolean isPublic = Arrays.stream(publicEndpoints)
+                .anyMatch(pattern -> {
+                    String fullPattern = apiPrefix + pattern;
+                    boolean matches = requestPath.matches(fullPattern);
+                    log.info("Pattern: {} -> Matches: {}", fullPattern, matches);
+                    return matches;
+                });
+        
+        log.info("Is Public Endpoint: {}", isPublic);
+        return isPublic;
     }
 
     Mono<Void> unauthenticated(ServerHttpResponse response) {

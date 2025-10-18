@@ -45,8 +45,28 @@ public class Stock {
     @Column(nullable = false, columnDefinition = "DECIMAL(12,4) DEFAULT 0.0000")
     BigDecimal threshold;
 
+    @Column(name = "reserved_quantity", nullable = false, columnDefinition = "DECIMAL(12,4) DEFAULT 0.0000")
+    @Builder.Default
+    BigDecimal reservedQuantity = BigDecimal.ZERO;
 
     @Column(name = "last_updated", nullable = false,
             columnDefinition = "DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
     LocalDateTime lastUpdated;
+
+    // Helper methods
+    public BigDecimal getAvailableQuantity() {
+        return quantity.subtract(reservedQuantity);
+    }
+
+    public boolean hasEnoughStock(BigDecimal requiredQuantity) {
+        return getAvailableQuantity().compareTo(requiredQuantity) >= 0;
+    }
+
+    public boolean isLowStock() {
+        return getAvailableQuantity().compareTo(threshold) <= 0;
+    }
+
+    public boolean isOutOfStock() {
+        return getAvailableQuantity().compareTo(BigDecimal.ZERO) <= 0;
+    }
 }

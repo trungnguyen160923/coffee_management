@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { catalogService } from '../../services/catalogService';
+import { useAuth } from '../../context/AuthContext';
 import { Package, RefreshCw, Search, Loader } from 'lucide-react';
 import ReturnGoodsDetailModal from '../../components/manager/ReturnGoodsDetailModal';
 
@@ -15,6 +16,7 @@ interface ReturnRow {
 }
 
 export default function ReturnGoods() {
+  const { managerBranch } = useAuth();
   const [data, setData] = useState<Page<ReturnRow> | null>(null);
   const [page, setPage] = useState(0);
   const [size, setSize] = useState(10);
@@ -33,6 +35,7 @@ export default function ReturnGoods() {
         returnNumber: query || undefined,
         fromDate: fromDate || undefined,
         toDate: toDate || undefined,
+        branchId: managerBranch?.branchId, // Lọc theo chi nhánh của manager
         page,
         size,
         sortBy: 'createAt',
@@ -44,7 +47,7 @@ export default function ReturnGoods() {
     }
   };
 
-  useEffect(() => { load(); }, [page, size]);
+  useEffect(() => { load(); }, [page, size, managerBranch?.branchId]);
   useEffect(() => {
     const t = setTimeout(() => { setPage(0); void load(); }, 400);
     return () => clearTimeout(t);

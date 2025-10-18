@@ -295,7 +295,7 @@ public class GoodsReceiptService {
             Integer ingredientId = detail.getIngredient().getIngredientId();
 
             Stock stock = stockRepository
-                    .findByIngredientIngredientIdAndBranchId(ingredientId, branchId)
+                    .findByBranchIdAndIngredientIngredientId(branchId, ingredientId)
                     .orElse(Stock.builder()
                             .ingredient(detail.getIngredient())
                             .branchId(branchId)

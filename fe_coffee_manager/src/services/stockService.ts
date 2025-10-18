@@ -105,5 +105,42 @@ export const stockService = {
 
     const response = await apiClient.get(`${baseUrl}/stocks/branch/${branchId}?${queryParams.toString()}`) as StockPageResponse;
     return response;
+  },
+
+  // Lấy holdId từ orderId
+  getHoldIdByOrderId: async (orderId: string): Promise<string> => {
+    const response = await apiClient.get(`${baseUrl}/stocks/hold-id/${orderId}`) as any;
+    return response.result?.holdId;
+  },
+
+  // Commit reservation khi order chuyển sang ready
+  commitReservation: async (orderId: string): Promise<any> => {
+    // Lấy holdId từ orderId trước
+    const holdIdResponse = await apiClient.get(`${baseUrl}/stocks/hold-id/${orderId}`) as any;
+    const holdId = holdIdResponse.result?.holdId;
+    if (!holdId) {
+      throw new Error('No active reservation found for this order');
+    }
+    
+    const response = await apiClient.post(`${baseUrl}/stocks/commit`, {
+      holdId: holdId,
+      orderId: parseInt(orderId)
+    });
+    return response;
+  },
+
+  // Release reservation khi order bị cancelled
+  releaseReservation: async (orderId: string): Promise<any> => {
+    // Lấy holdId từ orderId trước
+    const holdIdResponse = await apiClient.get(`${baseUrl}/stocks/hold-id/${orderId}`) as any;
+    const holdId = holdIdResponse.result?.holdId;
+    if (!holdId) {
+      throw new Error('No active reservation found for this order');
+    }
+    
+    const response = await apiClient.post(`${baseUrl}/stocks/release`, {
+      holdId: holdId
+    });
+    return response;
   }
 };

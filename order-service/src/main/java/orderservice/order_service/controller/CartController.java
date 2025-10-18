@@ -9,7 +9,6 @@ import orderservice.order_service.dto.response.CartItemResponse;
 import orderservice.order_service.dto.response.CartResponse;
 import orderservice.order_service.dto.response.CartTotalResponse;
 import orderservice.order_service.exception.AppException;
-import orderservice.order_service.exception.ErrorCode;
 import orderservice.order_service.service.CartService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -215,16 +214,24 @@ public class CartController {
 
         // 2) Fallback: guest cart using header or query param
         String raw = (guestHeader != null && !guestHeader.isBlank()) ? guestHeader : guestParam;
+        
         if (raw != null && !raw.isBlank()) {
             try {
+                // Thử parse thành số trước
                 int parsed = Integer.parseInt(raw);
-                if (parsed > 0)
+                if (parsed > 0) {
                     return parsed;
+                }
             } catch (NumberFormatException ignored) {
+                // Nếu không parse được thành số, sử dụng hash của chuỗi
+                // Sử dụng hash code trực tiếp, không dùng Math.abs() để tránh inconsistency
+                int hash = raw.hashCode();
+                return hash;
             }
         }
 
         // 3) As a last resort, generate a guest id based on session-less timestamp hash
+        // Nhưng chỉ tạo mới nếu thực sự cần thiết
         int generated = Math.abs((int) (System.currentTimeMillis() % Integer.MAX_VALUE));
         return generated;
     }

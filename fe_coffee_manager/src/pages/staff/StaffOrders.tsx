@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import orderService from '../../services/orderService';
 import catalogService from '../../services/catalogService';
+import { stockService } from '../../services/stockService';
 import { CatalogProduct, CatalogRecipe } from '../../types';
+import toast from 'react-hot-toast';
 
 interface SimpleOrderItem {
     productName?: string;
@@ -120,20 +122,75 @@ export default function StaffOrders() {
         if (!orderId || !status) return;
         try {
             setError(null);
+            
+            // Gọi API reservation trước (nếu cần)
+            if (status === 'ready') {
+                // Khi chuyển sang ready → commit reservation trước
+                try {
+                    await stockService.commitReservation(String(orderId));
+                    console.log('Reservation committed for order:', orderId);
+                } catch (reservationError: any) {
+                    console.error('Failed to commit reservation:', reservationError);
+                    const errorMessage = reservationError?.response?.data?.message || 
+                                       reservationError?.message || 
+                                       'Unknown error occurred';
+                    toast.error(`Failed to commit reservation: ${errorMessage}`);
+                    return; // Dừng lại, không cập nhật trạng thái
+                }
+            } else if (status === 'cancelled') {
+                // Khi chuyển sang cancelled → release reservation trước
+                try {
+                    await stockService.releaseReservation(String(orderId));
+                    console.log('Reservation released for order:', orderId);
+                } catch (reservationError: any) {
+                    console.error('Failed to release reservation:', reservationError);
+                    const errorMessage = reservationError?.response?.data?.message || 
+                                       reservationError?.message || 
+                                       'Unknown error occurred';
+                    toast.error(`Failed to release reservation: ${errorMessage}`);
+                    return; // Dừng lại, không cập nhật trạng thái
+                }
+            }
+            
+            // Chỉ cập nhật trạng thái order nếu reservation API thành công (hoặc không cần gọi)
             const updated = await orderService.updateOrderStatus(String(orderId), status as any);
+            
+            // Cập nhật UI
             setOrders(prev => prev.map(o =>
                 String(o.orderId) === String(orderId)
                     ? { ...o, status: (updated as any)?.status ?? status }
                     : o
             ));
-        } catch (e) {
+            
+            // Hiển thị toast thành công
+            toast.success(`Order status updated to ${status}`);
+        } catch (e: any) {
             console.error('Failed to update order status', e);
-            setError('Failed to update order status.');
+            const errorMessage = e?.response?.data?.message || 
+                               e?.message || 
+                               'Unknown error occurred';
+            toast.error(`Failed to update order status: ${errorMessage}`);
+            setError(`Failed to update order status: ${errorMessage}`);
         }
     };
 
 
-    const statuses = ['pending', 'preparing', 'ready', 'completed', 'cancelled'];
+    // Lấy các trạng thái tiếp theo có thể chọn dựa trên trạng thái hiện tại
+    const getNextStatuses = (currentStatus?: string) => {
+        switch ((currentStatus || '').toLowerCase()) {
+            case 'pending':
+                return ['preparing', 'cancelled'];
+            case 'preparing':
+                return ['ready', 'cancelled'];
+            case 'ready':
+                return ['completed'];
+            case 'completed':
+            case 'cancelled':
+                return []; // Không thể thay đổi trạng thái
+            default:
+                return ['pending', 'preparing', 'ready', 'completed', 'cancelled'];
+        }
+    };
 
     const openDetail = async (orderId?: number | string) => {
         if (!orderId) return;
@@ -312,32 +369,45 @@ export default function StaffOrders() {
                                                             <circle cx="12" cy="12" r="3" />
                                                         </svg>
                                                     </button>
-                                                    <button
-                                                        onClick={() => setEditingOrderId(o.orderId!)}
-                                                        className="px-2 py-1 text-xs rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 inline-flex"
-                                                        title="Edit status"
-                                                    >
-                                                        {/* Pencil icon */}
-                                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
-                                                            <path d="M12 20h9" />
-                                                            <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
-                                                        </svg>
-                                                    </button>
-                                                    {String(editingOrderId) === String(o.orderId) && (
-                                                        <select
-                                                            autoFocus
-                                                            className="px-2 py-1 text-xs rounded-lg border border-gray-200 text-gray-700 bg-white inline-flex"
-                                                            defaultValue={(o.status || '').toLowerCase()}
-                                                            onBlur={() => setEditingOrderId(null)}
-                                                            onChange={async (e) => {
-                                                                await handleUpdateStatus(o.orderId, e.target.value);
-                                                                setEditingOrderId(null);
-                                                            }}
+                                                    {/* Chỉ hiển thị nút edit nếu order chưa hoàn thành hoặc bị hủy */}
+                                                    {!['completed', 'cancelled'].includes((o.status || '').toLowerCase()) && (
+                                                        <button
+                                                            onClick={() => setEditingOrderId(o.orderId!)}
+                                                            className="px-2 py-1 text-xs rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 inline-flex"
+                                                            title="Edit status"
                                                         >
-                                                            {statuses.map(s => (
-                                                                <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
-                                                            ))}
-                                                        </select>
+                                                            {/* Pencil icon */}
+                                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
+                                                                <path d="M12 20h9" />
+                                                                <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+                                                            </svg>
+                                                        </button>
+                                                    )}
+                                                    {String(editingOrderId) === String(o.orderId) && (
+                                                        <div className="flex flex-col gap-1">
+                                                            <select
+                                                                autoFocus
+                                                                className="px-2 py-1 text-xs rounded-lg border border-gray-200 text-gray-700 bg-white inline-flex"
+                                                                defaultValue=""
+                                                                onBlur={() => setEditingOrderId(null)}
+                                                                onChange={async (e) => {
+                                                                    if (e.target.value) {
+                                                                        await handleUpdateStatus(o.orderId, e.target.value);
+                                                                        setEditingOrderId(null);
+                                                                    }
+                                                                }}
+                                                            >
+                                                                <option value="" disabled>
+                                                                    Select new status...
+                                                                </option>
+                                                                {/* Hiển thị các trạng thái tiếp theo có thể chọn */}
+                                                                {getNextStatuses(o.status).map(s => (
+                                                                    <option key={s} value={s}>
+                                                                        {s.charAt(0).toUpperCase() + s.slice(1)}
+                                                                    </option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
                                                     )}
                                                 </div>
                                             </td>

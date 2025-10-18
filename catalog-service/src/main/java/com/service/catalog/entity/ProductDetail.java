@@ -37,6 +37,9 @@ public class ProductDetail {
     @Column(nullable = false, columnDefinition = "DECIMAL(12,2) DEFAULT 0.00")
     BigDecimal price;
 
+    @Column(nullable = true, columnDefinition = "BOOLEAN DEFAULT false")
+    Boolean active;
+
     @Column(name = "create_at", nullable = false, updatable = false,
             columnDefinition = "DATETIME DEFAULT CURRENT_TIMESTAMP")
     LocalDateTime createAt;

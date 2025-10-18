@@ -22,6 +22,11 @@ public class UserCreatedV2Event {
     public String position;       // required for STAFF
     public Double salary;         // required for STAFF
 
+    // Customer fields
+    public LocalDate dob;         // required for CUSTOMER
+    public String avatarUrl;      // optional for CUSTOMER
+    public String bio;            // optional for CUSTOMER
+
     public Instant occurredAt;
 }
 

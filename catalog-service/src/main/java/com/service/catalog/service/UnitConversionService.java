@@ -37,9 +37,6 @@ public class UnitConversionService {
     }
 
     public BigDecimal convertQuantity(Integer ingredientId, String fromUnit, String toUnit, BigDecimal quantity, Integer branchId) {
-        log.info("=== CONVERT QUANTITY DEBUG ===");
-        log.info("ingredientId: {}, fromUnit: {}, toUnit: {}, quantity: {}, branchId: {}", 
-                ingredientId, fromUnit, toUnit, quantity, branchId);
         
         if (fromUnit.equals(toUnit)) {
             log.info("Same units, returning original quantity: {}", quantity);
@@ -100,9 +97,6 @@ public class UnitConversionService {
      * Convert between units of different dimensions using ingredient-specific conversions with branch filter
      */
     private BigDecimal convertDifferentDimensions(Integer ingredientId, String fromUnit, String toUnit, BigDecimal quantity, Integer branchId) {
-        log.info("=== CONVERT DIFFERENT DIMENSIONS DEBUG ===");
-        log.info("ingredientId: {}, fromUnit: {}, toUnit: {}, quantity: {}, branchId: {}", 
-                ingredientId, fromUnit, toUnit, quantity, branchId);
         
         // Try direct conversion first (active only with scope filter)
         Optional<IngredientUnitConversion> directConversion;
@@ -257,9 +251,6 @@ public class UnitConversionService {
     }
 
     public BigDecimal getConversionFactor(Integer ingredientId, String fromUnit, String toUnit, Integer branchId) {
-        log.info("=== GET CONVERSION FACTOR DEBUG ===");
-        log.info("ingredientId: {}, fromUnit: {}, toUnit: {}, branchId: {}", 
-                ingredientId, fromUnit, toUnit, branchId);
         
         if (fromUnit.equals(toUnit)) {
             log.info("Same units, returning 1.0");
@@ -311,9 +302,6 @@ public class UnitConversionService {
      */
 
     private BigDecimal getIngredientSpecificConversionFactor(Integer ingredientId, String fromUnit, String toUnit, Integer branchId) {
-        log.info("=== GET INGREDIENT SPECIFIC CONVERSION FACTOR DEBUG ===");
-        log.info("ingredientId: {}, fromUnit: {}, toUnit: {}, branchId: {}", 
-                ingredientId, fromUnit, toUnit, branchId);
         
         // Try direct conversion (active only with scope filter)
         Optional<IngredientUnitConversion> directConversion;

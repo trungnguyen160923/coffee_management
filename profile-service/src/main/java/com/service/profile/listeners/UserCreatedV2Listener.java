@@ -57,8 +57,8 @@ public class UserCreatedV2Listener {
         this.kafkaTemplate = kafkaTemplate;
     }
 
-    // @KafkaListener(topics = "user.created.v2", groupId = "profile-user-v2")
-    // @Transactional
+    @KafkaListener(topics = "user.created.v2", groupId = "profile-user-v2")
+    @Transactional
     public void onUserCreated(String payload) throws Exception {
         System.out.println("=== UserCreatedV2Listener triggered ===");
         System.out.println("Received event: " + payload);
@@ -70,11 +70,16 @@ public class UserCreatedV2Listener {
         }
 
         try {
-            // Validate branch exists - DISABLED FOR NOW
-            // ApiResponse<?> br = branchClient.getBranchById(evt.branchId);
-            // if (br == null || br.getResult() == null) {
-            //     throw new RuntimeException("BRANCH_NOT_FOUND");
-            // }
+            // Validate branch exists
+            try {
+                ApiResponse<?> br = branchClient.getBranchById(evt.branchId);
+                if (br == null || br.getResult() == null) {
+                    throw new RuntimeException("BRANCH_NOT_FOUND");
+                }
+            } catch (Exception e) {
+                System.err.println("Branch validation failed, continuing anyway: " + e.getMessage());
+                // Continue without branch validation if branch service is down
+            }
 
             // Assign a temporary Authentication so method security passes during background
             // processing
@@ -113,14 +118,14 @@ public class UserCreatedV2Listener {
             }
 
             // publish completed
-            // try {
-            //     UserProfileCompletedEvent done = new UserProfileCompletedEvent();
-            //     done.sagaId = evt.sagaId;
-            //     done.userId = evt.userId;
-            //     done.occurredAt = Instant.now();
-            //     kafkaTemplate.send("user.profile.completed", json.writeValueAsString(done));
-            // } catch (Exception ignore) {
-            // }
+            try {
+                UserProfileCompletedEvent done = new UserProfileCompletedEvent();
+                done.sagaId = evt.sagaId;
+                done.userId = evt.userId;
+                done.occurredAt = Instant.now();
+                kafkaTemplate.send("user.profile.completed", json.writeValueAsString(done));
+            } catch (Exception ignore) {
+            }
         } catch (Exception ex) {
             // Compensation and failure notification - DISABLED FOR NOW
             try {
@@ -145,32 +150,32 @@ public class UserCreatedV2Listener {
             }
 
             // publish failure event for auth to delete user
-            // try {
-            //     UserProfileFailedEvent failed = new UserProfileFailedEvent();
-            //     failed.sagaId = evt.sagaId;
-            //     failed.userId = evt.userId;
-            //     Integer code = 9999;
-            //     String reason = ex.getMessage();
-            //     if (ex instanceof FeignException fe) {
-            //         String content = fe.contentUTF8();
-            //         try {
-            //             java.util.Map<?, ?> body = json.readValue(content, java.util.Map.class);
-            //             Object c = body.get("code");
-            //             Object m = body.get("message");
-            //             if (c instanceof Number)
-            //                 code = ((Number) c).intValue();
-            //             if (m instanceof String s)
-            //                 reason = s;
-            //         } catch (Exception ignoreParse) {
-            //         }
-            //     }
-            //     failed.code = code;
-            //     failed.reason = reason;
-            //     failed.occurredAt = Instant.now();
-            //     kafkaTemplate.send("user.profile.failed", json.writeValueAsString(failed));
-            // } catch (Exception ignore) {
-            //     // ignore publish errors
-            // }
+            try {
+                UserProfileFailedEvent failed = new UserProfileFailedEvent();
+                failed.sagaId = evt.sagaId;
+                failed.userId = evt.userId;
+                Integer code = 9999;
+                String reason = ex.getMessage();
+                if (ex instanceof FeignException fe) {
+                    String content = fe.contentUTF8();
+                    try {
+                        java.util.Map<?, ?> body = json.readValue(content, java.util.Map.class);
+                        Object c = body.get("code");
+                        Object m = body.get("message");
+                        if (c instanceof Number)
+                            code = ((Number) c).intValue();
+                        if (m instanceof String s)
+                            reason = s;
+                    } catch (Exception ignoreParse) {
+                    }
+                }
+                failed.code = code;
+                failed.reason = reason;
+                failed.occurredAt = Instant.now();
+                kafkaTemplate.send("user.profile.failed", json.writeValueAsString(failed));
+            } catch (Exception ignore) {
+                // ignore publish errors
+            }
 
             System.err.println("Saga compensation executed for sagaId=" + evt.sagaId + ", reason=" + ex.getMessage());
             processed.save(new ProcessedEvent(evt.sagaId, "user.created.v2", Instant.now()));

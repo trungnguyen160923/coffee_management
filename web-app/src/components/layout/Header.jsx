@@ -1,49 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import { authService } from '../../services/authService';
 import { cartService } from '../../services/cartService';
 
 const Header = () => {
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
-    const [username, setUsername] = useState('');
+    const { isAuthenticated, user, logout } = useAuth();
     const [showDropdown, setShowDropdown] = useState(false);
     const location = useLocation();
     const navigate = useNavigate();
     const [cartCount, setCartCount] = useState(0);
 
     useEffect(() => {
-        // Check authentication status from localStorage or context
-        const checkAuthStatus = () => {
-            const token = localStorage.getItem('token');
-            const user = localStorage.getItem('user');
-
-            if (token && user) {
-                setIsAuthenticated(true);
-                setUsername(JSON.parse(user).username || 'User');
-            } else {
-                setIsAuthenticated(false);
-                setUsername('');
-            }
-        };
-
-        // Check on mount and route changes
-        checkAuthStatus();
-
-        // Listen for storage changes (login/logout from other tabs)
-        const handleStorageChange = (e) => {
-            if (e.key === 'token' || e.key === 'user') {
-                checkAuthStatus();
-            }
-        };
-
-        window.addEventListener('storage', handleStorageChange);
-
-        // Listen for custom login event
-        const handleLogin = () => {
-            checkAuthStatus();
-        };
-
-        window.addEventListener('userLogin', handleLogin);
         const handleCartUpdated = async () => {
             try {
                 const items = await cartService.getCartItems();
@@ -58,8 +26,6 @@ const Header = () => {
         handleCartUpdated();
 
         return () => {
-            window.removeEventListener('storage', handleStorageChange);
-            window.removeEventListener('userLogin', handleLogin);
             window.removeEventListener('cartUpdated', handleCartUpdated);
         };
     }, [location.pathname]);
@@ -94,12 +60,8 @@ const Header = () => {
         } catch (error) {
             console.error('Logout API failed:', error);
         } finally {
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
-            setIsAuthenticated(false);
-            setUsername('');
+            logout();
             setShowDropdown(false);
-            window.location.href = '/auth/login';
         }
     };
 
@@ -181,7 +143,7 @@ const Header = () => {
                                     onClick={toggleDropdown}
                                     aria-expanded={showDropdown}
                                 >
-                                    {username}
+                                    {user?.username || 'User'}
                                 </a>
                                 <ul className={`dropdown-menu ${showDropdown ? 'show' : ''}`}>
                                     <li>

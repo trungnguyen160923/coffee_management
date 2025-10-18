@@ -34,6 +34,10 @@ public class CreateGuestOrderRequest {
     // Branch ID sẽ được tự động chọn dựa trên địa chỉ giao hàng
     Integer branchId;
 
+    // Thông tin để liên kết với reservations
+    Integer cartId;
+    String guestId;
+
     Integer tableId;
     Integer reservationId;
 
