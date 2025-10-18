@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { cartService } from '../../services/cartService';
+import { ScrollableContainer } from '../common/ScrollableContainer';
 
 const CartPage = () => {
     const [cartItems, setCartItems] = useState([]);
@@ -126,7 +127,8 @@ const CartPage = () => {
                     <div className="row">
                         <div className="col-md-12">
                             <div className="cart-list">
-                                <table className="table" style={{ display: 'table', visibility: 'visible' }}>
+                                <ScrollableContainer maxHeight="500px">
+                                    <table className="table" style={{ display: 'table', visibility: 'visible' }}>
                                     <thead className="thead-primary">
                                         <tr className="text-center">
                                             <th>&nbsp;</th>
@@ -260,6 +262,7 @@ const CartPage = () => {
                                         )}
                                     </tbody>
                                 </table>
+                                </ScrollableContainer>
                             </div>
                         </div>
                     </div>

@@ -2,6 +2,7 @@ package orderservice.order_service.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import lombok.extern.slf4j.Slf4j;
 import orderservice.order_service.client.CatalogServiceClient;
 import orderservice.order_service.dto.ApiResponse;
 import orderservice.order_service.dto.request.AddToCartRequest;
@@ -24,6 +25,7 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = lombok.AccessLevel.PRIVATE, makeFinal = true)
+@Slf4j
 public class CartService {
 
     CartRepository cartRepository;
@@ -65,12 +67,28 @@ public class CartService {
     }
 
     public CartResponse getCart(Integer userId) {
-        Cart cart = getOrCreateCart(userId);
+        // Tìm cart hiện tại, không tạo mới
+        Optional<Cart> cartOpt = cartRepository.findByUserId(userId);
+        if (cartOpt.isEmpty()) {
+            // Nếu chưa có cart, trả về cart rỗng
+            return CartResponse.builder()
+                    .cartId(null)
+                    .userId(userId)
+                    .cartItems(List.of())
+                    .totalAmount(BigDecimal.ZERO)
+                    .totalItems(0)
+                    .createAt(null)
+                    .updateAt(null)
+                    .build();
+        }
+        
+        Cart cart = cartOpt.get();
         List<CartItem> items = cartItemRepository.findByCartCartId(cart.getCartId());
         List<CartItemResponse> itemResponses = items.stream().map(this::toCartItemResponse)
                 .collect(Collectors.toList());
         BigDecimal totalAmount = items.stream().map(CartItem::getTotalPrice).reduce(BigDecimal.ZERO, BigDecimal::add);
         int totalItems = items.stream().mapToInt(CartItem::getQuantity).sum();
+        
         return CartResponse.builder()
                 .cartId(cart.getCartId())
                 .userId(cart.getUserId())
@@ -115,8 +133,15 @@ public class CartService {
     }
 
     private Cart getOrCreateCart(Integer userId) {
-        return cartRepository.findByUserId(userId)
-                .orElseGet(() -> cartRepository.save(Cart.builder().userId(userId).build()));
+        // Tìm cart theo userId (cho authenticated users)
+        Optional<Cart> existingCart = cartRepository.findByUserId(userId);
+        if (existingCart.isPresent()) {
+            return existingCart.get();
+        }
+        
+        // Tạo cart mới chỉ khi chưa có
+        Cart newCart = Cart.builder().userId(userId).build();
+        return cartRepository.save(newCart);
     }
 
     private CartItemResponse toCartItemResponse(CartItem item) {

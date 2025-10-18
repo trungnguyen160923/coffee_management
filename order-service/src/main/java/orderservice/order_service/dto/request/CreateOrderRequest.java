@@ -39,6 +39,10 @@ public class CreateOrderRequest {
     java.math.BigDecimal vat;
     String discountCode;
 
+    // Thông tin để liên kết với reservations
+    Integer cartId;
+    String guestId;
+
     @NotEmpty(message = "Order items cannot be empty")
     @Valid
     List<OrderItemRequest> orderItems;

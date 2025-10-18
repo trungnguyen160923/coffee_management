@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../../context/AuthContext';
 import { authService } from '../../../services/authService';
 
 const LoginPage = () => {
@@ -10,6 +11,7 @@ const LoginPage = () => {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
+    const { login } = useAuth();
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -41,16 +43,15 @@ const LoginPage = () => {
             const tokenPayload = JSON.parse(atob(token.split('.')[1]));
             const userId = tokenPayload.user_id;
 
-            // Store real token and user data
-            localStorage.setItem('token', token);
-            localStorage.setItem('user', JSON.stringify({
+            // Create user data object
+            const userData = {
                 email: formData.email,
                 username: formData.email.split('@')[0],
                 userId: userId
-            }));
+            };
 
-            // Dispatch custom event to notify Header
-            window.dispatchEvent(new CustomEvent('userLogin'));
+            // Use AuthContext login method
+            login(token, userData);
 
             // Redirect to home page
             navigate('/coffee');

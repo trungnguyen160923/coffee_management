@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.service.auth.dto.request.ManagerProfileCreationRequest;
 import com.service.auth.dto.request.StaffProfileCreationRequest;
+import com.service.auth.dto.request.CustomerUserCreationRequest;
 import com.service.auth.entity.User;
 import com.service.auth.events.UserCreatedV2Event;
 import com.service.auth.outbox.OutboxEvent;
@@ -127,6 +128,51 @@ public class UserV2Service {
     }
 
     @Transactional
+    public Object createCustomerUser(CustomerUserCreationRequest req) {
+        System.out.println("=== UserV2Service.createCustomerUser called ===");
+        // Validate duplicate email
+        if (userRepository.existsByEmail(req.getEmail())) {
+            throw new RuntimeException("Email already exists");
+        }
+        User user = new User();
+        user.setEmail(req.getEmail());
+        user.setPassword(passwordEncoder.encode(req.getPassword()));
+        user.setFullname(req.getFullname());
+        user.setPhoneNumber(req.getPhoneNumber());
+        user.setRole(roleRepository.findByName(req.getRole()).orElseThrow());
+        userRepository.save(user);
+
+        UserCreatedV2Event evt = new UserCreatedV2Event();
+        evt.sagaId = UUID.randomUUID().toString();
+        evt.userId = user.getUserId();
+        evt.email = user.getEmail();
+        evt.fullname = user.getFullname();
+        evt.phoneNumber = user.getPhoneNumber();
+        evt.role = req.getRole();
+        evt.dob = req.getDob();
+        evt.avatarUrl = req.getAvatarUrl();
+        evt.bio = req.getBio();
+        evt.occurredAt = Instant.now();
+
+        OutboxEvent ob = new OutboxEvent();
+        ob.setId(UUID.randomUUID().toString());
+        ob.setAggregateType("USER");
+        ob.setAggregateId(String.valueOf(user.getUserId()));
+        ob.setType("UserCreatedV2");
+        try {
+            ob.setPayload(json.writeValueAsString(evt));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        ob.setStatus("NEW");
+        ob.setAttempts(0);
+        ob.setCreatedAt(Instant.now());
+        outboxRepo.save(ob);
+
+        return java.util.Map.of("userId", user.getUserId(), "sagaId", evt.sagaId);
+    }
+
+    @Transactional
     public Object deleteManagerUser(Integer userId) {
         var user = userRepository.findById(userId).orElseThrow();
         if (user.getRole() == null || user.getRole().getName() == null || !"MANAGER".equals(user.getRole().getName())) {
@@ -168,6 +214,37 @@ public class UserV2Service {
         evt.sagaId = java.util.UUID.randomUUID().toString();
         evt.userId = user.getUserId();
         evt.role = "STAFF";
+        evt.occurredAt = java.time.Instant.now();
+
+        OutboxEvent ob = new OutboxEvent();
+        ob.setId(java.util.UUID.randomUUID().toString());
+        ob.setAggregateType("USER");
+        ob.setAggregateId(String.valueOf(user.getUserId()));
+        ob.setType("UserDeleteRequestedV1");
+        try {
+            ob.setPayload(json.writeValueAsString(evt));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        ob.setStatus("NEW");
+        ob.setAttempts(0);
+        ob.setCreatedAt(java.time.Instant.now());
+        outboxRepo.save(ob);
+
+        return java.util.Map.of("userId", user.getUserId(), "sagaId", evt.sagaId);
+    }
+
+    @Transactional
+    public Object deleteCustomerUser(Integer userId) {
+        var user = userRepository.findById(userId).orElseThrow();
+        if (user.getRole() == null || user.getRole().getName() == null || !"CUSTOMER".equals(user.getRole().getName())) {
+            throw new RuntimeException("USER_NOT_CUSTOMER");
+        }
+
+        var evt = new com.service.auth.events.UserDeleteRequestedEvent();
+        evt.sagaId = java.util.UUID.randomUUID().toString();
+        evt.userId = user.getUserId();
+        evt.role = "CUSTOMER";
         evt.occurredAt = java.time.Instant.now();
 
         OutboxEvent ob = new OutboxEvent();

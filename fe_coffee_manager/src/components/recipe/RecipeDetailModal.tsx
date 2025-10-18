@@ -71,19 +71,18 @@ export default function RecipeDetailModal({ open, onClose, recipe }: Props) {
   return (
     <div className="fixed inset-0 z-50 pointer-events-none">
       <div
-        className="absolute bg-white rounded-xl shadow-2xl transform transition-all pointer-events-auto max-w-4xl w-full max-h-[90vh] overflow-hidden"
+        className="absolute bg-white rounded-xl shadow-2xl transform transition-all pointer-events-auto max-w-4xl w-full max-h-[90vh] flex flex-col"
         style={{
           left: `${position.x}px`,
           top: `${position.y}px`,
           cursor: isDragging ? 'grabbing' : 'grab'
         }}
       >
-        <div className="bg-white px-6 pt-6 pb-4">
-          {/* Header - Draggable area */}
-          <div
-            className="flex items-center justify-between mb-6 cursor-grab active:cursor-grabbing select-none"
-            onMouseDown={handleMouseDown}
-          >
+        {/* Header - Draggable area - Fixed */}
+        <div
+          className="bg-white px-6 pt-6 pb-4 border-b border-gray-200 flex items-center justify-between cursor-grab active:cursor-grabbing select-none flex-shrink-0"
+          onMouseDown={handleMouseDown}
+        >
             <div className="flex items-center space-x-3">
               <div className="bg-amber-50 p-2 rounded-lg">
                 <ChefHat className="w-6 h-6 text-amber-600" />
@@ -98,8 +97,8 @@ export default function RecipeDetailModal({ open, onClose, recipe }: Props) {
             </button>
           </div>
 
-          {/* Scrollable content area */}
-          <div className="overflow-y-auto max-h-[calc(90vh-120px)]">
+        {/* Content area - Scrollable */}
+        <div className="flex-1 overflow-y-auto px-6 pb-4">
             {/* Summary badges */}
             <div className="mb-4 flex flex-wrap gap-2 items-center">
               <span className={`px-2 py-1 rounded text-xs ${recipe.status === 'ACTIVE' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>{recipe.status}</span>
@@ -145,7 +144,7 @@ export default function RecipeDetailModal({ open, onClose, recipe }: Props) {
             {/* Items table */}
             <div className="bg-white border rounded-lg">
               <div className="px-4 py-3 border-b bg-gray-50 font-semibold">Ingredients</div>
-              <div className="max-h-64 overflow-auto">
+              <div>
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 sticky top-0">
                     <tr>
@@ -175,13 +174,20 @@ export default function RecipeDetailModal({ open, onClose, recipe }: Props) {
             </div>
           </div>
 
-          {/* Timestamps */}
-          <div className="mt-4 flex items-center gap-4 text-xs text-gray-500">
-            <div className="flex items-center gap-1"><Clock className="w-4 h-4" /> Created: {new Date(recipe.createAt).toLocaleString()}</div>
-            <div className="flex items-center gap-1"><Clock className="w-4 h-4" /> Updated: {new Date(recipe.updateAt).toLocaleString()}</div>
-          </div>
+           {/* Timestamps */}
+           <div className="mt-6 pt-4 border-t border-gray-200 px-6 pb-4">
+             <div className="flex items-center gap-6 text-xs text-gray-500">
+               <div className="flex items-center gap-1">
+                 <Clock className="w-4 h-4" />
+                 <span>Created: {new Date(recipe.createAt).toLocaleString()}</span>
+               </div>
+               <div className="flex items-center gap-1">
+                 <Clock className="w-4 h-4" />
+                 <span>Updated: {new Date(recipe.updateAt).toLocaleString()}</span>
+               </div>
+             </div>
+           </div>
         </div>
-      </div>
     </div>
   );
 }

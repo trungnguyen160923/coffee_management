@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { catalogService } from '../../services/catalogService';
+import { useAuth } from '../../context/AuthContext';
 import { Package, RefreshCw, Search, Loader } from 'lucide-react';
 import GoodsReceiptDetailModal from '../../components/manager/GoodsReceiptDetailModal';
 
@@ -30,6 +31,7 @@ interface GoodsReceiptDetailRow {
 }
 
 export default function GoodsReceipts() {
+  const { managerBranch } = useAuth();
   const [data, setData] = useState<Page<GoodsReceiptRow> | null>(null);
   const [page, setPage] = useState(0);
   const [size, setSize] = useState(10);
@@ -48,6 +50,7 @@ export default function GoodsReceipts() {
         grnNumber: query || undefined,
         fromDate: fromDate || undefined,
         toDate: toDate || undefined,
+        branchId: managerBranch?.branchId, // Lọc theo chi nhánh của manager
         page,
         size,
         sortBy: 'createAt',
@@ -59,7 +62,7 @@ export default function GoodsReceipts() {
     }
   };
 
-  useEffect(() => { load(); }, [page, size]);
+  useEffect(() => { load(); }, [page, size, managerBranch?.branchId]);
 
   // Debounced auto-search when filters change
   useEffect(() => {

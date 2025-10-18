@@ -4,15 +4,18 @@ import { API, CONFIG } from '../configurations/configuration';
 class CartService {
     getGuestId() {
         let id = localStorage.getItem('guestId');
+        
         if (!id) {
-            id = String(Math.floor(Math.random() * 1000000000));
+            id = `GUEST_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
             localStorage.setItem('guestId', id);
         }
+        
         return id;
     }
 
     buildHeaders() {
-        return { 'X-Guest-Id': this.getGuestId() };
+        const guestId = this.getGuestId();
+        return { 'X-Guest-Id': guestId };
     }
 
     mapCartItems(rawItems = []) {

@@ -38,6 +38,7 @@ spring:
               - Path=${app.api-prefix}/catalogs/**
             filters:
               - StripPrefix=1
+              - RewritePath=/api/catalogs/(?<path>.*), /catalogs/$\{path}
           - id: fallback_route
             uri: http://localhost:8000
             predicates:

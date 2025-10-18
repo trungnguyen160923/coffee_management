@@ -5,6 +5,8 @@ import { orderService } from '../../services/orderService';
 import { emailService } from '../../services/emailService';
 import { discountService } from '../../services/discountService';
 import { branchService } from '../../services/branchService';
+import { stockService } from '../../services/stockService';
+import { getCurrentUserSessionAsync, createGuestSession } from '../../utils/userSession';
 import MomoPaymentPage from './MomoPaymentPage';
 import axios from 'axios';
 import { showToast } from '../../utils/toast';
@@ -38,6 +40,8 @@ const GuestCheckout = () => {
     const [appliedDiscount, setAppliedDiscount] = useState(null);
     const [discountError, setDiscountError] = useState(null);
     const [selectedBranch, setSelectedBranch] = useState(null);
+    const [branchStockStatus, setBranchStockStatus] = useState(null);
+    const [isCheckingStock, setIsCheckingStock] = useState(false);
 
     // Fetch provinces and cart items on mount
     useEffect(() => {
@@ -61,6 +65,49 @@ const GuestCheckout = () => {
         } catch (error) {
             console.error('Error fetching cart items:', error);
             setCartItems([]);
+        }
+    };
+
+    // Tìm chi nhánh khác có hàng khi chi nhánh gần nhất hết hàng
+    const findAlternativeBranchWithStock = async (deliveryAddress, currentBranchId, cartItems, userSession) => {
+        try {
+            // Tìm các chi nhánh khác gần địa chỉ
+            const branchesResult = await branchService.findTopNearestBranches(deliveryAddress, 10);
+            if (!branchesResult.success || branchesResult.branches.length === 0) {
+                setBranchStockStatus({ available: false, message: 'Không tìm thấy chi nhánh nào khác gần địa chỉ này' });
+                return;
+            }
+            
+            const allBranches = branchesResult.branches;
+            // Loại bỏ chi nhánh hiện tại
+            const otherBranches = allBranches.filter(branch => branch.branchId !== currentBranchId);
+            
+            // Kiểm tra stock cho các chi nhánh khác
+            const stockResults = await stockService.checkStockForMultipleBranches(cartItems, otherBranches, userSession);
+            
+            const availableBranches = stockResults.filter(result => result.available);
+            
+            if (availableBranches.length > 0) {
+                // Tìm thấy chi nhánh khác có hàng, tự động chọn chi nhánh gần nhất
+                const nearestAvailableBranch = availableBranches[0].branch;
+                
+                setSelectedBranch(nearestAvailableBranch);
+                setBranchStockStatus({ 
+                    available: true, 
+                    message: `Đã tự động chọn chi nhánh khác: ${nearestAvailableBranch.name}` 
+                });
+            } else {
+                setBranchStockStatus({ 
+                    available: false, 
+                    message: 'Tất cả chi nhánh gần đây đều hết hàng' 
+                });
+            }
+        } catch (error) {
+            console.error('Lỗi khi tìm chi nhánh khác:', error);
+            setBranchStockStatus({ 
+                available: false, 
+                message: 'Lỗi khi tìm chi nhánh khác' 
+            });
         }
     };
 
@@ -89,17 +136,9 @@ const GuestCheckout = () => {
             }
 
             setSelectedBranch(branchResult.branch);
-            console.log('Selected branch:', branchResult.branch);
 
             // Step 2: Validate discount with branch ID
             const cartTotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-
-            // Create discount request with branch ID
-            const discountRequest = {
-                discountCode: discountCode,
-                orderAmount: cartTotal,
-                branchId: branchResult.branch.branchId
-            };
 
             const result = await discountService.validateDiscount(discountCode, cartTotal, branchResult.branch.branchId);
 
@@ -238,7 +277,7 @@ const GuestCheckout = () => {
         }
     };
 
-    const handleWardChange = (e) => {
+    const handleWardChange = async (e) => {
         const wardName = e.target.options[e.target.selectedIndex].text;
         setFormData((prev) => ({
             ...prev,
@@ -252,6 +291,59 @@ const GuestCheckout = () => {
             setDiscountError(null);
             setSelectedBranch(null);
             showToast('Discount removed due to address change. Please reapply discount.', 'info');
+        }
+
+        // Kiểm tra stock khi có đủ 3 trường địa chỉ
+        if (formData.province && formData.district && wardName) {
+            try {
+                setIsCheckingStock(true);
+                
+                // Tạo guest session nếu chưa có
+                let userSession = await getCurrentUserSessionAsync();
+                if (!userSession) {
+                    userSession = createGuestSession();
+                }
+
+                // Xóa reservations cũ
+                try {
+                    await stockService.clearAllReservations(userSession);
+                } catch (error) {
+                    console.error('Lỗi khi xóa reservations cũ:', error);
+                }
+
+                const fullAddress = `${wardName}, ${formData.district}, ${formData.province}`;
+                
+                // Tìm chi nhánh gần nhất
+                const branchResult = await branchService.findNearestBranch(fullAddress);
+                
+                if (branchResult.success && branchResult.branch) {
+                    setSelectedBranch(branchResult.branch);
+                    
+                    // Kiểm tra stock của chi nhánh này
+                    const stockResult = await stockService.checkStockAvailability(cartItems, branchResult.branch.branchId, userSession);
+                    
+                    if (stockResult.success && stockResult.available) {
+                        setBranchStockStatus({ available: true, message: 'Chi nhánh có đủ hàng' });
+                        showToast('Chi nhánh có đủ hàng, có thể đặt hàng', 'success');
+                    } else {
+                        setBranchStockStatus({ available: false, message: 'Chi nhánh hết hàng, đang tìm chi nhánh khác...' });
+                        showToast('Chi nhánh gần nhất hết hàng, đang tìm chi nhánh khác...', 'warning');
+                        
+                        // Tự động tìm chi nhánh khác có hàng
+                        await findAlternativeBranchWithStock(fullAddress, branchResult.branch.branchId, cartItems, userSession);
+                    }
+                } else {
+                    setSelectedBranch(null);
+                    setBranchStockStatus({ available: false, message: 'Không tìm thấy chi nhánh gần địa chỉ này' });
+                    showToast('Không tìm thấy chi nhánh gần địa chỉ này', 'error');
+                }
+            } catch (error) {
+                console.error('Lỗi khi kiểm tra stock:', error);
+                setBranchStockStatus({ available: false, message: 'Lỗi khi kiểm tra tồn kho' });
+                showToast('Lỗi khi kiểm tra tồn kho', 'error');
+            } finally {
+                setIsCheckingStock(false);
+            }
         }
     };
 
@@ -270,10 +362,18 @@ const GuestCheckout = () => {
     const proceedWithOrder = async () => {
         try {
             setSubmitting(true);
+            setIsCheckingStock(true);
+            
             // Fetch cart to build order items
             const cartItems = await cartService.getCartItems();
             if (!cartItems || cartItems.length === 0) {
-                alert('Your cart is empty. Please add items before checkout.');
+                showToast('Your cart is empty. Please add items before checkout.', 'warning');
+                return;
+            }
+
+            // Kiểm tra đã có chi nhánh được chọn chưa
+            if (!selectedBranch) {
+                showToast('Vui lòng chọn địa chỉ giao hàng để hệ thống tự động chọn chi nhánh gần nhất.', 'warning');
                 return;
             }
 
@@ -290,15 +390,23 @@ const GuestCheckout = () => {
                 formData.province
             ].filter(a => a.trim()).join(', ');
 
+            // Lấy thông tin session để liên kết với reservations
+            const userSession = await getCurrentUserSessionAsync();
+            const cartId = userSession?.cartId || null;
+            const guestId = userSession?.guestId || null;
+
             const payload = {
                 customerName: formData.name,
                 phone: formData.phone,
                 email: formData.email,
                 deliveryAddress: fullDeliveryAddress, // Lưu đầy đủ địa chỉ vào DB
                 branchSelectionAddress: deliveryAddress, // Chỉ dùng để tìm chi nhánh
+                branchId: selectedBranch.branchId, // Sử dụng chi nhánh đã chọn
                 paymentMethod: formData.paymentMethod,
                 discount: appliedDiscount ? appliedDiscount.amount : 0,
                 discountCode: appliedDiscount ? appliedDiscount.code : null,
+                cartId: cartId, // Thêm cartId để liên kết với reservations
+                guestId: guestId, // Thêm guestId để liên kết với reservations
                 orderItems: cartItems.map(it => ({
                     productId: it.productId,
                     productDetailId: it.productDetailId,
@@ -306,7 +414,6 @@ const GuestCheckout = () => {
                 })),
                 notes: formData.notes
             };
-
 
             const orderResult = await orderService.createGuestOrder(payload);
             try { await cartService.clearCart(); } catch (_) { }
@@ -329,15 +436,16 @@ const GuestCheckout = () => {
                 // Don't fail the order if email fails
             }
 
-            alert('Guest order placed successfully! Confirmation email has been sent.');
+            showToast('Guest order placed successfully! Confirmation email has been sent.', 'success');
             window.dispatchEvent(new Event('cartUpdated'));
             navigate('/coffee');
         } catch (error) {
             console.error('Guest order creation failed:', error);
             const errorMsg = error?.response?.data?.message || error.message || 'Failed to place guest order';
-            alert('Guest order failed: ' + errorMsg);
+            showToast('Guest order failed: ' + errorMsg, 'error');
         } finally {
             setSubmitting(false);
+            setIsCheckingStock(false);
         }
     };
 
@@ -570,6 +678,43 @@ const GuestCheckout = () => {
 
                                     <div className="w-100"></div>
 
+                                    {/* Hiển thị thông tin chi nhánh và trạng thái stock */}
+                                    {selectedBranch && (
+                                        <div className="col-md-12">
+                                            <div className="mt-3 p-3 border rounded" style={{ backgroundColor: '#2a2a2a', borderColor: '#444' }}>
+                                                <div className="d-flex align-items-center mb-2">
+                                                    <i className="fa fa-store me-2" style={{ color: '#C39C5E' }}></i>
+                                                    <strong>Chi nhánh phục vụ:</strong>
+                                                </div>
+                                                <div className="mb-2">
+                                                    <span className="text-light">{selectedBranch.name}</span>
+                                                </div>
+                                                <div className="mb-2">
+                                                    <small className="text-muted">
+                                                        <i className="fa fa-map-marker-alt me-1"></i>
+                                                        {selectedBranch.address}
+                                                    </small>
+                                                </div>
+                                                {branchStockStatus && (
+                                                    <div className={`alert ${branchStockStatus.available ? 'alert-success' : 'alert-warning'} mb-0 py-2`}>
+                                                        <i className={`fa ${branchStockStatus.available ? 'fa-check-circle' : 'fa-exclamation-triangle'} me-2`}></i>
+                                                        <small>{branchStockStatus.message}</small>
+                                                        {branchStockStatus.available && branchStockStatus.message.includes('tự động chọn') && (
+                                                            <div className="mt-1">
+                                                                <small className="text-success">
+                                                                    <i className="fa fa-info-circle me-1"></i>
+                                                                    Chi nhánh gần nhất hết hàng, đã tự động chọn chi nhánh khác có hàng
+                                                                </small>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div className="w-100"></div>
+
                                     <div className="col-md-6">
                                         <div className="form-group">
                                             <label htmlFor="phone">Phone *</label>
@@ -626,7 +771,7 @@ const GuestCheckout = () => {
                                                         type="submit"
                                                         name="submit"
                                                         id="submit"
-                                                        disabled={submitting}
+                                                        disabled={submitting || !selectedBranch || (branchStockStatus && !branchStockStatus.available)}
                                                         className="btn btn-primary py-3 px-4"
                                                     >
                                                         {submitting ? 'Placing...' : 'Place an order'}
@@ -850,6 +995,23 @@ const GuestCheckout = () => {
                     </div>
                 </div>
             </section>
+
+            {/* Loading overlay for stock checking */}
+            {isCheckingStock && (
+                <div className="position-fixed top-0 start-0 w-100 h-100 d-flex justify-content-center align-items-center" 
+                     style={{ 
+                         backgroundColor: 'rgba(0, 0, 0, 0.7)', 
+                         zIndex: 9999 
+                     }}>
+                    <div className="text-center text-white">
+                        <div className="spinner-border text-primary mb-3" role="status">
+                            <span className="sr-only">Loading...</span>
+                        </div>
+                        <h5>Đang kiểm tra tồn kho...</h5>
+                        <p>Vui lòng chờ trong giây lát</p>
+                    </div>
+                </div>
+            )}
         </>
     );
 };

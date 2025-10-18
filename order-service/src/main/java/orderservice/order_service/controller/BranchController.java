@@ -391,4 +391,46 @@ public class BranchController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
         }
     }
+
+    /**
+     * Lấy n chi nhánh gần nhất dựa trên địa chỉ
+     * @param address - Địa chỉ để tìm chi nhánh gần nhất
+     * @param limit - Số lượng chi nhánh cần lấy (mặc định 5, tối đa 20)
+     * @return Danh sách n chi nhánh gần nhất
+     */
+    @GetMapping("/nearest/top")
+    public ResponseEntity<ApiResponse<List<Branch>>> findTopNearestBranches(
+            @RequestParam String address,
+            @RequestParam(defaultValue = "5") int limit) {
+        try {
+            // Giới hạn số lượng để tránh performance issues
+            int maxLimit = Math.min(limit, 20);
+            int minLimit = Math.max(maxLimit, 1);
+            
+            List<Branch> nearestBranches = branchSelectionService.findTopNearestBranches(address, minLimit);
+            
+            if (nearestBranches == null || nearestBranches.isEmpty()) {
+                ApiResponse<List<Branch>> response = ApiResponse.<List<Branch>>builder()
+                        .code(404)
+                        .message("No branches found for the given address")
+                        .result(null)
+                        .build();
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+            }
+
+            ApiResponse<List<Branch>> response = ApiResponse.<List<Branch>>builder()
+                    .code(200)
+                    .message("Top " + nearestBranches.size() + " nearest branches found successfully")
+                    .result(nearestBranches)
+                    .build();
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            ApiResponse<List<Branch>> response = ApiResponse.<List<Branch>>builder()
+                    .code(500)
+                    .message("Failed to find nearest branches: " + e.getMessage())
+                    .result(null)
+                    .build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
 }

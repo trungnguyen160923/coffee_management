@@ -22,6 +22,7 @@ export const API = {
   GET_RESERVATIONS_BY_CUSTOMER: "/order-service/api/reservations/customer",
   // Catalog-service (via API Gateway)
   GET_PRODUCTS: "/catalogs/products",
+  GET_PRODUCTS_CAN_SELL: "/catalogs/products/can-sell",
   GET_PRODUCT_BY_ID: "/catalogs/products",
   GET_PRODUCT_DETAIL_BY_ID: "/catalogs/products/detail",
   GET_CATEGORIES: "/catalogs/categories",
@@ -49,4 +50,8 @@ export const API = {
   GET_CUSTOMER_ADDRESSES: "/profiles/customer-addresses",
   UPDATE_CUSTOMER_ADDRESS: "/profiles/customer-addresses",
   DELETE_CUSTOMER_ADDRESS: "/profiles/customer-addresses",
+  // Catalog API base
+  CATALOG_API: "/catalogs",
+  // Stock reservation APIs
+  CLEAR_RESERVATIONS: "/catalogs/stocks/clear-reservations",
 };

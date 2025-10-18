@@ -5,13 +5,18 @@ export const productService = {
     // Get all products - từ ProductController @GetMapping
     getAllProducts: async () => {
         try {
-            const response = await httpClient.get(`${API.GET_PRODUCTS}`);
+            const response = await httpClient.get(`${API.GET_PRODUCTS_CAN_SELL}`);
             // API trả về ApiResponse<List<ProductResponse>>
             return response.data.result || [];
         } catch (error) {
             console.error('Error fetching products:', error);
             throw error;
         }
+    },
+
+    // Get all products can sell - alias for getAllProducts
+    getAllProductsCanSell: async () => {
+        return productService.getAllProducts();
     },
 
     // Get products by category ID - có thể cần thêm endpoint này
@@ -37,6 +42,17 @@ export const productService = {
         }
     },
 
+    // Get single product by ID for public (only active product details)
+    getProductByIdForPublic: async (productId) => {
+        try {
+            const response = await httpClient.get(`${API.GET_PRODUCTS}/public/${productId}`);
+            return response.data.result;
+        } catch (error) {
+            console.error(`Error fetching product ${productId} for public:`, error);
+            throw error;
+        }
+    },
+
     // Get product detail by detail ID - từ ProductController @GetMapping("/detail/{productDetailId}")
     getProductDetailById: async (productDetailId) => {
         try {
@@ -45,6 +61,24 @@ export const productService = {
             return response.data.result;
         } catch (error) {
             console.error(`Error fetching product detail ${productDetailId}:`, error);
+            throw error;
+        }
+    },
+
+    // Search products for public (only active product details)
+    searchProducts: async (params = {}) => {
+        try {
+            const queryParams = new URLSearchParams();
+            Object.keys(params).forEach(key => {
+                if (params[key] !== undefined && params[key] !== null) {
+                    queryParams.append(key, params[key]);
+                }
+            });
+            
+            const response = await httpClient.get(`${API.GET_PRODUCTS}/public/search?${queryParams.toString()}`);
+            return response.data.result;
+        } catch (error) {
+            console.error('Error searching products:', error);
             throw error;
         }
     },
@@ -68,7 +102,6 @@ export const productService = {
                 filename = filename.substring(filename.lastIndexOf('/') + 1);
             }
         }
-        console.log('filename', filename);
         // Trả về URL đúng qua API Gateway (absolute URL)
         return `${CONFIG.API_GATEWAY}${API.FILE_IMAGE_PRODUCTS}/${filename}`;
     }

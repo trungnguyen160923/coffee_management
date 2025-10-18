@@ -32,7 +32,7 @@ public class UserV2Controller {
         String sagaId = String.valueOf(((java.util.Map<?, ?>) result).get("sagaId"));
         var future = sagaCoordinator.register(sagaId);
         try {
-            var saga = future.get(5, java.util.concurrent.TimeUnit.SECONDS);
+            var saga = future.get(15, java.util.concurrent.TimeUnit.SECONDS);
             if (!saga.success()) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                         .body(ApiResponse.builder().code(400).message(saga.reason()).result(null).build());
@@ -53,7 +53,7 @@ public class UserV2Controller {
         String sagaId = String.valueOf(((java.util.Map<?, ?>) result).get("sagaId"));
         var future = sagaCoordinator.register(sagaId);
         try {
-            var saga = future.get(5, java.util.concurrent.TimeUnit.SECONDS);
+            var saga = future.get(15, java.util.concurrent.TimeUnit.SECONDS);
             if (!saga.success()) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                         .body(ApiResponse.builder().code(400).message(saga.reason()).result(null).build());
@@ -74,7 +74,7 @@ public class UserV2Controller {
         String sagaId = String.valueOf(((java.util.Map<?, ?>) result).get("sagaId"));
         var future = sagaCoordinator.register(sagaId);
         try {
-            var saga = future.get(5, java.util.concurrent.TimeUnit.SECONDS);
+            var saga = future.get(15, java.util.concurrent.TimeUnit.SECONDS);
             if (!saga.success()) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                         .body(ApiResponse.builder().code(400).message(saga.reason()).result(null).build());
@@ -95,7 +95,7 @@ public class UserV2Controller {
         String sagaId = String.valueOf(((java.util.Map<?, ?>) result).get("sagaId"));
         var future = sagaCoordinator.register(sagaId);
         try {
-            var saga = future.get(5, java.util.concurrent.TimeUnit.SECONDS);
+            var saga = future.get(15, java.util.concurrent.TimeUnit.SECONDS);
             if (!saga.success()) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                         .body(ApiResponse.builder().code(400).message(saga.reason()).result(null).build());

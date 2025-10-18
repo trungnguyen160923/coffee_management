@@ -110,11 +110,24 @@ public class ProductService {
                 .map(productMapper::toProductResponse)
                 .toList();
     }
+
+    public List<ProductResponse> getAllProductsCanSell() {
+        return productRepository.findAllByActiveTrue()
+                .stream()
+                .map(productMapper::toProductResponseForPublic)
+                .toList();   
+    }
     
     public ProductResponse getProductById(Integer productId) {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_FOUND));
         return productMapper.toProductResponse(product);
+    }
+    
+    public ProductResponse getProductByIdForPublic(Integer productId) {
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_FOUND));
+        return productMapper.toProductResponseForPublic(product);
     }
 
     @PreAuthorize("hasRole('ADMIN')")
@@ -227,6 +240,14 @@ public class ProductService {
     }
     
     public ProductPageResponse searchProducts(ProductSearchRequest request) {
+        return searchProducts(request, false);
+    }
+    
+    public ProductPageResponse searchProductsForPublic(ProductSearchRequest request) {
+        return searchProducts(request, true);
+    }
+    
+    private ProductPageResponse searchProducts(ProductSearchRequest request, boolean filterActiveDetails) {
         // Tạo Pageable với sorting
         Sort sort = createSort(request.getSortBy(), request.getSortDirection());
         Pageable pageable = PageRequest.of(request.getPage(), request.getSize(), sort);
@@ -242,7 +263,9 @@ public class ProductService {
         // Convert sang ProductResponse
         List<ProductResponse> productResponses = productPage.getContent()
                 .stream()
-                .map(productMapper::toProductResponse)
+                .map(product -> filterActiveDetails ? 
+                    productMapper.toProductResponseForPublic(product) : 
+                    productMapper.toProductResponse(product))
                 .toList();
         
         // Tạo response

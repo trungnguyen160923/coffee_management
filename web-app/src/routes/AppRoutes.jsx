@@ -14,11 +14,13 @@ import ForgotPasswordPage from "../components/pages/auth/ForgotPasswordPage";
 import OrdersPage from "../components/pages/users/OrdersPage";
 import BookingsPage from "../components/pages/users/BookingsPage";
 import AddressManagement from "../components/pages/users/AddressManagement";
+import ProtectedRoute from "../components/common/ProtectedRoute";
 
 
 const AppRoutes = () => {
   return (
     <Routes>
+      {/* Public routes */}
       <Route path="/" element={<HomePage />} />
       <Route path="/coffee" element={<HomePage />} />
       <Route path="/coffee/about" element={<AboutPage />} />
@@ -26,18 +28,42 @@ const AppRoutes = () => {
       <Route path="/coffee/services" element={<ServicesPage />} />
       <Route path="/coffee/contact" element={<ContactPage />} />
       <Route path="/coffee/products/:id" element={<ProductDetail />} />
-      <Route path="/coffee/cart" element={<CartPage />} />
-      <Route path="/coffee/checkout" element={<CheckoutPage />} />
-      <Route path="/coffee/checkout/:id" element={<CheckoutPage />} />
       <Route path="/coffee/guest-checkout" element={<GuestCheckout />} />
 
+      {/* Auth routes */}
       <Route path="/auth/login" element={<LoginPage />} />
       <Route path="/auth/register" element={<RegisterPage />} />
       <Route path="/auth/forgot-password" element={<ForgotPasswordPage />} />
 
-      <Route path="/users/orders" element={<OrdersPage />} />
-      <Route path="/users/bookings" element={<BookingsPage />} />
-      <Route path="/users/addresses" element={<AddressManagement />} />
+      {/* Cart route - accessible for both authenticated and guest users */}
+      <Route path="/coffee/cart" element={<CartPage />} />
+
+      {/* Protected routes - require authentication */}
+      <Route path="/coffee/checkout" element={
+        <ProtectedRoute>
+          <CheckoutPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/coffee/checkout/:id" element={
+        <ProtectedRoute>
+          <CheckoutPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/users/orders" element={
+        <ProtectedRoute>
+          <OrdersPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/users/bookings" element={
+        <ProtectedRoute>
+          <BookingsPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/users/addresses" element={
+        <ProtectedRoute>
+          <AddressManagement />
+        </ProtectedRoute>
+      } />
     </Routes>
   );
 };

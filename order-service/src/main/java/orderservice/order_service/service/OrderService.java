@@ -15,13 +15,16 @@ import orderservice.order_service.entity.Order;
 import orderservice.order_service.entity.OrderItem;
 import orderservice.order_service.exception.AppException;
 import orderservice.order_service.exception.ErrorCode;
+import orderservice.order_service.repository.BranchRepository;
 import orderservice.order_service.repository.OrderItemRepository;
 import orderservice.order_service.repository.OrderRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -32,6 +35,7 @@ public class OrderService {
 
         OrderRepository orderRepository;
         OrderItemRepository orderItemRepository;
+        BranchRepository branchRepository;
         CatalogServiceClient catalogServiceClient;
         BranchSelectionService branchSelectionService;
         DiscountService discountService;
@@ -55,16 +59,26 @@ public class OrderService {
                                 subtotal = subtotal.add(itemTotal);
                         }
 
-                        // Tự động chọn chi nhánh dựa trên địa chỉ giao hàng (chỉ district + province)
-                        String addressForBranchSelection = request.getBranchSelectionAddress() != null
-                                        ? request.getBranchSelectionAddress()
-                                        : request.getDeliveryAddress();
-                        Branch selectedBranch = branchSelectionService.findNearestBranch(addressForBranchSelection);
-                        if (selectedBranch == null) {
-                                throw new AppException(ErrorCode.BRANCH_NOT_FOUND);
+                        // Sử dụng chi nhánh đã được chọn từ frontend
+                        Branch selectedBranch = null;
+                        if (request.getBranchId() != null) {
+                                // Frontend đã gửi branchId, sử dụng chi nhánh này
+                                selectedBranch = branchRepository.findById(request.getBranchId()).orElse(null);
+                                if (selectedBranch == null) {
+                                        throw new AppException(ErrorCode.BRANCH_NOT_FOUND);
+                                }
+                                log.info("Using branch from request: {} (ID: {})", selectedBranch.getName(), selectedBranch.getBranchId());
+                        } else {
+                                // Fallback: Tự động chọn chi nhánh dựa trên địa chỉ giao hàng
+                                String addressForBranchSelection = request.getBranchSelectionAddress() != null
+                                                ? request.getBranchSelectionAddress()
+                                                : request.getDeliveryAddress();
+                                selectedBranch = branchSelectionService.findNearestBranch(addressForBranchSelection);
+                                if (selectedBranch == null) {
+                                        throw new AppException(ErrorCode.BRANCH_NOT_FOUND);
+                                }
+                                log.info("Auto-selected branch: {} for address: {}", selectedBranch.getName(), addressForBranchSelection);
                         }
-                        log.info("Selected branch: {} for branch selection address: {}", selectedBranch.getName(),
-                                        addressForBranchSelection);
 
                         // Xử lý discount nếu có mã giảm giá
                         BigDecimal discount = BigDecimal.ZERO;
@@ -120,6 +134,41 @@ public class OrderService {
                                         .build();
 
                         order = orderRepository.save(order);
+
+                        // Cập nhật order_id vào stock_reservations
+                        try {
+                                // Tạm thời sử dụng cartId từ request (nếu có)
+                                Integer cartId = request.getCartId();
+                                String guestId = request.getGuestId();
+                                
+                                log.info("Attempting to update reservations for orderId: {}, cartId: {}, guestId: {}", 
+                                        order.getOrderId(), cartId, guestId);
+                                
+                                Map<String, Object> updateRequest = new HashMap<>();
+                                updateRequest.put("orderId", order.getOrderId());
+                                updateRequest.put("cartId", cartId);
+                                updateRequest.put("guestId", guestId);
+                                
+                                log.info("Calling catalog service with request: {}", updateRequest);
+                                
+                                catalogServiceClient.updateOrderIdForReservationsByCartOrGuest(updateRequest);
+                                log.info("Successfully updated reservation order_id for order: {}", order.getOrderId());
+                        } catch (Exception e) {
+                                log.error("Failed to update reservation order_id for order {}: {}", order.getOrderId(), e.getMessage(), e);
+                                
+                                // Xóa order đã tạo vì không thể liên kết với reservations
+                                try {
+                                        orderRepository.delete(order);
+                                        log.info("Deleted order {} due to reservation update failure", order.getOrderId());
+                                } catch (Exception deleteException) {
+                                        log.error("Failed to delete order {} after reservation update failure: {}", 
+                                                order.getOrderId(), deleteException.getMessage());
+                                }
+                                
+                                // Ném lỗi để rollback transaction
+                                throw new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION, 
+                                        "Failed to link order with reservations: " + e.getMessage());
+                        }
 
                         // Create order items
                         for (CreateOrderRequest.OrderItemRequest itemRequest : request.getOrderItems()) {
@@ -281,13 +330,21 @@ public class OrderService {
                                 subtotal = subtotal.add(itemTotal);
                         }
 
-                        // Tự động chọn chi nhánh dựa trên địa chỉ giao hàng (chỉ district + province)
-                        String addressForBranchSelection = request.getBranchSelectionAddress() != null
-                                        ? request.getBranchSelectionAddress()
-                                        : request.getDeliveryAddress();
-                        Branch selectedBranch = branchSelectionService.findNearestBranch(addressForBranchSelection);
-                        if (selectedBranch == null) {
-                                throw new AppException(ErrorCode.BRANCH_NOT_FOUND);
+                        // Sử dụng branchId từ request nếu có, nếu không thì tự động tìm
+                        Branch selectedBranch;
+                        if (request.getBranchId() != null) {
+                                // Sử dụng branchId từ frontend (đã được kiểm tra stock)
+                                selectedBranch = branchRepository.findById(request.getBranchId())
+                                                .orElseThrow(() -> new AppException(ErrorCode.BRANCH_NOT_FOUND));
+                        } else {
+                                // Fallback: tự động chọn chi nhánh dựa trên địa chỉ giao hàng
+                                String addressForBranchSelection = request.getBranchSelectionAddress() != null
+                                                ? request.getBranchSelectionAddress()
+                                                : request.getDeliveryAddress();
+                                selectedBranch = branchSelectionService.findNearestBranch(addressForBranchSelection);
+                                if (selectedBranch == null) {
+                                        throw new AppException(ErrorCode.BRANCH_NOT_FOUND);
+                                }
                         }
 
                         // Xử lý discount nếu có mã giảm giá
@@ -366,6 +423,23 @@ public class OrderService {
                                                 .build();
 
                                 orderItemRepository.save(orderItem);
+                        }
+
+                        // Cập nhật orderId trong stock_reservations nếu có cartId hoặc guestId
+                        if (request.getCartId() != null || request.getGuestId() != null) {
+                                try {
+                                        Map<String, Object> updateRequest = new HashMap<>();
+                                        updateRequest.put("orderId", order.getOrderId());
+                                        updateRequest.put("cartId", request.getCartId());
+                                        updateRequest.put("guestId", request.getGuestId());
+                                        
+                                        catalogServiceClient.updateOrderIdForReservationsByCartOrGuest(updateRequest);
+                                } catch (Exception e) {
+                                        // Nếu không thể cập nhật reservations, rollback order
+                                        orderRepository.delete(order);
+                                        throw new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION, 
+                                                "Failed to update stock reservations: " + e.getMessage());
+                                }
                         }
 
                         return convertToOrderResponse(order);

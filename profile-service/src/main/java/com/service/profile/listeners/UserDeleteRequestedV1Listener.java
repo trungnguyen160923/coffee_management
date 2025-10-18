@@ -39,7 +39,7 @@ public class UserDeleteRequestedV1Listener {
         this.json = json; this.branchClient = branchClient; this.managerProfileRepository = managerProfileRepository; this.staffProfileRepository = staffProfileRepository; this.kafkaTemplate = kafkaTemplate;
     }
 
-    // @KafkaListener(topics = "user.delete.requested.v1", groupId = "profile-user-delete-v1")
+    @KafkaListener(topics = "user.delete.requested.v1", groupId = "profile-user-delete-v1")
     // @Transactional
     public void onUserDeleteRequested(String payload) throws Exception {
         UserDeleteRequestedEvent evt = json.readValue(payload, UserDeleteRequestedEvent.class);

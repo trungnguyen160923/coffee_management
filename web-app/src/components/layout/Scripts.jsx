@@ -1,7 +1,23 @@
 import React, { useEffect } from 'react';
+import {
+  debounce,
+  throttle,
+  addOptimizedScrollListener,
+  addOptimizedResizeListener,
+  addGPUAcceleration,
+  optimizeTouchEvents,
+  performanceMonitor
+} from '../../utils/performanceUtils';
+import { initializeEventPatches } from '../../utils/eventListenerPatch';
+import { initializeOwlCarouselPatches } from '../../utils/owlCarouselPatch';
+import { initializeTouchOptimizations } from '../../utils/touchOptimization';
 
 const Scripts = () => {
     useEffect(() => {
+        // Initialize event listener patches immediately
+        initializeEventPatches();
+        initializeOwlCarouselPatches();
+        initializeTouchOptimizations();
         const scripts = [
             '/js/jquery-migrate-3.0.1.min.js',
             '/js/jquery.easing.1.3.js',
@@ -56,9 +72,10 @@ const Scripts = () => {
                 };
                 setFullHeight();
 
-                // Bind resize once
+                // Bind resize once with optimized listeners
                 if (!window.__fullHeightBound) {
-                    $(window).on('resize.ftcoFullHeight', setFullHeight);
+                    const optimizedSetFullHeight = debounce(setFullHeight, 100);
+                    addOptimizedResizeListener(window, optimizedSetFullHeight);
                     window.__fullHeightBound = true;
                 }
 
@@ -66,6 +83,9 @@ const Scripts = () => {
                 if ($.fn.owlCarousel && $('.home-slider').length) {
                     $('.home-slider').each(function () {
                         const $el = $(this);
+                        const el = this;
+                        addGPUAcceleration(el);
+                        optimizeTouchEvents(el);
                         // If already initialized, just refresh to avoid destroy errors
                         if ($el.hasClass('owl-loaded')) {
                             try { $el.trigger('refresh.owl.carousel'); } catch (_) { }
@@ -97,6 +117,9 @@ const Scripts = () => {
                 if ($.fn.owlCarousel && $('.carousel-work').length) {
                     $('.carousel-work').each(function () {
                         const $el = $(this);
+                        const el = this;
+                        addGPUAcceleration(el);
+                        optimizeTouchEvents(el);
                         if ($el.hasClass('owl-loaded')) {
                             try { $el.trigger('refresh.owl.carousel'); } catch (_) { }
                             return;
@@ -142,10 +165,10 @@ const Scripts = () => {
                     }
                 }
 
-                // Rebind scroll behavior for navbar (namespaced to avoid duplicates)
+                // Rebind scroll behavior for navbar with optimized listeners
                 if (!window.__scrollBound) {
-                    $(window).on('scroll.ftcoScroll', function () {
-                        const $w = $(this);
+                    const scrollHandler = (event) => {
+                        const $w = $(window);
                         const st = $w.scrollTop();
                         const navbar = $('.ftco_navbar');
                         const sd = $('.js-scroll-wrap');
@@ -166,7 +189,8 @@ const Scripts = () => {
                             }
                             if (sd.length > 0) sd.removeClass('sleep');
                         }
-                    });
+                    };
+                    addOptimizedScrollListener(window, scrollHandler, { throttleMs: 16 });
                     window.__scrollBound = true;
                 }
 
@@ -175,7 +199,7 @@ const Scripts = () => {
                     $('.ftco-animate').waypoint(function (direction) {
                         if (direction === 'down' && !$(this.element).hasClass('ftco-animated')) {
                             $(this.element).addClass('item-animate');
-                            setTimeout(function () {
+                            requestAnimationFrame(() => {
                                 $('body .ftco-animate.item-animate').each(function (k) {
                                     const el = $(this);
                                     setTimeout(function () {
@@ -185,9 +209,9 @@ const Scripts = () => {
                                         else if (effect === 'fadeInRight') el.addClass('fadeInRight ftco-animated');
                                         else el.addClass('fadeInUp ftco-animated');
                                         el.removeClass('item-animate');
-                                    }, k * 50, 'easeInOutExpo');
+                                    }, k * 30);
                                 });
-                            }, 100);
+                            });
                         }
                     }, { offset: '95%' });
 

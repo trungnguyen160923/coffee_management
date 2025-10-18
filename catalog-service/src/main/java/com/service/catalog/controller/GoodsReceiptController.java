@@ -56,9 +56,6 @@ public class GoodsReceiptController {
     @PreAuthorize("hasRole('STAFF') or hasRole('MANAGER')")
     public ApiResponse<UnitConversionResponse> validateUnitConversion(@RequestBody ValidateUnitConversionRequest request) {
         try {
-            log.info("=== VALIDATE UNIT CONVERSION DEBUG ===");
-            log.info("ingredientId: {}, fromUnit: {}, toUnit: {}, quantity: {}", 
-                    request.getIngredientId(), request.getFromUnitCode(), request.getToUnitCode(), request.getQuantity());
             
             boolean canConvert = unitConversionService.canConvert(
                 request.getIngredientId(), 

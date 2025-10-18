@@ -47,6 +47,7 @@ CREATE TABLE `product_details` (
   `product_id` INT NOT NULL,
   `size_id` INT NULL,
   `price` DECIMAL(12,2) NOT NULL DEFAULT 0,
+  `active` BOOLEAN DEFAULT false,
   `create_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   update_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
@@ -149,6 +150,7 @@ CREATE TABLE `stocks` (
   `quantity` DECIMAL(12,4) NOT NULL DEFAULT 0,
   `unit_code` VARCHAR(20) NOT NULL,
   `threshold` DECIMAL(12,4) NOT NULL DEFAULT 0,
+  `reserved_quantity` DECIMAL(12,4) NOT NULL DEFAULT 0,
   `last_updated` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -467,3 +469,221 @@ INSERT INTO units (code, name, dimension, factor_to_base, base_unit_code) VALUES
 --   (1, 'box', 'kg', 5.00000000, 'Coffee beans: box to kg'),
 --   (2, 'pack', 'l', 12.00000000, 'Condensed milk: pack to liter'),
 --   (3, 'box', 'kg', 10.00000000, 'Sugar: box to kg');
+
+
+-- ========================================
+-- STOCK RESERVATIONS SYSTEM
+-- ========================================
+-- Hệ thống giữ chỗ tồn kho theo công thức khi khách đặt món
+
+
+-- Tạo bảng stock_reservations
+DROP TABLE IF EXISTS stock_reservations;
+CREATE TABLE `stock_reservations` (
+  `reservation_id` BIGINT PRIMARY KEY NOT NULL AUTO_INCREMENT,
+  `reservation_group_id` VARCHAR(50) NOT NULL,
+  `branch_id` INT NOT NULL,
+  `ingredient_id` INT NOT NULL,
+  `quantity_reserved` DECIMAL(12,4) NOT NULL DEFAULT 0,
+  `unit_code` VARCHAR(20) NOT NULL,
+  `expires_at` DATETIME NOT NULL,
+  `order_id` INT NULL,
+  `cart_id` VARCHAR(50) NULL,
+  `guest_id` VARCHAR(50) NULL,
+  `status` ENUM('ACTIVE', 'COMMITTED', 'RELEASED') NOT NULL DEFAULT 'ACTIVE',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  
+  -- Constraints
+  CHECK (quantity_reserved >= 0),
+  CHECK (expires_at > created_at)
+);
+
+-- Indexes for performance
+CREATE INDEX `idx_stock_reservations_group_id` ON `stock_reservations` (`reservation_group_id`);
+CREATE INDEX `idx_stock_reservations_expires` ON `stock_reservations` (`expires_at`);
+CREATE INDEX `idx_stock_reservations_status` ON `stock_reservations` (`status`);
+CREATE INDEX `idx_stock_reservations_branch_ingredient` ON `stock_reservations` (`branch_id`, `ingredient_id`);
+CREATE INDEX `idx_stock_reservations_cart` ON `stock_reservations` (`cart_id`);
+CREATE INDEX `idx_stock_reservations_guest` ON `stock_reservations` (`guest_id`);
+CREATE INDEX `idx_stock_reservations_order` ON `stock_reservations` (`order_id`);
+
+-- Foreign Key Constraints
+ALTER TABLE `stock_reservations` 
+  ADD CONSTRAINT `fk_sr_ingredient` FOREIGN KEY (`ingredient_id`) REFERENCES `ingredients` (`ingredient_id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_sr_unit` FOREIGN KEY (`unit_code`) REFERENCES `units` (`code`) ON DELETE RESTRICT;
+
+-- Composite unique constraint để tránh duplicate reservations
+CREATE UNIQUE INDEX `uq_sr_group_ingredient` ON `stock_reservations` (`reservation_group_id`, `ingredient_id`, `status`);
+
+-- Trigger để tự động cập nhật reserved_quantity trong stocks
+DELIMITER $$
+
+CREATE TRIGGER `tr_stock_reservations_insert` 
+AFTER INSERT ON `stock_reservations`
+FOR EACH ROW
+BEGIN
+    UPDATE stocks 
+    SET reserved_quantity = reserved_quantity + NEW.quantity_reserved
+    WHERE ingredient_id = NEW.ingredient_id 
+      AND branch_id = NEW.branch_id;
+END$$
+
+CREATE TRIGGER `tr_stock_reservations_update` 
+AFTER UPDATE ON `stock_reservations`
+FOR EACH ROW
+BEGIN
+    -- Nếu status thay đổi từ ACTIVE sang COMMITTED
+    IF OLD.status = 'ACTIVE' AND NEW.status = 'COMMITTED' THEN
+        UPDATE stocks 
+        SET quantity = quantity - NEW.quantity_reserved,
+            reserved_quantity = reserved_quantity - NEW.quantity_reserved
+        WHERE ingredient_id = NEW.ingredient_id 
+          AND branch_id = NEW.branch_id;
+    END IF;
+    
+    -- Nếu status thay đổi từ ACTIVE sang RELEASED
+    IF OLD.status = 'ACTIVE' AND NEW.status = 'RELEASED' THEN
+        UPDATE stocks 
+        SET reserved_quantity = reserved_quantity - NEW.quantity_reserved
+        WHERE ingredient_id = NEW.ingredient_id 
+          AND branch_id = NEW.branch_id;
+    END IF;
+END$$
+
+CREATE TRIGGER `tr_stock_reservations_delete` 
+AFTER DELETE ON `stock_reservations`
+FOR EACH ROW
+BEGIN
+    UPDATE stocks 
+    SET reserved_quantity = reserved_quantity - OLD.quantity_reserved
+    WHERE ingredient_id = OLD.ingredient_id 
+      AND branch_id = OLD.branch_id;
+END$$
+
+DELIMITER ;
+
+-- Stored Procedure để cleanup expired reservations
+DELIMITER $$
+
+CREATE PROCEDURE `sp_cleanup_expired_reservations`()
+BEGIN
+    DECLARE done INT DEFAULT FALSE;
+    DECLARE v_reservation_id BIGINT;
+    DECLARE v_ingredient_id INT;
+    DECLARE v_branch_id INT;
+    DECLARE v_quantity_reserved DECIMAL(12,4);
+    DECLARE expired_count INT DEFAULT 0;
+    DECLARE deleted_count INT DEFAULT 0;
+    
+    DECLARE cur CURSOR FOR 
+        SELECT reservation_id, ingredient_id, branch_id, quantity_reserved
+        FROM stock_reservations 
+        WHERE status = 'ACTIVE' 
+          AND expires_at < NOW();
+    
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
+    
+    START TRANSACTION;
+    
+    -- Bước 1: Xử lý expired reservations
+    OPEN cur;
+    
+    read_loop: LOOP
+        FETCH cur INTO v_reservation_id, v_ingredient_id, v_branch_id, v_quantity_reserved;
+        IF done THEN
+            LEAVE read_loop;
+        END IF;
+        
+        -- Release reservation
+        UPDATE stock_reservations 
+        SET status = 'RELEASED', updated_at = NOW()
+        WHERE reservation_id = v_reservation_id;
+        
+        -- Update stocks
+        UPDATE stocks 
+        SET reserved_quantity = reserved_quantity - v_quantity_reserved
+        WHERE ingredient_id = v_ingredient_id 
+          AND branch_id = v_branch_id;
+          
+        SET expired_count = expired_count + 1;
+    END LOOP;
+    
+    CLOSE cur;
+    
+    -- Bước 2: Xoá records đã RELEASED quá 1 giờ
+    DELETE FROM stock_reservations 
+    WHERE status = 'RELEASED' 
+      AND updated_at < DATE_SUB(NOW(), INTERVAL 1 HOUR);
+    
+    SET deleted_count = ROW_COUNT();
+    
+    COMMIT;
+    
+    -- Log kết quả
+    SELECT CONCAT('Cleanup completed: ', expired_count, ' expired, ', deleted_count, ' deleted') as result;
+END$$
+
+DELIMITER ;
+
+-- Event Scheduler để tự động cleanup (chạy mỗi 5 phút)
+SET GLOBAL event_scheduler = ON;
+
+CREATE EVENT `ev_cleanup_expired_reservations`
+ON SCHEDULE EVERY 5 MINUTE
+DO
+  CALL sp_cleanup_expired_reservations();
+
+-- View để theo dõi stock availability
+CREATE VIEW `v_stock_availability` AS
+SELECT 
+    s.stock_id,
+    s.ingredient_id,
+    s.branch_id,
+    i.name as ingredient_name,
+    s.quantity as total_quantity,
+    s.reserved_quantity,
+    (s.quantity - s.reserved_quantity) as available_quantity,
+    s.threshold,
+    s.unit_code,
+    CASE 
+        WHEN (s.quantity - s.reserved_quantity) <= s.threshold THEN 'LOW_STOCK'
+        WHEN (s.quantity - s.reserved_quantity) <= 0 THEN 'OUT_OF_STOCK'
+        ELSE 'IN_STOCK'
+    END as stock_status,
+    s.last_updated
+FROM stocks s
+JOIN ingredients i ON s.ingredient_id = i.ingredient_id;
+
+-- View để theo dõi active reservations
+CREATE VIEW `v_active_reservations` AS
+SELECT 
+    sr.reservation_group_id,
+    sr.branch_id,
+    sr.ingredient_id,
+    i.name as ingredient_name,
+    SUM(sr.quantity_reserved) as total_reserved,
+    sr.unit_code,
+    MIN(sr.expires_at) as earliest_expiry,
+    MAX(sr.expires_at) as latest_expiry,
+    COUNT(*) as reservation_count
+FROM stock_reservations sr
+JOIN ingredients i ON sr.ingredient_id = i.ingredient_id
+WHERE sr.status = 'ACTIVE'
+GROUP BY sr.reservation_group_id, sr.branch_id, sr.ingredient_id, i.name, sr.unit_code;
+
+-- Sample data để test stock reservations (uncomment khi cần)
+/*
+INSERT INTO stock_reservations (
+    reservation_group_id, 
+    branch_id, 
+    ingredient_id, 
+    quantity_reserved, 
+    unit_code, 
+    expires_at, 
+    cart_id
+) VALUES 
+('CART_001', 1, 1, 50.0000, 'g', DATE_ADD(NOW(), INTERVAL 15 MINUTE), 'CART_001'),
+('CART_001', 1, 2, 100.0000, 'ml', DATE_ADD(NOW(), INTERVAL 15 MINUTE), 'CART_001'),
+('CART_002', 1, 1, 25.0000, 'g', DATE_ADD(NOW(), INTERVAL 10 MINUTE), 'CART_002');
+*/

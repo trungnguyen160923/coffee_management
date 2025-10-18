@@ -16,6 +16,14 @@ public class ProductMapper {
     private final ProductDetailMapper productDetailMapper;
     
     public ProductResponse toProductResponse(Product product) {
+        return toProductResponse(product, false);
+    }
+    
+    public ProductResponse toProductResponseForPublic(Product product) {
+        return toProductResponse(product, true);
+    }
+    
+    private ProductResponse toProductResponse(Product product, boolean filterActiveDetails) {
         if (product == null) {
             return null;
         }
@@ -31,10 +39,21 @@ public class ProductMapper {
                     .build();
         }
         
-        List<ProductDetailResponse> productDetails = product.getProductDetails()
-                .stream()
-                .map(productDetailMapper::toProductDetailResponse)
-                .toList();
+        List<ProductDetailResponse> productDetails;
+        if (filterActiveDetails) {
+            // For public API: only show active product details
+            productDetails = product.getProductDetails()
+                    .stream()
+                    .filter(detail -> detail.getActive() != null && detail.getActive())
+                    .map(productDetailMapper::toProductDetailResponse)
+                    .toList();
+        } else {
+            // For admin API: show all product details
+            productDetails = product.getProductDetails()
+                    .stream()
+                    .map(productDetailMapper::toProductDetailResponse)
+                    .toList();
+        }
         
         return ProductResponse.builder()
                 .productId(product.getProductId())

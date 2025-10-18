@@ -1,0 +1,190 @@
+/* Performance Optimization CSS */
+
+/* Optimize scroll performance */
+* {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Optimize touch events */
+.touch-optimized {
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+/* Optimize carousel performance */
+.owl-carousel {
+  will-change: transform;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  touch-action: pan-y pinch-zoom;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+.owl-carousel .owl-item {
+  will-change: transform;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  touch-action: pan-y pinch-zoom;
+}
+
+.owl-carousel .owl-stage {
+  touch-action: pan-y pinch-zoom;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+.owl-carousel .owl-stage-outer {
+  touch-action: pan-y pinch-zoom;
+  overflow: hidden;
+  position: relative;
+  width: 100%;
+}
+
+/* Optimize animations */
+.ftco-animate {
+  will-change: transform, opacity;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+}
+
+/* Optimize images */
+img {
+  will-change: auto;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+}
+
+/* Optimize full height sections */
+.js-fullheight {
+  will-change: height;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+}
+
+/* Optimize navbar scroll */
+.ftco_navbar {
+  will-change: transform;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+}
+
+/* Optimize waypoints */
+.ftco-animate.item-animate {
+  will-change: transform, opacity;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+}
+
+/* Reduce paint operations */
+.owl-carousel .owl-stage-outer {
+  overflow: hidden;
+  position: relative;
+  width: 100%;
+}
+
+.owl-carousel .owl-stage {
+  position: relative;
+  -ms-touch-action: pan-Y;
+  touch-action: manipulation;
+  -moz-backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+/* Optimize scroll events */
+.scroll-optimized {
+  contain: layout style paint;
+  will-change: scroll-position;
+}
+
+/* Optimize resize events */
+.resize-optimized {
+  contain: layout style paint;
+  will-change: height;
+}
+
+/* Optimize animations with GPU acceleration */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateZ(0); }
+  to { opacity: 1; transform: translateZ(0); }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translate3d(0, 30px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes fadeInLeft {
+  from { opacity: 0; transform: translate3d(-30px, 0, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes fadeInRight {
+  from { opacity: 0; transform: translate3d(30px, 0, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+/* Optimize carousel transitions */
+.owl-carousel .owl-item {
+  transition: transform 0.3s ease;
+  -webkit-transition: transform 0.3s ease;
+}
+
+/* Optimize scroll performance for mobile */
+@media (max-width: 768px) {
+  * {
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+  }
+  
+  .owl-carousel {
+    touch-action: pan-y;
+  }
+  
+  .owl-carousel .owl-stage {
+    touch-action: pan-y;
+  }
+}
+
+/* Optimize for high DPI displays */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .owl-carousel,
+  .ftco-animate,
+  .js-fullheight {
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+  }
+}
+
+/* Optimize for reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  
+  .owl-carousel {
+    animation: none !important;
+  }
+  
+  .ftco-animate {
+    animation: none !important;
+  }
+}

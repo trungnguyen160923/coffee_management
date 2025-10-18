@@ -40,10 +40,22 @@ public class ProductController {
         List<ProductResponse> result = productService.getAllProducts();
         return ApiResponse.<List<ProductResponse>>builder().result(result).build();
     }
+
+    @GetMapping("/can-sell")
+    ApiResponse<List<ProductResponse>> getAllProductsCanSell() {
+        List<ProductResponse> result = productService.getAllProductsCanSell();
+        return ApiResponse.<List<ProductResponse>>builder().result(result).build();
+    }
     
     @GetMapping("/{productId}")
     ApiResponse<ProductResponse> getProductById(@PathVariable Integer productId) {
         ProductResponse result = productService.getProductById(productId);
+        return ApiResponse.<ProductResponse>builder().result(result).build();
+    }
+    
+    @GetMapping("/public/{productId}")
+    ApiResponse<ProductResponse> getProductByIdForPublic(@PathVariable Integer productId) {
+        ProductResponse result = productService.getProductByIdForPublic(productId);
         return ApiResponse.<ProductResponse>builder().result(result).build();
     }
 
@@ -74,6 +86,29 @@ public class ProductController {
                 .build();
         
         ProductPageResponse result = productService.searchProducts(request);
+        return ApiResponse.<ProductPageResponse>builder().result(result).build();
+    }
+    
+    @GetMapping("/public/search")
+    ApiResponse<ProductPageResponse> searchProductsForPublic(
+            @RequestParam(defaultValue = "0") Integer page,
+            @RequestParam(defaultValue = "10") Integer size,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) Integer categoryId,
+            @RequestParam(required = false) String sortBy,
+            @RequestParam(required = false) String sortDirection) {
+        
+        ProductSearchRequest request = ProductSearchRequest.builder()
+                .page(page)
+                .size(size)
+                .search(search)
+                .categoryId(categoryId)
+                .active(true) // Force active = true for public
+                .sortBy(sortBy)
+                .sortDirection(sortDirection)
+                .build();
+        
+        ProductPageResponse result = productService.searchProductsForPublic(request);
         return ApiResponse.<ProductPageResponse>builder().result(result).build();
     }
 

@@ -105,7 +105,7 @@ const MenuPage = () => {
 
     const handleShowProduct = async (productId) => {
         try {
-            const product = await productService.getProductById(productId);
+            const product = await productService.getProductByIdForPublic(productId);
             setSelectedProduct(product);
             if (product?.productDetails?.length) {
                 setSelectedDetailId(product.productDetails[0].pdId);
@@ -412,21 +412,21 @@ const MenuPage = () => {
                                                 )}
                                             <div className="col-md-12">
                                                 <label style={{ color: '#c49b63' }}>Quantity:</label>
-                                                <div className="input-group d-flex mb-3">
-                                                    <span className="input-group-btn mr-2">
-                                                        <button
-                                                            type="button"
-                                                            className="btn btn-outline-secondary"
-                                                            onClick={dec}
-                                                            style={{
-                                                                backgroundColor: 'rgba(21, 17, 17, 0.8)',
-                                                                color: '#c49b63',
-                                                                border: '1px solid #c49b63'
-                                                            }}
-                                                        >
-                                                            <i className="icon-minus"></i>
-                                                        </button>
-                                                    </span>
+                                                <div className="input-group d-flex align-items-center mb-3" style={{ maxWidth: '200px' }}>
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-outline-secondary"
+                                                        onClick={dec}
+                                                        style={{
+                                                            backgroundColor: 'rgba(21, 17, 17, 0.8)',
+                                                            color: '#c49b63',
+                                                            border: '1px solid #c49b63',
+                                                            minWidth: '40px',
+                                                            height: '40px'
+                                                        }}
+                                                    >
+                                                        <i className="icon-minus"></i>
+                                                    </button>
                                                     <input
                                                         type="text"
                                                         readOnly
@@ -435,23 +435,26 @@ const MenuPage = () => {
                                                         style={{
                                                             backgroundColor: 'rgba(21, 17, 17, 0.8)',
                                                             color: '#fff',
-                                                            border: '1px solid #c49b63'
+                                                            border: '1px solid #c49b63',
+                                                            height: '40px',
+                                                            borderLeft: 'none',
+                                                            borderRight: 'none'
                                                         }}
                                                     />
-                                                    <span className="input-group-btn ml-2">
-                                                        <button
-                                                            type="button"
-                                                            className="btn btn-outline-secondary"
-                                                            onClick={inc}
-                                                            style={{
-                                                                backgroundColor: 'rgba(21, 17, 17, 0.8)',
-                                                                color: '#c49b63',
-                                                                border: '1px solid #c49b63'
-                                                            }}
-                                                        >
-                                                            <i className="icon-plus"></i>
-                                                        </button>
-                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-outline-secondary"
+                                                        onClick={inc}
+                                                        style={{
+                                                            backgroundColor: 'rgba(21, 17, 17, 0.8)',
+                                                            color: '#c49b63',
+                                                            border: '1px solid #c49b63',
+                                                            minWidth: '40px',
+                                                            height: '40px'
+                                                        }}
+                                                    >
+                                                        <i className="icon-plus"></i>
+                                                    </button>
                                                 </div>
                                             </div>
                                         </div>
