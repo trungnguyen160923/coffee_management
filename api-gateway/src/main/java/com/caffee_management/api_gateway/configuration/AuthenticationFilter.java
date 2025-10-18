@@ -38,6 +38,7 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
     private String[] publicEndpoints = {
             "/auth-service/auth/.*",
             "/auth-service/users/registration",
+            "/auth-service/users-v2/create-customer",
             "/order-service/api/branches.*",
             "/order-service/api/branches",
             "/order-service/api/reservations",

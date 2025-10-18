@@ -1,29 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 const Header = () => {
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
-    const [username, setUsername] = useState('');
+    const { isAuthenticated, user, logout } = useAuth();
     const location = useLocation();
 
-    useEffect(() => {
-        // Check authentication status from localStorage or context
-        const token = localStorage.getItem('token');
-        const user = localStorage.getItem('user');
-
-        if (token && user) {
-            setIsAuthenticated(true);
-            setUsername(JSON.parse(user).username || 'User');
-        }
-    }, []);
-
     const handleLogout = () => {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        setIsAuthenticated(false);
-        setUsername('');
-        // Redirect to login page
-        window.location.href = '/auth/login';
+        logout();
     };
 
     const isActive = (path) => {
@@ -81,7 +65,7 @@ const Header = () => {
                                     data-bs-toggle="dropdown"
                                     aria-expanded="false"
                                 >
-                                    {username}
+                                    {user?.fullname || 'User'}
                                 </a>
                                 <ul className="dropdown-menu">
                                     <li>

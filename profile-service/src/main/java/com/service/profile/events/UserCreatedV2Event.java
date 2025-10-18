@@ -15,6 +15,12 @@ public class UserCreatedV2Event {
     public String identityCard;
     public String position;
     public Double salary;
+    
+    // Customer fields
+    public LocalDate dob;
+    public String avatarUrl;
+    public String bio;
+    
     public Instant occurredAt;
 }
 

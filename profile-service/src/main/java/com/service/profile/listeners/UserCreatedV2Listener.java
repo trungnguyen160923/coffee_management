@@ -11,9 +11,9 @@ import org.springframework.security.core.context.SecurityContextHolder;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.service.profile.dto.ApiResponse;
-import com.service.profile.dto.request.AssignManagerRequest;
 import com.service.profile.dto.request.ManagerProfileCreationRequest;
 import com.service.profile.dto.request.StaffProfileCreationRequest;
+import com.service.profile.dto.request.CustomerProfileCreationRequest;
 import com.service.profile.entity.ProcessedEvent;
 import com.service.profile.events.UserCreatedV2Event;
 import com.service.profile.events.UserProfileFailedEvent;
@@ -22,8 +22,10 @@ import com.service.profile.repository.ProcessedEventRepository;
 import com.service.profile.repository.http_client.BranchClient;
 import com.service.profile.repository.ManagerProfileRepository;
 import com.service.profile.repository.StaffProfileRepository;
+import com.service.profile.repository.CustomerProfileRepository;
 import com.service.profile.service.ManagerProfileService;
 import com.service.profile.service.StaffProfileService;
+import com.service.profile.service.CustomerProfileService;
 
 import java.time.Instant;
 import java.util.List;
@@ -36,24 +38,30 @@ public class UserCreatedV2Listener {
     private final BranchClient branchClient;
     private final ManagerProfileService managerProfileService;
     private final StaffProfileService staffProfileService;
+    private final CustomerProfileService customerProfileService;
     private final ManagerProfileRepository managerProfileRepository;
     private final StaffProfileRepository staffProfileRepository;
+    private final CustomerProfileRepository customerProfileRepository;
     private final KafkaTemplate<String, String> kafkaTemplate;
 
     public UserCreatedV2Listener(ObjectMapper json, ProcessedEventRepository processed,
             BranchClient branchClient,
             ManagerProfileService managerProfileService,
             StaffProfileService staffProfileService,
+            CustomerProfileService customerProfileService,
             ManagerProfileRepository managerProfileRepository,
             StaffProfileRepository staffProfileRepository,
+            CustomerProfileRepository customerProfileRepository,
             KafkaTemplate<String, String> kafkaTemplate) {
         this.json = json;
         this.processed = processed;
         this.branchClient = branchClient;
         this.managerProfileService = managerProfileService;
         this.staffProfileService = staffProfileService;
+        this.customerProfileService = customerProfileService;
         this.managerProfileRepository = managerProfileRepository;
         this.staffProfileRepository = staffProfileRepository;
+        this.customerProfileRepository = customerProfileRepository;
         this.kafkaTemplate = kafkaTemplate;
     }
 
@@ -70,22 +78,29 @@ public class UserCreatedV2Listener {
         }
 
         try {
-            // Validate branch exists
-            try {
-                ApiResponse<?> br = branchClient.getBranchById(evt.branchId);
-                if (br == null || br.getResult() == null) {
-                    throw new RuntimeException("BRANCH_NOT_FOUND");
+            // Validate branch exists (only for MANAGER and STAFF)
+            if (!Objects.equals(evt.role, "CUSTOMER")) {
+                try {
+                    ApiResponse<?> br = branchClient.getBranchById(evt.branchId);
+                    if (br == null || br.getResult() == null) {
+                        throw new RuntimeException("BRANCH_NOT_FOUND");
+                    }
+                } catch (Exception e) {
+                    System.err.println("Branch validation failed, continuing anyway: " + e.getMessage());
+                    // Continue without branch validation if branch service is down
                 }
-            } catch (Exception e) {
-                System.err.println("Branch validation failed, continuing anyway: " + e.getMessage());
-                // Continue without branch validation if branch service is down
             }
 
             // Assign a temporary Authentication so method security passes during background
             // processing
-            List<SimpleGrantedAuthority> authorities = Objects.equals(evt.role, "MANAGER")
-                    ? List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))
-                    : List.of(new SimpleGrantedAuthority("ROLE_MANAGER"));
+            List<SimpleGrantedAuthority> authorities;
+            if (Objects.equals(evt.role, "MANAGER")) {
+                authorities = List.of(new SimpleGrantedAuthority("ROLE_ADMIN"));
+            } else if (Objects.equals(evt.role, "CUSTOMER")) {
+                authorities = List.of(new SimpleGrantedAuthority("ROLE_CUSTOMER"));
+            } else {
+                authorities = List.of(new SimpleGrantedAuthority("ROLE_MANAGER"));
+            }
             var systemAuth = new UsernamePasswordAuthenticationToken("system", null, authorities);
             SecurityContextHolder.getContext().setAuthentication(systemAuth);
             // Assign manager first (idempotent). For STAFF we do not assign manager to
@@ -112,6 +127,13 @@ public class UserCreatedV2Listener {
                                 .position(evt.position)
                                 .hireDate(evt.hireDate)
                                 .salary(java.math.BigDecimal.valueOf(evt.salary))
+                                .build());
+                case "CUSTOMER" -> customerProfileService.createCustomerProfile(
+                        CustomerProfileCreationRequest.builder()
+                                .userId(evt.userId)
+                                .dob(evt.dob)
+                                .avatarUrl(evt.avatarUrl)
+                                .bio(evt.bio)
                                 .build());
                 default -> {
                 }
@@ -143,6 +165,12 @@ public class UserCreatedV2Listener {
                     try {
                         staffProfileRepository.deleteById(evt.userId);
                     } catch (Exception ignore3) {
+                    }
+                }
+                if (Objects.equals(evt.role, "CUSTOMER")) {
+                    try {
+                        customerProfileRepository.deleteById(evt.userId);
+                    } catch (Exception ignore4) {
                     }
                 }
             } catch (Exception ignore) {
