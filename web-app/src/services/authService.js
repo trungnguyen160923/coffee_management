@@ -18,5 +18,20 @@ export const authService = {
   getUserById: async (userId) => {
     const response = await httpClient.get(`${API.GET_USER_BY_ID}/${userId}`);
     return response.data;
+  },
+
+  createCustomer: async (customerData) => {
+    const response = await httpClient.post(API.CREATE_CUSTOMER, customerData);
+    return response.data;
+  },
+
+  getMyProfile: async () => {
+    const response = await httpClient.get(API.MY_INFO);
+    return response.data;
+  },
+
+  getMe: async () => {
+    const response = await httpClient.get(API.GET_ME);
+    return response.data;
   }
 };

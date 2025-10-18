@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
 import { authService } from '../../../services/authService';
+import { showToast } from '../../../utils/toast';
 
 const LoginPage = () => {
     const [formData, setFormData] = useState({
@@ -43,10 +44,28 @@ const LoginPage = () => {
             const tokenPayload = JSON.parse(atob(token.split('.')[1]));
             const userId = tokenPayload.user_id;
 
+            // Get user profile information to get fullname
+            let fullname = formData.email.split('@')[0]; // fallback to username
+            try {
+                // Set token to httpClient before calling profile API
+                const httpClient = (await import('../../../configurations/httpClient')).default;
+                httpClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+                
+                const userResponse = await authService.getMe();
+                console.log('userResponse', userResponse);
+                if (userResponse.result && userResponse.result.fullname) {
+                    fullname = userResponse.result.fullname;
+                    console.log('fullname', fullname);
+                }
+            } catch (profileErr) {
+                console.log('Could not fetch user profile, using email username as fallback');
+                // Don't show error or return, just use fallback
+            }
+
             // Create user data object
             const userData = {
                 email: formData.email,
-                username: formData.email.split('@')[0],
+                username: fullname, // Use fullname instead of email username
                 userId: userId
             };
 

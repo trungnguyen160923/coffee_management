@@ -5,7 +5,9 @@ export const CONFIG = {
 export const API = {
   LOGIN: "/auth-service/auth/token",
   MY_INFO: "/profile/users/my-profile",
+  GET_ME: "/auth-service/users/me",
   GET_USER_BY_ID: "/auth-service/users",
+  CREATE_CUSTOMER: "/auth-service/users-v2/create-customer",
   MY_POST: "/post/my-posts",
   CREATE_POST: "/post/create",
   UPDATE_PROFILE: "/profile/users/my-profile",
