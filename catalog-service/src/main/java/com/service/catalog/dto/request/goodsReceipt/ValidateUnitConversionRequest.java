@@ -16,4 +16,5 @@ public class ValidateUnitConversionRequest {
     private String fromUnitCode;
     private String toUnitCode;
     private BigDecimal quantity;
+    private Integer branchId; // Added branchId field
 }

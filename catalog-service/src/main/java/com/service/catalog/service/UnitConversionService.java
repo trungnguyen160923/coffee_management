@@ -95,20 +95,12 @@ public class UnitConversionService {
 
     /**
      * Convert between units of different dimensions using ingredient-specific conversions with branch filter
+     * Priority order: BRANCH-specific → GLOBAL → throw exception
      */
     private BigDecimal convertDifferentDimensions(Integer ingredientId, String fromUnit, String toUnit, BigDecimal quantity, Integer branchId) {
         
-        // Try direct conversion first (active only with scope filter)
-        Optional<IngredientUnitConversion> directConversion;
-        if (branchId != null) {
-            log.info("Looking for direct conversion with branch filter: branchId={}", branchId);
-            directConversion = conversionRepository.findActiveConversionByIngredientAndUnitsAndScope(
-                ingredientId, fromUnit, toUnit, branchId);
-        } else {
-            log.info("Looking for direct conversion without branch filter");
-            directConversion = conversionRepository.findByIngredientIdAndFromUnitCodeAndToUnitCodeAndIsActiveTrue(
-                ingredientId, fromUnit, toUnit);
-        }
+        // 1. Try direct conversion with priority: BRANCH → GLOBAL
+        Optional<IngredientUnitConversion> directConversion = findDirectConversionWithPriority(ingredientId, fromUnit, toUnit, branchId);
         
         if (directConversion.isPresent()) {
             log.info("Direct conversion found: factor={}, scope={}, branchId={}", 
@@ -122,17 +114,8 @@ public class UnitConversionService {
             log.info("No direct conversion found");
         }
 
-        // Try reverse conversion (active only with scope filter)
-        Optional<IngredientUnitConversion> reverseConversion;
-        if (branchId != null) {
-            log.info("Looking for reverse conversion with branch filter: branchId={}", branchId);
-            reverseConversion = conversionRepository.findActiveConversionByIngredientAndUnitsAndScope(
-                ingredientId, toUnit, fromUnit, branchId);
-        } else {
-            log.info("Looking for reverse conversion without branch filter");
-            reverseConversion = conversionRepository.findByIngredientIdAndFromUnitCodeAndToUnitCodeAndIsActiveTrue(
-                ingredientId, toUnit, fromUnit);
-        }
+        // 2. Try reverse conversion with priority: BRANCH → GLOBAL
+        Optional<IngredientUnitConversion> reverseConversion = findReverseConversionWithPriority(ingredientId, fromUnit, toUnit, branchId);
         
         if (reverseConversion.isPresent()) {
             log.info("Reverse conversion found: factor={}, scope={}, branchId={}", 
@@ -146,24 +129,10 @@ public class UnitConversionService {
             log.info("No reverse conversion found");
         }
 
-        // Try conversion through base unit (active only with scope filter)
-        log.info("Looking for base unit conversion");
-        Optional<IngredientUnitConversion> toBase;
-        Optional<IngredientUnitConversion> fromBase;
-        
-        if (branchId != null) {
-            log.info("Looking for base conversions with branch filter: branchId={}", branchId);
-            toBase = conversionRepository.findActiveBaseConversionByIngredientAndUnitsAndScope(
-                ingredientId, fromUnit, "BASE", branchId);
-            fromBase = conversionRepository.findActiveBaseConversionByIngredientAndUnitsAndScope(
-                ingredientId, "BASE", toUnit, branchId);
-        } else {
-            log.info("Looking for base conversions without branch filter");
-            toBase = conversionRepository.findByIngredientIdAndFromUnitCodeAndToUnitCodeAndIsActiveTrue(
-                ingredientId, fromUnit, "BASE");
-            fromBase = conversionRepository.findByIngredientIdAndFromUnitCodeAndToUnitCodeAndIsActiveTrue(
-                ingredientId, "BASE", toUnit);
-        }
+        // 3. Try conversion through base unit with priority: BRANCH → GLOBAL
+        log.info("Looking for base unit conversion with priority");
+        Optional<IngredientUnitConversion> toBase = findBaseConversionWithPriority(ingredientId, fromUnit, "BASE", branchId);
+        Optional<IngredientUnitConversion> fromBase = findBaseConversionWithPriority(ingredientId, "BASE", toUnit, branchId);
 
         log.info("Base conversions found: toBase={}, fromBase={}", toBase.isPresent(), fromBase.isPresent());
         
@@ -183,6 +152,108 @@ public class UnitConversionService {
         throw new IllegalArgumentException(
             String.format("Cannot convert from %s to %s for ingredient %d - different dimensions and no specific conversion rule", fromUnit, toUnit, ingredientId)
         );
+    }
+
+    /**
+     * Find direct conversion with priority: BRANCH → GLOBAL
+     */
+    private Optional<IngredientUnitConversion> findDirectConversionWithPriority(Integer ingredientId, String fromUnit, String toUnit, Integer branchId) {
+        if (branchId != null) {
+            // 1. Try BRANCH-specific first (highest priority)
+            log.info("Looking for BRANCH-specific direct conversion: branchId={}", branchId);
+            Optional<IngredientUnitConversion> branchConversion = conversionRepository.findBranchSpecificConversion(
+                ingredientId, fromUnit, toUnit, branchId);
+            
+            if (branchConversion.isPresent()) {
+                log.info("BRANCH-specific direct conversion found: factor={}, branchId={}", 
+                        branchConversion.get().getFactor(), branchConversion.get().getBranchId());
+                return branchConversion;
+            }
+            
+            // 2. Try GLOBAL as fallback
+            log.info("No BRANCH-specific found, trying GLOBAL direct conversion");
+            Optional<IngredientUnitConversion> globalConversion = conversionRepository.findGlobalConversion(
+                ingredientId, fromUnit, toUnit);
+            
+            if (globalConversion.isPresent()) {
+                log.info("GLOBAL direct conversion found: factor={}", globalConversion.get().getFactor());
+                return globalConversion;
+            }
+        } else {
+            // No branch context - try GLOBAL only
+            log.info("No branch context, trying GLOBAL direct conversion");
+            return conversionRepository.findGlobalConversion(ingredientId, fromUnit, toUnit);
+        }
+        
+        return Optional.empty();
+    }
+
+    /**
+     * Find reverse conversion with priority: BRANCH → GLOBAL
+     */
+    private Optional<IngredientUnitConversion> findReverseConversionWithPriority(Integer ingredientId, String fromUnit, String toUnit, Integer branchId) {
+        if (branchId != null) {
+            // 1. Try BRANCH-specific reverse first (highest priority)
+            log.info("Looking for BRANCH-specific reverse conversion: branchId={}", branchId);
+            Optional<IngredientUnitConversion> branchReverse = conversionRepository.findBranchSpecificReverseConversion(
+                ingredientId, fromUnit, toUnit, branchId);
+            
+            if (branchReverse.isPresent()) {
+                log.info("BRANCH-specific reverse conversion found: factor={}, branchId={}", 
+                        branchReverse.get().getFactor(), branchReverse.get().getBranchId());
+                return branchReverse;
+            }
+            
+            // 2. Try GLOBAL reverse as fallback
+            log.info("No BRANCH-specific reverse found, trying GLOBAL reverse conversion");
+            Optional<IngredientUnitConversion> globalReverse = conversionRepository.findGlobalReverseConversion(
+                ingredientId, fromUnit, toUnit);
+            
+            if (globalReverse.isPresent()) {
+                log.info("GLOBAL reverse conversion found: factor={}", globalReverse.get().getFactor());
+                return globalReverse;
+            }
+        } else {
+            // No branch context - try GLOBAL only
+            log.info("No branch context, trying GLOBAL reverse conversion");
+            return conversionRepository.findGlobalReverseConversion(ingredientId, fromUnit, toUnit);
+        }
+        
+        return Optional.empty();
+    }
+
+    /**
+     * Find base unit conversion with priority: BRANCH → GLOBAL
+     */
+    private Optional<IngredientUnitConversion> findBaseConversionWithPriority(Integer ingredientId, String fromUnit, String toUnit, Integer branchId) {
+        if (branchId != null) {
+            // 1. Try BRANCH-specific base first (highest priority)
+            log.info("Looking for BRANCH-specific base conversion: branchId={}", branchId);
+            Optional<IngredientUnitConversion> branchBase = conversionRepository.findBranchSpecificBaseConversion(
+                ingredientId, fromUnit, toUnit, branchId);
+            
+            if (branchBase.isPresent()) {
+                log.info("BRANCH-specific base conversion found: factor={}, branchId={}", 
+                        branchBase.get().getFactor(), branchBase.get().getBranchId());
+                return branchBase;
+            }
+            
+            // 2. Try GLOBAL base as fallback
+            log.info("No BRANCH-specific base found, trying GLOBAL base conversion");
+            Optional<IngredientUnitConversion> globalBase = conversionRepository.findGlobalBaseConversion(
+                ingredientId, fromUnit, toUnit);
+            
+            if (globalBase.isPresent()) {
+                log.info("GLOBAL base conversion found: factor={}", globalBase.get().getFactor());
+                return globalBase;
+            }
+        } else {
+            // No branch context - try GLOBAL only
+            log.info("No branch context, trying GLOBAL base conversion");
+            return conversionRepository.findGlobalBaseConversion(ingredientId, fromUnit, toUnit);
+        }
+        
+        return Optional.empty();
     }
 
     /**
@@ -303,17 +374,8 @@ public class UnitConversionService {
 
     private BigDecimal getIngredientSpecificConversionFactor(Integer ingredientId, String fromUnit, String toUnit, Integer branchId) {
         
-        // Try direct conversion (active only with scope filter)
-        Optional<IngredientUnitConversion> directConversion;
-        if (branchId != null) {
-            log.info("Looking for direct conversion with branch filter: branchId={}", branchId);
-            directConversion = conversionRepository.findActiveConversionByIngredientAndUnitsAndScope(
-                ingredientId, fromUnit, toUnit, branchId);
-        } else {
-            log.info("Looking for direct conversion without branch filter");
-            directConversion = conversionRepository.findByIngredientIdAndFromUnitCodeAndToUnitCodeAndIsActiveTrue(
-                ingredientId, fromUnit, toUnit);
-        }
+        // 1. Try direct conversion with priority: BRANCH → GLOBAL
+        Optional<IngredientUnitConversion> directConversion = findDirectConversionWithPriority(ingredientId, fromUnit, toUnit, branchId);
         
         if (directConversion.isPresent()) {
             log.info("Direct conversion found: factor={}, scope={}, branchId={}", 
@@ -325,17 +387,8 @@ public class UnitConversionService {
             log.info("No direct conversion found");
         }
 
-        // Try reverse conversion (active only with scope filter)
-        Optional<IngredientUnitConversion> reverseConversion;
-        if (branchId != null) {
-            log.info("Looking for reverse conversion with branch filter: branchId={}", branchId);
-            reverseConversion = conversionRepository.findActiveConversionByIngredientAndUnitsAndScope(
-                ingredientId, toUnit, fromUnit, branchId);
-        } else {
-            log.info("Looking for reverse conversion without branch filter");
-            reverseConversion = conversionRepository.findByIngredientIdAndFromUnitCodeAndToUnitCodeAndIsActiveTrue(
-                ingredientId, toUnit, fromUnit);
-        }
+        // 2. Try reverse conversion with priority: BRANCH → GLOBAL
+        Optional<IngredientUnitConversion> reverseConversion = findReverseConversionWithPriority(ingredientId, fromUnit, toUnit, branchId);
         
         if (reverseConversion.isPresent()) {
             log.info("Reverse conversion found: factor={}, scope={}, branchId={}", 
@@ -349,24 +402,10 @@ public class UnitConversionService {
             log.info("No reverse conversion found");
         }
 
-        // Try conversion through base unit (active only with scope filter)
-        log.info("Looking for base unit conversion");
-        Optional<IngredientUnitConversion> toBase;
-        Optional<IngredientUnitConversion> fromBase;
-        
-        if (branchId != null) {
-            log.info("Looking for base conversions with branch filter: branchId={}", branchId);
-            toBase = conversionRepository.findActiveBaseConversionByIngredientAndUnitsAndScope(
-                ingredientId, fromUnit, "BASE", branchId);
-            fromBase = conversionRepository.findActiveBaseConversionByIngredientAndUnitsAndScope(
-                ingredientId, "BASE", toUnit, branchId);
-        } else {
-            log.info("Looking for base conversions without branch filter");
-            toBase = conversionRepository.findByIngredientIdAndFromUnitCodeAndToUnitCodeAndIsActiveTrue(
-                ingredientId, fromUnit, "BASE");
-            fromBase = conversionRepository.findByIngredientIdAndFromUnitCodeAndToUnitCodeAndIsActiveTrue(
-                ingredientId, "BASE", toUnit);
-        }
+        // 3. Try conversion through base unit with priority: BRANCH → GLOBAL
+        log.info("Looking for base unit conversion with priority");
+        Optional<IngredientUnitConversion> toBase = findBaseConversionWithPriority(ingredientId, fromUnit, "BASE", branchId);
+        Optional<IngredientUnitConversion> fromBase = findBaseConversionWithPriority(ingredientId, "BASE", toUnit, branchId);
 
         log.info("Base conversions found: toBase={}, fromBase={}", toBase.isPresent(), fromBase.isPresent());
         

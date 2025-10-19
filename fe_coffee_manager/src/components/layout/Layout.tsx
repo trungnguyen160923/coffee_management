@@ -62,6 +62,7 @@ export function Layout({ children }: LayoutProps) {
         { icon: FileText, label: 'Purchase Orders', path: '/manager/purchase-orders' },
         { icon: Truck, label: 'Suppliers', path: '/manager/suppliers' },
         { icon: Archive, label: 'Inventory', path: '/manager/inventory' },
+        { icon: UtensilsCrossed, label: 'Ingredients', path: '/manager/ingredients' },
         { icon: FileText, label: 'Goods Receipts', path: '/manager/goods-receipts' },
         { icon: FileText, label: 'Return Goods', path: '/manager/return-goods' },
         { icon: BarChart3, label: 'Statistics', path: '/manager/statistics' },

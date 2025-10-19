@@ -740,6 +740,7 @@ export const catalogService = {
     fromUnitCode: string;
     toUnitCode: string;
     quantity: number;
+    branchId?: number; // Added branchId field
   }) {
     const resp = await apiClient.post<any>('/api/catalogs/goods-receipts/validate-unit-conversion', data);
     return (resp as any)?.result ?? resp;
@@ -751,6 +752,8 @@ export const catalogService = {
     toUnitCode: string;
     factor: number;
     description?: string;
+    scope?: string;
+    branchId?: number | null;
   }) {
     const resp = await apiClient.post<any>('/api/catalogs/goods-receipts/create-unit-conversion', data);
     return (resp as any)?.result ?? resp;
@@ -763,6 +766,11 @@ export const catalogService = {
 
   async getAllGlobalConversions(): Promise<any[]> {
     const resp = await apiClient.get<any>('/api/catalogs/goods-receipts/conversions/global');
+    return (resp as any)?.result ?? resp;
+  },
+
+  async getConversionsForBranch(branchId: number): Promise<any[]> {
+    const resp = await apiClient.get<any>(`/api/catalogs/goods-receipts/conversions/branch/${branchId}`);
     return (resp as any)?.result ?? resp;
   },
 
