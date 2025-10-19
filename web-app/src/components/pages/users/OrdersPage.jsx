@@ -50,6 +50,20 @@ const OrdersPage = () => {
         }
     };
 
+    const handleCancelOrder = async (orderId) => {
+        if (window.confirm('Are you sure you want to cancel this order?')) {
+            try {
+                await orderService.cancelOrder(orderId);
+                alert('Order cancelled successfully!');
+                // Refresh the orders list
+                fetchOrders();
+            } catch (error) {
+                console.error('Error cancelling order:', error);
+                alert('An error occurred while cancelling the order. Please try again.');
+            }
+        }
+    };
+
     const formatDate = (dateString) => {
         if (!dateString) return 'N/A';
         const date = new Date(dateString);
@@ -123,23 +137,82 @@ const OrdersPage = () => {
         {
             header: 'Status',
             key: 'status',
-            render: (order) => (
-                <span style={{
-                    padding: '4px 12px',
-                    borderRadius: '20px',
-                    fontSize: '11px',
-                    fontWeight: 'bold',
-                    textTransform: 'uppercase',
-                    backgroundColor: order.status === 'COMPLETED' ? '#28a745' :
-                        order.status === 'PENDING' ? '#c49b63' :
-                            order.status === 'CANCELLED' ? '#dc3545' :
-                                order.status === 'PROCESSING' ? '#17a2b8' :
-                                    '#6c757d',
-                    color: '#fff'
-                }}>
-                    {order.status}
-                </span>
-            )
+            render: (order) => {
+                const getStatusStyle = (status) => {
+                    const baseStyle = {
+                        padding: '4px 12px',
+                        borderRadius: '20px',
+                        fontSize: '11px',
+                        fontWeight: 'bold',
+                        textTransform: 'uppercase',
+                        color: '#fff'
+                    };
+
+                    // Normalize status for comparison - trim whitespace and convert to uppercase
+                    const normalizedStatus = status?.toString().trim().toUpperCase();
+
+                    switch (normalizedStatus) {
+                        case 'PENDING':
+                            return { ...baseStyle, backgroundColor: '#c49b63' }; // Coffee brown
+                        case 'PREPARING':
+                            return { ...baseStyle, backgroundColor: '#17a2b8' }; // Blue
+                        case 'READY':
+                            return { ...baseStyle, backgroundColor: '#28a745' }; // Green
+                        case 'COMPLETED':
+                            return { ...baseStyle, backgroundColor: '#6c757d' }; // Gray
+                        case 'CANCELLED':
+                            return { ...baseStyle, backgroundColor: '#dc3545' }; // Red
+                        default:
+                            return { ...baseStyle, backgroundColor: '#6c757d' }; // Default gray
+                    }
+                };
+
+                return (
+                    <span style={getStatusStyle(order.status)}>
+                        {order.status}
+                    </span>
+                );
+            }
+        },
+        {
+            header: 'Actions',
+            key: 'actions',
+            render: (order) => {
+                // Normalize status for comparison - trim whitespace and convert to uppercase
+                const normalizedStatus = order.status?.toString().trim().toUpperCase();
+                const isPending = normalizedStatus === 'PENDING';
+
+                return isPending ? (
+                    <button
+                        onClick={() => handleCancelOrder(order.orderId)}
+                        style={{
+                            backgroundColor: 'transparent',
+                            color: '#dc3545',
+                            border: 'none',
+                            padding: '4px',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '12px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                        }}
+                        onMouseOver={(e) => {
+                            e.target.style.backgroundColor = '#f8d7da';
+                            e.target.style.color = '#721c24';
+                        }}
+                        onMouseOut={(e) => {
+                            e.target.style.backgroundColor = 'transparent';
+                            e.target.style.color = '#dc3545';
+                        }}
+                        title="Cancel Order"
+                    >
+                        🗑️
+                    </button>
+                ) : (
+                    <span style={{ color: '#6c757d', fontSize: '12px' }}>-</span>
+                );
+            }
         }
     ];
 

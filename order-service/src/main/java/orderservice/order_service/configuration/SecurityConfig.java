@@ -26,7 +26,9 @@ public class SecurityConfig {
             "/api/email/send-order-confirmation", // Allow public access to email confirmation
             "/api/discounts/validate", // Allow public access to discount validation
             "/api/discounts/apply", // Allow public access to discount application
-            "/api/discounts/available" // Allow public access to available discounts
+            "/api/discounts/available", // Allow public access to available discounts
+            "/api/reservations/public/**", // Allow public access to track reservation status
+            "/api/orders/public/**" // Allow public access to track order status
     };
 
     private final CustomJwtDecoder customJwtDecoder;
@@ -54,11 +56,14 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/reservations/**")
                 .hasAnyRole("ADMIN", "MANAGER", "CUSTOMER", "STAFF")
                 .requestMatchers(HttpMethod.PUT, "/api/reservations/**")
-                .hasAnyRole("ADMIN", "MANAGER", "STAFF")
+                .hasAnyRole("ADMIN", "MANAGER", "CUSTOMER", "STAFF")
                 .requestMatchers(HttpMethod.DELETE, "/api/reservations/**")
                 .hasAnyRole("ADMIN", "MANAGER", "STAFF")
                 // Table management access rules for Manager
                 .requestMatchers("/api/staff/tables/**")
+                .hasAnyRole("ADMIN", "MANAGER", "STAFF")
+                // POS API access rules for Staff
+                .requestMatchers("/api/pos/**")
                 .hasAnyRole("ADMIN", "MANAGER", "STAFF")
                 .anyRequest()
                 .authenticated());

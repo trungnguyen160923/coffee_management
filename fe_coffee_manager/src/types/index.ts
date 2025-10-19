@@ -377,7 +377,7 @@ export interface Order {
 export interface OrderItem {
   productId: string;
   productName: string;
-  size: 'S' | 'M' | 'L';
+  size: 'S' | 'M' | 'L' | null;
   quantity: number;
   price: number;
   notes?: string;

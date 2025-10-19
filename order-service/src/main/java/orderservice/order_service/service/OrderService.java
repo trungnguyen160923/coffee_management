@@ -213,6 +213,7 @@ public class OrderService {
                                 .branchId(order.getBranchId())
                                 .tableId(order.getTableId())
                                 .reservationId(order.getReservationId())
+                                .staffId(order.getStaffId())
                                 .status(order.getStatus())
                                 .paymentMethod(order.getPaymentMethod())
                                 .paymentStatus(order.getPaymentStatus())
