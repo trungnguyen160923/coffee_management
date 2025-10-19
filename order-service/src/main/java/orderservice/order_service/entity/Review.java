@@ -12,45 +12,38 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.math.BigDecimal;
+
 @Entity
-@Table(name = "branches")
+@Table(name = "reviews")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class Branch {
+public class Review {
     
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "review_id")
+    private Integer reviewId;
+    
+    @Column(name = "product_id")
+    private Integer productId; // loose reference to catalog_db.products
+    
+    @Column(name = "customer_id")
+    private Integer customerId; // loose reference to customer_profiles/user_id
+    
+    @Column(name = "order_id")
+    private Integer orderId; // reference to orders table
+    
     @Column(name = "branch_id")
     private Integer branchId;
-
-    @Column(name = "name", nullable = false, length = 150)
-    private String name;
-
-    @Column(name = "address", length = 255)
-    private String address;
-
-    @Column(name = "phone", length = 20)
-    private String phone;
     
-    @Column(name = "manager_user_id")
-    private Integer managerUserId;
-
-    @Column(name = "openhours")
-    private LocalTime openHours;
+    @Column(name = "rating", nullable = false)
+    private Byte rating = 5; // 1..5, default 5
     
-    @Column(name = "endhours")
-    private LocalTime endHours;
-    
-    @Column(name = "latitude")
-    private BigDecimal latitude;
-    
-    @Column(name = "longitude")
-    private BigDecimal longitude;
+    @Column(name = "comment", columnDefinition = "TEXT")
+    private String comment;
     
     @CreationTimestamp
     @Column(name = "create_at", nullable = false, updatable = false)
@@ -59,4 +52,14 @@ public class Branch {
     @UpdateTimestamp
     @Column(name = "update_at", nullable = false)
     private LocalDateTime updateAt;
+    
+    @Column(name = "is_deleted", nullable = false)
+    @Builder.Default
+    private Boolean isDeleted = false;
+    
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+    
+    @Column(name = "deleted_by")
+    private Integer deletedBy;
 }

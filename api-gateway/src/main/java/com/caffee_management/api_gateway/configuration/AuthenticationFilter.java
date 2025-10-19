@@ -75,6 +75,9 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
             "/catalogs/stocks/check-and-reserve",
             "/catalogs/stocks/check-and-reserve/.*",
             "/catalogs/stocks/.*",
+
+            // Public reviews endpoints
+            "/order-service/reviews/filter",
     };
 
     @Value("${app.api-prefix}")

@@ -79,6 +79,14 @@ public enum ErrorCode {
     DISCOUNT_USAGE_LIMIT_EXCEEDED(3007, "Discount usage limit exceeded", HttpStatus.BAD_REQUEST),
     DISCOUNT_MIN_ORDER_NOT_MET(3008, "Minimum order amount not met", HttpStatus.BAD_REQUEST),
     DISCOUNT_BRANCH_MISMATCH(3009, "Discount not applicable for this branch", HttpStatus.BAD_REQUEST),
+
+    // Review Error Codes
+    PRODUCT_ID_REQUIRED(4001, "Product ID is required", HttpStatus.BAD_REQUEST),
+    BRANCH_ID_REQUIRED(4002, "Branch ID is required", HttpStatus.BAD_REQUEST),
+    CUSTOMER_ID_REQUIRED(4003, "Customer ID is required", HttpStatus.BAD_REQUEST),
+    COMMENT_MAX_LENGTH_255(4004, "Comment must not exceed 255 characters", HttpStatus.BAD_REQUEST),
+    REVIEW_NOT_FOUND(4005, "Review not found", HttpStatus.NOT_FOUND),
+    REVIEW_CREATION_FAILED(4006, "Review creation failed", HttpStatus.INTERNAL_SERVER_ERROR),
     ;
 
     ErrorCode(int code, String message, HttpStatusCode statusCode) {

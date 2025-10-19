@@ -40,6 +40,8 @@ export default function StaffOrders() {
     const [recipeModalOpen, setRecipeModalOpen] = useState<boolean>(false);
     const [selectedRecipe, setSelectedRecipe] = useState<CatalogRecipe | null>(null);
     const [recipeLoading, setRecipeLoading] = useState<boolean>(false);
+    const [refreshing, setRefreshing] = useState<boolean>(false);
+    const [autoRefresh, setAutoRefresh] = useState<boolean>(false);
 
     const branchId = useMemo(() => {
         // Prefer nested branch from backend, fallback to legacy branchId field
@@ -48,26 +50,32 @@ export default function StaffOrders() {
         return null;
     }, [user]);
 
-    useEffect(() => {
-        const load = async () => {
-            if (!branchId) {
-                setLoading(false);
-                setError('Could not determine staff branch.');
-                return;
-            }
-            try {
+    const loadOrders = async (isRefresh = false) => {
+        if (!branchId) {
+            setLoading(false);
+            setError('Could not determine staff branch.');
+            return;
+        }
+        try {
+            if (isRefresh) {
+                setRefreshing(true);
+            } else {
                 setLoading(true);
-                setError(null);
-                const data = await orderService.getOrdersByBranch(branchId);
-                setOrders(Array.isArray(data) ? data : []);
-            } catch (e: any) {
-                console.error('Failed to load orders by branch', e);
-                setError(`Failed to load orders: ${e.message || 'Unknown error'}`);
-            } finally {
-                setLoading(false);
             }
-        };
-        load();
+            setError(null);
+            const data = await orderService.getOrdersByBranch(branchId);
+            setOrders(Array.isArray(data) ? data : []);
+        } catch (e: any) {
+            console.error('Failed to load orders by branch', e);
+            setError(`Failed to load orders: ${e.message || 'Unknown error'}`);
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
+        }
+    };
+
+    useEffect(() => {
+        loadOrders();
     }, [branchId]);
 
     // debounce search
@@ -75,6 +83,25 @@ export default function StaffOrders() {
         const h = setTimeout(() => setDebouncedSearch(search.trim().toLowerCase()), 300);
         return () => clearTimeout(h);
     }, [search]);
+
+    // Auto refresh functionality
+    useEffect(() => {
+        if (!autoRefresh) return;
+        
+        const interval = setInterval(() => {
+            loadOrders(true);
+            toast.success('Orders refreshed automatically', {
+                duration: 2000,
+                position: 'top-right',
+                style: {
+                    background: '#10B981',
+                    color: '#fff',
+                },
+            });
+        }, 10000); // Refresh every 10 seconds
+
+        return () => clearInterval(interval);
+    }, [autoRefresh, branchId]);
 
     const filteredOrders = useMemo(() => {
         const byStatus = (o: SimpleOrder) => {
@@ -153,12 +180,14 @@ export default function StaffOrders() {
             }
             
             // Chỉ cập nhật trạng thái order nếu reservation API thành công (hoặc không cần gọi)
-            const updated = await orderService.updateOrderStatus(String(orderId), status as any);
+            // Convert status to uppercase before sending to backend
+            const uppercaseStatus = status.toUpperCase();
+            const updated = await orderService.updateOrderStatus(String(orderId), uppercaseStatus as any);
             
             // Cập nhật UI
             setOrders(prev => prev.map(o =>
                 String(o.orderId) === String(orderId)
-                    ? { ...o, status: (updated as any)?.status ?? status }
+                    ? { ...o, status: (updated as any)?.status ?? uppercaseStatus }
                     : o
             ));
             
@@ -284,8 +313,50 @@ export default function StaffOrders() {
 
     return (
         <div className="p-8">
-            <div className="mb-6">
+            <div className="mb-6 flex items-center justify-between">
                 <h1 className="text-2xl font-bold text-gray-800">Branch Orders</h1>
+                <div className="flex items-center gap-3">
+                    {/* Auto refresh toggle */}
+                    <label className="flex items-center gap-2 text-sm text-gray-600">
+                        <input
+                            type="checkbox"
+                            checked={autoRefresh}
+                            onChange={(e) => setAutoRefresh(e.target.checked)}
+                            className="w-4 h-4 text-amber-600 bg-gray-100 border-gray-300 rounded focus:ring-amber-500 focus:ring-2"
+                        />
+                        <span className="flex items-center gap-1">
+                            Auto Refresh (10s)
+                            {autoRefresh && (
+                                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" title="Auto refresh is active"></div>
+                            )}
+                        </span>
+                    </label>
+                    
+                    {/* Manual refresh button */}
+                    <button
+                        onClick={async () => {
+                            await loadOrders(true);
+                            toast.success('Orders refreshed manually', {
+                                duration: 2000,
+                                position: 'top-right',
+                            });
+                        }}
+                        disabled={refreshing}
+                        className="flex items-center gap-2 px-3 py-2 text-sm bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                        {refreshing ? (
+                            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                        ) : (
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                        )}
+                        {refreshing ? 'Refreshing...' : 'Refresh'}
+                    </button>
+                </div>
             </div>
 
             {loading && (
