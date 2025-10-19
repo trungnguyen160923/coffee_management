@@ -81,6 +81,20 @@ export const branchService = {
      */
     async findTop5NearestBranches(address) {
         return this.findTopNearestBranches(address, 5);
+    },
+
+    /**
+     * Lấy tất cả chi nhánh
+     * @returns {Promise<Array>} - Danh sách tất cả chi nhánh
+     */
+    async getAllBranches() {
+        try {
+            const response = await httpClient.get(`${API.GET_BRANCHES}`);
+            return response.data?.result || [];
+        } catch (error) {
+            console.error('Failed to get all branches:', error);
+            throw error;
+        }
     }
 };
 

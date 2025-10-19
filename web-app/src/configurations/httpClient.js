@@ -26,11 +26,16 @@ httpClient.interceptors.response.use(
   },
   (error) => {
     if (error.response?.status === 401) {
-      // Kiểm tra xem có phải API stock không cần token
-      const isStockAPI = error.config?.url?.includes('/stocks/');
+      // Kiểm tra xem có phải API public không cần token
+      const isPublicAPI = error.config?.url?.includes('/stocks/') || 
+                         error.config?.url?.includes('/products/') ||
+                         error.config?.url?.includes('/branches') ||
+                         error.config?.url?.includes('/reviews') ||
+                         error.config?.url?.includes('/order-service/branches') ||
+                         error.config?.url?.includes('/order-service/reviews');
       
-      if (!isStockAPI) {
-        // Token hết hạn hoặc không hợp lệ - chỉ redirect nếu không phải API stock
+      if (!isPublicAPI) {
+        // Token hết hạn hoặc không hợp lệ - chỉ redirect nếu không phải API public
         clearAuthData();
         
         // Dispatch event để thông báo cho các component khác
