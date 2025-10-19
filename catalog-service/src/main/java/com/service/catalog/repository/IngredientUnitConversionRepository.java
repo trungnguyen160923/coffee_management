@@ -130,4 +130,105 @@ public interface IngredientUnitConversionRepository extends JpaRepository<Ingred
             String toUnitCode, 
             Long id
     );
+
+    // ===== NEW METHODS FOR PRIORITY-BASED CONVERSION =====
+    
+    /**
+     * Find BRANCH-specific conversion (highest priority)
+     * Only searches for BRANCH scope conversions for the specific branch
+     */
+    @Query("SELECT c FROM IngredientUnitConversion c WHERE " +
+           "c.ingredientId = :ingredientId AND " +
+           "c.fromUnitCode = :fromUnitCode AND " +
+           "c.toUnitCode = :toUnitCode AND " +
+           "c.isActive = true AND " +
+           "c.scope = 'BRANCH' AND c.branchId = :branchId")
+    Optional<IngredientUnitConversion> findBranchSpecificConversion(
+        @Param("ingredientId") Integer ingredientId, 
+        @Param("fromUnitCode") String fromUnitCode, 
+        @Param("toUnitCode") String toUnitCode,
+        @Param("branchId") Integer branchId
+    );
+
+    /**
+     * Find GLOBAL conversion (fallback priority)
+     * Only searches for GLOBAL scope conversions
+     */
+    @Query("SELECT c FROM IngredientUnitConversion c WHERE " +
+           "c.ingredientId = :ingredientId AND " +
+           "c.fromUnitCode = :fromUnitCode AND " +
+           "c.toUnitCode = :toUnitCode AND " +
+           "c.isActive = true AND " +
+           "c.scope = 'GLOBAL'")
+    Optional<IngredientUnitConversion> findGlobalConversion(
+        @Param("ingredientId") Integer ingredientId, 
+        @Param("fromUnitCode") String fromUnitCode, 
+        @Param("toUnitCode") String toUnitCode
+    );
+
+    /**
+     * Find BRANCH-specific reverse conversion (highest priority)
+     * Only searches for BRANCH scope reverse conversions for the specific branch
+     */
+    @Query("SELECT c FROM IngredientUnitConversion c WHERE " +
+           "c.ingredientId = :ingredientId AND " +
+           "c.fromUnitCode = :toUnitCode AND " +
+           "c.toUnitCode = :fromUnitCode AND " +
+           "c.isActive = true AND " +
+           "c.scope = 'BRANCH' AND c.branchId = :branchId")
+    Optional<IngredientUnitConversion> findBranchSpecificReverseConversion(
+        @Param("ingredientId") Integer ingredientId, 
+        @Param("fromUnitCode") String fromUnitCode, 
+        @Param("toUnitCode") String toUnitCode,
+        @Param("branchId") Integer branchId
+    );
+
+    /**
+     * Find GLOBAL reverse conversion (fallback priority)
+     * Only searches for GLOBAL scope reverse conversions
+     */
+    @Query("SELECT c FROM IngredientUnitConversion c WHERE " +
+           "c.ingredientId = :ingredientId AND " +
+           "c.fromUnitCode = :toUnitCode AND " +
+           "c.toUnitCode = :fromUnitCode AND " +
+           "c.isActive = true AND " +
+           "c.scope = 'GLOBAL'")
+    Optional<IngredientUnitConversion> findGlobalReverseConversion(
+        @Param("ingredientId") Integer ingredientId, 
+        @Param("fromUnitCode") String fromUnitCode, 
+        @Param("toUnitCode") String toUnitCode
+    );
+
+    /**
+     * Find BRANCH-specific base unit conversion (highest priority)
+     * Only searches for BRANCH scope base conversions for the specific branch
+     */
+    @Query("SELECT c FROM IngredientUnitConversion c WHERE " +
+           "c.ingredientId = :ingredientId AND " +
+           "c.fromUnitCode = :fromUnitCode AND " +
+           "c.toUnitCode = :toUnitCode AND " +
+           "c.isActive = true AND " +
+           "c.scope = 'BRANCH' AND c.branchId = :branchId")
+    Optional<IngredientUnitConversion> findBranchSpecificBaseConversion(
+        @Param("ingredientId") Integer ingredientId, 
+        @Param("fromUnitCode") String fromUnitCode, 
+        @Param("toUnitCode") String toUnitCode,
+        @Param("branchId") Integer branchId
+    );
+
+    /**
+     * Find GLOBAL base unit conversion (fallback priority)
+     * Only searches for GLOBAL scope base conversions
+     */
+    @Query("SELECT c FROM IngredientUnitConversion c WHERE " +
+           "c.ingredientId = :ingredientId AND " +
+           "c.fromUnitCode = :fromUnitCode AND " +
+           "c.toUnitCode = :toUnitCode AND " +
+           "c.isActive = true AND " +
+           "c.scope = 'GLOBAL'")
+    Optional<IngredientUnitConversion> findGlobalBaseConversion(
+        @Param("ingredientId") Integer ingredientId, 
+        @Param("fromUnitCode") String fromUnitCode, 
+        @Param("toUnitCode") String toUnitCode
+    );
 }

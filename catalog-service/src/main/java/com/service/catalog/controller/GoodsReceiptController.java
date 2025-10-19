@@ -56,6 +56,8 @@ public class GoodsReceiptController {
     @PreAuthorize("hasRole('STAFF') or hasRole('MANAGER')")
     public ApiResponse<UnitConversionResponse> validateUnitConversion(@RequestBody ValidateUnitConversionRequest request) {
         try {
+            // Get branchId from request (sent from frontend)
+            Integer branchId = request.getBranchId();
             
             boolean canConvert = unitConversionService.canConvert(
                 request.getIngredientId(), 
@@ -64,20 +66,20 @@ public class GoodsReceiptController {
             );
             
             if (canConvert) {
-                // For validation, we don't have branchId, so use null (admin scope)
+                // Use branchId from user context for proper BRANCH rule lookup
                 BigDecimal convertedQuantity = unitConversionService.convertQuantity(
                     request.getIngredientId(),
                     request.getFromUnitCode(),
                     request.getToUnitCode(),
                     request.getQuantity(),
-                    null // No branchId for validation
+                    branchId // Use actual branchId from user context
                 );
                 
                 BigDecimal conversionFactor = unitConversionService.getConversionFactor(
                     request.getIngredientId(),
                     request.getFromUnitCode(),
                     request.getToUnitCode(),
-                    null // No branchId for validation
+                    branchId // Use actual branchId from user context
                 );
                 
                 UnitConversionResponse response = UnitConversionResponse.builder()

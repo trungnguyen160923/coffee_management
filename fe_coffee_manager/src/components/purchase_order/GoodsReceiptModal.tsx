@@ -365,11 +365,15 @@ const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
 
   const validateUnitConversion = async (ingredientId: number, fromUnit: string, toUnit: string, quantity: number) => {
     try {
+      // Get branchId from user context
+      const currentBranchId = user?.branchId ? Number(user.branchId) : null;
+      
       return await catalogService.validateUnitConversion({
         ingredientId,
         fromUnitCode: fromUnit,
         toUnitCode: toUnit,
-        quantity
+        quantity,
+        branchId: currentBranchId || undefined // Convert null to undefined
       });
     } catch (error) {
       console.error('Unit conversion validation error:', error);
@@ -560,12 +564,20 @@ const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
     if (!conversionData) return;
 
     try {
+      // Get current branch ID from user context
+      const currentBranchId = user?.branchId ? Number(user.branchId) : null;
+      
+      console.log('Creating conversion for branch ID:', currentBranchId);
+      console.log('Conversion data:', conversionData);
+
       await catalogService.createUnitConversion({
         ingredientId: conversionData.ingredientId,
         fromUnitCode: conversionData.fromUnit,
         toUnitCode: conversionData.toUnit,
         factor: conversionData.factor,
-        description: `Conversion from ${conversionData.fromUnit} to ${conversionData.toUnit}`
+        description: `Conversion from ${conversionData.fromUnit} to ${conversionData.toUnit}`,
+        scope: 'BRANCH', // Manager can only create BRANCH-specific rules
+        branchId: currentBranchId // Use current branch ID
       });
 
       toast.success('Unit conversion created successfully');
@@ -578,6 +590,7 @@ const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
         await handleDetailChange(getOriginalIndex(index), 'receivedUnitCode', details[index].receivedUnitCode);
       }
     } catch (error: any) {
+      console.error('Error creating conversion:', error);
       toast.error(error.message || 'Failed to create unit conversion');
     }
   };

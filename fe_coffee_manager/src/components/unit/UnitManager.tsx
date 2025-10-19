@@ -9,9 +9,10 @@ interface UnitManagerProps {
   onClose: () => void;
   onUnitsUpdated: () => void;
   editingUnit?: CatalogUnit | null;
+  viewOnly?: boolean; // New prop for view-only mode
 }
 
-const UnitManager: React.FC<UnitManagerProps> = ({ onClose, onUnitsUpdated, editingUnit }) => {
+const UnitManager: React.FC<UnitManagerProps> = ({ onClose, onUnitsUpdated, editingUnit, viewOnly = false }) => {
   const [units, setUnits] = useState<CatalogUnit[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -290,20 +291,26 @@ const UnitManager: React.FC<UnitManagerProps> = ({ onClose, onUnitsUpdated, edit
                 <Scale className="w-6 h-6 text-blue-600" />
               </div>
               <div>
-                <h2 className="text-2xl font-bold text-white">Unit Management</h2>
-                <p className="text-blue-100">Manage measurement units</p>
+                <h2 className="text-2xl font-bold text-white">
+                  {viewOnly ? 'View Units' : 'Unit Management'}
+                </h2>
+                <p className="text-blue-100">
+                  {viewOnly ? 'View measurement units' : 'Manage measurement units'}
+                </p>
               </div>
             </div>
             <div className="flex items-center space-x-2">
-              <button
-                onClick={handleRefresh}
-                disabled={loading}
-                className="flex items-center space-x-2 bg-white/20 hover:bg-white/30 text-white px-3 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Refresh units"
-              >
-                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                <span className="text-sm">Refresh</span>
-              </button>
+              {!viewOnly && (
+                <button
+                  onClick={handleRefresh}
+                  disabled={loading}
+                  className="flex items-center space-x-2 bg-white/20 hover:bg-white/30 text-white px-3 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Refresh units"
+                >
+                  <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                  <span className="text-sm">Refresh</span>
+                </button>
+              )}
               <button
                 onClick={onClose}
                 className="p-2 text-white hover:bg-white/20 rounded-lg transition-colors"
@@ -450,14 +457,18 @@ const UnitManager: React.FC<UnitManagerProps> = ({ onClose, onUnitsUpdated, edit
               </div>
             ) : (
               <div className="mb-6 flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900">Units</h3>
-                <button
-                  onClick={handleCreate}
-                  className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Add Unit</span>
-                </button>
+                <h3 className="text-lg font-semibold text-gray-900">
+                  {viewOnly ? 'View Units' : 'Units'}
+                </h3>
+                {!viewOnly && (
+                  <button
+                    onClick={handleCreate}
+                    className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Add Unit</span>
+                  </button>
+                )}
               </div>
             )}
 
@@ -489,22 +500,26 @@ const UnitManager: React.FC<UnitManagerProps> = ({ onClose, onUnitsUpdated, edit
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{Number(unit.factorToBase).toFixed(8)}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{unit.baseUnitCode || '—'}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            <div className="flex items-center space-x-2">
-                              <button
-                                onClick={() => handleEdit(unit)}
-                                className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                                title="Edit unit"
-                              >
-                                <Settings className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => handleDelete(unit)}
-                                className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
-                                title="Delete unit"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
+                            {!viewOnly ? (
+                              <div className="flex items-center space-x-2">
+                                <button
+                                  onClick={() => handleEdit(unit)}
+                                  className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                  title="Edit unit"
+                                >
+                                  <Settings className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleDelete(unit)}
+                                  className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
+                                  title="Delete unit"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 text-sm">View only</span>
+                            )}
                           </td>
                         </tr>
                       ))}

@@ -25,6 +25,7 @@ import GoodsReceipts from './pages/manager/GoodsReceipts';
 import ReturnGoods from './pages/manager/ReturnGoods';
 import { TableManagement } from './pages/manager/TableManagement';
 import DiscountManagementPage from './pages/manager/DiscountManagement';
+import ManagerIngredientManagement from './pages/manager/IngredientManagement';
 import { StaffDashboard } from './pages/staff/StaffDashboard';
 import SupplierConfirmPage from './pages/supplier/SupplierConfirmPage';
 import SupplierSuccessPage from './pages/supplier/SupplierSuccessPage';
@@ -121,6 +122,7 @@ function AppRoutes() {
             <Route path="suppliers" element={<Layout><ManagerSupplierManagement /></Layout>} />
             <Route path="purchase-orders" element={<Layout><PurchaseOrders /></Layout>} />
             <Route path="inventory" element={<Layout><StockManagement /></Layout>} />
+            <Route path="ingredients" element={<Layout><ManagerIngredientManagement /></Layout>} />
             <Route path="goods-receipts" element={<Layout><GoodsReceipts /></Layout>} />
             <Route path="return-goods" element={<Layout><ReturnGoods /></Layout>} />
             <Route path="statistics" element={<Layout><div className="p-8"><h1 className="text-2xl font-bold">Thống kê chi nhánh</h1></div></Layout>} />
