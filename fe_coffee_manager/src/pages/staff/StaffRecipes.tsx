@@ -124,17 +124,15 @@ export default function StaffRecipes() {
                                 <div className="overflow-x-auto">
                                     <table className="min-w-full table-fixed text-sm">
                                         <colgroup>
-                                            <col style={{ width: '28%' }} />
-                                            <col style={{ width: '18%' }} />
-                                            <col style={{ width: '12%' }} />
-                                            <col style={{ width: '12%' }} />
-                                            <col style={{ width: '18%' }} />
-                                            <col style={{ width: '12%' }} />
+                                            <col style={{ width: '35%' }} />
+                                            <col style={{ width: '15%' }} />
+                                            <col style={{ width: '15%' }} />
+                                            <col style={{ width: '20%' }} />
+                                            <col style={{ width: '15%' }} />
                                         </colgroup>
                                         <thead>
                                             <tr className="bg-gray-50 text-left text-gray-600">
                                                 <th className="px-6 py-3 font-medium">Name</th>
-                                                <th className="px-6 py-3 font-medium">Product</th>
                                                 <th className="px-6 py-3 font-medium">Size</th>
                                                 <th className="px-6 py-3 font-medium">Version</th>
                                                 <th className="px-6 py-3 font-medium">Status</th>
@@ -145,7 +143,6 @@ export default function StaffRecipes() {
                                             {items.map((r) => (
                                                 <tr key={r.recipeId} className="hover:bg-gray-50">
                                                     <td className="px-6 py-4 font-semibold text-gray-900">{r.name}</td>
-                                                    <td className="px-6 py-4 text-gray-800">{r.productDetail?.pdId ? `#${r.productDetail.pdId}` : '-'}</td>
                                                     <td className="px-6 py-4 text-gray-800">{r.productDetail?.size?.name || '-'}</td>
                                                     <td className="px-6 py-4 text-gray-800">{r.version}</td>
                                                     <td className="px-6 py-4 text-gray-800">{r.status}</td>

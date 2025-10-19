@@ -9,6 +9,7 @@ export { default as catalogService } from './catalogService';
 export { stockService } from './stockService';
 export { default as tableService } from './tableService';
 export { default as discountService } from './discountService';
+export { default as posService } from './posService';
 
 // Export API client
 export { default as apiClient } from '../config/api';

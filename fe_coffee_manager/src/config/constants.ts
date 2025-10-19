@@ -29,6 +29,17 @@ export const API_ENDPOINTS = {
     STATUS: (id: string) => `/api/order-service/api/orders/${id}/status`,
     ITEMS: (id: string) => `/api/order-service/api/orders/${id}/items`,
   },
+  POS: {
+    ORDERS: '/api/order-service/api/pos/orders',
+    ORDERS_BY_STAFF: (staffId: number | string) => `/api/order-service/api/pos/orders/staff/${staffId}`,
+    ORDERS_BY_BRANCH: (branchId: number | string) => `/api/order-service/api/pos/orders/branch/${branchId}`,
+    ORDER_BY_ID: (id: string) => `/api/order-service/api/pos/orders/${id}`,
+    ORDER_STATUS: (id: string) => `/api/order-service/api/pos/orders/${id}/status`,
+    PRODUCTS: '/api/order-service/api/pos/products',
+    PRODUCT_BY_ID: (id: string) => `/api/order-service/api/pos/products/${id}`,
+    TABLES_BY_BRANCH: (branchId: number | string) => `/api/order-service/api/pos/tables/branch/${branchId}`,
+    TABLES_BY_BRANCH_STATUS: (branchId: number | string, status: string) => `/api/order-service/api/pos/tables/branch/${branchId}/status/${status}`,
+  },
   RESERVATIONS: {
     BASE: '/api/order-service/api/reservations',
     BY_BRANCH: (id: number | string) => `/api/order-service/api/reservations/branch/${id}`,

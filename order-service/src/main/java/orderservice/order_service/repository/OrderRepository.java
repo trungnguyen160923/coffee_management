@@ -20,4 +20,10 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
     @Query("SELECT o FROM Order o WHERE o.customerId = :customerId AND o.status = :status ORDER BY o.orderDate DESC")
     List<Order> findByCustomerIdAndStatusOrderByOrderDateDesc(@Param("customerId") Integer customerId,
             @Param("status") String status);
+
+    List<Order> findByStaffIdOrderByOrderDateDesc(Integer staffId);
+
+    @Query("SELECT o FROM Order o WHERE o.staffId = :staffId AND o.status = :status ORDER BY o.orderDate DESC")
+    List<Order> findByStaffIdAndStatusOrderByOrderDateDesc(@Param("staffId") Integer staffId,
+            @Param("status") String status);
 }

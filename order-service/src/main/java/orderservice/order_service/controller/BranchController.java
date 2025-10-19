@@ -15,6 +15,9 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 import orderservice.order_service.dto.response.PagedResponse;
 
 @RestController
@@ -319,6 +322,39 @@ public class BranchController {
                 .result(branches)
                 .build();
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/{branchId}/staff")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER') or hasRole('STAFF')")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getBranchStaff(@PathVariable Integer branchId) {
+        try {
+            // For now, return a mock response since we don't have a real staff service
+            // In a real implementation, this would call an auth service or user service
+            List<Map<String, Object>> staff = new ArrayList<>();
+
+            // Add current user as staff if they belong to this branch
+            // This is a simplified implementation
+            Map<String, Object> currentUser = new HashMap<>();
+            currentUser.put("user_id", 1); // This should come from JWT token
+            currentUser.put("fullname", "Current Staff Member");
+            currentUser.put("email", "staff@example.com");
+            currentUser.put("role", "STAFF");
+            staff.add(currentUser);
+
+            ApiResponse<List<Map<String, Object>>> response = ApiResponse.<List<Map<String, Object>>>builder()
+                    .code(200)
+                    .message("Branch staff retrieved successfully")
+                    .result(staff)
+                    .build();
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            ApiResponse<List<Map<String, Object>>> response = ApiResponse.<List<Map<String, Object>>>builder()
+                    .code(500)
+                    .message("Failed to retrieve branch staff: " + e.getMessage())
+                    .result(null)
+                    .build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
     }
 
     @PostMapping("/{branchId}/geocode")

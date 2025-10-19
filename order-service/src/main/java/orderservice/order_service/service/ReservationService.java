@@ -4,13 +4,18 @@ import orderservice.order_service.client.AuthServiceClient;
 import orderservice.order_service.dto.request.CreateReservationRequest;
 import orderservice.order_service.dto.response.ApiResponse;
 import orderservice.order_service.dto.response.ReservationResponse;
+import orderservice.order_service.dto.response.TableResponse;
 import orderservice.order_service.dto.response.UserResponse;
 import orderservice.order_service.entity.Branch;
+import orderservice.order_service.entity.CafeTable;
 import orderservice.order_service.entity.Reservation;
+import orderservice.order_service.entity.ReservationTable;
 import orderservice.order_service.exception.AppException;
 import orderservice.order_service.exception.ErrorCode;
 import orderservice.order_service.repository.BranchRepository;
+import orderservice.order_service.repository.CafeTableRepository;
 import orderservice.order_service.repository.ReservationRepository;
+import orderservice.order_service.repository.ReservationTableRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,16 +31,22 @@ public class ReservationService {
 
     private final ReservationRepository reservationRepository;
     private final BranchRepository branchRepository;
+    private final CafeTableRepository cafeTableRepository;
+    private final ReservationTableRepository reservationTableRepository;
     private final AuthServiceClient authServiceClient;
     private final EmailService emailService;
 
     @Autowired
     public ReservationService(ReservationRepository reservationRepository,
             BranchRepository branchRepository,
+            CafeTableRepository cafeTableRepository,
+            ReservationTableRepository reservationTableRepository,
             AuthServiceClient authServiceClient,
             EmailService emailService) {
         this.reservationRepository = reservationRepository;
         this.branchRepository = branchRepository;
+        this.cafeTableRepository = cafeTableRepository;
+        this.reservationTableRepository = reservationTableRepository;
         this.authServiceClient = authServiceClient;
         this.emailService = emailService;
     }
@@ -115,7 +126,8 @@ public class ReservationService {
                     branchName,
                     reservation.getReservedAt(),
                     reservation.getPartySize(),
-                    reservation.getNotes());
+                    reservation.getNotes(),
+                    savedReservation.getReservationId());
         }
 
         return convertToResponse(savedReservation, branch);
@@ -201,6 +213,28 @@ public class ReservationService {
     }
 
     private ReservationResponse convertToResponse(Reservation reservation, Branch branch) {
+        // Get assigned tables for this reservation
+        List<ReservationTable> reservationTables = reservationTableRepository
+                .findByReservationId(reservation.getReservationId());
+        List<TableResponse> assignedTables = reservationTables.stream()
+                .map(rt -> {
+                    CafeTable table = cafeTableRepository.findById(rt.getTableId()).orElse(null);
+                    if (table != null) {
+                        TableResponse tableResponse = new TableResponse();
+                        tableResponse.setTableId(table.getTableId());
+                        tableResponse.setBranchId(table.getBranchId());
+                        tableResponse.setLabel(table.getLabel());
+                        tableResponse.setCapacity(table.getCapacity());
+                        tableResponse.setStatus(table.getStatus());
+                        tableResponse.setCreateAt(table.getCreateAt());
+                        tableResponse.setUpdateAt(table.getUpdateAt());
+                        return tableResponse;
+                    }
+                    return null;
+                })
+                .filter(table -> table != null)
+                .collect(Collectors.toList());
+
         ReservationResponse response = new ReservationResponse();
         response.setReservationId(reservation.getReservationId());
         response.setCustomerId(reservation.getCustomerId());
@@ -215,6 +249,7 @@ public class ReservationService {
         response.setNotes(reservation.getNotes());
         response.setCreateAt(reservation.getCreateAt());
         response.setUpdateAt(reservation.getUpdateAt());
+        response.setAssignedTables(assignedTables);
         return response;
     }
 

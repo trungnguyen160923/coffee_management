@@ -50,6 +50,21 @@ const BookingsPage = () => {
         }
     };
 
+    const handleCancelReservation = async (reservationId) => {
+        if (window.confirm('Are you sure you want to cancel this reservation?')) {
+            try {
+                await reservationService.cancelReservation(reservationId);
+                alert('Reservation cancelled successfully!');
+                // Refresh the bookings list
+                fetchBookings();
+            } catch (error) {
+                console.error('Error cancelling reservation:', error);
+                alert('An error occurred while cancelling the reservation. Please try again.');
+            }
+        }
+    };
+
+
     const formatDate = (dateString) => {
         const date = new Date(dateString);
         return date.toLocaleDateString('en-US', {
@@ -96,6 +111,16 @@ const BookingsPage = () => {
             key: 'partySize'
         },
         {
+            header: 'Assigned Tables',
+            key: 'assignedTables',
+            render: (booking) => {
+                if (booking.assignedTables && booking.assignedTables.length > 0) {
+                    return booking.assignedTables.map(table => table.label).join(', ');
+                }
+                return '_';
+            }
+        },
+        {
             header: 'Phone',
             key: 'phone'
         },
@@ -106,21 +131,84 @@ const BookingsPage = () => {
         {
             header: 'Status',
             key: 'status',
+            render: (booking) => {
+                let backgroundColor, textColor;
+
+                switch (booking.status) {
+                    case 'PENDING':
+                        backgroundColor = '#c49b63';
+                        textColor = '#fff';
+                        break;
+                    case 'CONFIRMED':
+                        backgroundColor = '#28a745';
+                        textColor = '#fff';
+                        break;
+                    case 'SEATED':
+                        backgroundColor = '#17a2b8';
+                        textColor = '#fff';
+                        break;
+                    case 'COMPLETED':
+                        backgroundColor = '#6c757d';
+                        textColor = '#fff';
+                        break;
+                    case 'CANCELLED':
+                        backgroundColor = '#dc3545';
+                        textColor = '#fff';
+                        break;
+                    default:
+                        backgroundColor = '#6c757d';
+                        textColor = '#fff';
+                }
+
+                return (
+                    <span style={{
+                        padding: '4px 12px',
+                        borderRadius: '20px',
+                        fontSize: '11px',
+                        fontWeight: 'bold',
+                        textTransform: 'uppercase',
+                        backgroundColor: backgroundColor,
+                        color: textColor
+                    }}>
+                        {booking.status}
+                    </span>
+                );
+            }
+        },
+        {
+            header: 'Actions',
+            key: 'actions',
             render: (booking) => (
-                <span style={{
-                    padding: '4px 12px',
-                    borderRadius: '20px',
-                    fontSize: '11px',
-                    fontWeight: 'bold',
-                    textTransform: 'uppercase',
-                    backgroundColor: booking.status === 'CONFIRMED' ? '#28a745' :
-                        booking.status === 'PENDING' ? '#c49b63' :
-                            booking.status === 'CANCELLED' ? '#dc3545' :
-                                '#6c757d',
-                    color: booking.status === 'PENDING' ? '#fff' : '#fff'
-                }}>
-                    {booking.status}
-                </span>
+                (booking.status === 'PENDING' || booking.status === 'CONFIRMED') ? (
+                    <button
+                        onClick={() => handleCancelReservation(booking.reservationId)}
+                        style={{
+                            backgroundColor: 'transparent',
+                            color: '#dc3545',
+                            border: 'none',
+                            padding: '4px',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '12px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                        }}
+                        onMouseOver={(e) => {
+                            e.target.style.backgroundColor = '#f8d7da';
+                            e.target.style.color = '#721c24';
+                        }}
+                        onMouseOut={(e) => {
+                            e.target.style.backgroundColor = 'transparent';
+                            e.target.style.color = '#dc3545';
+                        }}
+                        title="Cancel Reservation"
+                    >
+                        🗑️
+                    </button>
+                ) : (
+                    <span style={{ color: '#6c757d', fontSize: '12px' }}>-</span>
+                )
             )
         }
     ];
