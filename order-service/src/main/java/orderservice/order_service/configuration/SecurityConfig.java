@@ -26,7 +26,8 @@ public class SecurityConfig {
             "/api/email/send-order-confirmation", // Allow public access to email confirmation
             "/api/discounts/validate", // Allow public access to discount validation
             "/api/discounts/apply", // Allow public access to discount application
-            "/api/discounts/available" // Allow public access to available discounts
+            "/api/discounts/available",// Allow public access to available discounts
+            "/reviews/filter"
     };
 
     private final CustomJwtDecoder customJwtDecoder;

@@ -130,13 +130,23 @@ CREATE TABLE reviews (
   review_id INT NOT NULL AUTO_INCREMENT,
   product_id INT DEFAULT NULL, -- loose reference to catalog_db.products
   customer_id INT DEFAULT NULL, -- loose reference to customer_profiles/user_id
+  order_id INT DEFAULT NULL, -- reference to orders table
   branch_id INT DEFAULT NULL,
   rating TINYINT NOT NULL DEFAULT 5, -- 1..5
   comment TEXT DEFAULT NULL,
   create_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   update_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  -- Soft delete fields
+  is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+  deleted_at DATETIME DEFAULT NULL,
+  deleted_by INT DEFAULT NULL,
   PRIMARY KEY (review_id),
-  KEY idx_reviews_branch_id (branch_id)
+  KEY idx_reviews_branch_id (branch_id),
+  KEY idx_reviews_order_id (order_id),
+  KEY idx_reviews_is_deleted (is_deleted),
+  KEY idx_reviews_customer_id_is_deleted (customer_id, is_deleted),
+  KEY idx_reviews_product_id_is_deleted (product_id, is_deleted),
+  KEY idx_reviews_customer_product_order (customer_id, product_id, order_id, is_deleted)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Example seeds (optional)
