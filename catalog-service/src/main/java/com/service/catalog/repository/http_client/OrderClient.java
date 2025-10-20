@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 
 @FeignClient(
         name = "order-service-client",
-        url = "${app.services.order}",
+        url = "http://localhost:8002",
         configuration = {AuthenticationRequestInterceptor.class})
 public interface OrderClient {
     

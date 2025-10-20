@@ -207,6 +207,46 @@ public class OrderController {
         }
     }
 
+    @GetMapping("/public/{orderId}")
+    public ResponseEntity<ApiResponse<OrderResponse>> getOrderByIdPublic(@PathVariable Integer orderId) {
+        try {
+            OrderResponse order = orderService.getOrderById(orderId);
+            ApiResponse<OrderResponse> response = ApiResponse.<OrderResponse>builder()
+                    .code(200)
+                    .message("Order retrieved successfully")
+                    .result(order)
+                    .build();
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            ApiResponse<OrderResponse> response = ApiResponse.<OrderResponse>builder()
+                    .code(500)
+                    .message("Failed to retrieve order: " + e.getMessage())
+                    .result(null)
+                    .build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    @PutMapping("/public/{orderId}/cancel")
+    public ResponseEntity<ApiResponse<Void>> cancelOrderPublic(@PathVariable Integer orderId) {
+        try {
+            orderService.updateOrderStatus(orderId, "CANCELLED");
+            ApiResponse<Void> response = ApiResponse.<Void>builder()
+                    .code(200)
+                    .message("Order cancelled successfully")
+                    .result(null)
+                    .build();
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            ApiResponse<Void> response = ApiResponse.<Void>builder()
+                    .code(500)
+                    .message("Failed to cancel order: " + e.getMessage())
+                    .result(null)
+                    .build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
     private String getCurrentToken() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication != null && authentication.getCredentials() != null) {

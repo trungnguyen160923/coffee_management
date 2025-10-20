@@ -7,36 +7,39 @@ import lombok.experimental.FieldDefaults;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "cafe_tables")
+@Table(name = "order_tables")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class CafeTable {
+public class OrderTable {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "table_id")
+    Integer id;
+
+    @Column(name = "order_id", nullable = false)
+    Integer orderId;
+
+    @Column(name = "table_id", nullable = false)
     Integer tableId;
-
-    @Column(name = "branch_id", nullable = false)
-    Integer branchId;
-
-    @Column(name = "label", length = 50, nullable = false)
-    String label;
-
-    @Column(name = "capacity", nullable = false)
-    Integer capacity;
-
-    @Column(name = "status", length = 50, nullable = false)
-    String status;
 
     @Column(name = "create_at", nullable = false)
     LocalDateTime createAt;
 
     @Column(name = "update_at", nullable = false)
     LocalDateTime updateAt;
+
+    // Relationship với Order
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "order_id", insertable = false, updatable = false)
+    Order order;
+
+    // Relationship với CafeTable
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "table_id", insertable = false, updatable = false)
+    CafeTable cafeTable;
 
     @PrePersist
     protected void onCreate() {
@@ -47,9 +50,5 @@ public class CafeTable {
     @PreUpdate
     protected void onUpdate() {
         updateAt = LocalDateTime.now();
-    }
-
-    public boolean isAvailable() {
-        return "AVAILABLE".equals(this.status);
     }
 }

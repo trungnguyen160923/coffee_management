@@ -221,6 +221,20 @@ const OrdersPage = () => {
         }
     };
 
+    const handleCancelOrder = async (orderId) => {
+        if (window.confirm('Are you sure you want to cancel this order?')) {
+            try {
+                await orderService.cancelOrder(orderId);
+                alert('Order cancelled successfully!');
+                // Refresh the orders list
+                fetchOrders();
+            } catch (error) {
+                console.error('Error cancelling order:', error);
+                alert('An error occurred while cancelling the order. Please try again.');
+            }
+        }
+    };
+
     const formatDate = (dateString) => {
         if (!dateString) return 'N/A';
         const date = new Date(dateString);
@@ -295,69 +309,118 @@ const OrdersPage = () => {
             header: 'Status',
             key: 'status',
             render: (order) => {
-                const normalizedStatus = order.status?.toString().trim().toUpperCase();
-                return (
-                    <span style={{
+                const getStatusStyle = (status) => {
+                    const baseStyle = {
                         padding: '4px 12px',
                         borderRadius: '20px',
                         fontSize: '11px',
                         fontWeight: 'bold',
                         textTransform: 'uppercase',
-                        backgroundColor: normalizedStatus === 'COMPLETED' ? '#28a745' :
-                            normalizedStatus === 'PENDING' ? '#c49b63' :
-                                normalizedStatus === 'CANCELLED' ? '#dc3545' :
-                                    normalizedStatus === 'PROCESSING' ? '#17a2b8' :
-                                        '#6c757d',
                         color: '#fff'
-                    }}>
-                        {order.status?.toUpperCase()}
+                    };
+
+                    // Normalize status for comparison - trim whitespace and convert to uppercase
+                    const normalizedStatus = status?.toString().trim().toUpperCase();
+
+                    switch (normalizedStatus) {
+                        case 'PENDING':
+                            return { ...baseStyle, backgroundColor: '#c49b63' }; // Coffee brown
+                        case 'PREPARING':
+                            return { ...baseStyle, backgroundColor: '#17a2b8' }; // Blue
+                        case 'READY':
+                            return { ...baseStyle, backgroundColor: '#28a745' }; // Green
+                        case 'COMPLETED':
+                            return { ...baseStyle, backgroundColor: '#6c757d' }; // Gray
+                        case 'CANCELLED':
+                            return { ...baseStyle, backgroundColor: '#dc3545' }; // Red
+                        default:
+                            return { ...baseStyle, backgroundColor: '#6c757d' }; // Default gray
+                    }
+                };
+
+                return (
+                    <span style={getStatusStyle(order.status)}>
+                        {order.status}
                     </span>
                 );
             }
         },
-                {
-                    header: 'Actions',
-                    key: 'actions',
-                    render: (order) => {
-                        // Check for uppercase 'COMPLETED' (backend now stores uppercase)
-                        const normalizedStatus = order.status?.toString().trim().toUpperCase();
-                        const isCompleted = normalizedStatus === 'COMPLETED';
-                        
-                        if (!isCompleted) {
-                            return (
-                                <span style={{ color: '#666', fontSize: '12px' }}>
-                                    {order.status || 'N/A'}
-                                </span>
-                            );
-                        }
+{
+    header: 'Actions',
+    key: 'actions',
+    render: (order) => {
+        // Normalize status for comparison - trim whitespace and convert to uppercase
+        const normalizedStatus = order.status?.toString().trim().toUpperCase();
 
-                        // Get review statistics for this order
-                        const orderReviewCount = getOrderReviewCount(order);
-                        const totalProducts = getTotalProductsCount(order);
-                        const allReviewed = areAllProductsReviewedInOrder(order);
+        // Pending order: allow cancel
+        if (normalizedStatus === 'PENDING') {
+            return (
+                <button
+                    onClick={() => handleCancelOrder(order.orderId)}
+                    style={{
+                        backgroundColor: 'transparent',
+                        color: '#dc3545',
+                        border: 'none',
+                        padding: '4px',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                    }}
+                    onMouseOver={(e) => {
+                        e.target.style.backgroundColor = '#f8d7da';
+                        e.target.style.color = '#721c24';
+                    }}
+                    onMouseOut={(e) => {
+                        e.target.style.backgroundColor = 'transparent';
+                        e.target.style.color = '#dc3545';
+                    }}
+                    title="Cancel Order"
+                >
+                    🗑️
+                </button>
+            );
+        }
 
-                        return (
-                            <button
-                                onClick={() => handleReviewClick(order)}
-                                style={{
-                                    backgroundColor: allReviewed ? '#28a745' : '#c49b63',
-                                    color: 'white',
-                                    border: 'none',
-                                    borderRadius: '5px',
-                                    padding: '6px 12px',
-                                    fontSize: '12px',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '4px'
-                                }}
-                            >
-                                <Star size={14} />
-                                {allReviewed ? 'Reviewed' : `Review (${orderReviewCount}/${totalProducts})`}
-                            </button>
-                        );
-                    }
-                }
+        // Completed order: allow review
+        if (normalizedStatus === 'COMPLETED') {
+            // Get review statistics for this order
+            const orderReviewCount = getOrderReviewCount(order);
+            const totalProducts = getTotalProductsCount(order);
+            const allReviewed = areAllProductsReviewedInOrder(order);
+
+            return (
+                <button
+                    onClick={() => handleReviewClick(order)}
+                    style={{
+                        backgroundColor: allReviewed ? '#28a745' : '#c49b63',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '5px',
+                        padding: '6px 12px',
+                        fontSize: '12px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                    }}
+                >
+                    <Star size={14} />
+                    {allReviewed ? 'Reviewed' : `Review (${orderReviewCount}/${totalProducts})`}
+                </button>
+            );
+        }
+
+        // Otherwise, show status or a placeholder
+        return (
+            <span style={{ color: '#666', fontSize: '12px' }}>
+                {order.status || '-'}
+            </span>
+        );
+    }
+}
     ];
 
     return (

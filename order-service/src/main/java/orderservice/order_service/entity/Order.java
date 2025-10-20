@@ -42,6 +42,9 @@ public class Order {
     @Column(name = "reservation_id")
     Integer reservationId;
 
+    @Column(name = "staff_id")
+    Integer staffId;
+
     @Column(nullable = false)
     String status;
 

@@ -42,6 +42,10 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
             "/order-service/api/branches.*",
             "/order-service/api/branches",
             "/order-service/api/reservations",
+            // Public reservation tracking endpoint
+            "/order-service/api/reservations/public/.*",
+            // Public order tracking endpoint
+            "/order-service/api/orders/public/.*",
             // Make cart endpoints public (no token required)
             "/order-service/api/cart",
             "/order-service/api/cart/.*",

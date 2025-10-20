@@ -3,6 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import reservationService, { Reservation } from '../../services/reservationService';
 import { tableService } from '../../services';
 import { Table } from '../../types';
+import { UpdateTableStatusRequest } from '../../types/table';
 import { TableAssignmentModal } from '../../components/table';
 
 export default function StaffReservations() {
@@ -10,7 +11,7 @@ export default function StaffReservations() {
     const [reservations, setReservations] = useState<Reservation[]>([]);
     const [search, setSearch] = useState<string>('');
     const [debouncedSearch, setDebouncedSearch] = useState<string>('');
-    const [statusFilter, setStatusFilter] = useState<'all' | 'PENDING' | 'CONFIRMED' | 'SEATED' | 'CANCELLED'>('all');
+    const [statusFilter, setStatusFilter] = useState<'all' | 'PENDING' | 'CONFIRMED' | 'SEATED' | 'COMPLETED' | 'CANCELLED'>('all');
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
     const [detailOpen, setDetailOpen] = useState<boolean>(false);
@@ -111,6 +112,8 @@ export default function StaffReservations() {
                 return 'bg-blue-100 text-blue-800 border-blue-200';
             case 'SEATED':
                 return 'bg-green-100 text-green-800 border-green-200';
+            case 'COMPLETED':
+                return 'bg-purple-100 text-purple-800 border-purple-200';
             case 'CANCELLED':
                 return 'bg-gray-100 text-gray-800 border-gray-200';
             default:
@@ -119,7 +122,7 @@ export default function StaffReservations() {
     };
 
     const [editingId, setEditingId] = useState<number | string | null>(null);
-    const statuses = ['PENDING', 'CONFIRMED', 'SEATED', 'CANCELLED'];
+    const statuses = ['PENDING', 'CONFIRMED', 'SEATED', 'COMPLETED', 'CANCELLED'];
 
     const updateStatus = async (id: number | string, status: string) => {
         try {
@@ -134,13 +137,30 @@ export default function StaffReservations() {
             const updated = await reservationService.updateStatus(id, status);
             setReservations(prev => prev.map(r => String(r.reservationId) === String(id) ? { ...r, status: updated.status } : r));
 
-            // If status becomes PENDING or CANCELLED, release any assigned tables
+            // If status becomes PENDING, CANCELLED, or COMPLETED, release any assigned tables
             const normalized = String(updated.status || status).toUpperCase();
-            if (normalized === 'PENDING' || normalized === 'CANCELLED') {
+            if (normalized === 'PENDING' || normalized === 'CANCELLED' || normalized === 'COMPLETED') {
                 try {
                     await tableService.removeTableAssignments(id);
+
+                    // If status is COMPLETED, also update table status to available
+                    if (normalized === 'COMPLETED') {
+                        const currentTables = assignedTables[Number(id)] || [];
+                        if (currentTables.length > 0) {
+                            await Promise.all(
+                                currentTables.map(table =>
+                                    tableService.updateTableStatus({
+                                        tableId: table.tableId,
+                                        status: 'available'
+                                    } as UpdateTableStatusRequest)
+                                )
+                            );
+                            showToast(`Tables ${currentTables.map(t => t.label).join(', ')} released back to available`, 'success');
+                        }
+                    }
                 } catch (e) {
                     // non-blocking: UI still updates; backend cleanup might fail silently
+                    console.error('Failed to release tables:', e);
                 }
                 setAssignedTables(prev => ({ ...prev, [Number(id)]: [] }));
             }

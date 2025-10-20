@@ -106,6 +106,11 @@ CREATE TABLE orders (
 ALTER TABLE orders
 ADD COLUMN delivery_address VARCHAR(255) NOT NULL AFTER phone;
 
+-- Thêm trường nhân viên lập hóa đơn
+ALTER TABLE orders
+ADD COLUMN staff_id INT DEFAULT NULL AFTER reservation_id,
+ADD KEY idx_orders_staff_id (staff_id);
+
 -- Order details (line items)
 DROP TABLE IF EXISTS order_details;
 CREATE TABLE order_details (
@@ -200,5 +205,20 @@ CREATE TABLE discounts (
   update_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   -- Khóa ngoại liên kết tới bảng branches (nếu có)
   CONSTRAINT fk_discount_branch FOREIGN KEY (branch_id) REFERENCES branches(branch_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- Bảng Order Tables - Liên kết đơn hàng với nhiều bàn
+CREATE TABLE order_tables (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  order_id INT NOT NULL,
+  table_id INT NOT NULL,
+  create_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  update_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY idx_ot_order_id (order_id),
+  KEY idx_ot_table_id (table_id),
+  CONSTRAINT fk_ot_order FOREIGN KEY (order_id) REFERENCES orders(order_id) ON DELETE CASCADE,
+  CONSTRAINT fk_ot_table FOREIGN KEY (table_id) REFERENCES cafe_tables(table_id) ON DELETE CASCADE,
+  UNIQUE KEY uq_order_table (order_id, table_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

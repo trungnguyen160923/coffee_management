@@ -39,8 +39,9 @@ public class EmailService {
             helper.setTo(toEmail);
             helper.setSubject("Order Confirmation - Coffee Shop #" + orderId);
 
+            String trackingUrl = "http://localhost:3000/track-order/" + orderId;
             String htmlContent = buildOrderConfirmationHtml(customerName, orderId, orderItems,
-                    totalAmount, deliveryAddress, paymentMethod, orderDate);
+                    totalAmount, deliveryAddress, paymentMethod, orderDate, trackingUrl);
             helper.setText(htmlContent, true);
 
             mailSender.send(message);
@@ -50,7 +51,7 @@ public class EmailService {
     }
 
     public void sendReservationConfirmationEmail(String toEmail, String customerName,
-            String branchName, LocalDateTime reservedAt, Integer partySize, String notes) {
+            String branchName, LocalDateTime reservedAt, Integer partySize, String notes, Integer reservationId) {
         try {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
@@ -60,6 +61,7 @@ public class EmailService {
             helper.setSubject("Reservation Confirmation - Coffee Shop");
 
             String formattedDate = reservedAt.format(DateTimeFormatter.ofPattern("MM/dd/yyyy HH:mm"));
+            String trackingUrl = "http://localhost:3000/track-reservation/" + reservationId;
             String htmlContent = String.format(
                     """
                             <!DOCTYPE html>
@@ -72,6 +74,8 @@ public class EmailService {
                                     .header { background-color: #8B4513; color: white; padding: 20px; text-align: center; }
                                     .content { padding: 20px; background-color: #f9f9f9; }
                                     .info { background-color: white; padding: 15px; margin: 10px 0; border-radius: 5px; }
+                                    .tracking-link { background-color: #8B4513 !important; color: #ffffff !important; padding: 12px 24px; text-decoration: none !important; border-radius: 5px; display: inline-block; margin: 10px 0; font-weight: bold !important; }
+                                    .tracking-link:hover { background-color: #6B3410; }
                                     .footer { text-align: center; margin-top: 20px; color: #666; }
                                 </style>
                             </head>
@@ -85,10 +89,16 @@ public class EmailService {
                                         <p>Hello <strong>%s</strong>,</p>
                                         <p>Your table reservation has been confirmed. We look forward to serving you!</p>
                                         <div class=\"info\">
+                                            <p><strong>Reservation ID:</strong> #%d</p>
                                             <p><strong>Branch:</strong> %s</p>
                                             <p><strong>Date & Time:</strong> %s</p>
                                             <p><strong>Party Size:</strong> %d</p>
                                             %s
+                                        </div>
+                                        <div class=\"info\">
+                                            <h3>📊 Track Your Reservation</h3>
+                                            <p>Click the button below to track your reservation status:</p>
+                                            <a href=\"%s\" class=\"tracking-link\" style=\"color: #ffffff !important; text-decoration: none !important;\">🔍 Track Reservation Status</a>
                                         </div>
                                         <div class=\"info\">
                                             <h3>📞 Customer Support</h3>
@@ -105,10 +115,12 @@ public class EmailService {
                             </html>
                             """,
                     customerName,
+                    reservationId,
                     branchName,
                     formattedDate,
                     partySize,
-                    (notes != null && !notes.isBlank()) ? ("<p><strong>Notes:</strong> " + notes + "</p>") : "");
+                    (notes != null && !notes.isBlank()) ? ("<p><strong>Notes:</strong> " + notes + "</p>") : "",
+                    trackingUrl);
 
             helper.setText(htmlContent, true);
 
@@ -120,7 +132,7 @@ public class EmailService {
 
     private String buildOrderConfirmationHtml(String customerName, Integer orderId,
             List<OrderItemInfo> orderItems, BigDecimal totalAmount,
-            String deliveryAddress, String paymentMethod, LocalDateTime orderDate) {
+            String deliveryAddress, String paymentMethod, LocalDateTime orderDate, String trackingUrl) {
 
         NumberFormat currencyFormat = NumberFormat.getCurrencyInstance(Locale.US);
         String formattedTotal = currencyFormat.format(totalAmount.doubleValue());
@@ -154,6 +166,8 @@ public class EmailService {
                                 table { width: 100%%; border-collapse: collapse; margin: 10px 0; }
                                 th { background-color: #8B4513; color: white; padding: 10px; text-align: left; }
                                 .total { font-size: 18px; font-weight: bold; color: #8B4513; }
+                                .tracking-link { background-color: #8B4513 !important; color: #ffffff !important; padding: 12px 24px; text-decoration: none !important; border-radius: 5px; display: inline-block; margin: 10px 0; font-weight: bold !important; }
+                                .tracking-link:hover { background-color: #6B3410; }
                                 .footer { text-align: center; margin-top: 20px; color: #666; }
                             </style>
                         </head>
@@ -196,6 +210,12 @@ public class EmailService {
                                     </div>
 
                                     <div class="order-info">
+                                        <h3>📊 Track Your Order</h3>
+                                        <p>Click the button below to track your order status:</p>
+                                        <a href="%s" class="tracking-link" style="color: #ffffff !important; text-decoration: none !important;">🔍 Track Order Status</a>
+                                    </div>
+
+                                    <div class="order-info">
                                         <h3>📞 Customer Support</h3>
                                         <p>If you have any questions about your order, please contact us:</p>
                                         <p>📧 Email: support@coffeeshop.com</p>
@@ -212,7 +232,7 @@ public class EmailService {
                         </html>
                         """,
                 customerName, orderId, formattedDate, deliveryAddress, paymentMethod,
-                itemsHtml.toString(), formattedTotal);
+                itemsHtml.toString(), formattedTotal, trackingUrl);
     }
 
     public static class OrderItemInfo {
