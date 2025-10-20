@@ -22,6 +22,11 @@ export const API = {
   CREATE_RESERVATION: "/order-service/api/reservations",
   GET_BRANCHES: "/order-service/api/branches",
   GET_RESERVATIONS_BY_CUSTOMER: "/order-service/api/reservations/customer",
+  CANCEL_RESERVATION: "/order-service/api/reservations",
+  GET_RESERVATION_BY_ID_PUBLIC: "/order-service/api/reservations/public",
+  CANCEL_RESERVATION_PUBLIC: "/order-service/api/reservations/public",
+  GET_ORDER_BY_ID_PUBLIC: "/order-service/api/orders/public",
+  CANCEL_ORDER_PUBLIC: "/order-service/api/orders/public",
   // Catalog-service (via API Gateway)
   GET_PRODUCTS: "/catalogs/products",
   GET_PRODUCTS_CAN_SELL: "/catalogs/products/can-sell",
@@ -41,6 +46,7 @@ export const API = {
   CREATE_ORDER: "/order-service/api/orders",
   CREATE_GUEST_ORDER: "/order-service/api/orders/guest",
   GET_ORDERS_BY_CUSTOMER: "/order-service/api/orders/customer",
+  CANCEL_ORDER: "/order-service/api/orders",
   // Email service
   SEND_ORDER_CONFIRMATION_EMAIL: "/order-service/api/email/send-order-confirmation",
   // Discount APIs (via API Gateway)

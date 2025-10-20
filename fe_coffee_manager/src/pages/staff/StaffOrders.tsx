@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import orderService from '../../services/orderService';
+import { posService, tableService, branchService } from '../../services';
 import catalogService from '../../services/catalogService';
 import { stockService } from '../../services/stockService';
 import { CatalogProduct, CatalogRecipe } from '../../types';
@@ -16,6 +17,8 @@ interface SimpleOrder {
     customerName?: string;
     phone?: string;
     deliveryAddress?: string;
+    tableIds?: number[];
+    staffId?: number;
     orderDate?: string;
     totalAmount?: number;
     paymentMethod?: string;
@@ -26,7 +29,9 @@ interface SimpleOrder {
 
 export default function StaffOrders() {
     const { user } = useAuth();
+    const [activeTab, setActiveTab] = useState<'regular' | 'pos'>('regular');
     const [orders, setOrders] = useState<SimpleOrder[]>([]);
+    const [posOrders, setPosOrders] = useState<SimpleOrder[]>([]);
     const [search, setSearch] = useState<string>('');
     const [debouncedSearch, setDebouncedSearch] = useState<string>('');
     const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'preparing' | 'ready' | 'completed' | 'cancelled'>('all');
@@ -42,6 +47,8 @@ export default function StaffOrders() {
     const [recipeLoading, setRecipeLoading] = useState<boolean>(false);
     const [refreshing, setRefreshing] = useState<boolean>(false);
     const [autoRefresh, setAutoRefresh] = useState<boolean>(false);
+    const [tableDetails, setTableDetails] = useState<Map<number, any>>(new Map());
+    const [staffDetails, setStaffDetails] = useState<Map<number, any>>(new Map());
 
     const branchId = useMemo(() => {
         // Prefer nested branch from backend, fallback to legacy branchId field
@@ -61,6 +68,38 @@ export default function StaffOrders() {
                 setRefreshing(true);
             } else {
                 setLoading(true);
+                setError(null);
+
+                // Load both regular orders and POS orders
+                const [regularData, posData] = await Promise.all([
+                    orderService.getOrdersByBranch(branchId),
+                    posService.getPOSOrdersByBranch(Number(branchId))
+                ]);
+
+                setOrders(Array.isArray(regularData) ? regularData : []);
+                setPosOrders(Array.isArray(posData) ? posData : []);
+
+                // Fetch table and staff details for POS orders
+                if (Array.isArray(posData) && posData.length > 0) {
+                    const allTableIds = new Set<number>();
+                    const allStaffIds = new Set<number>();
+
+                    posData.forEach((order: any) => {
+                        if (order.tableIds && Array.isArray(order.tableIds)) {
+                            order.tableIds.forEach((id: number) => allTableIds.add(id));
+                        }
+                        if (order.staffId) {
+                            allStaffIds.add(order.staffId);
+                        }
+                    });
+
+                    if (allTableIds.size > 0) {
+                        await fetchTableDetails(Array.from(allTableIds));
+                    }
+                    if (allStaffIds.size > 0) {
+                        await fetchStaffDetails(Array.from(allStaffIds));
+                    }
+                }
             }
             setError(null);
             const data = await orderService.getOrdersByBranch(branchId);
@@ -102,9 +141,14 @@ export default function StaffOrders() {
 
         return () => clearInterval(interval);
     }, [autoRefresh, branchId]);
+    const currentOrders = useMemo(() => {
+        return activeTab === 'regular' ? orders : posOrders;
+    }, [activeTab, orders, posOrders]);
 
     const filteredOrders = useMemo(() => {
         const byStatus = (o: SimpleOrder) => {
+            // POS orders không filter theo status
+            if (activeTab === 'pos') return true;
             if (statusFilter === 'all') return true;
             return (o.status || '').toLowerCase() === statusFilter;
         };
@@ -113,8 +157,20 @@ export default function StaffOrders() {
             const text = `${o.orderId ?? ''} ${o.customerName ?? ''} ${o.phone ?? ''} ${o.deliveryAddress ?? ''}`.toLowerCase();
             return text.includes(debouncedSearch);
         };
-        return orders.filter(o => byStatus(o) && bySearch(o));
-    }, [orders, statusFilter, debouncedSearch]);
+
+        // Filter orders based on tab type
+        const isCorrectOrderType = (o: SimpleOrder) => {
+            if (activeTab === 'pos') {
+                // POS orders: only show orders that have tables or staff_id
+                return (o.tableIds && o.tableIds.length > 0) || o.staffId;
+            } else {
+                // Regular orders: exclude orders that have tables or staff_id (POS orders)
+                return !((o.tableIds && o.tableIds.length > 0) || o.staffId);
+            }
+        };
+
+        return currentOrders.filter(o => byStatus(o) && bySearch(o) && isCorrectOrderType(o));
+    }, [currentOrders, statusFilter, debouncedSearch, activeTab]);
 
     const statusClass = (status?: string) => {
         switch ((status || '').toLowerCase()) {
@@ -149,8 +205,9 @@ export default function StaffOrders() {
         if (!orderId || !status) return;
         try {
             setError(null);
-            
-            // Gọi API reservation trước (nếu cần)
+
+            if (activeTab === 'regular') {
+                // Gọi API reservation trước (nếu cần)
             if (status === 'ready') {
                 // Khi chuyển sang ready → commit reservation trước
                 try {
@@ -183,16 +240,21 @@ export default function StaffOrders() {
             // Convert status to uppercase before sending to backend
             const uppercaseStatus = status.toUpperCase();
             const updated = await orderService.updateOrderStatus(String(orderId), uppercaseStatus as any);
-            
-            // Cập nhật UI
-            setOrders(prev => prev.map(o =>
-                String(o.orderId) === String(orderId)
-                    ? { ...o, status: (updated as any)?.status ?? uppercaseStatus }
-                    : o
-            ));
-            
-            // Hiển thị toast thành công
-            toast.success(`Order status updated to ${status}`);
+
+                setOrders(prev => prev.map(o =>
+                    String(o.orderId) === String(orderId)
+                        ? { ...o, status: updated?.status ?? status }
+                        : o
+                ));
+                toast.success(`Order status updated to ${status}`);
+            } else {
+                const updated: any = await posService.updatePOSOrderStatus(Number(orderId), status);
+                setPosOrders(prev => prev.map(o =>
+                    String(o.orderId) === String(orderId)
+                        ? { ...o, status: updated?.status ?? status }
+                        : o
+                ));
+            }
         } catch (e: any) {
             console.error('Failed to update order status', e);
             const errorMessage = e?.response?.data?.message || 
@@ -220,13 +282,25 @@ export default function StaffOrders() {
                 return ['pending', 'preparing', 'ready', 'completed', 'cancelled'];
         }
     };
+    const statuses = useMemo(() => {
+        return activeTab === 'pos'
+            ? ['pending', 'preparing', 'ready', 'completed'] // POS orders không có cancelled
+            : ['pending', 'preparing', 'ready', 'completed', 'cancelled']; // Regular orders có đầy đủ
+    }, [activeTab]);
 
     const openDetail = async (orderId?: number | string) => {
         if (!orderId) return;
         try {
             setError(null);
             setDetailLoading(true);
-            const resp: any = await orderService.getOrder(String(orderId));
+            let resp: any;
+
+            if (activeTab === 'regular') {
+                resp = await orderService.getOrder(String(orderId));
+            } else {
+                resp = await posService.getPOSOrderById(Number(orderId));
+            }
+
             const data = resp && typeof resp === 'object' && 'result' in resp ? resp.result : resp;
             setDetailOrder(data || null);
 
@@ -237,6 +311,16 @@ export default function StaffOrders() {
                     .filter((id: any) => id != null);
                 if (productIds.length > 0) {
                     await fetchProductDetails(productIds);
+                }
+            }
+
+            // Fetch table and staff details for POS orders
+            if (activeTab === 'pos' && data) {
+                if (data.tableIds && Array.isArray(data.tableIds) && data.tableIds.length > 0) {
+                    await fetchTableDetails(data.tableIds);
+                }
+                if (data.staffId) {
+                    await fetchStaffDetails([data.staffId]);
                 }
             }
 
@@ -278,6 +362,81 @@ export default function StaffOrders() {
         }
     };
 
+    const fetchTableDetails = async (tableIds: number[]) => {
+        try {
+            if (!branchId) return;
+            const tables = await tableService.getTablesByBranch(Number(branchId));
+            const newMap = new Map<number, any>();
+            tables.forEach(table => {
+                if (tableIds.includes(table.tableId)) {
+                    newMap.set(table.tableId, table);
+                }
+            });
+            setTableDetails(prev => new Map([...prev, ...newMap]));
+        } catch (error) {
+            console.error('Failed to fetch table details:', error);
+        }
+    };
+
+    const fetchStaffDetails = async (staffIds: number[]) => {
+        try {
+            if (!branchId) return;
+
+            // Try to fetch from the new /staff endpoint
+            try {
+                const staff = await branchService.getBranchStaff(String(branchId));
+
+                const newMap = new Map<number, any>();
+                staff.forEach((member: any) => {
+                    // Try different possible field names for user ID
+                    const userId = member.user_id || member.id || member.userId;
+                    if (userId && staffIds.includes(Number(userId))) {
+                        newMap.set(Number(userId), member);
+                    }
+                });
+
+                setStaffDetails(prev => new Map([...prev, ...newMap]));
+            } catch (apiError) {
+                // Fallback: use current user info if the staffId matches
+                const newMap = new Map<number, any>();
+
+                // Check if any of the staffIds match the current user
+                if (user && staffIds.includes(Number(user.id))) {
+                    newMap.set(Number(user.id), {
+                        user_id: Number(user.id),
+                        fullname: user.name || user.fullname || 'Current User',
+                        email: user.email
+                    });
+                }
+
+                // For other staff IDs, we'll create placeholder entries
+                staffIds.forEach(id => {
+                    if (!newMap.has(id)) {
+                        newMap.set(id, {
+                            user_id: id,
+                            fullname: `Staff #${id}`,
+                            email: `staff${id}@example.com`
+                        });
+                    }
+                });
+
+                setStaffDetails(prev => new Map([...prev, ...newMap]));
+            }
+        } catch (error) {
+            console.error('Failed to fetch staff details:', error);
+            // Create fallback entries for all staff IDs
+            const fallbackMap = new Map<number, any>();
+            staffIds.forEach(id => {
+                fallbackMap.set(id, {
+                    user_id: id,
+                    fullname: `Staff #${id}`,
+                    email: `staff${id}@example.com`
+                });
+            });
+            setStaffDetails(prev => new Map([...prev, ...fallbackMap]));
+        }
+    };
+
     const openRecipeModal = async (productId: string | number) => {
         try {
             setRecipeLoading(true);
@@ -315,76 +474,107 @@ export default function StaffOrders() {
         <div className="p-8">
             <div className="mb-6 flex items-center justify-between">
                 <h1 className="text-2xl font-bold text-gray-800">Branch Orders</h1>
-                <div className="flex items-center gap-3">
-                    {/* Auto refresh toggle */}
-                    <label className="flex items-center gap-2 text-sm text-gray-600">
-                        <input
-                            type="checkbox"
-                            checked={autoRefresh}
-                            onChange={(e) => setAutoRefresh(e.target.checked)}
-                            className="w-4 h-4 text-amber-600 bg-gray-100 border-gray-300 rounded focus:ring-amber-500 focus:ring-2"
-                        />
-                        <span className="flex items-center gap-1">
-                            Auto Refresh (10s)
-                            {autoRefresh && (
-                                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" title="Auto refresh is active"></div>
-                            )}
-                        </span>
-                    </label>
+                
+                <div className="flex items-center gap-4"> 
+                    {/* 1. Thanh điều hướng Tab (Từ pos_order) */}
+                    <div className="mt-4 flex space-x-1 bg-gray-100 p-1 rounded-lg w-fit">
+                        <button
+                            onClick={() => setActiveTab('regular')}
+                            className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${activeTab === 'regular'
+                                ? 'bg-white text-gray-900 shadow-sm'
+                                : 'text-gray-600 hover:text-gray-900'
+                                }`}
+                        >
+                            Regular Orders
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('pos')}
+                            className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${activeTab === 'pos'
+                                ? 'bg-white text-gray-900 shadow-sm'
+                                : 'text-gray-600 hover:text-gray-900'
+                                }`}
+                        >
+                            POS Orders
+                        </button>
+                    </div>
                     
-                    {/* Manual refresh button */}
-                    <button
-                        onClick={async () => {
-                            await loadOrders(true);
-                            toast.success('Orders refreshed manually', {
-                                duration: 2000,
-                                position: 'top-right',
-                            });
-                        }}
-                        disabled={refreshing}
-                        className="flex items-center gap-2 px-3 py-2 text-sm bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                        {refreshing ? (
-                            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                        ) : (
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                            </svg>
-                        )}
-                        {refreshing ? 'Refreshing...' : 'Refresh'}
-                    </button>
+                    {/* 2. Auto/Manual Refresh (Từ HEAD) */}
+                    {/* Chỉ hiển thị Refresh cho Regular Orders nếu cần */}
+                    {activeTab === 'regular' && (
+                        <div className="flex items-center gap-3">
+                            {/* Auto refresh toggle */}
+                            <label className="flex items-center gap-2 text-sm text-gray-600">
+                                <input
+                                    type="checkbox"
+                                    checked={autoRefresh}
+                                    onChange={(e) => setAutoRefresh(e.target.checked)}
+                                    className="w-4 h-4 text-amber-600 bg-gray-100 border-gray-300 rounded focus:ring-amber-500 focus:ring-2"
+                                />
+                                <span className="flex items-center gap-1">
+                                    Auto Refresh (10s)
+                                    {autoRefresh && (
+                                        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" title="Auto refresh is active"></div>
+                                    )}
+                                </span>
+                            </label>
+                            
+                            {/* Manual refresh button */}
+                            <button
+                                onClick={async () => {
+                                    await loadOrders(true);
+                                    toast.success('Orders refreshed manually', {
+                                        duration: 2000,
+                                        position: 'top-right',
+                                    });
+                                }}
+                                disabled={refreshing}
+                                className="flex items-center gap-2 px-3 py-2 text-sm bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                                {refreshing ? (
+                                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                ) : (
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                    </svg>
+                                )}
+                                {refreshing ? 'Refreshing...' : 'Refresh'}
+                            </button>
+                        </div>
+                    )}
                 </div>
             </div>
-
+    
             {loading && (
                 <div className="bg-white rounded-2xl shadow p-6">Loading...</div>
             )}
             {error && (
                 <div className="bg-red-50 text-red-700 border border-red-200 rounded-xl p-4 mb-4">{error}</div>
             )}
-
+    
             {!loading && !error && (
                 <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
                     <div className="px-6 py-4 border-b border-gray-100">
                         <div className="flex flex-wrap items-center gap-3">
-                            <div className="flex items-center gap-2">
-                                <label className="text-sm text-gray-600">Status</label>
-                                <select
-                                    className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
-                                    value={statusFilter}
-                                    onChange={(e) => setStatusFilter(e.target.value as any)}
-                                >
-                                    <option value="all">All</option>
-                                    <option value="pending">Pending</option>
-                                    <option value="preparing">Preparing</option>
-                                    <option value="ready">Ready</option>
-                                    <option value="completed">Completed</option>
-                                    <option value="cancelled">Cancelled</option>
-                                </select>
-                            </div>
+                            {activeTab === 'regular' && (
+                                <div className="flex items-center gap-2">
+                                    <label className="text-sm text-gray-600">Status</label>
+                                    <select
+                                        className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
+                                        value={statusFilter}
+                                        onChange={(e) => setStatusFilter(e.target.value as any)}
+                                    >
+                                        <option value="all">All</option>
+                                        <option value="pending">Pending</option>
+                                        <option value="preparing">Preparing</option>
+                                        <option value="ready">Ready</option>
+                                        <option value="completed">Completed</option>
+                                        <option value="cancelled">Cancelled</option>
+                                    </select>
+                                </div>
+                            )}
                             <div className="flex-1 min-w-[220px]">
                                 <input
                                     type="text"
@@ -405,12 +595,19 @@ export default function StaffOrders() {
                                     <tr className="bg-gray-50 text-left text-gray-600">
                                         <th className="px-6 py-3 font-medium">Order ID</th>
                                         <th className="px-6 py-3 font-medium">Customer Name</th>
-                                        <th className="px-6 py-3 font-medium">Phone</th>
-                                        <th className="px-6 py-3 font-medium">Address</th>
+                                        {activeTab === 'regular' && <th className="px-6 py-3 font-medium">Phone</th>}
+                                        {activeTab === 'regular' ? (
+                                            <th className="px-6 py-3 font-medium">Address</th>
+                                        ) : (
+                                            <>
+                                                <th className="px-6 py-3 font-medium">Tables</th>
+                                                <th className="px-6 py-3 font-medium">Staff</th>
+                                            </>
+                                        )}
                                         <th className="px-6 py-3 font-medium">Order Date</th>
                                         <th className="px-6 py-3 font-medium">Total Amount</th>
                                         <th className="px-6 py-3 font-medium">Payment</th>
-                                        <th className="px-6 py-3 font-medium">Status</th>
+                                        {activeTab === 'regular' && <th className="px-6 py-3 font-medium">Status</th>}
                                         <th className="px-6 py-3 font-medium">Actions</th>
                                     </tr>
                                 </thead>
@@ -419,14 +616,52 @@ export default function StaffOrders() {
                                         <tr key={String(o.orderId || idx)} className="hover:bg-gray-50">
                                             <td className="px-6 py-4 font-semibold text-gray-900">{o.orderId}</td>
                                             <td className="px-6 py-4 text-gray-800">{o.customerName || '-'}</td>
-                                            <td className="px-6 py-4 text-gray-800">{o.phone || '-'}</td>
-                                            <td className="px-6 py-4 text-gray-800 max-w-[320px] truncate" title={o.deliveryAddress || ''}>{o.deliveryAddress || '-'}</td>
+                                            {activeTab === 'regular' && <td className="px-6 py-4 text-gray-800">{o.phone || '-'}</td>}
+                                            {activeTab === 'regular' ? (
+                                                <td className="px-6 py-4 text-gray-800 max-w-[320px] truncate" title={o.deliveryAddress || ''}>{o.deliveryAddress || '-'}</td>
+                                            ) : (
+                                                <>
+                                                    <td className="px-6 py-4 text-gray-800">
+                                                        {o.tableIds && Array.isArray(o.tableIds) && o.tableIds.length > 0 ? (
+                                                            <div className="flex flex-wrap gap-1">
+                                                                {o.tableIds.map((id: number) => {
+                                                                    const table = tableDetails.get(id);
+                                                                    return (
+                                                                        <span key={id} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                                                                            {table?.label || `Bàn ${id}`}
+                                                                        </span>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        ) : (
+                                                            '-'
+                                                        )}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-gray-800">
+                                                        {o.staffId ? (
+                                                            <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
+                                                                {(() => {
+                                                                    const staff = staffDetails.get(o.staffId);
+                                                                    if (staff) {
+                                                                        return staff.fullname || staff.name || staff.fullName || `Staff #${o.staffId}`;
+                                                                    }
+                                                                    return `Staff #${o.staffId}`;
+                                                                })()}
+                                                            </span>
+                                                        ) : (
+                                                            '-'
+                                                        )}
+                                                    </td>
+                                                </>
+                                            )}
                                             <td className="px-6 py-4 text-gray-800">{formatDate(o.orderDate)}</td>
                                             <td className="px-6 py-4 text-gray-900 font-semibold">{formatCurrency(o.totalAmount as unknown as number)}</td>
                                             <td className="px-6 py-4 text-gray-800">{o.paymentMethod || '-'}</td>
-                                            <td className="px-6 py-4">
-                                                <span className={`px-3 py-1 rounded-full text-xs font-medium border ${statusClass(o.status)}`}>{(o.status || 'unknown').toUpperCase()}</span>
-                                            </td>
+                                            {activeTab === 'regular' && (
+                                                <td className="px-6 py-4">
+                                                    <span className={`px-3 py-1 rounded-full text-xs font-medium border ${statusClass(o.status)}`}>{(o.status || 'unknown').toUpperCase()}</span>
+                                                </td>
+                                            )}
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="flex items-center gap-2">
                                                     <button
@@ -440,45 +675,47 @@ export default function StaffOrders() {
                                                             <circle cx="12" cy="12" r="3" />
                                                         </svg>
                                                     </button>
-                                                    {/* Chỉ hiển thị nút edit nếu order chưa hoàn thành hoặc bị hủy */}
-                                                    {!['completed', 'cancelled'].includes((o.status || '').toLowerCase()) && (
-                                                        <button
-                                                            onClick={() => setEditingOrderId(o.orderId!)}
-                                                            className="px-2 py-1 text-xs rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 inline-flex"
-                                                            title="Edit status"
-                                                        >
-                                                            {/* Pencil icon */}
-                                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
-                                                                <path d="M12 20h9" />
-                                                                <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
-                                                            </svg>
-                                                        </button>
-                                                    )}
-                                                    {String(editingOrderId) === String(o.orderId) && (
-                                                        <div className="flex flex-col gap-1">
-                                                            <select
-                                                                autoFocus
-                                                                className="px-2 py-1 text-xs rounded-lg border border-gray-200 text-gray-700 bg-white inline-flex"
-                                                                defaultValue=""
-                                                                onBlur={() => setEditingOrderId(null)}
-                                                                onChange={async (e) => {
-                                                                    if (e.target.value) {
-                                                                        await handleUpdateStatus(o.orderId, e.target.value);
-                                                                        setEditingOrderId(null);
-                                                                    }
-                                                                }}
+                                                    
+                                                    {/* Logic chỉnh sửa trạng thái (đã hợp nhất) */}
+                                                    {activeTab === 'regular' && !['completed', 'cancelled'].includes((o.status || '').toLowerCase()) && (
+                                                        <>
+                                                            <button
+                                                                onClick={() => setEditingOrderId(o.orderId!)}
+                                                                className="px-2 py-1 text-xs rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 inline-flex"
+                                                                title="Edit status"
                                                             >
-                                                                <option value="" disabled>
-                                                                    Select new status...
-                                                                </option>
-                                                                {/* Hiển thị các trạng thái tiếp theo có thể chọn */}
-                                                                {getNextStatuses(o.status).map(s => (
-                                                                    <option key={s} value={s}>
-                                                                        {s.charAt(0).toUpperCase() + s.slice(1)}
+                                                                {/* Pencil icon */}
+                                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
+                                                                    <path d="M12 20h9" />
+                                                                    <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+                                                                </svg>
+                                                            </button>
+                                                            {String(editingOrderId) === String(o.orderId) && (
+                                                                <select
+                                                                    autoFocus
+                                                                    className="px-2 py-1 text-xs rounded-lg border border-gray-200 text-gray-700 bg-white inline-flex"
+                                                                    // Đã sửa conflict: Lấy giá trị mặc định từ pos_order, logic options từ HEAD (vì HEAD có getNextStatuses)
+                                                                    defaultValue={(o.status || '').toLowerCase()}
+                                                                    onBlur={() => setEditingOrderId(null)}
+                                                                    onChange={async (e) => {
+                                                                        if (e.target.value) {
+                                                                            await handleUpdateStatus(o.orderId, e.target.value);
+                                                                            setEditingOrderId(null);
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    <option value="" disabled>
+                                                                        Select new status...
                                                                     </option>
-                                                                ))}
-                                                            </select>
-                                                        </div>
+                                                                    {/* Giả định getNextStatuses(o.status) là logic mong muốn cho việc chuyển trạng thái */}
+                                                                    {getNextStatuses(o.status).map(s => (
+                                                                        <option key={s} value={s}>
+                                                                            {s.charAt(0).toUpperCase() + s.slice(1)}
+                                                                        </option>
+                                                                    ))}
+                                                                </select>
+                                                            )}
+                                                        </>
                                                     )}
                                                 </div>
                                             </td>
@@ -490,7 +727,8 @@ export default function StaffOrders() {
                     )}
                 </div>
             )}
-
+    
+            {/* Detail Modal (Không có xung đột, giữ nguyên) */}
             {detailOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
                     <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl">
@@ -507,16 +745,57 @@ export default function StaffOrders() {
                                 <div className="space-y-3 text-sm text-gray-800">
                                     <div className="grid grid-cols-2 gap-4">
                                         <div><span className="text-gray-500">Order ID:</span> <span className="font-semibold">{detailOrder.orderId}</span></div>
-                                        <div><span className="text-gray-500">Status:</span> <span className="font-semibold">{(detailOrder.status || '').toUpperCase()}</span></div>
+                                        {activeTab === 'regular' && <div><span className="text-gray-500">Status:</span> <span className="font-semibold">{(detailOrder.status || '').toUpperCase()}</span></div>}
                                         <div><span className="text-gray-500">Customer:</span> <span className="font-semibold">{detailOrder.customerName || '-'}</span></div>
-                                        <div><span className="text-gray-500">Phone:</span> <span className="font-semibold">{detailOrder.phone || '-'}</span></div>
-                                        <div className="col-span-2"><span className="text-gray-500">Address:</span> <span className="font-semibold">{detailOrder.deliveryAddress || '-'}</span></div>
+                                        {activeTab === 'regular' && <div><span className="text-gray-500">Phone:</span> <span className="font-semibold">{detailOrder.phone || '-'}</span></div>}
+                                        {activeTab === 'regular' && <div className="col-span-2"><span className="text-gray-500">Address:</span> <span className="font-semibold">{detailOrder.deliveryAddress || '-'}</span></div>}
+                                        {activeTab === 'pos' && (
+                                            <>
+                                                <div>
+                                                    <span className="text-gray-500">Tables:</span>
+                                                    <span className="font-semibold ml-2">
+                                                        {detailOrder.tableIds && Array.isArray(detailOrder.tableIds) && detailOrder.tableIds.length > 0 ? (
+                                                            <div className="flex flex-wrap gap-1 mt-1">
+                                                                {detailOrder.tableIds.map((id: number) => {
+                                                                    const table = tableDetails.get(id);
+                                                                    return (
+                                                                        <span key={id} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                                                                            {table?.label || `Bàn ${id}`}
+                                                                        </span>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        ) : (
+                                                            '-'
+                                                        )}
+                                                    </span>
+                                                </div>
+                                                <div>
+                                                    <span className="text-gray-500">Staff:</span>
+                                                    <span className="font-semibold ml-2">
+                                                        {detailOrder.staffId ? (
+                                                            <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
+                                                                {(() => {
+                                                                    const staff = staffDetails.get(detailOrder.staffId);
+                                                                    if (staff) {
+                                                                        return staff.fullname || staff.name || staff.fullName || `Staff #${detailOrder.staffId}`;
+                                                                    }
+                                                                    return `Staff #${detailOrder.staffId}`;
+                                                                })()}
+                                                            </span>
+                                                        ) : (
+                                                            '-'
+                                                        )}
+                                                    </span>
+                                                </div>
+                                            </>
+                                        )}
                                         <div><span className="text-gray-500">Order Date:</span> <span className="font-semibold">{formatDate(detailOrder.orderDate)}</span></div>
                                         <div><span className="text-gray-500">Payment:</span> <span className="font-semibold">{detailOrder.paymentMethod || '-'}</span></div>
-                                        <div><span className="text-gray-500">Payment Status:</span> <span className="font-semibold">{detailOrder.paymentStatus || '-'}</span></div>
+                                        {activeTab === 'regular' && <div><span className="text-gray-500">Payment Status:</span> <span className="font-semibold">{detailOrder.paymentStatus || '-'}</span></div>}
                                         <div><span className="text-gray-500">Total:</span> <span className="font-semibold">{formatCurrency(detailOrder.totalAmount as number)}</span></div>
                                     </div>
-
+    
                                     <div className="mt-4">
                                         <h4 className="font-semibold mb-2">Items</h4>
                                         {Array.isArray(detailOrder.orderItems) && detailOrder.orderItems.length > 0 ? (
@@ -537,7 +816,7 @@ export default function StaffOrders() {
                                                             const product = productDetails.get(productId);
                                                             const API_BASE = (import.meta as any).env?.API_BASE_URL || 'http://localhost:8000';
                                                             const imageSrc = product?.imageUrl && (product.imageUrl.startsWith('http') ? product.imageUrl : `${API_BASE}/api/catalogs${product.imageUrl}`);
-
+    
                                                             return (
                                                                 <tr key={i}>
                                                                     <td className="px-4 py-2">
@@ -606,7 +885,8 @@ export default function StaffOrders() {
                     </div>
                 </div>
             )}
-
+    
+            {/* Recipe Modal (Không có xung đột, giữ nguyên) */}
             {recipeModalOpen && selectedRecipe && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
                     <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl">
@@ -628,7 +908,7 @@ export default function StaffOrders() {
                                         .split(/\r?\n/)
                                         .map(s => s.trim())
                                         .filter(Boolean);
-
+    
                                     return steps.length === 0 ? (
                                         <div className="text-gray-500 italic text-xs">No instructions provided</div>
                                     ) : (
@@ -688,5 +968,3 @@ export default function StaffOrders() {
         </div>
     );
 }
-
-

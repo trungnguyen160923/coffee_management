@@ -1,6 +1,7 @@
 package orderservice.order_service.dto.response;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 public class ReservationResponse {
 
@@ -17,6 +18,7 @@ public class ReservationResponse {
     private String notes;
     private LocalDateTime createAt;
     private LocalDateTime updateAt;
+    private List<TableResponse> assignedTables;
 
     // Constructors
     public ReservationResponse() {
@@ -25,7 +27,7 @@ public class ReservationResponse {
     public ReservationResponse(Integer reservationId, Integer customerId, String customerName,
             String phone, String email, Integer branchId, String branchName, LocalDateTime reservedAt,
             String status, Integer partySize, String notes, LocalDateTime createAt,
-            LocalDateTime updateAt) {
+            LocalDateTime updateAt, List<TableResponse> assignedTables) {
         this.reservationId = reservationId;
         this.customerId = customerId;
         this.customerName = customerName;
@@ -39,6 +41,7 @@ public class ReservationResponse {
         this.notes = notes;
         this.createAt = createAt;
         this.updateAt = updateAt;
+        this.assignedTables = assignedTables;
     }
 
     // Getters and Setters
@@ -144,5 +147,13 @@ public class ReservationResponse {
 
     public void setUpdateAt(LocalDateTime updateAt) {
         this.updateAt = updateAt;
+    }
+
+    public List<TableResponse> getAssignedTables() {
+        return assignedTables;
+    }
+
+    public void setAssignedTables(List<TableResponse> assignedTables) {
+        this.assignedTables = assignedTables;
     }
 }

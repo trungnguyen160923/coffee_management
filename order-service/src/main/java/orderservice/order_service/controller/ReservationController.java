@@ -121,6 +121,56 @@ public class ReservationController {
         }
     }
 
+    @GetMapping("/public/{reservationId}")
+    public ResponseEntity<ApiResponse<ReservationResponse>> getReservationByIdPublic(
+            @PathVariable Integer reservationId) {
+        try {
+            Optional<ReservationResponse> reservation = reservationService.getReservationById(reservationId);
+            if (reservation.isPresent()) {
+                ApiResponse<ReservationResponse> response = ApiResponse.<ReservationResponse>builder()
+                        .code(200)
+                        .message("Reservation retrieved successfully")
+                        .result(reservation.get())
+                        .build();
+                return ResponseEntity.ok(response);
+            } else {
+                ApiResponse<ReservationResponse> response = ApiResponse.<ReservationResponse>builder()
+                        .code(404)
+                        .message("Reservation not found")
+                        .result(null)
+                        .build();
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+            }
+        } catch (Exception e) {
+            ApiResponse<ReservationResponse> response = ApiResponse.<ReservationResponse>builder()
+                    .code(500)
+                    .message("Failed to retrieve reservation: " + e.getMessage())
+                    .result(null)
+                    .build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    @PutMapping("/public/{reservationId}/cancel")
+    public ResponseEntity<ApiResponse<Void>> cancelReservationPublic(@PathVariable Integer reservationId) {
+        try {
+            reservationService.cancelReservation(reservationId);
+            ApiResponse<Void> response = ApiResponse.<Void>builder()
+                    .code(200)
+                    .message("Reservation cancelled successfully")
+                    .result(null)
+                    .build();
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            ApiResponse<Void> response = ApiResponse.<Void>builder()
+                    .code(500)
+                    .message("Failed to cancel reservation: " + e.getMessage())
+                    .result(null)
+                    .build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
     @PutMapping("/{reservationId}/status")
     public ResponseEntity<ApiResponse<ReservationResponse>> updateReservationStatus(@PathVariable Integer reservationId,
             @RequestParam String status) {

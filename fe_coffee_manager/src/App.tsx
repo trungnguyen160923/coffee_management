@@ -33,6 +33,7 @@ import SupplierCancelledPage from './pages/supplier/SupplierCancelledPage';
 import StaffOrders from './pages/staff/StaffOrders';
 import StaffReservations from './pages/staff/StaffReservations';
 import StaffRecipes from './pages/staff/StaffRecipes';
+import StaffPOS from './pages/staff/StaffPOS';
 import StaffTables from './pages/staff/StaffTables';
 
 function AppRoutes() {
@@ -53,7 +54,7 @@ function AppRoutes() {
 
   // Check if current path is a public supplier route
   const isPublicSupplierRoute = window.location.pathname.startsWith('/supplier/');
-  
+
   // For public supplier routes, always allow access
   if (isPublicSupplierRoute) {
     return (
@@ -146,6 +147,7 @@ function AppRoutes() {
             <Route path="reservations" element={<Layout><StaffReservations /></Layout>} />
             <Route path="tables" element={<Layout><StaffTables /></Layout>} />
             <Route path="recipes" element={<Layout><StaffRecipes /></Layout>} />
+            <Route path="pos" element={<StaffPOS />} />
             <Route path="*" element={<NotFoundPage showLoginButton={false} />} />
           </Routes>
         </ProtectedRoute>
