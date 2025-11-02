@@ -123,6 +123,7 @@ export interface CatalogProductDetail {
   pdId: number;
   size: CatalogSize;
   price: number;
+  active: boolean;
   createAt: string;
   updateAt: string;
 }
