@@ -121,12 +121,27 @@ export default function StaffPOS() {
         loadDiscounts();
     }, [branchId]);
 
+    // Helper function to filter active product details
+    const getActiveProductDetails = (productDetails: any[]) => {
+        return productDetails.filter(detail =>
+            detail.active !== null && detail.active !== false
+        );
+    };
+
     const filteredProducts = useMemo(() => {
         return products.filter(product => {
             const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 product.description?.toLowerCase().includes(searchTerm.toLowerCase());
             const matchesCategory = categoryFilter === 'all' || product.category?.name === categoryFilter;
-            return matchesSearch && matchesCategory;
+
+            // Check if product is active (not null or false)
+            const isProductActive = product.active !== null && product.active !== false;
+
+            // Check if product has at least one active productDetail
+            const activeDetails = getActiveProductDetails(product.productDetails || []);
+            const hasActiveProductDetails = activeDetails.length > 0;
+
+            return matchesSearch && matchesCategory && isProductActive && hasActiveProductDetails;
         });
     }, [products, searchTerm, categoryFilter]);
 
@@ -555,46 +570,53 @@ export default function StaffPOS() {
 
                                             {/* Product sizes and prices */}
                                             <div className="space-y-3">
-                                                {product.productDetails.length > 1 ? (
-                                                    // Multiple sizes - show dropdown selector
-                                                    <div className="space-y-2">
-
-                                                        <select
-                                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                                            onChange={(e) => {
-                                                                const selectedDetail = product.productDetails.find(detail =>
-                                                                    detail.pdId === parseInt(e.target.value)
-                                                                );
-                                                                if (selectedDetail) {
-                                                                    addToCart(product, selectedDetail);
-                                                                }
-                                                            }}
-                                                        >
-                                                            <option value="">Select size...</option>
-                                                            {product.productDetails.map((detail) => (
-                                                                <option key={detail.pdId} value={detail.pdId}>
-                                                                    {detail.size?.name || 'No size'} - {formatCurrency(detail.price)}
-                                                                </option>
-                                                            ))}
-                                                        </select>
-                                                    </div>
-                                                ) : (
-                                                    // Single size or no size - compact add button
-                                                    <div className="flex items-center justify-between p-2 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors"
-                                                        onClick={() => addToCart(product, product.productDetails[0])}>
-                                                        <div className="flex items-center space-x-2">
-                                                            <div className="text-xs font-medium text-gray-700">
-                                                                {product.productDetails[0].size?.name || ''}
-                                                            </div>
-                                                            <div className="text-sm font-bold text-amber-600">
-                                                                {formatCurrency(product.productDetails[0].price)}
-                                                            </div>
+                                                {(() => {
+                                                    const activeDetails = getActiveProductDetails(product.productDetails || []);
+                                                    return activeDetails.length > 1 ? (
+                                                        // Multiple sizes - show dropdown selector
+                                                        <div className="space-y-2">
+                                                            <select
+                                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                                onChange={(e) => {
+                                                                    const selectedDetail = activeDetails.find(detail =>
+                                                                        detail.pdId === parseInt(e.target.value)
+                                                                    );
+                                                                    if (selectedDetail) {
+                                                                        addToCart(product, selectedDetail);
+                                                                    }
+                                                                }}
+                                                            >
+                                                                <option value="">Select size...</option>
+                                                                {activeDetails.map((detail) => (
+                                                                    <option key={detail.pdId} value={detail.pdId}>
+                                                                        {detail.size?.name || 'No size'} - {formatCurrency(detail.price)}
+                                                                    </option>
+                                                                ))}
+                                                            </select>
                                                         </div>
-                                                        <button className="bg-blue-500 text-white rounded-full p-1 hover:bg-blue-600 transition-colors">
-                                                            <Plus className="h-3 w-3" />
-                                                        </button>
-                                                    </div>
-                                                )}
+                                                    ) : activeDetails.length === 1 ? (
+                                                        // Single size - compact add button
+                                                        <div className="flex items-center justify-between p-2 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors"
+                                                            onClick={() => addToCart(product, activeDetails[0])}>
+                                                            <div className="flex items-center space-x-2">
+                                                                <div className="text-xs font-medium text-gray-700">
+                                                                    {activeDetails[0].size?.name || 'No size'}
+                                                                </div>
+                                                                <div className="text-sm font-bold text-amber-600">
+                                                                    {formatCurrency(activeDetails[0].price)}
+                                                                </div>
+                                                            </div>
+                                                            <button className="bg-blue-500 text-white rounded-full p-1 hover:bg-blue-600 transition-colors">
+                                                                <Plus className="h-3 w-3" />
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        // No active details
+                                                        <div className="p-2 text-center text-gray-500 text-sm">
+                                                            No available sizes
+                                                        </div>
+                                                    );
+                                                })()}
                                             </div>
 
                                             <div className="mt-2">
@@ -1095,7 +1117,7 @@ export default function StaffPOS() {
                         <div className="p-6 flex-1 overflow-y-auto">
                             {/* Order Info */}
                             <div className="flex justify-between items-center mb-4 text-sm text-gray-600">
-                                <span>Đơn hàng #{Date.now().toString().slice(-4)}</span>
+                                <span>Order #{Date.now().toString().slice(-4)}</span>
                                 <span>{new Date().toLocaleDateString('vi-VN')} {new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</span>
                             </div>
 
@@ -1155,30 +1177,6 @@ export default function StaffPOS() {
                                 </div>
                             </div>
 
-                            {/* Quick Amount Buttons */}
-                            {paymentMethod === 'cash' && (
-                                <div className="mb-6">
-                                    <h4 className="text-sm font-medium text-gray-700 mb-3">Suggested Amounts</h4>
-                                    <div className="grid grid-cols-3 gap-2">
-                                        {[
-                                            getFinalAmount(),
-                                            getFinalAmount() + 10000,
-                                            getFinalAmount() + 20000,
-                                            100000,
-                                            200000,
-                                            500000
-                                        ].map((amount) => (
-                                            <button
-                                                key={amount}
-                                                onClick={() => setReceivedAmount(amount)}
-                                                className="p-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
-                                            >
-                                                {formatCurrency(amount)}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
 
                             {/* Cash Input */}
                             {paymentMethod === 'cash' && (
