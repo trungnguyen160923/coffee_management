@@ -18,7 +18,7 @@ public class SecurityConfig {
 
     private static final String[] PUBLIC_ENDPOINTS = { "/files/upload", "/files/cleanup", "/public/purchase-orders/**", "/stocks/check-and-reserve", "/stocks/check-and-reserve/**", "/stocks/update-order-id", "/stocks/update-order-id-by-cart", "/stocks/hold-id/**" };
     private static final String[] PUBLIC_GET_ENDPOINTS = { "/sizes", "/files/images/products/**", "/products",
-            "/products/**", "/categories", "/categories/**", "/public/purchase-orders/**" };
+            "/products/**", "/categories", "/categories/**", "/public/purchase-orders/**", "/api/analytics/metrics/**" };
 
     private final CustomJwtDecoder customJwtDecoder;
 

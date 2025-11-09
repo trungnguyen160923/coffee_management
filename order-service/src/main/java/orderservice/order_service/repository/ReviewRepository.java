@@ -8,6 +8,9 @@ import org.springframework.data.repository.query.Param;
 
 import orderservice.order_service.entity.Review;
 
+import java.time.LocalDate;
+import java.util.List;
+
 public interface ReviewRepository extends JpaRepository<Review, Integer> {
     
     // Hàm lọc tất cả các điều kiện - linh hoạt (chỉ lấy review chưa bị xóa)
@@ -51,4 +54,8 @@ public interface ReviewRepository extends JpaRepository<Review, Integer> {
     
     // Kiểm tra duplicate review theo (customerId, productId, orderId)
     boolean existsByCustomerIdAndProductIdAndOrderIdAndIsDeletedFalse(Integer customerId, Integer productId, Integer orderId);
+    
+    // Analytics query: Get reviews by branch and date
+    @Query("SELECT r FROM Review r WHERE r.branchId = :branchId AND DATE(r.createAt) = :date AND r.isDeleted = false")
+    List<Review> findByBranchIdAndDate(@Param("branchId") Integer branchId, @Param("date") LocalDate date);
 }

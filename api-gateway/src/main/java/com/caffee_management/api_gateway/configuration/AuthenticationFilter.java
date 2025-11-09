@@ -82,6 +82,9 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
 
             // Public reviews endpoints
             "/order-service/reviews/filter",
+            // Analytics endpoints for AI Service (no authentication required)
+            "/order-service/api/analytics/metrics",
+            "/order-service/api/analytics/metrics/.*",
     };
 
     @Value("${app.api-prefix}")
