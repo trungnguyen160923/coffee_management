@@ -38,20 +38,11 @@ class Settings:
     ANOMALY_THRESHOLD: float = 0.1
     MIN_TRAINING_SAMPLES: int = 30
     
-    # AI Provider Settings (OpenAI or Gemini)
-    AI_PROVIDER: str = os.getenv("AI_PROVIDER", "gemini")  # "openai" or "gemini"
-    
     # OpenAI Settings
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
     OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
     OPENAI_TEMPERATURE: float = float(os.getenv("OPENAI_TEMPERATURE", "0.3"))
     OPENAI_MAX_TOKENS: int = int(os.getenv("OPENAI_MAX_TOKENS", "1500"))
-    
-    # Google Gemini Settings
-    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
-    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
-    GEMINI_TEMPERATURE: float = float(os.getenv("GEMINI_TEMPERATURE", "0.3"))
-    GEMINI_MAX_TOKENS: int = int(os.getenv("GEMINI_MAX_TOKENS", "1500"))
     
     # Feature List for ML Model
     FEATURE_LIST: list = [

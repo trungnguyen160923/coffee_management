@@ -1,10 +1,11 @@
 """
-AI Agent Service using LangChain + OpenAI GPT-4o or Google Gemini
+AI Agent Service using LangChain + OpenAI GPT-4o
 Tổng hợp 3 JSON từ các service và xử lý với AI
 """
 import json
 from datetime import date
 from typing import Optional, Dict, Any
+from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
 from app.config import settings
 from app.clients.order_client import OrderServiceClient
@@ -21,44 +22,17 @@ class AIAgentService:
         self.order_client = OrderServiceClient()
         self.catalog_client = CatalogServiceClient()
         
-        # Initialize LLM based on AI_PROVIDER setting
-        self.llm = None
-        self.ai_provider = settings.AI_PROVIDER.lower()
-        
-        if self.ai_provider == "gemini":
-            # Initialize Google Gemini LLM
-            if settings.GEMINI_API_KEY:
-                try:
-                    from langchain_google_genai import ChatGoogleGenerativeAI
-                    self.llm = ChatGoogleGenerativeAI(
-                        model=settings.GEMINI_MODEL,
-                        temperature=settings.GEMINI_TEMPERATURE,
-                        max_output_tokens=settings.GEMINI_MAX_TOKENS,
-                        google_api_key=settings.GEMINI_API_KEY
-                    )
-                    logger.info(f"✅ Initialized Google Gemini: {settings.GEMINI_MODEL}")
-                except ImportError:
-                    logger.error("langchain-google-genai not installed. Run: pip install langchain-google-genai")
-            else:
-                logger.warning("Gemini API key not configured. AI features will be disabled.")
-        elif self.ai_provider == "openai":
-            # Initialize OpenAI LLM
-            if settings.OPENAI_API_KEY:
-                try:
-                    from langchain_openai import ChatOpenAI
-                    self.llm = ChatOpenAI(
-                        model=settings.OPENAI_MODEL,
-                        temperature=settings.OPENAI_TEMPERATURE,
-                        max_tokens=settings.OPENAI_MAX_TOKENS,
-                        api_key=settings.OPENAI_API_KEY
-                    )
-                    logger.info(f"✅ Initialized OpenAI: {settings.OPENAI_MODEL}")
-                except ImportError:
-                    logger.error("langchain-openai not installed. Run: pip install langchain-openai")
-            else:
-                logger.warning("OpenAI API key not configured. AI features will be disabled.")
+        # Initialize OpenAI LLM
+        if settings.OPENAI_API_KEY:
+            self.llm = ChatOpenAI(
+                model=settings.OPENAI_MODEL,
+                temperature=settings.OPENAI_TEMPERATURE,
+                max_tokens=settings.OPENAI_MAX_TOKENS,
+                api_key=settings.OPENAI_API_KEY
+            )
         else:
-            logger.warning(f"Unknown AI provider: {self.ai_provider}. Supported: 'gemini' or 'openai'")
+            logger.warning("OpenAI API key not configured. AI features will be disabled.")
+            self.llm = None
     
     async def collect_three_json_data(
         self,
@@ -119,10 +93,9 @@ class AIAgentService:
         Xử lý dữ liệu đã tổng hợp với AI sử dụng LangChain
         """
         if not self.llm:
-            provider_name = "Gemini" if self.ai_provider == "gemini" else "OpenAI"
             return {
                 "success": False,
-                "message": f"{provider_name} API key not configured"
+                "message": "OpenAI API key not configured"
             }
         
         try:

@@ -25,13 +25,9 @@ python-multipart==0.0.6
 python-json-logger==2.0.7
 
 # AI & LangChain
-# Updated to compatible versions with langchain-google-genai 2.0.10
-langchain>=0.3.0
-langchain-openai>=0.2.0
-langchain-google-genai>=2.0.10
-langchain-core>=0.3.0
-langsmith>=0.2.0
-openai>=1.35.14
-google-generativeai>=0.8.5
+langchain==0.1.20
+langchain-openai==0.1.7
+langchain-core==0.1.52
+openai==1.35.14
 
 
