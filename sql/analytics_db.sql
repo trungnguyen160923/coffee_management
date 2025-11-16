@@ -12,7 +12,7 @@ USE analytics_db;
 -- =============================================
 CREATE TABLE daily_branch_metrics (
     id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT 'Khóa chính tự tăng',
-    branch_id BIGINT NOT NULL COMMENT 'ID của chi nhánh (nên đồng bộ kiểu dữ liệu với service khác)',
+    branch_id INT NOT NULL COMMENT 'ID của chi nhánh (nên đồng bộ kiểu dữ liệu với service khác)',
     report_date DATE NOT NULL COMMENT 'Ngày ghi nhận metrics',
 
     -- Các cột chỉ số (features) dùng để train/predict:
@@ -66,7 +66,7 @@ CREATE TABLE daily_branch_metrics (
 -- =============================================
 CREATE TABLE ml_models (
     id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT 'Khóa chính tự tăng',
-    model_name VARCHAR(255) NOT NULL UNIQUE COMMENT 'Tên định danh duy nhất cho model (vd: iforest_anomaly_branch_123)',
+    model_name VARCHAR(255) NOT NULL COMMENT 'Tên định danh cho model (vd: iforest_anomaly_branch_123)',
     model_version VARCHAR(50) NOT NULL COMMENT 'Phiên bản của model (vd: v1.0, v1.1)',
     model_type VARCHAR(100) DEFAULT 'ISOLATION_FOREST' COMMENT 'Loại thuật toán (vd: ISOLATION_FOREST, PROPHET)',
 
@@ -95,6 +95,10 @@ CREATE TABLE ml_models (
     is_production BOOLEAN DEFAULT FALSE COMMENT 'Cờ đánh dấu model đang chạy production',
     created_by VARCHAR(100) COMMENT 'Người tạo model',
 
+    -- Ràng buộc: Cho phép nhiều version cùng tên model
+    UNIQUE KEY uk_model_name_version (model_name, model_version),
+    
+    -- Indexes để tăng tốc truy vấn
     INDEX idx_model_name (model_name),
     INDEX idx_is_active (is_active)
 
@@ -145,7 +149,51 @@ CREATE TABLE anomaly_results (
 ) COMMENT 'Bảng lưu trữ kết quả dự đoán bất thường từ mô hình ML';
 
 -- =============================================
--- 4. Bảng Hỗ Trợ: Cấu Hình Hệ Thống
+-- 4. Bảng Forecast: Kết quả Dự báo Nhu cầu
+-- =============================================
+CREATE TABLE IF NOT EXISTS forecast_results (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT 'Khóa chính tự tăng',
+    branch_id INT NOT NULL COMMENT 'ID chi nhánh',
+    forecast_date DATE NOT NULL COMMENT 'Ngày tạo forecast',
+    forecast_start_date DATE NOT NULL COMMENT 'Ngày bắt đầu dự báo',
+    forecast_end_date DATE NOT NULL COMMENT 'Ngày kết thúc dự báo',
+    model_id BIGINT COMMENT 'FK liên kết đến model trong ml_models',
+    
+    -- Target metric và algorithm
+    target_metric VARCHAR(50) NOT NULL COMMENT 'Metric được dự báo (order_count, total_revenue, etc.)',
+    algorithm VARCHAR(50) NOT NULL COMMENT 'Thuật toán (PROPHET, LIGHTGBM, XGBOOST)',
+    
+    -- Kết quả dự báo (JSON)
+    forecast_values TEXT COMMENT 'Kết quả dự báo dạng JSON: {"2025-11-09": 150, "2025-11-10": 165, ...}',
+    confidence_intervals TEXT COMMENT 'Confidence intervals dạng JSON: {"2025-11-09": {"lower": 140, "upper": 160}, ...}',
+    
+    -- Performance metrics (nếu có validation)
+    mae DECIMAL(15, 4) COMMENT 'Mean Absolute Error',
+    mse DECIMAL(15, 4) COMMENT 'Mean Squared Error',
+    rmse DECIMAL(15, 4) COMMENT 'Root Mean Squared Error',
+    mape DECIMAL(10, 4) COMMENT 'Mean Absolute Percentage Error (%)',
+    
+    -- Metadata
+    training_samples_count INT COMMENT 'Số lượng samples training',
+    training_date_start DATE COMMENT 'Ngày bắt đầu training data',
+    training_date_end DATE COMMENT 'Ngày kết thúc training data',
+    forecast_horizon_days INT DEFAULT 7 COMMENT 'Số ngày dự báo',
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT 'Thời điểm tạo forecast',
+    
+    -- Khóa ngoại
+    FOREIGN KEY (model_id) REFERENCES ml_models(id) ON DELETE SET NULL,
+    
+    -- Indexes
+    INDEX idx_branch_forecast_date (branch_id, forecast_date),
+    INDEX idx_target_metric (target_metric),
+    INDEX idx_algorithm (algorithm),
+    INDEX idx_forecast_date_range (forecast_start_date, forecast_end_date)
+    
+) COMMENT 'Bảng lưu trữ kết quả dự báo nhu cầu';
+
+-- =============================================
+-- 5. Bảng Hỗ Trợ: Cấu Hình Hệ Thống
 -- =============================================
 
 -- Bảng cấu hình hệ thống
@@ -163,7 +211,7 @@ CREATE TABLE system_configurations (
 ) COMMENT 'Bảng lưu trữ cấu hình hệ thống';
 
 -- =============================================
--- 5. Dữ Liệu Khởi Tạo
+-- 6. Dữ Liệu Khởi Tạo
 -- =============================================
 
 -- Insert default system configurations
@@ -175,7 +223,7 @@ INSERT INTO system_configurations (config_key, config_value, config_type, descri
 ('max_anomaly_history_days', '90', 'NUMBER', 'Số ngày lưu trữ lịch sử anomalies');
 
 -- =============================================
--- 6. Views & Utilities
+-- 7. Views & Utilities
 -- =============================================
 
 -- View tổng hợp anomalies
@@ -191,6 +239,24 @@ SELECT
 FROM anomaly_results ar
 WHERE ar.analysis_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
 GROUP BY ar.analysis_date, ar.branch_id;
+
+-- View tổng hợp forecasts
+CREATE VIEW v_forecast_summary AS
+SELECT 
+    fr.forecast_date,
+    fr.branch_id,
+    fr.target_metric,
+    fr.algorithm,
+    fr.forecast_horizon_days,
+    fr.training_samples_count,
+    fr.mae,
+    fr.rmse,
+    fr.mape,
+    fr.forecast_start_date,
+    fr.forecast_end_date
+FROM forecast_results fr
+WHERE fr.forecast_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+ORDER BY fr.forecast_date DESC, fr.branch_id;
 
 -- =============================================
 -- END OF CORE SCHEMA
