@@ -31,18 +31,34 @@ class Settings:
     DB_PORT: int = int(os.getenv("DB_PORT", "3306"))
     DB_USER: str = os.getenv("DB_USER", "root")
     DB_PASSWORD: str = os.getenv("DB_PASSWORD", "")
-    DB_NAME: str = os.getenv("DB_NAME", "analytics_db")
+    DB_NAME: str = os.getenv("DB_NAME", "analytics_db_report")
     
     # ML Model Settings
     MODEL_RETRAIN_FREQUENCY_DAYS: int = 7
     ANOMALY_THRESHOLD: float = 0.1
     MIN_TRAINING_SAMPLES: int = 30
     
+    # AI Provider Settings (OpenAI or Gemini)
+    AI_PROVIDER: str = os.getenv("AI_PROVIDER", "openai")
+    
     # OpenAI Settings
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+    OPENAI_BASE_URL: str = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
     OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
     OPENAI_TEMPERATURE: float = float(os.getenv("OPENAI_TEMPERATURE", "0.3"))
     OPENAI_MAX_TOKENS: int = int(os.getenv("OPENAI_MAX_TOKENS", "1500"))
+    
+    # Email Settings (for report distribution)
+    SMTP_HOST: str = os.getenv("SMTP_HOST", "smtp.gmail.com")
+    SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))
+    SMTP_USER: str = os.getenv("SMTP_USER", "")
+    SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "").strip().strip('"').strip("'")  # Remove quotes but keep spaces
+    SMTP_FROM_EMAIL: str = os.getenv("SMTP_FROM_EMAIL", "")
+    SMTP_USE_TLS: bool = os.getenv("SMTP_USE_TLS", "true").lower() == "true"
+    
+    # Report Distribution Settings
+    MANAGER_EMAIL: str = os.getenv("MANAGER_EMAIL", "")  # Default manager email
+    ENABLE_EMAIL_DISTRIBUTION: bool = os.getenv("ENABLE_EMAIL_DISTRIBUTION", "false").lower() == "true"
     
     # Feature List for ML Model
     FEATURE_LIST: list = [
