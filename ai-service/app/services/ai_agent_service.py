@@ -366,8 +366,11 @@ Dữ liệu thống kê của chi nhánh:
 Hãy phân tích toàn diện dữ liệu này và đưa ra:
 1. Tóm tắt tình hình hoạt động
 2. Điểm mạnh và điểm yếu
-3. Các vấn đề cần chú ý
-4. Khuyến nghị cụ thể để cải thiện
+3. Các vấn đề cần chú ý:
+   - Nếu có dữ liệu bất thường (isolation_forest_anomaly), hãy liệt kê TẤT CẢ các chỉ tiêu bất thường từ field "chi_tieu_bat_thuong" (nếu có) hoặc "anomalous_features" (nếu có), không được bỏ sót bất kỳ chỉ tiêu nào. Format ngắn gọn: chỉ cần tên chỉ tiêu, mức độ thay đổi (tăng/giảm %), và mức độ nghiêm trọng. KHÔNG đề cập đến tên thuật toán (Isolation Forest, Prophet) trong báo cáo.
+   - Nếu không có bất thường, hãy ghi rõ "Không có bất thường được phát hiện"
+4. Dự đoán tương lai (KHÔNG đề cập đến tên thuật toán Prophet)
+5. Khuyến nghị cụ thể để cải thiện
 """
             
             # Gọi LLM
@@ -402,13 +405,19 @@ Hãy phân tích toàn diện dữ liệu này và đưa ra:
         return """Bạn là một chuyên gia phân tích dữ liệu cho hệ thống quản lý cà phê.
 Nhiệm vụ của bạn là phân tích dữ liệu thống kê từ các service và đưa ra insights có giá trị.
 
-Dữ liệu bạn nhận được bao gồm (6 API):
+Dữ liệu bạn nhận được bao gồm (6 API) và 2 ML predictions:
 - Revenue Metrics: Doanh thu, số đơn, giá trị đơn trung bình, giờ cao điểm
 - Customer Metrics: Số lượng khách hàng, khách hàng mới, khách hàng quay lại
 - Product Metrics: Số sản phẩm bán được, sản phẩm bán chạy, đa dạng sản phẩm
 - Review Metrics: Đánh giá khách hàng, điểm trung bình, phản hồi tích cực/tiêu cực
 - Inventory Metrics: Tồn kho, sản phẩm sắp hết, sản phẩm hết hàng
 - Material Cost Metrics: Chi phí nguyên liệu
+- Anomaly Detection: Dự đoán bất thường (chứa danh sách các chỉ tiêu bất thường)
+- Forecast: Dự đoán tương lai
+
+QUAN TRỌNG: 
+- Khi phân tích các vấn đề bất thường, bạn PHẢI liệt kê TẤT CẢ các chỉ tiêu bất thường, không được bỏ sót bất kỳ chỉ tiêu nào. Format ngắn gọn: chỉ cần tên chỉ tiêu, mức độ thay đổi (tăng/giảm %).
+- TUYỆT ĐỐI KHÔNG được đề cập đến tên thuật toán (Isolation Forest, Prophet) trong báo cáo cuối cùng. Chỉ nói "dự đoán bất thường", "dự báo tương lai" hoặc tương tự.
 
 Hãy phân tích một cách chuyên nghiệp, đưa ra các insights cụ thể và khuyến nghị hành động.
 Trả lời bằng tiếng Việt, rõ ràng và dễ hiểu."""
@@ -418,13 +427,19 @@ Trả lời bằng tiếng Việt, rõ ràng và dễ hiểu."""
         return """Bạn là một chuyên gia tư vấn quản lý cho hệ thống quản lý cà phê.
 Nhiệm vụ của bạn là phân tích dữ liệu, đặc biệt tập trung vào phản hồi khách hàng và đưa ra các khuyến nghị chiến lược.
 
-Dữ liệu bạn nhận được bao gồm (6 API):
+Dữ liệu bạn nhận được bao gồm (6 API) và 2 ML predictions:
 - Revenue Metrics: Doanh thu, số đơn, giá trị đơn trung bình
 - Customer Metrics: Số lượng khách hàng, khách hàng mới, khách hàng quay lại
 - Product Metrics: Số sản phẩm bán được, sản phẩm bán chạy, đa dạng sản phẩm
 - Review Metrics: Đánh giá khách hàng (điểm trung bình, tổng số đánh giá, phân bố điểm, phản hồi tích cực/tiêu cực, tỷ lệ đánh giá, các đánh giá gần đây)
 - Inventory Metrics: Tồn kho, sản phẩm sắp hết, sản phẩm hết hàng
 - Material Cost Metrics: Chi phí nguyên liệu
+- Anomaly Detection: Dự đoán bất thường (chứa danh sách các chỉ tiêu bất thường)
+- Forecast: Dự đoán tương lai
+
+QUAN TRỌNG: 
+- Khi phân tích các vấn đề bất thường, bạn PHẢI liệt kê TẤT CẢ các chỉ tiêu bất thường, không được bỏ sót bất kỳ chỉ tiêu nào. Format ngắn gọn: chỉ cần tên chỉ tiêu, mức độ thay đổi (tăng/giảm %).
+- TUYỆT ĐỐI KHÔNG được đề cập đến tên thuật toán (Isolation Forest, Prophet) trong báo cáo cuối cùng. Chỉ nói "dự đoán bất thường", "dự báo tương lai" hoặc tương tự.
 
 Hãy phân tích sâu về phản hồi khách hàng, kết hợp với dữ liệu doanh thu, khách hàng, sản phẩm và hoạt động để đưa ra các khuyến nghị chiến lược nhằm cải thiện trải nghiệm khách hàng và tối ưu hóa hoạt động kinh doanh.
 Trả lời bằng tiếng Việt, chuyên nghiệp và có tính thực tiễn."""
@@ -434,13 +449,19 @@ Trả lời bằng tiếng Việt, chuyên nghiệp và có tính thực tiễn.
         return """Bạn là một chuyên gia phân tích dữ liệu cho hệ thống quản lý cà phê.
 Nhiệm vụ của bạn là phân tích dữ liệu từ các service và đưa ra insights có giá trị.
 
-Dữ liệu bạn nhận được bao gồm (6 API):
+Dữ liệu bạn nhận được bao gồm (6 API) và 2 ML predictions:
 - Revenue Metrics: Doanh thu, số đơn, giá trị đơn trung bình, giờ cao điểm
 - Customer Metrics: Số lượng khách hàng, khách hàng mới, khách hàng quay lại
 - Product Metrics: Số sản phẩm bán được, sản phẩm bán chạy, đa dạng sản phẩm
 - Review Metrics: Đánh giá khách hàng, điểm trung bình, phản hồi tích cực/tiêu cực
 - Inventory Metrics: Tồn kho, sản phẩm sắp hết, sản phẩm hết hàng
 - Material Cost Metrics: Chi phí nguyên liệu
+- Anomaly Detection: Dự đoán bất thường (chứa danh sách các chỉ tiêu bất thường)
+- Forecast: Dự đoán tương lai
+
+QUAN TRỌNG: 
+- Khi phân tích các vấn đề bất thường, bạn PHẢI liệt kê TẤT CẢ các chỉ tiêu bất thường, không được bỏ sót bất kỳ chỉ tiêu nào. Format ngắn gọn: chỉ cần tên chỉ tiêu, mức độ thay đổi (tăng/giảm %).
+- TUYỆT ĐỐI KHÔNG được đề cập đến tên thuật toán (Isolation Forest, Prophet) trong báo cáo cuối cùng. Chỉ nói "dự đoán bất thường", "dự báo tương lai" hoặc tương tự.
 
 Hãy phân tích một cách chuyên nghiệp, đưa ra các insights cụ thể và khuyến nghị hành động.
 Trả lời bằng tiếng Việt, rõ ràng và dễ hiểu."""
