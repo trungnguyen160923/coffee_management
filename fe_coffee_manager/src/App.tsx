@@ -14,6 +14,7 @@ import SupplierManagement from './pages/admin/SupplierManagement';
 import IngredientManagement from './pages/admin/IngredientManagement';
 import RecipeManagement from './pages/admin/RecipeManagement';
 import AdminDiscountManagementPage from './pages/admin/DiscountManagement';
+import AIStatistics from './pages/admin/AIStatistics';
 import { ManagerDashboard } from './pages/manager/ManagerDashboard';
 import StaffManagement from './pages/manager/StaffManagement';
 import ManagerSupplierManagement from './pages/manager/SupplierManagement';
@@ -97,7 +98,7 @@ function AppRoutes() {
             <Route path="branches" element={<Layout><BranchManagement /></Layout>} />
             <Route path="managers" element={<Layout><ManagerManagement /></Layout>} />
             <Route path="discounts" element={<Layout><AdminDiscountManagementPage /></Layout>} />
-            <Route path="statistics" element={<Layout><div className="p-8"><h1 className="text-2xl font-bold">Thống kê</h1></div></Layout>} />
+            <Route path="statistics" element={<Layout><AIStatistics /></Layout>} />
             {/* Unknown admin subroute: show 404 without Layout */}
             <Route path="*" element={<NotFoundPage showLoginButton={false} />} />
           </Routes>
