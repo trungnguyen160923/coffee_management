@@ -2,6 +2,7 @@ package orderservice.order_service.configuration;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -30,7 +31,8 @@ public class SecurityConfig {
             "/reviews/filter",
             "/api/discounts/available", // Allow public access to available discounts
             "/api/reservations/public/**", // Allow public access to track reservation status
-            "/api/orders/public/**" // Allow public access to track order status
+            "/api/orders/public/**", // Allow public access to track order status
+            "/api/analytics/metrics/**" // Allow access for AI service
     };
 
     private final CustomJwtDecoder customJwtDecoder;
@@ -38,44 +40,52 @@ public class SecurityConfig {
     public SecurityConfig(CustomJwtDecoder customJwtDecoder) {
         this.customJwtDecoder = customJwtDecoder;
     }
-
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity httpSecurity) throws Exception {
-        httpSecurity.authorizeHttpRequests(request -> request
-                // Public endpoints - allow all methods
-                .requestMatchers(PUBLIC_ENDPOINTS)
-                .permitAll()
-                // Specific role-based rules for branches (only for non-GET methods)
-                .requestMatchers(HttpMethod.POST, "/api/branches")
-                .hasRole("ADMIN")
-                .requestMatchers(HttpMethod.PUT, "/api/branches/**")
-                .hasRole("ADMIN")
-                .requestMatchers(HttpMethod.DELETE, "/api/branches/**")
-                .hasRole("ADMIN")
-                // Reservation access rules
-                .requestMatchers(HttpMethod.POST, "/api/reservations")
-                .permitAll() // Allow both authenticated and non-authenticated users
-                .requestMatchers(HttpMethod.GET, "/api/reservations/**")
-                .hasAnyRole("ADMIN", "MANAGER", "CUSTOMER", "STAFF")
-                .requestMatchers(HttpMethod.PUT, "/api/reservations/**")
-                .hasAnyRole("ADMIN", "MANAGER", "CUSTOMER", "STAFF")
-                .requestMatchers(HttpMethod.DELETE, "/api/reservations/**")
-                .hasAnyRole("ADMIN", "MANAGER", "STAFF")
-                // Table management access rules for Manager
-                .requestMatchers("/api/staff/tables/**")
-                .hasAnyRole("ADMIN", "MANAGER", "STAFF")
-                // POS API access rules for Staff
-                .requestMatchers("/api/pos/**")
-                .hasAnyRole("ADMIN", "MANAGER", "STAFF")
-                .anyRequest()
-                .authenticated());
+    @Order(1)
+    public SecurityFilterChain publicFilterChain(HttpSecurity httpSecurity) throws Exception {
+        httpSecurity
+                .securityMatcher(PUBLIC_ENDPOINTS)
+                .authorizeHttpRequests(request -> request
+                        .anyRequest()
+                        .permitAll())
+                .csrf(AbstractHttpConfigurer::disable);
 
-        httpSecurity.oauth2ResourceServer(oauth2 -> oauth2.jwt(jwtConfigurer -> jwtConfigurer
-                .decoder(customJwtDecoder)
-                .jwtAuthenticationConverter(jwtAuthenticationConverter()))
-                .authenticationEntryPoint(new JwtAuthenticationEntryPoint()));
-        // CORS disabled - handled by API Gateway to prevent duplicate headers
-        httpSecurity.csrf(AbstractHttpConfigurer::disable);
+        return httpSecurity.build();
+    }
+    @Bean
+    @Order(2)
+    public SecurityFilterChain protectedFilterChain(HttpSecurity httpSecurity) throws Exception {
+        httpSecurity
+                .authorizeHttpRequests(request -> request
+                        // Specific role-based rules for branches (only for non-GET methods)
+                        .requestMatchers(HttpMethod.POST, "/api/branches")
+                        .hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/branches/**")
+                        .hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/branches/**")
+                        .hasRole("ADMIN")
+                        // Reservation access rules
+                        .requestMatchers(HttpMethod.POST, "/api/reservations")
+                        .permitAll() // Allow both authenticated and non-authenticated users
+                        .requestMatchers(HttpMethod.GET, "/api/reservations/**")
+                        .hasAnyRole("ADMIN", "MANAGER", "CUSTOMER", "STAFF")
+                        .requestMatchers(HttpMethod.PUT, "/api/reservations/**")
+                        .hasAnyRole("ADMIN", "MANAGER", "CUSTOMER", "STAFF")
+                        .requestMatchers(HttpMethod.DELETE, "/api/reservations/**")
+                        .hasAnyRole("ADMIN", "MANAGER", "STAFF")
+                        // Table management access rules for Manager
+                        .requestMatchers("/api/staff/tables/**")
+                        .hasAnyRole("ADMIN", "MANAGER", "STAFF")
+                        // POS API access rules for Staff
+                        .requestMatchers("/api/pos/**")
+                        .hasAnyRole("ADMIN", "MANAGER", "STAFF")
+                        .anyRequest()
+                        .authenticated())
+                .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwtConfigurer -> jwtConfigurer
+                        .decoder(customJwtDecoder)
+                        .jwtAuthenticationConverter(jwtAuthenticationConverter()))
+                        .authenticationEntryPoint(new JwtAuthenticationEntryPoint()))
+                .csrf(AbstractHttpConfigurer::disable);
 
         return httpSecurity.build();
     }

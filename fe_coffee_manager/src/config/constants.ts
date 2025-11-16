@@ -71,6 +71,37 @@ export const API_ENDPOINTS = {
     VALIDATE: '/api/order-service/api/discounts/validate',
     AVAILABLE: '/api/order-service/api/discounts/available',
   },
+  AI_STATISTICS: {
+    BASE: '/api/ai',
+    ANALYTICS: '/api/ai',
+    AGENT: '/api/ai/agent',
+    // AI Service endpoints (port 8005)
+    AI_ANALYSIS: '/api/ai/agent/analyze',
+    REPORTS: {
+      BASE: '/api/ai/reports',
+      BY_ID: (id: number) => `/api/ai/reports/${id}`,
+      BY_BRANCH: (branchId: number, page?: number, pageSize?: number) => {
+        const params = new URLSearchParams();
+        if (page) params.append('page', page.toString());
+        if (pageSize) params.append('page_size', pageSize.toString());
+        return `/api/ai/reports/branch/${branchId}${params.toString() ? `?${params.toString()}` : ''}`;
+      },
+      BY_BRANCH_AND_DATE: (branchId: number, date: string) => `/api/ai/reports/branch/${branchId}/date/${date}`,
+      UNSENT: '/api/ai/reports/unsent/list',
+    },
+    DISTRIBUTION: {
+      SEND: (reportId: number) => `/api/ai/distribution/send/${reportId}`,
+      SEND_UNSENT: '/api/ai/distribution/send-unsent',
+      STATUS: '/api/ai/distribution/status',
+    },
+    SCHEDULER: {
+      STATUS: '/api/ai/scheduler/status',
+      START: '/api/ai/scheduler/start',
+      STOP: '/api/ai/scheduler/stop',
+      TRIGGER_DAILY: '/api/ai/scheduler/trigger/daily-reports',
+      TRIGGER_SEND_UNSENT: '/api/ai/scheduler/trigger/send-unsent',
+    },
+  },
 } as const;
 
 // HTTP Status Codes

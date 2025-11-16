@@ -1,0 +1,19 @@
+# Python dependencies cho Analytics Service
+# Database
+mysql-connector-python>=8.0.33
+pymysql>=1.1.0
+
+# Machine Learning - Isolation Forest
+scikit-learn>=1.3.0
+numpy>=1.24.0
+pandas>=2.0.0
+scipy>=1.11.0  # Dependency của scikit-learn và prophet
+
+# Machine Learning - Prophet Forecasting
+prophet>=1.1.5
+
+# Utilities
+python-dotenv>=1.0.0
+joblib>=1.3.0  # Để save/load models
+python-dateutil>=2.8.0  # Để xử lý dates
+
