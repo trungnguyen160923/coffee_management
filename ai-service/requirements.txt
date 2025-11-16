@@ -30,4 +30,11 @@ langchain-openai==0.1.7
 langchain-core==0.1.52
 openai==1.35.14
 
+# Email
+aiosmtplib==3.0.1
+email-validator==2.1.0
+
+# Scheduler
+apscheduler==3.10.4
+
 
