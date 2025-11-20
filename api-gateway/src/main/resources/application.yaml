@@ -39,12 +39,41 @@ spring:
             filters:
               - StripPrefix=1
               - RewritePath=/api/catalogs/(?<path>.*), /catalogs/$\{path}
+          - id: notification_service
+            uri: http://localhost:8006
+            predicates:
+              - Path=${app.api-prefix}/notification-service/**
+            filters:
+              - StripPrefix=1
+          # HTTP route for SockJS HTTP requests (GET /ws/info, /ws/xhr, etc.)
+          - id: notification_service_ws_http
+            uri: http://localhost:8006
+            predicates:
+              - Path=${app.api-prefix}/notification-service/ws/**
+              # Exclude WebSocket upgrade requests
+              - Header=!Upgrade, websocket
+            filters:
+              # Strip /api/notification-service, leaving /ws/**
+              # With context-path /notification-service, Spring Security will match /ws/**
+              - StripPrefix=2
+          # WebSocket route for actual WebSocket connections
+          - id: notification_service_ws
+            uri: ws://localhost:8006
+            predicates:
+              - Path=${app.api-prefix}/notification-service/ws/**
+              # Only match WebSocket upgrade requests
+              - Header=Upgrade, websocket
+            filters:
+              # Strip /api/notification-service, leaving /ws/**
+              - StripPrefix=2
           - id: fallback_route
             uri: http://localhost:8000
             predicates:
               - Path=/**
             filters:
               - RewritePath=/.*, /api/fallback
+    default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Origin, Access-Control-Allow-Credentials, Access-Control-Allow-Methods, Access-Control-Allow-Headers, RETAIN_UNIQUE
   # kafka:
   #   bootstrap-servers: localhost:9094
   #   consumer:

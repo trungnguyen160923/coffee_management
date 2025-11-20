@@ -1,5 +1,5 @@
 // API Configuration
-const API_BASE_URL = import.meta.env.API_BASE_URL || 'http://localhost:8000';
+export const API_BASE_URL = import.meta.env.API_BASE_URL || 'http://localhost:8000';
 const AI_SERVICE_URL = import.meta.env.AI_SERVICE_URL || 'http://localhost:8005';
 const REFRESH_ENDPOINT = '/api/auth-service/auth/refresh';
 // seconds before expiry to proactively refresh

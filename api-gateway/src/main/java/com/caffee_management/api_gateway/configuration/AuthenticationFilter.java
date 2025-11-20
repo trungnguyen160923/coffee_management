@@ -93,7 +93,24 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
-        log.info("Enter authentication filter....");
+        String path = exchange.getRequest().getURI().getPath();
+        String method = exchange.getRequest().getMethod().name();
+        String query = exchange.getRequest().getURI().getQuery();
+        
+        log.info("=== API Gateway AuthenticationFilter ===");
+        log.info("Method: {}", method);
+        log.info("Path: {}", path);
+        log.info("Query: {}", query);
+        log.info("Full URI: {}", exchange.getRequest().getURI());
+        
+        // Skip authentication for WebSocket handshake and SockJS endpoints
+        boolean isWebSocketPath = path.contains("/ws/") || path.contains("/notification-service/ws");
+        log.info("Is WebSocket path: {}", isWebSocketPath);
+        
+        if (isWebSocketPath) {
+            log.info("Skipping authentication for WebSocket/SockJS endpoint");
+            return chain.filter(exchange);
+        }
 
         if (isPublicEndpoint(exchange.getRequest()))
             return chain.filter(exchange);

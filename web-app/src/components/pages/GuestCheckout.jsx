@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { cartService } from '../../services/cartService';
 import { orderService } from '../../services/orderService';
+import { notificationService } from '../../services/notificationService';
 import { emailService } from '../../services/emailService';
 import { discountService } from '../../services/discountService';
 import { branchService } from '../../services/branchService';
@@ -417,6 +418,29 @@ const GuestCheckout = () => {
 
             const orderResult = await orderService.createGuestOrder(payload);
             try { await cartService.clearCart(); } catch (_) { }
+
+            try {
+                const totalAmount = orderResult?.totalAmount ??
+                    cartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
+                await notificationService.notifyOrderCreated({
+                    orderId: orderResult?.orderId,
+                    branchId: selectedBranch.branchId,
+                    customerId: null,
+                    customerName: formData.name,
+                    customerEmail: formData.email,
+                    phone: formData.phone,
+                    totalAmount,
+                    paymentMethod: formData.paymentMethod,
+                    createdAt: new Date().toISOString(),
+                    items: cartItems.map((it) => ({
+                        pdId: it.productDetailId,
+                        productName: it.productName || it.name || 'Item',
+                        quantity: it.quantity,
+                    })),
+                });
+            } catch (notifyError) {
+                console.error('Failed to notify staff about guest order:', notifyError);
+            }
 
             // Send order confirmation email
             try {

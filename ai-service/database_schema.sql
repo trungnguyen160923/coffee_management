@@ -1,8 +1,6 @@
--- Database schema for AI Analytics Service
--- Create database if not exists
-CREATE DATABASE IF NOT EXISTS analytics_db_report CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS analytics_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-USE analytics_db_report;
+USE analytics_db;
 
 -- Table for storing AI-generated reports
 CREATE TABLE IF NOT EXISTS ai_reports (

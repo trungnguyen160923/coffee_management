@@ -159,7 +159,7 @@ export const getCartIdFromAPI = async () => {
         }
 
         const userData = JSON.parse(user);
-        const userId = userData.userId;
+        const userId = userData.userId ?? userData.user_id;
         
         if (!userId) {
             return null;

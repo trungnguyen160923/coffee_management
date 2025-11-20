@@ -1,4 +1,0 @@
-"""
-Analytics Service - Clean Architecture
-"""
-
