@@ -1,0 +1,77 @@
+server:
+  port: 8006
+  servlet:
+    context-path: /notification-service
+
+spring:
+  application:
+    name: notification-service
+  datasource:
+    url: jdbc:mysql://localhost:3306/notification_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    username: root
+    password: 12345678
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+    database-platform: org.hibernate.dialect.MySQLDialect
+  kafka:
+    bootstrap-servers: localhost:9094
+    consumer:
+      group-id: notification-service
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "*"
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+  mail:
+    # ============================================
+    # EMAIL CONFIGURATION
+    # ============================================
+    # Option 1: Brevo (Sendinblue) - RECOMMENDED for production
+    # - Better deliverability and analytics
+    # - Free tier: 300 emails/day
+    # - Get SMTP credentials from: https://app.brevo.com/settings/keys/smtp
+    # host: smtp-relay.brevo.com
+    # port: 587
+    # username: your_brevo_email@example.com  # Your Brevo account email
+    # password: your_brevo_smtp_key           # SMTP key from Brevo dashboard
+    
+    # Option 2: Gmail SMTP - Simple but limited
+    # - Free but has daily limits (500 emails/day)
+    # - May have deliverability issues
+    # - Need to enable "App Password" in Google Account settings
+    host: smtp.gmail.com
+    port: 587
+    username: changeme@gmail.com
+    password: changeme-app-password
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+          ssl:
+            trust: smtp.gmail.com
+
+jwt:
+  signerKey: "1TjXchw5FloESb63Kc+DFhTARvpWL4jUGCwfGWxuG5SIf/1y/LgJxHnMqaF6A/ij"
+
+app:
+  cors:
+    allowed-origins:
+      - http://localhost:5173
+      - http://localhost:8000
+      - http://localhost:3000
+  services:
+    auth: http://localhost:8001/auth-service
+    order: http://localhost:8002/order-service
+    profile: http://localhost:8003/profiles
+    catalog: http://localhost:8004/catalogs

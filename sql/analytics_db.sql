@@ -148,9 +148,6 @@ CREATE TABLE anomaly_results (
 
 ) COMMENT 'Bảng lưu trữ kết quả dự đoán bất thường từ mô hình ML';
 
--- =============================================
--- 4. Bảng Forecast: Kết quả Dự báo Nhu cầu
--- =============================================
 CREATE TABLE IF NOT EXISTS forecast_results (
     id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT 'Khóa chính tự tăng',
     branch_id INT NOT NULL COMMENT 'ID chi nhánh',
@@ -193,7 +190,43 @@ CREATE TABLE IF NOT EXISTS forecast_results (
 ) COMMENT 'Bảng lưu trữ kết quả dự báo nhu cầu';
 
 -- =============================================
--- 5. Bảng Hỗ Trợ: Cấu Hình Hệ Thống
+-- 5. Bảng Báo Cáo AI: ai_reports
+-- =============================================
+CREATE TABLE IF NOT EXISTS ai_reports (
+    id INT AUTO_INCREMENT PRIMARY KEY COMMENT 'Khóa chính tự tăng',
+    branch_id INT NOT NULL COMMENT 'ID chi nhánh',
+    report_date DATETIME NOT NULL COMMENT 'Ngày tạo báo cáo',
+    tool_type VARCHAR(50) NULL COMMENT 'Loại công cụ AI sử dụng',
+    
+    -- Report content
+    analysis TEXT NOT NULL COMMENT 'Nội dung phân tích chi tiết',
+    summary JSON NULL COMMENT 'Tóm tắt báo cáo dạng JSON',
+    recommendations JSON NULL COMMENT 'Khuyến nghị dạng JSON',
+    raw_data JSON NULL COMMENT 'Dữ liệu thô phục vụ báo cáo',
+    
+    -- Metadata
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Thời điểm tạo',
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Thời điểm cập nhật',
+    
+    -- Status flags
+    is_sent BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'Đã gửi báo cáo hay chưa',
+    sent_at DATETIME NULL COMMENT 'Thời điểm gửi báo cáo',
+    
+    -- Additional metadata
+    query TEXT NULL COMMENT 'Truy vấn/dữ liệu đầu vào dùng để sinh báo cáo',
+    ai_model VARCHAR(100) NULL COMMENT 'Tên model AI sử dụng',
+    processing_time_ms INT NULL COMMENT 'Thời gian xử lý (ms)',
+    
+    -- Indexes for better query performance
+    INDEX idx_branch_id (branch_id),
+    INDEX idx_report_date (report_date),
+    INDEX idx_branch_date (branch_id, report_date),
+    INDEX idx_is_sent (is_sent),
+    INDEX idx_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT 'Bảng lưu trữ báo cáo AI được sinh tự động';
+
+-- =============================================
+-- 6. Bảng Hỗ Trợ: Cấu Hình Hệ Thống
 -- =============================================
 
 -- Bảng cấu hình hệ thống
@@ -211,7 +244,7 @@ CREATE TABLE system_configurations (
 ) COMMENT 'Bảng lưu trữ cấu hình hệ thống';
 
 -- =============================================
--- 6. Dữ Liệu Khởi Tạo
+-- 7. Dữ Liệu Khởi Tạo
 -- =============================================
 
 -- Insert default system configurations
@@ -223,7 +256,7 @@ INSERT INTO system_configurations (config_key, config_value, config_type, descri
 ('max_anomaly_history_days', '90', 'NUMBER', 'Số ngày lưu trữ lịch sử anomalies');
 
 -- =============================================
--- 7. Views & Utilities
+-- 8. Views & Utilities
 -- =============================================
 
 -- View tổng hợp anomalies

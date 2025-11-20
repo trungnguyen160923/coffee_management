@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 
 import { DEFAULT_IMAGES } from '../../config/constants';
+import { NotificationBell } from '../notifications/NotificationBell';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -280,7 +281,12 @@ export function Layout({ children }: LayoutProps) {
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 h-screen overflow-y-auto">
+        <div className="relative flex-1 h-screen overflow-y-auto">
+          <div className="pointer-events-none sticky top-4 z-30 flex justify-end pr-6">
+            <div className="pointer-events-auto">
+              <NotificationBell />
+            </div>
+          </div>
           {children}
         </div>
       </div>
