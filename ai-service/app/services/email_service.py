@@ -744,6 +744,242 @@ Ngày: {report_date}
         
         return story
     
+    def _format_all_branches_ai_analysis(
+        self,
+        analysis_text: str,
+        heading_style: ParagraphStyle,
+        heading3_style: ParagraphStyle,
+        normal_style: ParagraphStyle
+    ) -> List:
+        """
+        Format AI analysis text for ALL BRANCHES by organizing into sections:
+        1. TỔNG QUAN TẤT CẢ CHI NHÁNH
+        2. ĐÁNH GIÁ TỪNG CHI NHÁNH
+        3. SO SÁNH VÀ PHÂN TÍCH
+        4. KHUYẾN NGHỊ CHO TỪNG CHI NHÁNH
+        5. KẾT LUẬN
+        """
+        if not analysis_text:
+            return []
+        
+        story = []
+        lines = analysis_text.split('\n')
+        
+        # Sections to extract
+        sections = {
+            'overview': {'title': '1. TỔNG QUAN TẤT CẢ CHI NHÁNH', 'content': []},
+            'branch_evaluation': {'title': '2. ĐÁNH GIÁ TỪNG CHI NHÁNH', 'content': []},
+            'comparison': {'title': '3. SO SÁNH VÀ PHÂN TÍCH', 'content': []},
+            'recommendations': {'title': '4. KHUYẾN NGHỊ CHO TỪNG CHI NHÁNH', 'content': []},
+            'conclusion': {'title': '5. KẾT LUẬN', 'content': []}
+        }
+        
+        current_section = None
+        current_content = []
+        
+        def clean_text(text: str) -> str:
+            """Remove markdown formatting characters"""
+            text = text.strip()
+            text = text.replace('###', '').replace('##', '').replace('#', '')
+            text = text.replace('**', '').replace('*', '').replace('__', '').replace('_', '')
+            text = text.strip()
+            text = re.sub(r'^\d+\.\s*', '', text)
+            return text.strip()
+        
+        def detect_section(line: str) -> Optional[str]:
+            """Detect which section a line belongs to"""
+            line_lower = line.lower()
+            cleaned = clean_text(line)
+            cleaned_lower = cleaned.lower()
+            
+            # Check for overview section (1. TỔNG QUAN...)
+            if (re.match(r'^[#\s]*1[\.\)]\s*', line_lower) or 
+                'tổng quan' in cleaned_lower or 
+                'tổng quan tất cả chi nhánh' in cleaned_lower):
+                return 'overview'
+            
+            # Check for branch evaluation section (2. ĐÁNH GIÁ...)
+            if (re.match(r'^[#\s]*2[\.\)]\s*', line_lower) or 
+                ('đánh giá' in cleaned_lower and 'từng chi nhánh' in cleaned_lower)):
+                return 'branch_evaluation'
+            
+            # Check for comparison section (3. SO SÁNH...)
+            if (re.match(r'^[#\s]*3[\.\)]\s*', line_lower) or 
+                ('so sánh' in cleaned_lower and 'phân tích' in cleaned_lower)):
+                return 'comparison'
+            
+            # Check for recommendations section (4. KHUYẾN NGHỊ...)
+            if (re.match(r'^[#\s]*4[\.\)]\s*', line_lower) or 
+                ('khuyến nghị' in cleaned_lower and 'từng chi nhánh' in cleaned_lower)):
+                return 'recommendations'
+            
+            # Check for conclusion section (5. KẾT LUẬN...)
+            if (re.match(r'^[#\s]*5[\.\)]\s*', line_lower) or 
+                'kết luận' in cleaned_lower):
+                return 'conclusion'
+            
+            return None
+        
+        # Parse the analysis text
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            
+            # Check if this line starts a new section
+            detected_section = detect_section(line)
+            if detected_section:
+                # Save previous section content
+                if current_section and current_content:
+                    sections[current_section]['content'].extend(current_content)
+                current_section = detected_section
+                current_content = []
+                continue
+            
+            # If we haven't detected a section yet, try to find one
+            if current_section is None:
+                detected_section = detect_section(line)
+                if detected_section:
+                    current_section = detected_section
+                    current_content = []
+                    continue
+            
+            # Clean and add content
+            cleaned = clean_text(line)
+            if cleaned and len(cleaned) > 3:
+                # Skip lines that are just section headers
+                is_header_only = (
+                    any(keyword in cleaned.lower() for keyword in [
+                        'tổng quan', 'đánh giá từng chi nhánh', 'so sánh và phân tích',
+                        'khuyến nghị cho từng chi nhánh', 'kết luận', 'tình hình hoạt động'
+                    ]) and len(cleaned) < 50
+                )
+                if not is_header_only:
+                    # Remove bullet points that might remain
+                    cleaned = re.sub(r'^[-•*]\s*', '', cleaned)
+                    if cleaned and len(cleaned) > 3:
+                        current_content.append(cleaned)
+        
+        # Save last section
+        if current_section and current_content:
+            sections[current_section]['content'].extend(current_content)
+        
+        # If no sections were detected, try to parse by common patterns
+        if not any(sections[s]['content'] for s in sections):
+            # Fallback: parse by detecting section keywords in content
+            current_section = None
+            for line in lines:
+                cleaned = clean_text(line)
+                if not cleaned or len(cleaned) < 5:
+                    continue
+                
+                # Try to detect section from content
+                if 'tổng quan' in cleaned.lower() or 'tổng doanh thu' in cleaned.lower():
+                    current_section = 'overview'
+                    continue
+                elif 'đánh giá từng chi nhánh' in cleaned.lower() or 'chi nhánh 1:' in cleaned.lower() or 'chi nhánh 2:' in cleaned.lower():
+                    current_section = 'branch_evaluation'
+                    continue
+                elif 'so sánh' in cleaned.lower() and 'phân tích' in cleaned.lower():
+                    current_section = 'comparison'
+                    continue
+                elif 'khuyến nghị' in cleaned.lower() and 'từng chi nhánh' in cleaned.lower():
+                    current_section = 'recommendations'
+                    continue
+                elif 'kết luận' in cleaned.lower() or 'tóm tắt tình hình tổng thể' in cleaned.lower():
+                    current_section = 'conclusion'
+                    continue
+                
+                # Add content to current section
+                if current_section:
+                    sections[current_section]['content'].append(cleaned)
+                elif not current_section:
+                    # Default to overview if no section detected
+                    sections['overview']['content'].append(cleaned)
+        
+        # Build PDF story from sections
+        # 1. Overview section
+        if sections['overview']['content']:
+            story.append(Paragraph(sections['overview']['title'], heading3_style))
+            story.append(Spacer(1, 0.15*inch))
+            for item in sections['overview']['content']:
+                if item and len(item) > 5:
+                    # Check if it's a sub-section header
+                    if any(keyword in item.lower() for keyword in ['tổng doanh thu', 'số đơn hàng', 'số khách hàng', 'chi nhánh hoạt động']):
+                        story.append(Paragraph(f"• {item}", normal_style))
+                    else:
+                        story.append(Paragraph(f"  {item}", normal_style))
+                    story.append(Spacer(1, 0.1*inch))
+            story.append(Spacer(1, 0.2*inch))
+        
+        # 2. Branch Evaluation section
+        if sections['branch_evaluation']['content']:
+            story.append(Paragraph(sections['branch_evaluation']['title'], heading3_style))
+            story.append(Spacer(1, 0.15*inch))
+            for item in sections['branch_evaluation']['content']:
+                if item and len(item) > 5:
+                    # Check if it's a branch header (Chi nhánh X:)
+                    if re.match(r'^chi nhánh \d+:', item.lower()):
+                        story.append(Paragraph(f"• {item}", normal_style))
+                    elif any(keyword in item.lower() for keyword in ['id:', 'điểm mạnh:', 'điểm yếu:', 'đánh giá tổng thể:', 'xếp hạng:']):
+                        story.append(Paragraph(f"  • {item}", normal_style))
+                    else:
+                        story.append(Paragraph(f"    {item}", normal_style))
+                    story.append(Spacer(1, 0.08*inch))
+            story.append(Spacer(1, 0.2*inch))
+        
+        # 3. Comparison section
+        if sections['comparison']['content']:
+            story.append(Paragraph(sections['comparison']['title'], heading3_style))
+            story.append(Spacer(1, 0.15*inch))
+            for item in sections['comparison']['content']:
+                if item and len(item) > 5:
+                    # Check if it's a sub-section header
+                    if any(keyword in item.lower() for keyword in ['chi nhánh nào đang dẫn đầu', 'chi nhánh nào cần hỗ trợ', 'xu hướng chung']):
+                        story.append(Paragraph(f"• {item}", normal_style))
+                    else:
+                        story.append(Paragraph(f"  {item}", normal_style))
+                    story.append(Spacer(1, 0.1*inch))
+            story.append(Spacer(1, 0.2*inch))
+        
+        # 4. Recommendations section
+        if sections['recommendations']['content']:
+            story.append(Paragraph(sections['recommendations']['title'], heading3_style))
+            story.append(Spacer(1, 0.15*inch))
+            for item in sections['recommendations']['content']:
+                if item and len(item) > 5:
+                    # Check if it's a branch recommendation header
+                    if re.match(r'^(main branch|sunshine|riverside|laza|chi nhánh \d+):', item.lower()):
+                        story.append(Paragraph(f"• {item}", normal_style))
+                    elif re.match(r'^\d+\.', item):
+                        story.append(Paragraph(f"  {item}", normal_style))
+                    else:
+                        story.append(Paragraph(f"    {item}", normal_style))
+                    story.append(Spacer(1, 0.1*inch))
+            story.append(Spacer(1, 0.2*inch))
+        
+        # 5. Conclusion section (IMPORTANT - ensure it's always included)
+        if sections['conclusion']['content']:
+            story.append(Paragraph(sections['conclusion']['title'], heading3_style))
+            story.append(Spacer(1, 0.15*inch))
+            for item in sections['conclusion']['content']:
+                if item and len(item) > 5:
+                    # Check if it's a sub-section header
+                    if any(keyword in item.lower() for keyword in ['tóm tắt tình hình tổng thể', 'đề xuất hành động ưu tiên']):
+                        story.append(Paragraph(f"• {item}", normal_style))
+                    else:
+                        story.append(Paragraph(f"  {item}", normal_style))
+                    story.append(Spacer(1, 0.1*inch))
+            story.append(Spacer(1, 0.2*inch))
+        else:
+            # If conclusion section is missing, add a placeholder
+            story.append(Paragraph(sections['conclusion']['title'], heading3_style))
+            story.append(Spacer(1, 0.15*inch))
+            story.append(Paragraph("  Phần kết luận sẽ được cập nhật trong báo cáo tiếp theo.", normal_style))
+            story.append(Spacer(1, 0.2*inch))
+        
+        return story
+    
     def _generate_report_pdf_file(
         self,
         branch_id: int,
@@ -1439,4 +1675,689 @@ Ngày: {report_date}
             logger.warning(f"Failed to create forecast chart: {e}")
             plt.close()
             return None
+    
+    # ========== Admin Email Methods (All Branches) ==========
+    
+    async def send_all_branches_report_email(
+        self,
+        to_emails: List[str],
+        report_date: str,
+        analysis: str,
+        summary: Optional[dict] = None,
+        recommendations: Optional[List[str]] = None,
+        raw_data: Optional[Dict[str, Any]] = None
+    ) -> bool:
+        """
+        Send AI report for ALL branches via email to admin
+        
+        Args:
+            to_emails: List of recipient email addresses (admin emails)
+            report_date: Report date (string)
+            analysis: Full AI analysis text for all branches
+            summary: Summary metrics across all branches (optional)
+            recommendations: List of recommendations (optional)
+            raw_data: Raw data dictionary with all branches metrics (optional)
+        
+        Returns:
+            True if sent successfully, False otherwise
+        """
+        if not settings.ENABLE_EMAIL_DISTRIBUTION:
+            logger.info("Email distribution is disabled. Skipping email send.")
+            return False
+        
+        if not self.smtp_user or not self.smtp_password:
+            logger.warning("SMTP credentials not configured. Cannot send email.")
+            return False
+        
+        try:
+            # Create email message
+            message = MIMEMultipart("alternative")
+            message["From"] = self.smtp_from
+            message["To"] = ", ".join(to_emails)
+            message["Subject"] = f"📊 Báo Cáo Phân Tích AI - Tất Cả Chi Nhánh - {report_date}"
+            
+            # Build HTML email body
+            html_body = self._build_all_branches_email_html(
+                report_date=report_date,
+                analysis=analysis,
+                summary=summary,
+                recommendations=recommendations,
+                raw_data=raw_data
+            )
+            
+            # Build plain text version
+            text_body = self._build_all_branches_email_text(
+                report_date=report_date,
+                analysis=analysis,
+                summary=summary,
+                recommendations=recommendations
+            )
+            
+            # Add both versions
+            message.attach(MIMEText(text_body, "plain", "utf-8"))
+            message.attach(MIMEText(html_body, "html", "utf-8"))
+            
+            # Generate and attach PDF report file
+            try:
+                pdf_path = self._generate_all_branches_pdf_file(
+                    report_date=report_date,
+                    analysis=analysis,
+                    summary=summary,
+                    recommendations=recommendations,
+                    raw_data=raw_data
+                )
+                
+                # Attach PDF file
+                with open(pdf_path, 'rb') as f:
+                    attachment = MIMEBase('application', 'pdf')
+                    attachment.set_payload(f.read())
+                    encoders.encode_base64(attachment)
+                    attachment.add_header(
+                        'Content-Disposition',
+                        f'attachment; filename= "Bao_Cao_AI_Tat_Ca_Chi_Nhanh_{report_date.replace("-", "_")}.pdf"'
+                    )
+                    message.attach(attachment)
+                
+                # Clean up temporary file
+                os.unlink(pdf_path)
+                logger.info(f"All branches report PDF file attached successfully")
+            except Exception as e:
+                logger.warning(f"Failed to attach PDF report file: {e}. Continuing without attachment.", exc_info=True)
+            
+            # Send email using SMTPAsync client
+            if self.smtp_port == 465:
+                smtp = aiosmtplib.SMTP(
+                    hostname=self.smtp_host,
+                    port=self.smtp_port,
+                    use_tls=True,
+                )
+            else:
+                smtp = aiosmtplib.SMTP(
+                    hostname=self.smtp_host,
+                    port=self.smtp_port,
+                    use_tls=False,
+                )
+            
+            await smtp.connect()
+            
+            if self.smtp_port == 587:
+                try:
+                    await smtp.starttls()
+                except Exception as tls_error:
+                    error_msg = str(tls_error).lower()
+                    if "already using tls" not in error_msg and "connection already" not in error_msg:
+                        raise
+            
+            await smtp.login(self.smtp_user, self.smtp_password)
+            await smtp.send_message(message)
+            await smtp.quit()
+            
+            logger.info(f"All branches report email sent successfully to {to_emails}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error sending all branches report email: {e}", exc_info=True)
+            return False
+    
+    def _build_all_branches_email_html(
+        self,
+        report_date: str,
+        analysis: str,
+        summary: Optional[dict] = None,
+        recommendations: Optional[List[str]] = None,
+        raw_data: Optional[Dict[str, Any]] = None
+    ) -> str:
+        """Build HTML email body for all branches report"""
+        # Format summary metrics nicely
+        summary_html = ""
+        if summary:
+            summary_html = """
+                    <div class="summary-box">
+                        <h2>📈 Tóm Tắt Metrics Tổng Hợp</h2>
+                        <div class="metrics-grid">
+            """
+            # Key metrics to highlight for all branches
+            key_metrics = {
+                'total_branches': ('🏢 Tổng Số Chi Nhánh', 'chi nhánh'),
+                'active_branches': ('✅ Chi Nhánh Hoạt Động', 'chi nhánh'),
+                'total_revenue': ('💰 Tổng Doanh Thu', 'VNĐ'),
+                'total_order_count': ('🛒 Tổng Số Đơn Hàng', 'đơn'),
+                'avg_order_value': ('📊 Giá Trị TB/Đơn', 'VNĐ'),
+                'total_customer_count': ('👥 Tổng Khách Hàng', 'người'),
+                'total_new_customers': ('🆕 Khách Hàng Mới', 'người'),
+                'total_repeat_customers': ('🔄 Khách Hàng Quay Lại', 'người'),
+                'overall_customer_retention_rate': ('📈 Tỷ Lệ Giữ Chân', '%'),
+                'total_unique_products_sold': ('📦 Sản Phẩm Đã Bán', 'sản phẩm'),
+                'overall_avg_review_score': ('⭐ Đánh Giá TB', '/5'),
+                'total_reviews': ('💬 Tổng Đánh Giá', 'đánh giá'),
+                'average_revenue_per_branch': ('💵 Doanh Thu TB/Chi Nhánh', 'VNĐ'),
+            }
+            
+            for key, (label, unit) in key_metrics.items():
+                if key in summary and summary[key] is not None:
+                    value = summary[key]
+                    if isinstance(value, (int, float)):
+                        if key in ['total_revenue', 'avg_order_value', 'average_revenue_per_branch']:
+                            value = f"{value:,.0f}".replace(',', '.')
+                        elif key == 'overall_avg_review_score':
+                            value = f"{value:.2f}"
+                        elif key == 'overall_customer_retention_rate':
+                            value = f"{value * 100:.2f}" if value < 1 else f"{value:.2f}"
+                        elif isinstance(value, float):
+                            value = f"{value:.2f}"
+                    summary_html += f"""
+                            <div class="metric-item">
+                                <div class="metric-label">{label}</div>
+                                <div class="metric-value">{value} {unit}</div>
+                            </div>
+                    """
+            
+            summary_html += """
+                        </div>
+                    </div>
+            """
+        
+        # Format recommendations
+        recommendations_html = ""
+        if recommendations:
+            recommendations_html = """
+                    <div class="recommendations">
+                        <h2>💡 Khuyến Nghị Hành Động</h2>
+                        <ol class="recommendations-list">
+            """
+            for i, rec in enumerate(recommendations, 1):
+                priority_class = "normal"
+                if any(word in rec.lower() for word in ['khẩn cấp', 'khẩn', 'ngay lập tức']):
+                    priority_class = "urgent"
+                elif any(word in rec.lower() for word in ['quan trọng', 'nên', 'cần']):
+                    priority_class = "important"
+                
+                recommendations_html += f"""
+                            <li class="recommendation-item {priority_class}">
+                                <span class="rec-number">{i}</span>
+                                <span class="rec-text">{rec}</span>
+                            </li>
+                """
+            recommendations_html += """
+                        </ol>
+                    </div>
+            """
+        
+        html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>
+                * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+                body {{ 
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+                    line-height: 1.6; 
+                    color: #333; 
+                    background-color: #f5f5f5;
+                    padding: 20px;
+                }}
+                .email-container {{ 
+                    max-width: 700px; 
+                    margin: 0 auto; 
+                    background-color: #ffffff;
+                    border-radius: 10px;
+                    overflow: hidden;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                }}
+                .header {{ 
+                    background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+                    color: white; 
+                    padding: 30px 20px; 
+                    text-align: center;
+                }}
+                .header h1 {{ 
+                    font-size: 28px; 
+                    margin-bottom: 10px;
+                    font-weight: 600;
+                }}
+                .header p {{ 
+                    font-size: 16px; 
+                    opacity: 0.95;
+                }}
+                .content {{ 
+                    padding: 30px 20px; 
+                }}
+                .summary-box {{ 
+                    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+                    padding: 20px; 
+                    margin: 20px 0; 
+                    border-radius: 8px;
+                    border-left: 5px solid #e74c3c;
+                }}
+                .summary-box h2 {{
+                    color: #e74c3c;
+                    margin-bottom: 15px;
+                    font-size: 20px;
+                }}
+                .metrics-grid {{
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                    gap: 15px;
+                    margin-top: 15px;
+                }}
+                .metric-item {{
+                    background: white;
+                    padding: 15px;
+                    border-radius: 6px;
+                    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+                }}
+                .metric-label {{
+                    font-size: 13px;
+                    color: #666;
+                    margin-bottom: 5px;
+                }}
+                .metric-value {{
+                    font-size: 18px;
+                    font-weight: bold;
+                    color: #333;
+                }}
+                .analysis-section {{
+                    background-color: #f9f9f9;
+                    padding: 20px;
+                    margin: 20px 0;
+                    border-radius: 8px;
+                    border-left: 5px solid #4CAF50;
+                }}
+                .analysis-section h2 {{
+                    color: #4CAF50;
+                    margin-bottom: 15px;
+                    font-size: 20px;
+                }}
+                .analysis-preview {{
+                    white-space: pre-wrap;
+                    color: #555;
+                    line-height: 1.8;
+                    max-height: 300px;
+                    overflow: hidden;
+                }}
+                .recommendations {{
+                    background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%);
+                    padding: 20px; 
+                    margin: 20px 0; 
+                    border-radius: 8px;
+                    border-left: 5px solid #f39c12;
+                }}
+                .recommendations h2 {{
+                    color: #d35400;
+                    margin-bottom: 15px;
+                    font-size: 20px;
+                }}
+                .recommendations-list {{
+                    list-style: none;
+                    padding-left: 0;
+                }}
+                .recommendation-item {{
+                    display: flex;
+                    align-items: flex-start;
+                    margin: 12px 0;
+                    padding: 12px;
+                    background: white;
+                    border-radius: 6px;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                }}
+                .recommendation-item.urgent {{
+                    border-left: 4px solid #e74c3c;
+                }}
+                .recommendation-item.important {{
+                    border-left: 4px solid #f39c12;
+                }}
+                .recommendation-item.normal {{
+                    border-left: 4px solid #3498db;
+                }}
+                .rec-number {{
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    width: 28px;
+                    height: 28px;
+                    background: #e74c3c;
+                    color: white;
+                    border-radius: 50%;
+                    font-weight: bold;
+                    margin-right: 12px;
+                    flex-shrink: 0;
+                }}
+                .rec-text {{
+                    flex: 1;
+                    color: #333;
+                }}
+                .attachment-notice {{
+                    background-color: #e8f4f8;
+                    padding: 15px;
+                    margin: 20px 0;
+                    border-radius: 6px;
+                    border-left: 4px solid #3498db;
+                    text-align: center;
+                }}
+                .attachment-notice strong {{
+                    color: #2980b9;
+                }}
+                .footer {{ 
+                    margin-top: 30px; 
+                    padding-top: 20px; 
+                    border-top: 2px solid #eee; 
+                    font-size: 12px; 
+                    color: #999; 
+                    text-align: center;
+                }}
+                @media only screen and (max-width: 600px) {{
+                    .metrics-grid {{
+                        grid-template-columns: 1fr;
+                    }}
+                    .header h1 {{
+                        font-size: 24px;
+                    }}
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="email-container">
+                <div class="header">
+                    <h1>📊 Báo Cáo Phân Tích AI - Tất Cả Chi Nhánh</h1>
+                    <p>Ngày: {report_date}</p>
+                </div>
+                <div class="content">
+                    {summary_html}
+                    
+                    {recommendations_html}
+                    
+                    <div class="attachment-notice">
+                        <strong>📎 File Báo Cáo Đầy Đủ (PDF)</strong><br>
+                        Vui lòng mở file PDF đính kèm để xem báo cáo chi tiết với đánh giá từng chi nhánh, so sánh hiệu suất và khuyến nghị cụ thể.
+                    </div>
+                    
+                    <div class="footer">
+                        <p>Tạo tự động bởi AI Analytics Service - Dành cho Admin</p>
+                    </div>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        return html
+    
+    def _build_all_branches_email_text(
+        self,
+        report_date: str,
+        analysis: str,
+        summary: Optional[dict] = None,
+        recommendations: Optional[List[str]] = None
+    ) -> str:
+        """Build plain text email body for all branches"""
+        text = f"""
+BÁO CÁO PHÂN TÍCH AI - TẤT CẢ CHI NHÁNH
+Ngày: {report_date}
+
+"""
+        if summary:
+            text += "TÓM TẮT METRICS TỔNG HỢP:\n"
+            for key, value in summary.items():
+                if value is not None:
+                    text += f"- {key.replace('_', ' ').title()}: {value}\n"
+            text += "\n"
+        
+        if recommendations:
+            text += "KHUYẾN NGHỊ:\n"
+            for i, rec in enumerate(recommendations, 1):
+                text += f"{i}. {rec}\n"
+        
+        return text
+    
+    def _generate_all_branches_pdf_file(
+        self,
+        report_date: str,
+        analysis: str,
+        summary: Optional[dict] = None,
+        recommendations: Optional[List[str]] = None,
+        raw_data: Optional[Dict[str, Any]] = None
+    ) -> str:
+        """Generate comprehensive PDF report file for all branches"""
+        # Format currency
+        def format_currency(value):
+            if isinstance(value, (int, float)):
+                return f"{value:,.0f}".replace(',', '.')
+            return str(value)
+        
+        # Create temporary PDF file
+        tmp_file = tempfile.NamedTemporaryFile(suffix='.pdf', delete=False)
+        pdf_path = tmp_file.name
+        tmp_file.close()
+        
+        # Register Vietnamese font
+        vietnamese_font = EmailService._register_vietnamese_font()
+        
+        # Create PDF document
+        doc = SimpleDocTemplate(pdf_path, pagesize=A4)
+        story = []
+        styles = getSampleStyleSheet()
+        
+        # Custom styles with Vietnamese font
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontName=vietnamese_font,
+            fontSize=24,
+            textColor=colors.HexColor('#e74c3c'),
+            spaceAfter=30,
+            alignment=TA_CENTER
+        )
+        
+        heading_style = ParagraphStyle(
+            'CustomHeading',
+            parent=styles['Heading2'],
+            fontName=vietnamese_font,
+            fontSize=18,
+            textColor=colors.HexColor('#e74c3c'),
+            spaceAfter=15,
+            spaceBefore=20
+        )
+        
+        normal_style = ParagraphStyle(
+            'CustomNormal',
+            parent=styles['Normal'],
+            fontName=vietnamese_font,
+            fontSize=10
+        )
+        
+        heading3_style = ParagraphStyle(
+            'CustomHeading3',
+            parent=styles['Heading3'],
+            fontName=vietnamese_font,
+            fontSize=14,
+            textColor=colors.HexColor('#555'),
+            spaceAfter=10,
+            spaceBefore=15
+        )
+        
+        table_normal_style = ParagraphStyle(
+            'TableNormal',
+            fontName=vietnamese_font,
+            fontSize=9
+        )
+        
+        # Title
+        story.append(Paragraph(f"Báo Cáo Phân Tích AI - Tất Cả Chi Nhánh", title_style))
+        story.append(Paragraph(f"Ngày: {report_date}", normal_style))
+        story.append(Paragraph(f"Thời gian tạo: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}", normal_style))
+        story.append(Spacer(1, 0.3*inch))
+        
+        # Summary section
+        if summary:
+            story.append(Paragraph("Tóm Tắt Metrics Tổng Hợp", heading_style))
+            
+            summary_data = [['Chỉ Tiêu', 'Giá Trị']]
+            metric_labels = {
+                'total_branches': ('Tổng Số Chi Nhánh', 'chi nhánh', str),
+                'active_branches': ('Chi Nhánh Hoạt Động', 'chi nhánh', str),
+                'total_revenue': ('Tổng Doanh Thu', 'VNĐ', format_currency),
+                'total_order_count': ('Tổng Số Đơn Hàng', 'đơn', str),
+                'avg_order_value': ('Giá Trị TB/Đơn', 'VNĐ', format_currency),
+                'total_customer_count': ('Tổng Khách Hàng', 'người', str),
+                'total_new_customers': ('Khách Hàng Mới', 'người', str),
+                'total_repeat_customers': ('Khách Hàng Quay Lại', 'người', str),
+                'overall_customer_retention_rate': ('Tỷ Lệ Giữ Chân', '%', lambda x: f"{x * 100:.2f}" if isinstance(x, float) and x < 1 else f"{x:.2f}"),
+                'total_unique_products_sold': ('Sản Phẩm Đã Bán', 'sản phẩm', str),
+                'overall_avg_review_score': ('Đánh Giá TB', '/5', lambda x: f"{x:.2f}" if isinstance(x, float) else str(x)),
+                'total_reviews': ('Tổng Đánh Giá', 'đánh giá', str),
+                'average_revenue_per_branch': ('Doanh Thu TB/Chi Nhánh', 'VNĐ', format_currency),
+                'total_orders': ('Tổng Đơn Hàng', 'đơn', str),
+                'average_orders_per_branch': ('Đơn TB/Chi Nhánh', 'đơn', lambda x: f"{x:.2f}" if isinstance(x, float) else str(x)),
+            }
+            
+            def format_cell(text):
+                if not text:
+                    return ''
+                return Paragraph(str(text), table_normal_style)
+            
+            formatted_summary_data = [[format_cell('Chỉ Tiêu'), format_cell('Giá Trị')]]
+            
+            for key, (label, unit, formatter) in metric_labels.items():
+                if key in summary and summary[key] is not None:
+                    value = summary[key]
+                    formatted_value = formatter(value)
+                    value_str = f"{formatted_value} {unit}"
+                    formatted_summary_data.append([format_cell(label), format_cell(value_str)])
+            
+            summary_table = Table(formatted_summary_data, colWidths=[4*inch, 2*inch])
+            table_style = TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e74c3c')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 12),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+            ])
+            summary_table.setStyle(table_style)
+            story.append(summary_table)
+            story.append(Spacer(1, 0.3*inch))
+        
+        # Format and add AI Analysis section
+        if analysis:
+            formatted_analysis = self._format_all_branches_ai_analysis(analysis, heading_style, heading3_style, normal_style)
+            if formatted_analysis:
+                story.append(PageBreak())
+                story.append(Paragraph("Phân Tích AI - Đánh Giá Tất Cả Chi Nhánh", heading_style))
+                story.extend(formatted_analysis)
+                story.append(Spacer(1, 0.3*inch))
+        
+        # Branch comparison table (if available in raw_data)
+        if raw_data and raw_data.get('all_branches_stats') and raw_data['all_branches_stats'].get('branchSummaries'):
+            story.append(PageBreak())
+            story.append(Paragraph("So Sánh Chi Nhánh", heading_style))
+            
+            branch_data = [
+                [format_cell('STT'), format_cell('Tên Chi Nhánh'), format_cell('Doanh Thu'), format_cell('Số Đơn'), format_cell('Đơn Hoàn Thành'), format_cell('Đơn Hủy')]
+            ]
+            
+            for idx, branch in enumerate(raw_data['all_branches_stats']['branchSummaries'][:20], 1):
+                branch_data.append([
+                    format_cell(str(idx)),
+                    format_cell(branch.get('branchName', f"Chi nhánh {branch.get('branchId', 'N/A')}")[:25]),
+                    format_cell(format_currency(branch.get('revenue', 0))),
+                    format_cell(str(branch.get('orderCount', 0))),
+                    format_cell(str(branch.get('completedOrders', 0))),
+                    format_cell(str(branch.get('cancelledOrders', 0)))
+                ])
+            
+            branch_table = Table(branch_data, colWidths=[0.5*inch, 2*inch, 1.2*inch, 0.8*inch, 1*inch, 0.8*inch])
+            branch_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e74c3c')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTSIZE', (0, 0), (-1, 0), 9),
+                ('FONTSIZE', (0, 1), (-1, -1), 8),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+            ]))
+            story.append(branch_table)
+            story.append(Spacer(1, 0.3*inch))
+        
+        # Top performing branches
+        if raw_data and raw_data.get('all_branches_stats') and raw_data['all_branches_stats'].get('topPerformingBranches'):
+            story.append(Paragraph("Top Chi Nhánh Hoạt Động Tốt Nhất", heading3_style))
+            top_branches_data = [
+                [format_cell('Hạng'), format_cell('Tên Chi Nhánh'), format_cell('Doanh Thu'), format_cell('Số Đơn')]
+            ]
+            
+            for idx, branch in enumerate(raw_data['all_branches_stats']['topPerformingBranches'][:10], 1):
+                top_branches_data.append([
+                    format_cell(str(idx)),
+                    format_cell(branch.get('branchName', f"Chi nhánh {branch.get('branchId', 'N/A')}")[:30]),
+                    format_cell(format_currency(branch.get('revenue', 0))),
+                    format_cell(str(branch.get('orderCount', 0)))
+                ])
+            
+            top_branches_table = Table(top_branches_data, colWidths=[0.5*inch, 3*inch, 1.5*inch, 1*inch])
+            top_branches_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#27ae60')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('FONTSIZE', (0, 1), (-1, -1), 9),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+            ]))
+            story.append(top_branches_table)
+            story.append(Spacer(1, 0.3*inch))
+        
+        # Branch review stats
+        if raw_data and raw_data.get('all_branches_review_metrics') and raw_data['all_branches_review_metrics'].get('branchReviewStats'):
+            story.append(PageBreak())
+            story.append(Paragraph("Đánh Giá Theo Chi Nhánh", heading_style))
+            
+            review_data = [
+                [format_cell('Chi Nhánh'), format_cell('Điểm TB'), format_cell('Tổng Đánh Giá'), format_cell('Tích Cực'), format_cell('Tiêu Cực')]
+            ]
+            
+            for branch in raw_data['all_branches_review_metrics']['branchReviewStats'][:20]:
+                review_data.append([
+                    format_cell(branch.get('branchName', f"Chi nhánh {branch.get('branchId', 'N/A')}")[:25]),
+                    format_cell(f"{branch.get('avgReviewScore', 0):.2f}"),
+                    format_cell(str(branch.get('totalReviews', 0))),
+                    format_cell(str(branch.get('positiveReviews', 0))),
+                    format_cell(str(branch.get('negativeReviews', 0)))
+                ])
+            
+            review_table = Table(review_data, colWidths=[2.5*inch, 1*inch, 1*inch, 1*inch, 1*inch])
+            review_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e74c3c')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTSIZE', (0, 0), (-1, 0), 9),
+                ('FONTSIZE', (0, 1), (-1, -1), 8),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+            ]))
+            story.append(review_table)
+            story.append(Spacer(1, 0.3*inch))
+        
+        # Recommendations section
+        if recommendations:
+            story.append(PageBreak())
+            story.append(Paragraph("Khuyến Nghị Hành Động", heading_style))
+            for i, rec in enumerate(recommendations, 1):
+                story.append(Paragraph(f"{i}. {rec}", normal_style))
+                story.append(Spacer(1, 0.1*inch))
+        
+        # Footer
+        story.append(Spacer(1, 0.5*inch))
+        story.append(Paragraph("AI Analytics Service - Báo cáo được tạo tự động", normal_style))
+        story.append(Paragraph("Hệ thống quản lý cà phê - Coffee Management System - Dành cho Admin", normal_style))
+        
+        # Build PDF
+        doc.build(story)
+        
+        return pdf_path
 

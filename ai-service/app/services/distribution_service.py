@@ -6,6 +6,7 @@ from typing import List, Optional
 from datetime import datetime, date
 from app.services.report_service import ReportService
 from app.services.email_service import EmailService
+from app.services.ai_agent_service import AIAgentService
 from app.models.report import Report
 from app.schemas.report import ReportUpdate
 import logging
@@ -19,6 +20,7 @@ class DistributionService:
     def __init__(self):
         self.report_service = ReportService()
         self.email_service = EmailService()
+        self.ai_agent_service = AIAgentService()
     
     async def send_report_to_manager(
         self,
@@ -267,6 +269,95 @@ class DistributionService:
                 
         except Exception as e:
             logger.error(f"Error sending report by date: {e}", exc_info=True)
+            return {
+                "success": False,
+                "message": f"Error: {str(e)}"
+            }
+    
+    async def send_all_branches_report_to_admin(
+        self,
+        report_date: date,
+        admin_emails: Optional[List[str]] = None
+    ) -> dict:
+        """
+        Send report for ALL branches to admin(s)
+        - Calls AI analyze-all to get analysis
+        - Sends email with all branches report
+        
+        Args:
+            report_date: Report date
+            admin_emails: List of admin emails (if None, uses default from config)
+        
+        Returns:
+            dict with success status and message
+        """
+        try:
+            logger.info(f"Attempting to send all branches report for date {report_date}")
+            
+            # Get admin emails
+            if not admin_emails:
+                from app.config import settings
+                if settings.ADMIN_EMAIL:
+                    admin_emails = [settings.ADMIN_EMAIL]
+                else:
+                    error_msg = "No admin email configured. Please provide admin_emails parameter or configure ADMIN_EMAIL in settings."
+                    logger.warning(error_msg)
+                    return {
+                        "success": False,
+                        "message": error_msg
+                    }
+            
+            logger.info(f"Collecting data and analyzing all branches for date {report_date}")
+            
+            # 1. Collect data for all branches
+            aggregated_data = await self.ai_agent_service.collect_all_branches_data(
+                target_date=report_date
+            )
+            
+            # 2. Process with AI
+            ai_result = await self.ai_agent_service.process_all_branches_with_ai(
+                aggregated_data=aggregated_data,
+                query=None
+            )
+            
+            if not ai_result.get("success"):
+                error_msg = ai_result.get("message", "Failed to process with AI")
+                logger.error(error_msg)
+                return {
+                    "success": False,
+                    "message": error_msg
+                }
+            
+            logger.info(f"Sending all branches report to {admin_emails}")
+            
+            # 3. Send email
+            email_sent = await self.email_service.send_all_branches_report_email(
+                to_emails=admin_emails,
+                report_date=report_date.strftime("%Y-%m-%d"),
+                analysis=ai_result.get("analysis", ""),
+                summary=ai_result.get("summary"),
+                recommendations=ai_result.get("recommendations"),
+                raw_data=aggregated_data
+            )
+            
+            if email_sent:
+                logger.info(f"All branches report sent successfully to {admin_emails}")
+                return {
+                    "success": True,
+                    "message": f"All branches report sent successfully to {admin_emails}",
+                    "sent_to": admin_emails,
+                    "report_date": report_date.strftime("%Y-%m-%d")
+                }
+            else:
+                error_msg = "Failed to send email. Check email configuration and SMTP settings."
+                logger.error(error_msg)
+                return {
+                    "success": False,
+                    "message": error_msg
+                }
+                
+        except Exception as e:
+            logger.error(f"Error sending all branches report to admin: {e}", exc_info=True)
             return {
                 "success": False,
                 "message": f"Error: {str(e)}"

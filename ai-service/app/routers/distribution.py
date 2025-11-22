@@ -117,6 +117,27 @@ async def check_report_exists(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/send-all-branches")
+async def send_all_branches_report(
+    report_date: date = Query(..., description="Report date (YYYY-MM-DD)"),
+    admin_emails: Optional[List[str]] = Query(None, description="List of admin emails (optional)"),
+    db: Session = Depends(get_db)
+):
+    """
+    Send report for ALL branches to admin(s) via email
+    - Automatically calls AI analyze-all to get analysis
+    - Sends email with comprehensive all branches report
+    """
+    result = await distribution_service.send_all_branches_report_to_admin(
+        report_date, admin_emails
+    )
+    
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["message"])
+    
+    return result
+
+
 @router.get("/status")
 async def get_distribution_status(
     db: Session = Depends(get_db)

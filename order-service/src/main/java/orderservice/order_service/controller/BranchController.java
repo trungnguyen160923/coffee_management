@@ -4,15 +4,19 @@ import jakarta.validation.Valid;
 import orderservice.order_service.dto.request.AssignManagerRequest;
 import orderservice.order_service.dto.ApiResponse;
 import orderservice.order_service.dto.request.CreateBranchRequest;
+import orderservice.order_service.dto.response.*;
 import orderservice.order_service.entity.Branch;
+import orderservice.order_service.service.AnalyticsService;
 import orderservice.order_service.service.BranchService;
 import orderservice.order_service.service.BranchSelectionService;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.ArrayList;
@@ -26,11 +30,13 @@ public class BranchController {
 
     private final BranchService branchService;
     private final BranchSelectionService branchSelectionService;
+    private final AnalyticsService analyticsService;
 
     @Autowired
-    public BranchController(BranchService branchService, BranchSelectionService branchSelectionService) {
+    public BranchController(BranchService branchService, BranchSelectionService branchSelectionService, AnalyticsService analyticsService) {
         this.branchService = branchService;
         this.branchSelectionService = branchSelectionService;
+        this.analyticsService = analyticsService;
     }
 
     @PostMapping
@@ -464,6 +470,129 @@ public class BranchController {
             ApiResponse<List<Branch>> response = ApiResponse.<List<Branch>>builder()
                     .code(500)
                     .message("Failed to find nearest branches: " + e.getMessage())
+                    .result(null)
+                    .build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    // ========== Branch Statistics Endpoints ==========
+
+    @GetMapping("/stats")
+    public ResponseEntity<ApiResponse<BranchStatsResponse>> getBranchStats(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFrom,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateTo) {
+        try {
+            // Default to last 30 days if not provided
+            if (dateFrom == null) {
+                dateFrom = LocalDate.now().minusDays(30);
+            }
+            if (dateTo == null) {
+                dateTo = LocalDate.now();
+            }
+
+            BranchStatsResponse stats = analyticsService.getBranchStats(dateFrom, dateTo);
+            ApiResponse<BranchStatsResponse> response = ApiResponse.<BranchStatsResponse>builder()
+                    .code(200)
+                    .message("Branch stats retrieved successfully")
+                    .result(stats)
+                    .build();
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            ApiResponse<BranchStatsResponse> response = ApiResponse.<BranchStatsResponse>builder()
+                    .code(500)
+                    .message("Failed to retrieve branch stats: " + e.getMessage())
+                    .result(null)
+                    .build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    @GetMapping("/stats/all")
+    public ResponseEntity<ApiResponse<AllBranchesStatsResponse>> getAllBranchesStats(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFrom,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateTo) {
+        try {
+            // Default to last 30 days if not provided
+            if (dateFrom == null) {
+                dateFrom = LocalDate.now().minusDays(30);
+            }
+            if (dateTo == null) {
+                dateTo = LocalDate.now();
+            }
+
+            AllBranchesStatsResponse stats = analyticsService.getAllBranchesStats(dateFrom, dateTo);
+            ApiResponse<AllBranchesStatsResponse> response = ApiResponse.<AllBranchesStatsResponse>builder()
+                    .code(200)
+                    .message("All branches stats retrieved successfully")
+                    .result(stats)
+                    .build();
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            ApiResponse<AllBranchesStatsResponse> response = ApiResponse.<AllBranchesStatsResponse>builder()
+                    .code(500)
+                    .message("Failed to retrieve all branches stats: " + e.getMessage())
+                    .result(null)
+                    .build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    @GetMapping("/{branchId}/revenue")
+    public ResponseEntity<ApiResponse<BranchRevenueResponse>> getBranchRevenue(
+            @PathVariable Integer branchId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFrom,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateTo) {
+        try {
+            // Default to last 30 days if not provided
+            if (dateFrom == null) {
+                dateFrom = LocalDate.now().minusDays(30);
+            }
+            if (dateTo == null) {
+                dateTo = LocalDate.now();
+            }
+
+            BranchRevenueResponse revenue = analyticsService.getBranchRevenue(branchId, dateFrom, dateTo);
+            ApiResponse<BranchRevenueResponse> response = ApiResponse.<BranchRevenueResponse>builder()
+                    .code(200)
+                    .message("Branch revenue retrieved successfully")
+                    .result(revenue)
+                    .build();
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            ApiResponse<BranchRevenueResponse> response = ApiResponse.<BranchRevenueResponse>builder()
+                    .code(500)
+                    .message("Failed to retrieve branch revenue: " + e.getMessage())
+                    .result(null)
+                    .build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    @GetMapping("/revenue/all")
+    public ResponseEntity<ApiResponse<AllBranchesRevenueResponse>> getAllBranchesRevenue(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFrom,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateTo) {
+        try {
+            // Default to last 30 days if not provided
+            if (dateFrom == null) {
+                dateFrom = LocalDate.now().minusDays(30);
+            }
+            if (dateTo == null) {
+                dateTo = LocalDate.now();
+            }
+
+            AllBranchesRevenueResponse revenue = analyticsService.getAllBranchesRevenue(dateFrom, dateTo);
+            ApiResponse<AllBranchesRevenueResponse> response = ApiResponse.<AllBranchesRevenueResponse>builder()
+                    .code(200)
+                    .message("All branches revenue retrieved successfully")
+                    .result(revenue)
+                    .build();
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            ApiResponse<AllBranchesRevenueResponse> response = ApiResponse.<AllBranchesRevenueResponse>builder()
+                    .code(500)
+                    .message("Failed to retrieve all branches revenue: " + e.getMessage())
                     .result(null)
                     .build();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);

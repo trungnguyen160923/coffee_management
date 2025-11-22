@@ -9,6 +9,7 @@ import orderservice.order_service.service.AnalyticsService;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -109,6 +110,96 @@ public class AnalyticsController {
             ApiResponse<ReviewMetricsResponse> response = ApiResponse.<ReviewMetricsResponse>builder()
                     .code(500)
                     .message("Failed to retrieve review metrics: " + e.getMessage())
+                    .result(null)
+                    .build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    // ========== All Branches Statistics Endpoints (for Admin) ==========
+
+    @GetMapping("/revenue/all")
+    public ResponseEntity<ApiResponse<AllBranchesRevenueMetricsResponse>> getAllBranchesRevenueMetrics(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        try {
+            AllBranchesRevenueMetricsResponse metrics = analyticsService.getAllBranchesRevenueMetrics(date);
+            ApiResponse<AllBranchesRevenueMetricsResponse> response = ApiResponse.<AllBranchesRevenueMetricsResponse>builder()
+                    .code(200)
+                    .message("All branches revenue metrics retrieved successfully")
+                    .result(metrics)
+                    .build();
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("Error retrieving all branches revenue metrics", e);
+            ApiResponse<AllBranchesRevenueMetricsResponse> response = ApiResponse.<AllBranchesRevenueMetricsResponse>builder()
+                    .code(500)
+                    .message("Failed to retrieve all branches revenue metrics: " + e.getMessage())
+                    .result(null)
+                    .build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    @GetMapping("/customers/all")
+    public ResponseEntity<ApiResponse<AllBranchesCustomerMetricsResponse>> getAllBranchesCustomerMetrics(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        try {
+            AllBranchesCustomerMetricsResponse metrics = analyticsService.getAllBranchesCustomerMetrics(date);
+            ApiResponse<AllBranchesCustomerMetricsResponse> response = ApiResponse.<AllBranchesCustomerMetricsResponse>builder()
+                    .code(200)
+                    .message("All branches customer metrics retrieved successfully")
+                    .result(metrics)
+                    .build();
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("Error retrieving all branches customer metrics", e);
+            ApiResponse<AllBranchesCustomerMetricsResponse> response = ApiResponse.<AllBranchesCustomerMetricsResponse>builder()
+                    .code(500)
+                    .message("Failed to retrieve all branches customer metrics: " + e.getMessage())
+                    .result(null)
+                    .build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    @GetMapping("/products/all")
+    public ResponseEntity<ApiResponse<AllBranchesProductMetricsResponse>> getAllBranchesProductMetrics(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        try {
+            AllBranchesProductMetricsResponse metrics = analyticsService.getAllBranchesProductMetrics(date);
+            ApiResponse<AllBranchesProductMetricsResponse> response = ApiResponse.<AllBranchesProductMetricsResponse>builder()
+                    .code(200)
+                    .message("All branches product metrics retrieved successfully")
+                    .result(metrics)
+                    .build();
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("Error retrieving all branches product metrics", e);
+            ApiResponse<AllBranchesProductMetricsResponse> response = ApiResponse.<AllBranchesProductMetricsResponse>builder()
+                    .code(500)
+                    .message("Failed to retrieve all branches product metrics: " + e.getMessage())
+                    .result(null)
+                    .build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    @GetMapping("/reviews/all")
+    public ResponseEntity<ApiResponse<AllBranchesReviewMetricsResponse>> getAllBranchesReviewMetrics(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        try {
+            AllBranchesReviewMetricsResponse metrics = analyticsService.getAllBranchesReviewMetrics(date);
+            ApiResponse<AllBranchesReviewMetricsResponse> response = ApiResponse.<AllBranchesReviewMetricsResponse>builder()
+                    .code(200)
+                    .message("All branches review metrics retrieved successfully")
+                    .result(metrics)
+                    .build();
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("Error retrieving all branches review metrics", e);
+            ApiResponse<AllBranchesReviewMetricsResponse> response = ApiResponse.<AllBranchesReviewMetricsResponse>builder()
+                    .code(500)
+                    .message("Failed to retrieve all branches review metrics: " + e.getMessage())
                     .result(null)
                     .build();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);

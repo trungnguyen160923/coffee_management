@@ -22,10 +22,13 @@ class ReportService:
     ) -> Report:
         """
         Create a new report in database
+        branch_id can be None or 0 for admin/all branches reports
         """
         try:
+            # Use 0 if branch_id is None (for admin reports)
+            branch_id = report_data.branch_id if report_data.branch_id is not None else 0
             db_report = Report(
-                branch_id=report_data.branch_id,
+                branch_id=branch_id,
                 report_date=report_data.report_date,
                 tool_type=report_data.tool_type,
                 analysis=report_data.analysis,
@@ -105,6 +108,32 @@ class ReportService:
                 .first()
         except Exception as e:
             logger.error(f"Error getting report by branch and date: {e}", exc_info=True)
+            return None
+    
+    def get_admin_report_by_date(
+        self,
+        db: Session,
+        report_date: date
+    ) -> Optional[Report]:
+        """
+        Get admin report (all branches) for a specific date
+        branch_id=0 represents admin/all branches reports
+        """
+        try:
+            # Convert date to datetime for comparison
+            start_of_day = datetime.combine(report_date, datetime.min.time())
+            end_of_day = datetime.combine(report_date, datetime.max.time())
+            
+            return db.query(Report)\
+                .filter(
+                    Report.branch_id == 0,  # 0 = admin/all branches report
+                    Report.report_date >= start_of_day,
+                    Report.report_date <= end_of_day
+                )\
+                .order_by(desc(Report.created_at))\
+                .first()
+        except Exception as e:
+            logger.error(f"Error getting admin report by date: {e}", exc_info=True)
             return None
     
     def update_report(

@@ -21,6 +21,9 @@ public class SecurityConfig {
             "/customer-profiles/internal",
             "/api/branches", // Allow public access to get branches list
             "/api/branches/**", // Allow public access to all branch endpoints
+            "/api/branches/stats", // Allow public access to branch stats
+            "/api/branches/stats/all", // Allow public access to all branches stats (for admin)
+            "/api/branches/revenue/all", // Allow public access to all branches revenue (for admin)
             "/api/cart",
             "/api/cart/**",
             "/api/orders/guest", // Allow guest checkout without authentication
@@ -32,7 +35,11 @@ public class SecurityConfig {
             "/api/discounts/available", // Allow public access to available discounts
             "/api/reservations/public/**", // Allow public access to track reservation status
             "/api/orders/public/**", // Allow public access to track order status
-            "/api/analytics/metrics/**" // Allow access for AI service
+            "/api/analytics/metrics/**", // Allow access for AI service
+            "/api/analytics/metrics/revenue/all", // Allow public access to all branches revenue metrics (for admin)
+            "/api/analytics/metrics/customers/all", // Allow public access to all branches customer metrics (for admin)
+            "/api/analytics/metrics/products/all", // Allow public access to all branches product metrics (for admin)
+            "/api/analytics/metrics/reviews/all" // Allow public access to all branches review metrics (for admin)
     };
 
     private final CustomJwtDecoder customJwtDecoder;
