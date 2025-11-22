@@ -42,4 +42,9 @@ email-validator==2.1.0
 # Scheduler
 apscheduler==3.10.4
 
+# PDF Generation with Charts
+matplotlib>=3.7.0
+reportlab>=4.0.0
+Pillow>=10.0.0
+
 
