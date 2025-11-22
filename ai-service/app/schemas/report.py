@@ -8,7 +8,7 @@ from typing import Optional, Dict, Any, List
 
 class ReportCreate(BaseModel):
     """Schema for creating a new report"""
-    branch_id: int
+    branch_id: Optional[int] = None  # None or 0 for admin/all branches reports
     report_date: datetime
     tool_type: Optional[str] = None
     analysis: str

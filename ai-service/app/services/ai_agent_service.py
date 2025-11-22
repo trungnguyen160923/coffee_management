@@ -568,3 +568,256 @@ Trả lời bằng tiếng Việt, rõ ràng và dễ hiểu."""
         
         # Giới hạn số lượng recommendations
         return recommendations[:10] if recommendations else []
+    
+    async def collect_all_branches_data(
+        self,
+        target_date: date
+    ) -> Dict[str, Any]:
+        """
+        Thu thập dữ liệu từ các service cho TẤT CẢ chi nhánh (6 API mới):
+        Order Service (4 API):
+        1. All branches revenue metrics
+        2. All branches customer metrics
+        3. All branches product metrics
+        4. All branches review metrics
+        Order Service (2 API):
+        5. All branches stats (cần date range, dùng target_date làm cả 2)
+        6. All branches revenue (cần date range, dùng target_date làm cả 2)
+        """
+        try:
+            # Order Service APIs (4 API) - cho ngày cụ thể
+            # 1. All Branches Revenue Metrics
+            all_revenue_data = await self.order_client.get_all_branches_revenue_metrics(
+                target_date
+            )
+            
+            # 2. All Branches Customer Metrics
+            all_customer_data = await self.order_client.get_all_branches_customer_metrics(
+                target_date
+            )
+            
+            # 3. All Branches Product Metrics
+            all_product_data = await self.order_client.get_all_branches_product_metrics(
+                target_date
+            )
+            
+            # 4. All Branches Review Metrics
+            all_review_data = await self.order_client.get_all_branches_review_metrics(
+                target_date
+            )
+            
+            # Order Service APIs (2 API) - cho date range (dùng target_date làm cả 2)
+            # 5. All Branches Stats
+            all_stats_data = await self.order_client.get_all_branches_stats(
+                target_date, target_date
+            )
+            
+            # 6. All Branches Revenue
+            all_revenue_range_data = await self.order_client.get_all_branches_revenue(
+                target_date, target_date
+            )
+            
+            # Default structure khi không có data
+            if all_review_data is None:
+                all_review_data = {
+                    "overallAvgReviewScore": 0.0,
+                    "totalReviews": 0,
+                    "reviewDistribution": {},
+                    "totalPositiveReviews": 0,
+                    "totalNegativeReviews": 0,
+                    "overallReviewRate": 0.0,
+                    "recentReviews": [],
+                    "branchReviewStats": []
+                }
+            
+            # Tổng hợp thành một dictionary với đầy đủ 6 API
+            aggregated_data = {
+                "date": target_date.isoformat(),
+                "all_branches_revenue_metrics": all_revenue_data or {},
+                "all_branches_customer_metrics": all_customer_data or {},
+                "all_branches_product_metrics": all_product_data or {},
+                "all_branches_review_metrics": all_review_data,
+                "all_branches_stats": all_stats_data or {},
+                "all_branches_revenue": all_revenue_range_data or {}
+            }
+            
+            logger.info(f"Collected all branches data - Revenue: {bool(all_revenue_data)}, Customer: {bool(all_customer_data)}, Product: {bool(all_product_data)}, Review: {bool(all_review_data)}, Stats: {bool(all_stats_data)}, Revenue Range: {bool(all_revenue_range_data)}")
+            
+            return aggregated_data
+            
+        except Exception as e:
+            logger.error(f"Error collecting all branches data: {e}", exc_info=True)
+            return {
+                "date": target_date.isoformat(),
+                "all_branches_revenue_metrics": {},
+                "all_branches_customer_metrics": {},
+                "all_branches_product_metrics": {},
+                "all_branches_review_metrics": {},
+                "all_branches_stats": {},
+                "all_branches_revenue": {},
+                "error": str(e)
+            }
+    
+    async def process_all_branches_with_ai(
+        self,
+        aggregated_data: Dict[str, Any],
+        query: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Xử lý dữ liệu tất cả chi nhánh đã tổng hợp với AI sử dụng LangChain
+        Tập trung vào đánh giá tình hình từng chi nhánh
+        """
+        if not self.llm:
+            return {
+                "success": False,
+                "message": "OpenAI API key not configured"
+            }
+        
+        try:
+            # Chuyển đổi data thành JSON string để đưa vào prompt
+            data_json = json.dumps(aggregated_data, indent=2, ensure_ascii=False)
+            
+            # System prompt cho admin - đánh giá tất cả chi nhánh
+            system_prompt = self._get_admin_system_prompt()
+            
+            # Tạo user prompt
+            if query:
+                user_prompt = f"""
+Dữ liệu thống kê của TẤT CẢ chi nhánh:
+{data_json}
+
+Câu hỏi cụ thể: {query}
+
+Hãy phân tích dữ liệu và đánh giá tình hình từng chi nhánh, so sánh giữa các chi nhánh, và trả lời câu hỏi một cách chi tiết.
+"""
+            else:
+                user_prompt = f"""
+Dữ liệu thống kê của TẤT CẢ chi nhánh:
+{data_json}
+
+Hãy phân tích toàn diện và đánh giá tình hình TỪNG CHI NHÁNH, bao gồm:
+
+1. TỔNG QUAN TẤT CẢ CHI NHÁNH:
+   - Tổng doanh thu, số đơn hàng, số khách hàng
+   - Chi nhánh hoạt động tốt nhất và kém nhất
+   - So sánh hiệu suất giữa các chi nhánh
+
+2. ĐÁNH GIÁ TỪNG CHI NHÁNH (liệt kê chi tiết cho từng chi nhánh):
+   - Tên chi nhánh và ID
+   - Điểm mạnh của chi nhánh
+   - Điểm yếu và vấn đề cần chú ý
+   - Đánh giá tổng thể (Tốt / Khá / Cần cải thiện / Nghiêm trọng)
+   - Xếp hạng trong hệ thống
+
+3. SO SÁNH VÀ PHÂN TÍCH:
+   - Chi nhánh nào đang dẫn đầu về doanh thu, khách hàng, đánh giá
+   - Chi nhánh nào cần hỗ trợ khẩn cấp
+   - Xu hướng chung của toàn hệ thống
+
+4. KHUYẾN NGHỊ CHO TỪNG CHI NHÁNH:
+   - Khuyến nghị cụ thể cho từng chi nhánh dựa trên tình hình thực tế
+   - Ưu tiên các chi nhánh cần hỗ trợ
+
+5. KẾT LUẬN:
+   - Tóm tắt tình hình tổng thể
+   - Đề xuất hành động ưu tiên cho admin
+
+Hãy trình bày rõ ràng, chi tiết và có cấu trúc để admin dễ dàng nắm bắt tình hình từng chi nhánh.
+"""
+            
+            # Gọi LLM
+            messages = [
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=user_prompt)
+            ]
+            
+            response = self.llm.invoke(messages)
+            analysis_text = response.content
+            
+            # Parse response để lấy summary và recommendations
+            summary = self._extract_all_branches_summary(aggregated_data)
+            recommendations = self._extract_recommendations(analysis_text)
+            
+            return {
+                "success": True,
+                "analysis": analysis_text,
+                "summary": summary,
+                "recommendations": recommendations
+            }
+            
+        except Exception as e:
+            logger.error(f"Error processing all branches with AI: {e}", exc_info=True)
+            return {
+                "success": False,
+                "message": f"Error processing with AI: {str(e)}"
+            }
+    
+    def _get_admin_system_prompt(self) -> str:
+        """System prompt cho Admin - đánh giá tất cả chi nhánh"""
+        return """Bạn là một chuyên gia phân tích dữ liệu cấp cao cho hệ thống quản lý cà phê.
+Nhiệm vụ của bạn là đánh giá và phân tích tình hình TẤT CẢ các chi nhánh trong hệ thống.
+
+Dữ liệu bạn nhận được bao gồm 6 API tổng hợp từ tất cả chi nhánh:
+- All Branches Revenue Metrics: Tổng hợp doanh thu, số đơn, giá trị đơn trung bình từ tất cả chi nhánh
+- All Branches Customer Metrics: Tổng hợp số lượng khách hàng, khách hàng mới, khách hàng quay lại từ tất cả chi nhánh
+- All Branches Product Metrics: Tổng hợp sản phẩm bán được, sản phẩm bán chạy từ tất cả chi nhánh
+- All Branches Review Metrics: Tổng hợp đánh giá khách hàng, điểm trung bình từ tất cả chi nhánh (bao gồm branchReviewStats để xem từng chi nhánh)
+- All Branches Stats: Thống kê tổng hợp với branchSummaries cho từng chi nhánh
+- All Branches Revenue: Doanh thu tổng hợp với branchRevenueDetails cho từng chi nhánh
+
+QUAN TRỌNG:
+- Bạn PHẢI đánh giá TỪNG CHI NHÁNH một cách chi tiết, không được bỏ sót
+- So sánh hiệu suất giữa các chi nhánh để xác định chi nhánh tốt nhất và kém nhất
+- Xác định các chi nhánh cần hỗ trợ khẩn cấp
+- Đưa ra khuyến nghị cụ thể cho từng chi nhánh dựa trên dữ liệu thực tế
+- Sử dụng dữ liệu từ branchReviewStats, branchSummaries, branchRevenueDetails để đánh giá từng chi nhánh
+
+Hãy phân tích một cách chuyên nghiệp, đưa ra các insights cụ thể và khuyến nghị hành động cho admin.
+Trả lời bằng tiếng Việt, rõ ràng, có cấu trúc và dễ hiểu."""
+    
+    def _extract_all_branches_summary(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Trích xuất summary từ dữ liệu tất cả chi nhánh"""
+        revenue = data.get("all_branches_revenue_metrics", {})
+        customer = data.get("all_branches_customer_metrics", {})
+        product = data.get("all_branches_product_metrics", {})
+        review = data.get("all_branches_review_metrics", {})
+        stats = data.get("all_branches_stats", {})
+        revenue_range = data.get("all_branches_revenue", {})
+        
+        # Convert BigDecimal to float if needed
+        def safe_float(value, default=0):
+            if value is None:
+                return default
+            if isinstance(value, (int, float)):
+                return float(value)
+            if hasattr(value, '__float__'):
+                return float(value)
+            return default
+        
+        return {
+            # Overall Metrics
+            "total_branches": stats.get("totalBranches", 0),
+            "active_branches": stats.get("activeBranches", 0),
+            "total_revenue": safe_float(revenue.get("totalRevenue")),
+            "total_order_count": revenue.get("totalOrderCount", 0),
+            "avg_order_value": safe_float(revenue.get("avgOrderValue")),
+            # Customer Metrics
+            "total_customer_count": customer.get("totalCustomerCount", 0),
+            "total_new_customers": customer.get("totalNewCustomers", 0),
+            "total_repeat_customers": customer.get("totalRepeatCustomers", 0),
+            "overall_customer_retention_rate": safe_float(customer.get("overallCustomerRetentionRate")),
+            # Product Metrics
+            "total_unique_products_sold": product.get("totalUniqueProductsSold", 0),
+            "overall_product_diversity_score": safe_float(product.get("overallProductDiversityScore")),
+            # Review Metrics
+            "overall_avg_review_score": safe_float(review.get("overallAvgReviewScore")),
+            "total_reviews": review.get("totalReviews", 0),
+            "total_positive_reviews": review.get("totalPositiveReviews", 0),
+            "total_negative_reviews": review.get("totalNegativeReviews", 0),
+            # Stats
+            "average_revenue_per_branch": safe_float(stats.get("averageRevenuePerBranch")),
+            "total_orders": stats.get("totalOrders", 0),
+            "average_orders_per_branch": safe_float(stats.get("averageOrdersPerBranch")),
+            # Revenue Range
+            "total_revenue_range": safe_float(revenue_range.get("totalRevenue"))
+        }

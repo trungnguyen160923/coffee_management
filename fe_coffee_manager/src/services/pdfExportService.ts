@@ -12,6 +12,47 @@ interface PDFExportOptions {
   aiData: AIAnalysisResponse;
 }
 
+interface AllBranchesPDFExportOptions {
+  reportDate: string;
+  aiData: {
+    success: boolean;
+    date: string;
+    analysis: string;
+    summary?: {
+      total_branches?: number;
+      active_branches?: number;
+      total_revenue?: number;
+      total_order_count?: number;
+      avg_order_value?: number;
+      total_customer_count?: number;
+      total_new_customers?: number;
+      total_repeat_customers?: number;
+      overall_customer_retention_rate?: number;
+      total_unique_products_sold?: number;
+      overall_product_diversity_score?: number;
+      overall_avg_review_score?: number;
+      total_reviews?: number;
+      total_positive_reviews?: number;
+      total_negative_reviews?: number;
+      average_revenue_per_branch?: number;
+      total_orders?: number;
+      average_orders_per_branch?: number;
+    };
+    recommendations?: string[];
+    raw_data?: any;
+  };
+  branchesData?: Array<{
+    id: number;
+    name: string;
+    revenue: number;
+    orders: number;
+    avgOrderValue: number;
+    rating: number;
+    customerRetention: number;
+    status: 'good' | 'warning' | 'critical';
+  }>;
+}
+
 /**
  * Format number with thousand separators
  */
@@ -20,7 +61,7 @@ const formatNumber = (value: number): string => {
 };
 
 /**
- * Clean analysis text by removing markdown characters
+ * Clean analysis text by removing markdown characters and ID references
  */
 const cleanAnalysisText = (text: string): string => {
   if (!text) return '';
@@ -36,6 +77,35 @@ const cleanAnalysisText = (text: string): string => {
   
   // Remove bullet points
   cleaned = cleaned.replace(/^[-•*]\s*/gm, '');
+  
+  // Remove ID references from text: (ID: X), ID: X, hoặc các pattern tương tự
+  // Pattern: (ID: 1), (ID:1), ID: 1, ID:1, (ID 1), ID 1
+  cleaned = cleaned.replace(/\s*\(ID:\s*\d+\)/gi, '');
+  cleaned = cleaned.replace(/\s*\(ID\s*\d+\)/gi, '');
+  cleaned = cleaned.replace(/\s*ID:\s*\d+/gi, '');
+  cleaned = cleaned.replace(/\s*ID\s+\d+/gi, '');
+  
+  // Remove lines that only contain "ID: X" or similar
+  cleaned = cleaned.split('\n').map(line => {
+    // Remove ID from end of line: "text (ID: 1)" -> "text"
+    line = line.replace(/\s*\(ID:\s*\d+\)\s*$/gi, '');
+    line = line.replace(/\s*\(ID\s*\d+\)\s*$/gi, '');
+    line = line.replace(/\s*ID:\s*\d+\s*$/gi, '');
+    line = line.replace(/\s*ID\s+\d+\s*$/gi, '');
+    return line;
+  }).filter(line => {
+    const trimmed = line.trim();
+    // Skip lines that are just ID references
+    if (/^ID:\s*\d+$/i.test(trimmed)) return false;
+    if (/^\(ID:\s*\d+\)$/i.test(trimmed)) return false;
+    if (/^ID\s+\d+$/i.test(trimmed)) return false;
+    return true;
+  }).join('\n');
+  
+  // Clean up multiple spaces (but preserve line breaks)
+  cleaned = cleaned.replace(/[ \t]+/g, ' ');
+  // Clean up multiple empty lines
+  cleaned = cleaned.replace(/\n\s*\n\s*\n/g, '\n\n');
   
   return cleaned.trim();
 };
@@ -1528,4 +1598,677 @@ export const exportAIStatisticsToPDFWithCanvas = async (
   }
 };
 */
+
+/**
+ * Generate comparison bar chart HTML for branches
+ */
+const generateComparisonBarChartHTML = (
+  data: Array<{name: string, revenue: number, orders: number}>
+): string => {
+  if (!data || data.length === 0) return '';
+  
+  const maxRevenue = Math.max(...data.map(d => d.revenue), 1);
+  const maxOrders = Math.max(...data.map(d => d.orders), 1);
+  
+  const svgWidth = 1000;
+  const svgHeight = Math.max(500, data.length * 60 + 100);
+  const padding = 150;
+  const chartWidth = svgWidth - padding - 60;
+  const chartHeight = svgHeight - 100;
+  const barHeight = 25;
+  const barSpacing = 8;
+  const groupSpacing = 20;
+  const startY = 60;
+  
+  return `
+    <div class="chart-container">
+      <svg viewBox="0 0 ${svgWidth} ${svgHeight}" style="width: 100%; height: ${svgHeight}px;">
+        <rect x="${padding}" y="40" width="${chartWidth}" height="${chartHeight}" fill="#fafafa" rx="4"/>
+        
+        ${data.map((item, index) => {
+          const y = startY + index * (barHeight * 2 + barSpacing + groupSpacing);
+          const revenueWidth = (item.revenue / maxRevenue) * chartWidth;
+          const ordersWidth = (item.orders / maxOrders) * chartWidth;
+          
+          return `
+            <!-- Branch ${index} -->
+            <g>
+              <text x="${padding - 10}" y="${y + barHeight / 2 + 5}" text-anchor="end" font-size="11" font-weight="600" fill="#374151">${item.name.length > 20 ? item.name.substring(0, 20) + '...' : item.name}</text>
+              
+              <!-- Revenue bar -->
+              <rect x="${padding}" y="${y}" width="${revenueWidth}" height="${barHeight}" fill="#f59e0b" rx="4"/>
+              <text x="${padding + revenueWidth - 5}" y="${y + barHeight / 2 + 4}" text-anchor="end" font-size="10" font-weight="bold" fill="white">${(item.revenue).toFixed(0)}k</text>
+              
+              <!-- Orders bar -->
+              <rect x="${padding}" y="${y + barHeight + barSpacing}" width="${ordersWidth}" height="${barHeight}" fill="#3b82f6" rx="4"/>
+              <text x="${padding + ordersWidth - 5}" y="${y + barHeight + barSpacing + barHeight / 2 + 4}" text-anchor="end" font-size="10" font-weight="bold" fill="white">${item.orders}</text>
+            </g>
+          `;
+        }).join('')}
+        
+        <line x1="${padding}" y1="40" x2="${padding}" y2="${40 + chartHeight}" stroke="#374151" stroke-width="2"/>
+        <line x1="${padding}" y1="${40 + chartHeight}" x2="${padding + chartWidth}" y2="${40 + chartHeight}" stroke="#374151" stroke-width="2"/>
+        
+        <!-- Legend -->
+        <g transform="translate(${padding + chartWidth - 150}, 20)">
+          <rect x="0" y="0" width="15" height="15" fill="#f59e0b" rx="2"/>
+          <text x="20" y="12" font-size="12" fill="#374151">Doanh thu (k)</text>
+          <rect x="0" y="20" width="15" height="15" fill="#3b82f6" rx="2"/>
+          <text x="20" y="32" font-size="12" fill="#374151">Đơn hàng</text>
+        </g>
+      </svg>
+    </div>
+  `;
+};
+
+/**
+ * Generate pie chart HTML for branch status distribution
+ */
+const generateStatusPieChartHTML = (branchesData: Array<{status: 'good' | 'warning' | 'critical'}>): string => {
+  if (!branchesData || branchesData.length === 0) return '';
+  
+  const statusCounts = {
+    good: branchesData.filter(b => b.status === 'good').length,
+    warning: branchesData.filter(b => b.status === 'warning').length,
+    critical: branchesData.filter(b => b.status === 'critical').length,
+  };
+  
+  const total = branchesData.length;
+  const goodPercent = (statusCounts.good / total) * 100;
+  const warningPercent = (statusCounts.warning / total) * 100;
+  const criticalPercent = (statusCounts.critical / total) * 100;
+  
+  const svgSize = 300;
+  const centerX = svgSize / 2;
+  const centerY = svgSize / 2;
+  const radius = 100;
+  
+  // Calculate angles
+  const goodAngle = (goodPercent / 100) * 360;
+  const warningAngle = (warningPercent / 100) * 360;
+  const criticalAngle = (criticalPercent / 100) * 360;
+  
+  const goodStartAngle = 0;
+  const goodEndAngle = goodAngle;
+  const warningStartAngle = goodEndAngle;
+  const warningEndAngle = warningStartAngle + warningAngle;
+  const criticalStartAngle = warningEndAngle;
+  const criticalEndAngle = criticalStartAngle + criticalAngle;
+  
+  const toRadians = (deg: number) => (deg * Math.PI) / 180;
+  const getArcPath = (startAngle: number, endAngle: number) => {
+    const start = {
+      x: centerX + radius * Math.cos(toRadians(startAngle - 90)),
+      y: centerY + radius * Math.sin(toRadians(startAngle - 90)),
+    };
+    const end = {
+      x: centerX + radius * Math.cos(toRadians(endAngle - 90)),
+      y: centerY + radius * Math.sin(toRadians(endAngle - 90)),
+    };
+    const largeArc = endAngle - startAngle > 180 ? 1 : 0;
+    return `M ${centerX} ${centerY} L ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArc} 1 ${end.x} ${end.y} Z`;
+  };
+  
+  return `
+    <div class="chart-container">
+      <svg viewBox="0 0 ${svgSize} ${svgSize + 80}" style="width: 100%; max-width: 400px;">
+        <path d="${getArcPath(goodStartAngle, goodEndAngle)}" fill="#10b981" stroke="#fff" stroke-width="2"/>
+        <path d="${getArcPath(warningStartAngle, warningEndAngle)}" fill="#f59e0b" stroke="#fff" stroke-width="2"/>
+        <path d="${getArcPath(criticalStartAngle, criticalEndAngle)}" fill="#ef4444" stroke="#fff" stroke-width="2"/>
+        
+        <!-- Labels -->
+        <g transform="translate(${centerX}, ${svgSize + 20})">
+          <rect x="-120" y="0" width="15" height="15" fill="#10b981" rx="2"/>
+          <text x="-100" y="12" font-size="12" fill="#374151">Tốt: ${statusCounts.good} (${goodPercent.toFixed(1)}%)</text>
+          
+          <rect x="-120" y="20" width="15" height="15" fill="#f59e0b" rx="2"/>
+          <text x="-100" y="32" font-size="12" fill="#374151">Cảnh báo: ${statusCounts.warning} (${warningPercent.toFixed(1)}%)</text>
+          
+          <rect x="-120" y="40" width="15" height="15" fill="#ef4444" rx="2"/>
+          <text x="-100" y="52" font-size="12" fill="#374151">Nghiêm trọng: ${statusCounts.critical} (${criticalPercent.toFixed(1)}%)</text>
+        </g>
+      </svg>
+    </div>
+  `;
+};
+
+/**
+ * Generate HTML content for All Branches PDF export
+ */
+const generateAllBranchesPDFHTML = (options: AllBranchesPDFExportOptions): string => {
+  const { reportDate, aiData, branchesData = [] } = options;
+  const summary = aiData.summary || {};
+  const recommendations = aiData.recommendations || [];
+  const rawData = aiData.raw_data || {};
+  
+  // Parse analysis into 5 sections
+  const analysisSections = {
+    overview: '',
+    branchEvaluation: '',
+    comparison: '',
+    branchRecommendations: '',
+    conclusion: '',
+  };
+  
+  if (aiData.analysis) {
+    const lines = aiData.analysis.split('\n');
+    let currentSection: keyof typeof analysisSections | null = null;
+    let currentContent: string[] = [];
+    
+    for (const line of lines) {
+      const trimmed = line.trim();
+      
+      if (trimmed.match(/^1\.|tổng quan.*chi nhánh|tổng quan.*tất cả/i)) {
+        if (currentSection) analysisSections[currentSection] = currentContent.join('\n').trim();
+        currentSection = 'overview';
+        currentContent = [];
+        continue;
+      }
+      if (trimmed.match(/^2\.|đánh giá.*chi nhánh|đánh giá.*từng/i)) {
+        if (currentSection) analysisSections[currentSection] = currentContent.join('\n').trim();
+        currentSection = 'branchEvaluation';
+        currentContent = [];
+        continue;
+      }
+      if (trimmed.match(/^3\.|so sánh|phân tích.*so sánh/i)) {
+        if (currentSection) analysisSections[currentSection] = currentContent.join('\n').trim();
+        currentSection = 'comparison';
+        currentContent = [];
+        continue;
+      }
+      if (trimmed.match(/^4\.|khuyến nghị.*chi nhánh|khuyến nghị.*từng/i)) {
+        if (currentSection) analysisSections[currentSection] = currentContent.join('\n').trim();
+        currentSection = 'branchRecommendations';
+        currentContent = [];
+        continue;
+      }
+      if (trimmed.match(/^5\.|kết luận|tổng kết/i)) {
+        if (currentSection) analysisSections[currentSection] = currentContent.join('\n').trim();
+        currentSection = 'conclusion';
+        currentContent = [];
+        continue;
+      }
+      
+      if (currentSection) {
+        currentContent.push(line);
+      } else if (!analysisSections.overview) {
+        currentContent.push(line);
+      }
+    }
+    
+    if (currentSection) {
+      analysisSections[currentSection] = currentContent.join('\n').trim();
+    }
+  }
+  
+  // Format currency for table (with dots)
+  const formatCurrencyTable = (value: number) => {
+    if (typeof value !== 'number') return '0';
+    return value.toLocaleString('vi-VN').replace(/,/g, '.');
+  };
+  
+  // Prepare comparison data
+  const comparisonData = branchesData.map(b => ({
+    name: b.name.replace('Chi nhánh ', '').replace('Main Branch', 'Main'),
+    revenue: b.revenue / 1000,
+    orders: b.orders,
+  }));
+  
+  const formattedDate = new Date(reportDate).toLocaleDateString('vi-VN', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+  
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Báo Cáo Phân Tích AI - Tất Cả Chi Nhánh</title>
+  <style>
+    @media print {
+      @page {
+        size: A4;
+        margin: 1cm;
+      }
+      body {
+        margin: 0;
+        padding: 0;
+      }
+      .page-break {
+        page-break-before: always;
+      }
+    }
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      background: white;
+      padding: 20px;
+    }
+    
+    .header {
+      background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+      color: white;
+      padding: 30px;
+      border-radius: 10px;
+      margin-bottom: 30px;
+      text-align: center;
+    }
+    
+    .header h1 {
+      font-size: 28px;
+      margin-bottom: 10px;
+    }
+    
+    .header p {
+      font-size: 16px;
+      opacity: 0.95;
+    }
+    
+    .section {
+      margin-bottom: 30px;
+      page-break-inside: avoid;
+    }
+    
+    .section-title {
+      font-size: 20px;
+      font-weight: bold;
+      color: #f59e0b;
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 3px solid #f59e0b;
+    }
+    
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin: 20px 0;
+    }
+    
+    .metric-card {
+      background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+      padding: 15px;
+      border-radius: 8px;
+      border-left: 4px solid #f59e0b;
+    }
+    
+    .metric-label {
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 5px;
+    }
+    
+    .metric-value {
+      font-size: 18px;
+      font-weight: bold;
+      color: #333;
+    }
+    
+    .chart-container {
+      margin: 20px 0;
+      padding: 20px;
+      background: #fafafa;
+      border-radius: 8px;
+      border: 1px solid #e5e7eb;
+    }
+    
+    .chart-title {
+      font-size: 16px;
+      font-weight: bold;
+      margin-bottom: 15px;
+      color: #374151;
+    }
+    
+    .analysis-content {
+      white-space: pre-wrap;
+      line-height: 1.8;
+      color: #555;
+      padding: 15px;
+      background: #f9f9f9;
+      border-radius: 6px;
+      margin: 15px 0;
+    }
+    
+    .recommendations-list {
+      list-style: none;
+      padding: 0;
+    }
+    
+    .recommendation-item {
+      padding: 12px;
+      margin: 10px 0;
+      background: white;
+      border-left: 4px solid #f59e0b;
+      border-radius: 4px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    
+    .table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+    }
+    
+    .table th,
+    .table td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    
+    .table th {
+      background: #f59e0b;
+      color: white;
+      font-weight: bold;
+    }
+    
+    .table tr:nth-child(even) {
+      background: #f9fafb;
+    }
+    
+    .footer {
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 2px solid #e5e7eb;
+      text-align: center;
+      font-size: 12px;
+      color: #999;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>📊 Báo Cáo Phân Tích AI - Tất Cả Chi Nhánh</h1>
+    <p>Ngày: ${formattedDate}</p>
+    <p>Thời gian tạo: ${new Date().toLocaleString('vi-VN')}</p>
+  </div>
+  
+  <!-- Tóm Tắt Metrics Tổng Hợp -->
+  ${summary && Object.keys(summary).length > 0 ? `
+    <div class="section">
+      <div class="section-title">📈 Tóm Tắt Metrics Tổng Hợp</div>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Chỉ Tiêu</th>
+            <th>Giá Trị</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${summary.total_branches ? `<tr>
+            <td>🏢 Tổng Số Chi Nhánh</td>
+            <td>${summary.total_branches} chi nhánh</td>
+          </tr>` : ''}
+          ${summary.active_branches ? `<tr>
+            <td>✅ Chi Nhánh Hoạt Động</td>
+            <td>${summary.active_branches} chi nhánh</td>
+          </tr>` : ''}
+          ${summary.total_revenue ? `<tr>
+            <td>💰 Tổng Doanh Thu</td>
+            <td>${formatCurrencyTable(summary.total_revenue)} VNĐ</td>
+          </tr>` : ''}
+          ${summary.total_order_count ? `<tr>
+            <td>🛒 Tổng Số Đơn Hàng</td>
+            <td>${summary.total_order_count} đơn</td>
+          </tr>` : ''}
+          ${summary.avg_order_value ? `<tr>
+            <td>📊 Giá Trị TB/Đơn</td>
+            <td>${formatCurrencyTable(summary.avg_order_value)} VNĐ</td>
+          </tr>` : ''}
+          ${summary.total_customer_count ? `<tr>
+            <td>👥 Tổng Khách Hàng</td>
+            <td>${summary.total_customer_count} người</td>
+          </tr>` : ''}
+          ${summary.total_new_customers ? `<tr>
+            <td>🆕 Khách Hàng Mới</td>
+            <td>${summary.total_new_customers} người</td>
+          </tr>` : ''}
+          ${summary.total_repeat_customers ? `<tr>
+            <td>🔄 Khách Hàng Quay Lại</td>
+            <td>${summary.total_repeat_customers} người</td>
+          </tr>` : ''}
+          ${summary.overall_customer_retention_rate !== undefined ? `<tr>
+            <td>📈 Tỷ Lệ Giữ Chân</td>
+            <td>${(summary.overall_customer_retention_rate < 1 ? summary.overall_customer_retention_rate * 100 : summary.overall_customer_retention_rate).toFixed(2)}%</td>
+          </tr>` : ''}
+          ${summary.total_unique_products_sold ? `<tr>
+            <td>📦 Sản Phẩm Đã Bán</td>
+            <td>${summary.total_unique_products_sold} sản phẩm</td>
+          </tr>` : ''}
+          ${summary.overall_avg_review_score ? `<tr>
+            <td>⭐ Đánh Giá TB</td>
+            <td>${summary.overall_avg_review_score.toFixed(2)}/5</td>
+          </tr>` : ''}
+          ${summary.total_reviews ? `<tr>
+            <td>💬 Tổng Đánh Giá</td>
+            <td>${summary.total_reviews} đánh giá</td>
+          </tr>` : ''}
+          ${summary.average_revenue_per_branch ? `<tr>
+            <td>💵 Doanh Thu TB/Chi Nhánh</td>
+            <td>${formatCurrencyTable(summary.average_revenue_per_branch)} VNĐ</td>
+          </tr>` : ''}
+        </tbody>
+      </table>
+    </div>
+  ` : ''}
+  
+  <!-- Phân Tích AI - Đánh Giá Tất Cả Chi Nhánh -->
+  ${aiData.analysis ? `
+    <div class="section page-break">
+      <div class="section-title">Phân Tích AI - Đánh Giá Tất Cả Chi Nhánh</div>
+      
+      ${analysisSections.overview ? `
+        <div style="margin: 15px 0;">
+          <h3 style="color: #f59e0b; font-size: 16px; margin-bottom: 10px;">1. TỔNG QUAN TẤT CẢ CHI NHÁNH</h3>
+          <div class="analysis-content">${cleanAnalysisText(analysisSections.overview)}</div>
+        </div>
+      ` : ''}
+      
+      ${analysisSections.branchEvaluation ? `
+        <div style="margin: 15px 0;">
+          <h3 style="color: #f59e0b; font-size: 16px; margin-bottom: 10px;">2. ĐÁNH GIÁ TỪNG CHI NHÁNH</h3>
+          <div class="analysis-content">${cleanAnalysisText(analysisSections.branchEvaluation)}</div>
+        </div>
+      ` : ''}
+      
+      ${analysisSections.comparison ? `
+        <div style="margin: 15px 0;">
+          <h3 style="color: #f59e0b; font-size: 16px; margin-bottom: 10px;">3. SO SÁNH VÀ PHÂN TÍCH</h3>
+          <div class="analysis-content">${cleanAnalysisText(analysisSections.comparison)}</div>
+        </div>
+      ` : ''}
+      
+      ${analysisSections.branchRecommendations ? `
+        <div style="margin: 15px 0;">
+          <h3 style="color: #f59e0b; font-size: 16px; margin-bottom: 10px;">4. KHUYẾN NGHỊ CHO TỪNG CHI NHÁNH</h3>
+          <div class="analysis-content">${cleanAnalysisText(analysisSections.branchRecommendations)}</div>
+        </div>
+      ` : ''}
+      
+      ${analysisSections.conclusion ? `
+        <div style="margin: 15px 0;">
+          <h3 style="color: #f59e0b; font-size: 16px; margin-bottom: 10px;">5. KẾT LUẬN</h3>
+          <div class="analysis-content">${cleanAnalysisText(analysisSections.conclusion)}</div>
+        </div>
+      ` : ''}
+    </div>
+  ` : ''}
+  
+  <!-- So Sánh Chi Nhánh -->
+  ${rawData.all_branches_stats?.branchSummaries?.length > 0 ? `
+    <div class="section page-break">
+      <div class="section-title">So Sánh Chi Nhánh</div>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>STT</th>
+            <th>Tên Chi Nhánh</th>
+            <th>Doanh Thu</th>
+            <th>Số Đơn</th>
+            <th>Đơn Hoàn Thành</th>
+            <th>Đơn Hủy</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rawData.all_branches_stats.branchSummaries.slice(0, 20).map((branch: any, idx: number) => `
+            <tr>
+              <td>${idx + 1}</td>
+              <td>${(branch.branchName || 'Chi nhánh').substring(0, 25)}</td>
+              <td>${formatCurrencyTable(branch.revenue || 0)}</td>
+              <td>${branch.orderCount || 0}</td>
+              <td>${branch.completedOrders || 0}</td>
+              <td>${branch.cancelledOrders || 0}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+      
+      ${comparisonData.length > 0 ? `
+        <div class="chart-container">
+          <div class="chart-title">Biểu đồ so sánh chi nhánh</div>
+          ${generateComparisonBarChartHTML(comparisonData)}
+        </div>
+      ` : ''}
+    </div>
+  ` : ''}
+  
+  <!-- Top Chi Nhánh Hoạt Động Tốt Nhất -->
+  ${rawData.all_branches_stats?.topPerformingBranches?.length > 0 ? `
+    <div class="section page-break">
+      <div class="section-title">Top Chi Nhánh Hoạt Động Tốt Nhất</div>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Hạng</th>
+            <th>Tên Chi Nhánh</th>
+            <th>Doanh Thu</th>
+            <th>Số Đơn</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rawData.all_branches_stats.topPerformingBranches.slice(0, 10).map((branch: any, idx: number) => `
+            <tr>
+              <td>${idx + 1}</td>
+              <td>${(branch.branchName || 'Chi nhánh').substring(0, 30)}</td>
+              <td>${formatCurrencyTable(branch.revenue || 0)}</td>
+              <td>${branch.orderCount || 0}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  ` : ''}
+  
+  <!-- Đánh Giá Theo Chi Nhánh -->
+  ${rawData.all_branches_review_metrics?.branchReviewStats?.length > 0 ? `
+    <div class="section page-break">
+      <div class="section-title">Đánh Giá Theo Chi Nhánh</div>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Chi Nhánh</th>
+            <th>Điểm TB</th>
+            <th>Tổng Đánh Giá</th>
+            <th>Tích Cực</th>
+            <th>Tiêu Cực</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rawData.all_branches_review_metrics.branchReviewStats.slice(0, 20).map((branch: any) => `
+            <tr>
+              <td>${(branch.branchName || 'Chi nhánh').substring(0, 25)}</td>
+              <td>${(branch.avgReviewScore || 0).toFixed(2)}</td>
+              <td>${branch.totalReviews || 0}</td>
+              <td>${branch.positiveReviews || 0}</td>
+              <td>${branch.negativeReviews || 0}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+      
+      ${branchesData.length > 0 ? `
+        <div class="chart-container">
+          <div class="chart-title">Biểu đồ đánh giá từng chi nhánh</div>
+          ${generateBarChartHTML(branchesData.map(b => ({
+            name: b.name.replace('Chi nhánh ', '').replace('Main Branch', 'Main'),
+            value: b.rating * 20, // Scale to 100
+          })))}
+        </div>
+      ` : ''}
+    </div>
+  ` : ''}
+  
+  <!-- Khuyến Nghị Hành Động -->
+  ${recommendations.length > 0 ? `
+    <div class="section page-break">
+      <div class="section-title">Khuyến Nghị Hành Động</div>
+      <ul class="recommendations-list">
+        ${recommendations.map((rec, idx) => `
+          <li class="recommendation-item">
+            <strong>${idx + 1}.</strong> ${rec}
+          </li>
+        `).join('')}
+      </ul>
+      
+      ${branchesData.length > 0 ? `
+        <div class="chart-container">
+          <div class="chart-title">Phân bố trạng thái chi nhánh</div>
+          ${generateStatusPieChartHTML(branchesData)}
+        </div>
+      ` : ''}
+    </div>
+  ` : ''}
+  
+  <div class="footer">
+    <p>AI Analytics Service - Báo cáo được tạo tự động</p>
+    <p>Hệ thống quản lý cà phê - Coffee Management System - Dành cho Admin</p>
+  </div>
+</body>
+</html>
+  `;
+};
+
+/**
+ * Export All Branches AI Statistics report to PDF
+ */
+export const exportAllBranchesToPDF = async (options: AllBranchesPDFExportOptions): Promise<void> => {
+  try {
+    // Generate HTML content
+    const htmlContent = generateAllBranchesPDFHTML(options);
+
+    // Create a new window for printing
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      throw new Error('Không thể mở cửa sổ in. Vui lòng cho phép popup.');
+    }
+
+    // Write HTML content
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+
+    // Wait for content to load
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // Trigger print dialog
+    printWindow.focus();
+    printWindow.print();
+
+    // Note: Don't close the window immediately as user might cancel print
+  } catch (error) {
+    console.error('Error exporting all branches PDF:', error);
+    throw new Error('Không thể xuất PDF. Vui lòng thử lại.');
+  }
+};
 
