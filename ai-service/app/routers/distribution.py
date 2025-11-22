@@ -4,6 +4,7 @@ API Routes for report distribution
 from fastapi import APIRouter, HTTPException, Query, Depends
 from sqlalchemy.orm import Session
 from typing import Optional, List
+from datetime import date
 from app.database import get_db
 from app.services.distribution_service import DistributionService
 import logging
@@ -35,6 +36,26 @@ async def send_report(
     return result
 
 
+@router.post("/send-by-date")
+async def send_report_by_date(
+    branch_id: int = Query(..., description="Branch ID"),
+    report_date: date = Query(..., description="Report date (YYYY-MM-DD)"),
+    manager_emails: Optional[List[str]] = Query(None, description="List of manager emails (optional)"),
+    db: Session = Depends(get_db)
+):
+    """
+    Send report for a specific branch and date to manager(s) via email
+    """
+    result = await distribution_service.send_report_by_date(
+        db, branch_id, report_date, manager_emails
+    )
+    
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["message"])
+    
+    return result
+
+
 @router.post("/send-unsent")
 async def send_unsent_reports(
     branch_id: Optional[int] = Query(None, description="Optional branch ID filter"),
@@ -54,6 +75,46 @@ async def send_unsent_reports(
         raise HTTPException(status_code=400, detail=result["message"])
     
     return result
+
+
+@router.get("/check-report")
+async def check_report_exists(
+    branch_id: int = Query(..., description="Branch ID"),
+    report_date: date = Query(..., description="Report date (YYYY-MM-DD)"),
+    db: Session = Depends(get_db)
+):
+    """
+    Check if a report exists for a specific branch and date
+    Useful for debugging before sending
+    """
+    from app.services.report_service import ReportService
+    
+    report_service = ReportService()
+    
+    try:
+        report = report_service.get_report_by_branch_and_date(
+            db, branch_id, report_date
+        )
+        
+        if not report:
+            return {
+                "exists": False,
+                "message": f"No report found for branch {branch_id} on date {report_date}",
+                "suggestion": "Please create a report first using /api/ai/agent/analyze endpoint"
+            }
+        
+        return {
+            "exists": True,
+            "report_id": report.id,
+            "branch_id": report.branch_id,
+            "report_date": report.report_date.isoformat(),
+            "is_sent": report.is_sent,
+            "sent_at": report.sent_at.isoformat() if report.sent_at else None,
+            "created_at": report.created_at.isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error checking report: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/status")
