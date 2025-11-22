@@ -100,7 +100,20 @@ const parseAnalysisSections = (analysisText: string) => {
         const isHeader = ['tóm tắt', 'điểm mạnh', 'điểm yếu', 'vấn đề', 'khuyến nghị'].some(
           keyword => cleaned.toLowerCase().includes(keyword) && cleaned.length < 50
         );
-        if (!isHeader) {
+        
+        // Lọc bỏ nội dung về dự báo khỏi issues section
+        const isForecastContent = currentSection === 'issues' && (
+          cleaned.toLowerCase().includes('dự báo') ||
+          cleaned.toLowerCase().includes('dự đoán') ||
+          cleaned.toLowerCase().includes('forecast') ||
+          cleaned.toLowerCase().includes('prophet') ||
+          cleaned.toLowerCase().includes('ngày tiếp theo') ||
+          cleaned.toLowerCase().includes('7 ngày') ||
+          cleaned.toLowerCase().includes('độ tin cậy') ||
+          /ngày\s+\d+\/\d+/.test(cleaned.toLowerCase()) // Pattern như "ngày 9/11"
+        );
+        
+        if (!isHeader && !isForecastContent) {
           sections[currentSection].push(cleaned);
         }
       }
@@ -108,6 +121,340 @@ const parseAnalysisSections = (analysisText: string) => {
   }
 
   return sections;
+};
+
+/**
+ * Generate bar chart HTML for top products using SVG for better PDF rendering
+ */
+const generateBarChartHTML = (data: Array<{name: string, value: number}>, maxItems: number = 10): string => {
+  if (!data || data.length === 0) return '';
+  
+  const items = data.slice(0, maxItems);
+  const maxValue = Math.max(...items.map(item => item.value), 1);
+  
+  // Màu sắc gradient cho mỗi bar (dùng SVG gradient)
+  const barGradients = [
+    { id: 'grad1', start: '#14b8a6', end: '#0d9488' }, // Teal
+    { id: 'grad2', start: '#fbbf24', end: '#f59e0b' }, // Yellow/Amber
+    { id: 'grad3', start: '#a78bfa', end: '#8b5cf6' }, // Purple
+    { id: 'grad4', start: '#fb7185', end: '#f43f5e' }, // Rose/Pink
+    { id: 'grad5', start: '#60a5fa', end: '#3b82f6' }, // Blue
+    { id: 'grad6', start: '#34d399', end: '#10b981' }, // Green
+    { id: 'grad7', start: '#f97316', end: '#ea580c' }, // Orange
+    { id: 'grad8', start: '#ec4899', end: '#db2777' }, // Pink
+    { id: 'grad9', start: '#6366f1', end: '#4f46e5' }, // Indigo
+    { id: 'grad10', start: '#06b6d4', end: '#0891b2' }, // Cyan
+  ];
+  
+  const svgWidth = 800;
+  const svgHeight = Math.max(400, items.length * 45 + 60);
+  const padding = 200; // Space for labels
+  const chartWidth = svgWidth - padding - 40;
+  const chartHeight = svgHeight - 60;
+  const barHeight = 35;
+  const barSpacing = 10;
+  const startY = 40;
+  
+  return `
+    <div class="bar-chart-container">
+      <svg class="bar-chart-svg" viewBox="0 0 ${svgWidth} ${svgHeight}" style="width: 100%; height: ${svgHeight}px;">
+        <!-- Background -->
+        <rect x="${padding}" y="20" width="${chartWidth}" height="${chartHeight}" fill="#fafafa" rx="4"/>
+        
+        <!-- Grid lines -->
+        ${[0, 0.25, 0.5, 0.75, 1].map(ratio => {
+          const x = padding + (ratio * chartWidth);
+          return `<line x1="${x}" y1="20" x2="${x}" y2="${20 + chartHeight}" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="2,2"/>`;
+        }).join('')}
+        
+        <!-- Bars -->
+        ${items.map((item, index) => {
+          const percentage = (item.value / maxValue) * 100;
+          const barWidth = (percentage / 100) * chartWidth;
+          const y = startY + index * (barHeight + barSpacing);
+          const gradientId = barGradients[index % barGradients.length].id;
+          const gradient = barGradients[index % barGradients.length];
+          
+          return `
+            <!-- Bar ${index} -->
+            <defs>
+              <linearGradient id="${gradientId}" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" style="stop-color:${gradient.start};stop-opacity:1" />
+                <stop offset="100%" style="stop-color:${gradient.end};stop-opacity:1" />
+              </linearGradient>
+            </defs>
+            <rect x="${padding}" y="${y}" width="${barWidth}" height="${barHeight}" fill="url(#${gradientId})" rx="6" style="filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));"/>
+            <text x="${padding + barWidth - 8}" y="${y + barHeight / 2 + 5}" text-anchor="end" font-size="13" font-weight="bold" fill="white" style="text-shadow: 0 1px 2px rgba(0,0,0,0.3);">${item.value}</text>
+            <text x="${padding - 10}" y="${y + barHeight / 2 + 5}" text-anchor="end" font-size="12" font-weight="600" fill="#374151">${item.name.length > 25 ? item.name.substring(0, 25) + '...' : item.name}</text>
+          `;
+        }).join('')}
+        
+        <!-- X-axis line -->
+        <line x1="${padding}" y1="${20 + chartHeight}" x2="${padding + chartWidth}" y2="${20 + chartHeight}" stroke="#374151" stroke-width="2.5"/>
+        
+        <!-- Y-axis line -->
+        <line x1="${padding}" y1="20" x2="${padding}" y2="${20 + chartHeight}" stroke="#374151" stroke-width="2.5"/>
+        
+        <!-- X-axis label -->
+        <text x="${padding + chartWidth / 2}" y="${svgHeight - 10}" text-anchor="middle" font-size="13" font-weight="bold" fill="#1f2937">Số Lượng Bán</text>
+        
+        <!-- X-axis values -->
+        ${[0, 0.25, 0.5, 0.75, 1].map(ratio => {
+          const x = padding + (ratio * chartWidth);
+          const value = Math.round(ratio * maxValue);
+          return `
+            <line x1="${x}" y1="${20 + chartHeight}" x2="${x}" y2="${20 + chartHeight + 5}" stroke="#6b7280" stroke-width="2"/>
+            <text x="${x}" y="${20 + chartHeight + 18}" text-anchor="middle" font-size="11" font-weight="600" fill="#4b5563">${value}</text>
+          `;
+        }).join('')}
+      </svg>
+    </div>
+  `;
+};
+
+/**
+ * Generate line chart HTML for revenue by hour
+ */
+const generateLineChartHTML = (data: Array<{hour: number, revenue: number}>): string => {
+  if (!data || data.length === 0) return '';
+  
+  const items = data.slice(0, 24);
+  const maxRevenue = Math.max(...items.map(item => item.revenue || 0), 1);
+  const minRevenue = Math.min(...items.map(item => item.revenue || 0), 0);
+  const range = maxRevenue - minRevenue || 1;
+  
+  const svgWidth = 850;
+  const svgHeight = 350;
+  const padding = 70;
+  const chartWidth = svgWidth - padding * 2;
+  const chartHeight = svgHeight - padding * 2;
+  
+  // Generate points for line
+  const points = items.map((item, index) => {
+    const x = padding + (index / (items.length - 1 || 1)) * chartWidth;
+    const y = padding + chartHeight - ((item.revenue || 0) - minRevenue) / range * chartHeight;
+    return `${x},${y}`;
+  }).join(' ');
+  
+  // Generate area path
+  const areaPath = `M ${padding},${padding + chartHeight} L ${points} L ${padding + chartWidth},${padding + chartHeight} Z`;
+  
+  return `
+    <div class="line-chart-container">
+      <svg class="line-chart-svg" viewBox="0 0 ${svgWidth} ${svgHeight}">
+        <!-- Background -->
+        <rect x="${padding}" y="${padding}" width="${chartWidth}" height="${chartHeight}" fill="#fafafa" rx="4"/>
+        
+        <!-- Grid lines -->
+        ${[0, 0.2, 0.4, 0.6, 0.8, 1].map(ratio => {
+          const y = padding + chartHeight - (ratio * chartHeight);
+          return `<line x1="${padding}" y1="${y}" x2="${padding + chartWidth}" y2="${y}" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="2,2"/>`;
+        }).join('')}
+        
+        <!-- Vertical grid lines -->
+        ${items.length > 1 ? items.map((_, index) => {
+          if (index === 0 || index === items.length - 1) return '';
+          const x = padding + (index / (items.length - 1 || 1)) * chartWidth;
+          return `<line x1="${x}" y1="${padding}" x2="${x}" y2="${padding + chartHeight}" stroke="#f3f4f6" stroke-width="1"/>`;
+        }).join('') : ''}
+        
+        <!-- Area fill with gradient -->
+        <path d="${areaPath}" fill="url(#revenueGradient)" opacity="0.6"/>
+        
+        <!-- Main line -->
+        <polyline points="${points}" fill="none" stroke="#6366f1" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+        
+        <!-- Points with glow effect -->
+        ${items.map((item, index) => {
+          const x = padding + (index / (items.length - 1 || 1)) * chartWidth;
+          const y = padding + chartHeight - ((item.revenue || 0) - minRevenue) / range * chartHeight;
+          return `
+            <circle cx="${x}" cy="${y}" r="8" fill="url(#pointGradient)" opacity="0.3"/>
+            <circle cx="${x}" cy="${y}" r="6" fill="#6366f1" stroke="#ffffff" stroke-width="3"/>
+          `;
+        }).join('')}
+        
+        <!-- X-axis labels -->
+        ${items.map((item, index) => {
+          const x = padding + (index / (items.length - 1 || 1)) * chartWidth;
+          return `
+            <text x="${x}" y="${svgHeight - 20}" text-anchor="middle" font-size="12" font-weight="600" fill="#4b5563">${item.hour || 0}</text>
+            <text x="${x}" y="${svgHeight - 5}" text-anchor="middle" font-size="10" fill="#9ca3af">Giờ</text>
+          `;
+        }).join('')}
+        
+        <!-- Y-axis labels -->
+        ${[0, 0.2, 0.4, 0.6, 0.8, 1].map(ratio => {
+          const y = padding + chartHeight - (ratio * chartHeight);
+          const value = minRevenue + (ratio * range);
+          const formattedValue = value >= 1000 ? `${(value / 1000).toFixed(0)}K` : value.toFixed(0);
+          return `
+            <line x1="${padding - 5}" y1="${y}" x2="${padding}" y2="${y}" stroke="#6b7280" stroke-width="2"/>
+            <text x="${padding - 12}" y="${y + 4}" text-anchor="end" font-size="12" font-weight="600" fill="#4b5563">${formattedValue}</text>
+          `;
+        }).join('')}
+        
+        <!-- Axis lines -->
+        <line x1="${padding}" y1="${padding}" x2="${padding}" y2="${padding + chartHeight}" stroke="#374151" stroke-width="2.5"/>
+        <line x1="${padding}" y1="${padding + chartHeight}" x2="${padding + chartWidth}" y2="${padding + chartHeight}" stroke="#374151" stroke-width="2.5"/>
+        
+        <!-- Axis labels -->
+        <text x="${svgWidth / 2}" y="${svgHeight - 5}" text-anchor="middle" font-size="13" font-weight="bold" fill="#1f2937">Giờ trong ngày</text>
+        <text x="20" y="${svgHeight / 2}" text-anchor="middle" font-size="13" font-weight="bold" fill="#1f2937" transform="rotate(-90 20 ${svgHeight / 2})">Doanh Thu (VNĐ)</text>
+        
+        <!-- Gradient definitions -->
+        <defs>
+          <linearGradient id="revenueGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" style="stop-color:#6366f1;stop-opacity:0.6" />
+            <stop offset="50%" style="stop-color:#818cf8;stop-opacity:0.4" />
+            <stop offset="100%" style="stop-color:#a5b4fc;stop-opacity:0.1" />
+          </linearGradient>
+          <radialGradient id="pointGradient" cx="50%" cy="50%">
+            <stop offset="0%" style="stop-color:#6366f1;stop-opacity:0.5" />
+            <stop offset="100%" style="stop-color:#6366f1;stop-opacity:0" />
+          </radialGradient>
+        </defs>
+      </svg>
+    </div>
+  `;
+};
+
+/**
+ * Generate forecast line chart HTML
+ */
+const generateForecastChartHTML = (forecastData: Array<{ngay: string, du_bao: number, khoang_tin_cay?: {min: number, max: number}}>): string => {
+  if (!forecastData || forecastData.length === 0) return '';
+  
+  const items = forecastData.slice(0, 7);
+  const forecasts = items.map(item => item.du_bao || 0);
+  const mins = items.map(item => item.khoang_tin_cay?.min || item.du_bao || 0);
+  const maxs = items.map(item => item.khoang_tin_cay?.max || item.du_bao || 0);
+  
+  const maxValue = Math.max(...maxs, 1);
+  const minValue = Math.min(...mins, 0);
+  const range = maxValue - minValue || 1;
+  
+  const svgWidth = 850;
+  const svgHeight = 350;
+  const padding = 70;
+  const chartWidth = svgWidth - padding * 2;
+  const chartHeight = svgHeight - padding * 2;
+  
+  // Generate points
+  const forecastPoints = forecasts.map((value, index) => {
+    const x = padding + (index / (items.length - 1 || 1)) * chartWidth;
+    const y = padding + chartHeight - ((value - minValue) / range * chartHeight);
+    return `${x},${y}`;
+  }).join(' ');
+  
+  const upperPoints = maxs.map((value, index) => {
+    const x = padding + (index / (items.length - 1 || 1)) * chartWidth;
+    const y = padding + chartHeight - ((value - minValue) / range * chartHeight);
+    return `${x},${y}`;
+  }).join(' ');
+  
+  const lowerPoints = mins.map((value, index) => {
+    const x = padding + (index / (items.length - 1 || 1)) * chartWidth;
+    const y = padding + chartHeight - ((value - minValue) / range * chartHeight);
+    return `${x},${y}`;
+  }).reverse().join(' ');
+  
+  const confidenceArea = `M ${padding + (0 / (items.length - 1 || 1)) * chartWidth},${padding + chartHeight - ((mins[0] - minValue) / range * chartHeight)} L ${upperPoints} L ${padding + chartWidth},${padding + chartHeight - ((mins[items.length - 1] - minValue) / range * chartHeight)} L ${lowerPoints} Z`;
+  
+  return `
+    <div class="line-chart-container">
+      <svg class="line-chart-svg" viewBox="0 0 ${svgWidth} ${svgHeight}">
+        <!-- Background -->
+        <rect x="${padding}" y="${padding}" width="${chartWidth}" height="${chartHeight}" fill="#fafafa" rx="4"/>
+        
+        <!-- Grid lines -->
+        ${[0, 0.2, 0.4, 0.6, 0.8, 1].map(ratio => {
+          const y = padding + chartHeight - (ratio * chartHeight);
+          return `<line x1="${padding}" y1="${y}" x2="${padding + chartWidth}" y2="${y}" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="2,2"/>`;
+        }).join('')}
+        
+        <!-- Vertical grid lines -->
+        ${items.length > 1 ? items.map((_, index) => {
+          if (index === 0 || index === items.length - 1) return '';
+          const x = padding + (index / (items.length - 1 || 1)) * chartWidth;
+          return `<line x1="${x}" y1="${padding}" x2="${x}" y2="${padding + chartHeight}" stroke="#f3f4f6" stroke-width="1"/>`;
+        }).join('') : ''}
+        
+        <!-- Confidence interval area with gradient -->
+        <path d="${confidenceArea}" fill="url(#confidenceGradient)" opacity="0.5"/>
+        
+        <!-- Confidence interval border -->
+        <polyline points="${upperPoints}" fill="none" stroke="#60a5fa" stroke-width="1.5" stroke-dasharray="3,3" opacity="0.6"/>
+        <polyline points="${lowerPoints.split(' ').reverse().join(' ')}" fill="none" stroke="#60a5fa" stroke-width="1.5" stroke-dasharray="3,3" opacity="0.6"/>
+        
+        <!-- Forecast line -->
+        <polyline points="${forecastPoints}" fill="none" stroke="#10b981" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+        
+        <!-- Points with glow -->
+        ${forecasts.map((value, index) => {
+          const x = padding + (index / (items.length - 1 || 1)) * chartWidth;
+          const y = padding + chartHeight - ((value - minValue) / range * chartHeight);
+          return `
+            <circle cx="${x}" cy="${y}" r="9" fill="url(#forecastPointGradient)" opacity="0.4"/>
+            <circle cx="${x}" cy="${y}" r="6" fill="#10b981" stroke="#ffffff" stroke-width="3"/>
+          `;
+        }).join('')}
+        
+        <!-- X-axis labels -->
+        ${items.map((item, index) => {
+          const x = padding + (index / (items.length - 1 || 1)) * chartWidth;
+          const dateStr = item.ngay ? new Date(item.ngay).toLocaleDateString('vi-VN', { day: 'numeric', month: 'short' }) : '';
+          return `
+            <text x="${x}" y="${svgHeight - 25}" text-anchor="middle" font-size="12" font-weight="600" fill="#4b5563" transform="rotate(-45 ${x} ${svgHeight - 25})">${dateStr}</text>
+          `;
+        }).join('')}
+        
+        <!-- Y-axis labels -->
+        ${[0, 0.2, 0.4, 0.6, 0.8, 1].map(ratio => {
+          const y = padding + chartHeight - (ratio * chartHeight);
+          const value = minValue + (ratio * range);
+          const formattedValue = value >= 1000 ? `${(value / 1000).toFixed(0)}K` : value.toFixed(0);
+          return `
+            <line x1="${padding - 5}" y1="${y}" x2="${padding}" y2="${y}" stroke="#6b7280" stroke-width="2"/>
+            <text x="${padding - 12}" y="${y + 4}" text-anchor="end" font-size="12" font-weight="600" fill="#4b5563">${formattedValue}</text>
+          `;
+        }).join('')}
+        
+        <!-- Axis lines -->
+        <line x1="${padding}" y1="${padding}" x2="${padding}" y2="${padding + chartHeight}" stroke="#374151" stroke-width="2.5"/>
+        <line x1="${padding}" y1="${padding + chartHeight}" x2="${padding + chartWidth}" y2="${padding + chartHeight}" stroke="#374151" stroke-width="2.5"/>
+        
+        <!-- Axis labels -->
+        <text x="${svgWidth / 2}" y="${svgHeight - 5}" text-anchor="middle" font-size="13" font-weight="bold" fill="#1f2937">Ngày</text>
+        <text x="20" y="${svgHeight / 2}" text-anchor="middle" font-size="13" font-weight="bold" fill="#1f2937" transform="rotate(-90 20 ${svgHeight / 2})">Giá Trị Dự Báo</text>
+        
+        <!-- Legend with better styling -->
+        <g transform="translate(${svgWidth - 200}, 30)">
+          <rect x="0" y="0" width="18" height="18" fill="url(#legendConfidenceGradient)" rx="2"/>
+          <text x="25" y="14" font-size="12" font-weight="600" fill="#1f2937">Khoảng tin cậy</text>
+          <line x1="0" y1="28" x2="18" y2="28" stroke="#10b981" stroke-width="4" stroke-linecap="round"/>
+          <text x="25" y="32" font-size="12" font-weight="600" fill="#1f2937">Dự báo</text>
+        </g>
+        
+        <!-- Gradient definitions -->
+        <defs>
+          <linearGradient id="confidenceGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" style="stop-color:#60a5fa;stop-opacity:0.6" />
+            <stop offset="50%" style="stop-color:#93c5fd;stop-opacity:0.4" />
+            <stop offset="100%" style="stop-color:#dbeafe;stop-opacity:0.2" />
+          </linearGradient>
+          <radialGradient id="forecastPointGradient" cx="50%" cy="50%">
+            <stop offset="0%" style="stop-color:#10b981;stop-opacity:0.6" />
+            <stop offset="100%" style="stop-color:#10b981;stop-opacity:0" />
+          </radialGradient>
+          <linearGradient id="legendConfidenceGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#60a5fa;stop-opacity:0.5" />
+            <stop offset="100%" style="stop-color:#93c5fd;stop-opacity:0.3" />
+          </linearGradient>
+        </defs>
+      </svg>
+    </div>
+  `;
 };
 
 /**
@@ -201,7 +548,6 @@ const generatePDFHTML = (options: PDFExportOptions): string => {
       text-align: center;
       margin-bottom: 30px;
       padding-bottom: 20px;
-      border-bottom: 3px solid #f59e0b;
     }
     
     .header h1 {
@@ -228,7 +574,6 @@ const generatePDFHTML = (options: PDFExportOptions): string => {
       color: #667eea;
       margin-bottom: 15px;
       padding-bottom: 8px;
-      border-bottom: 2px solid #e2e8f0;
     }
     
     .subsection-title {
@@ -266,7 +611,7 @@ const generatePDFHTML = (options: PDFExportOptions): string => {
     
     .analysis-box {
       background: #f9fafb;
-      border-left: 4px solid #10b981;
+      border: 1px solid #e5e7eb;
       padding: 15px;
       margin: 10px 0;
       border-radius: 4px;
@@ -274,22 +619,22 @@ const generatePDFHTML = (options: PDFExportOptions): string => {
     
     .strengths-box {
       background: #f0fdf4;
-      border-left: 4px solid #10b981;
+      border: 1px solid #e5e7eb;
     }
     
     .weaknesses-box {
       background: #fef2f2;
-      border-left: 4px solid #ef4444;
+      border: 1px solid #e5e7eb;
     }
     
     .issues-box {
       background: #fffbeb;
-      border-left: 4px solid #f59e0b;
+      border: 1px solid #e5e7eb;
     }
     
     .recommendations-box {
       background: #eff6ff;
-      border-left: 4px solid #3b82f6;
+      border: 1px solid #e5e7eb;
     }
     
     .analysis-item {
@@ -350,6 +695,11 @@ const generatePDFHTML = (options: PDFExportOptions): string => {
       background: #f9fafb;
     }
     
+    .table tbody tr td:first-child strong {
+      color: #667eea;
+      font-size: 12px;
+    }
+    
     .badge {
       display: inline-block;
       padding: 3px 8px;
@@ -376,10 +726,75 @@ const generatePDFHTML = (options: PDFExportOptions): string => {
     .footer {
       margin-top: 40px;
       padding-top: 20px;
-      border-top: 2px solid #e5e7eb;
       text-align: center;
       font-size: 10px;
       color: #666;
+    }
+    
+    .chart-container {
+      margin: 20px 0;
+      padding: 15px;
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 4px;
+    }
+    
+    .chart-title {
+      font-size: 16px;
+      font-weight: bold;
+      color: #1f2937;
+      margin-bottom: 20px;
+      text-align: center;
+      padding-bottom: 10px;
+    }
+    
+    .bar-chart-container {
+      margin: 20px 0;
+      padding: 15px;
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    
+    .bar-chart-svg {
+      width: 100%;
+      height: auto;
+    }
+    
+    .line-chart-container {
+      margin: 20px 0;
+      padding: 15px;
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    
+    .line-chart-svg {
+      width: 100%;
+      height: 350px;
+    }
+    
+    .chart-legend {
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      margin-top: 10px;
+      font-size: 10px;
+      color: #666;
+    }
+    
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    
+    .legend-color {
+      width: 12px;
+      height: 12px;
+      border-radius: 2px;
     }
     
     @media print {
@@ -387,6 +802,9 @@ const generatePDFHTML = (options: PDFExportOptions): string => {
         padding: 15px;
       }
       .section {
+        page-break-inside: avoid;
+      }
+      .chart-container {
         page-break-inside: avoid;
       }
     }
@@ -403,64 +821,365 @@ const generatePDFHTML = (options: PDFExportOptions): string => {
     </div>
   </div>
 
-  <!-- 1. Tóm Tắt Tình Hình Hoạt Động -->
+  <!-- 1. Tóm Tắt Metrics Chính -->
   <div class="section">
-    <div class="section-title">1. Tóm Tắt Tình Hình Hoạt Động</div>
+    <div class="section-title">1. Tóm Tắt Metrics Chính</div>
     
-    <div class="metrics-grid">
-      <div class="metric-card">
-        <div class="metric-label">💰 Doanh Thu</div>
-        <div class="metric-value">${formatNumber(summary.total_revenue || 0)} VNĐ</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-label">🛒 Số Đơn Hàng</div>
-        <div class="metric-value">${formatNumber(summary.order_count || 0)} đơn</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-label">📊 Giá Trị TB/Đơn</div>
-        <div class="metric-value">${formatNumber(summary.avg_order_value || 0)} VNĐ</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-label">👥 Tổng Khách Hàng</div>
-        <div class="metric-value">${formatNumber(summary.customer_count || 0)} người</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-label">🆕 Khách Hàng Mới</div>
-        <div class="metric-value">${formatNumber(summary.new_customers || 0)} người</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-label">🔄 Khách Quay Lại</div>
-        <div class="metric-value">${formatNumber(summary.repeat_customers || 0)} người</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-label">⭐ Đánh Giá TB</div>
-        <div class="metric-value">${(summary.avg_review_score || 0).toFixed(1)}/5</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-label">💬 Tổng Đánh Giá</div>
-        <div class="metric-value">${formatNumber(summary.total_reviews || 0)} đánh giá</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-label">📦 Sản Phẩm Đã Bán</div>
-        <div class="metric-value">${formatNumber(summary.unique_products_sold || 0)} sản phẩm</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-label">📈 Tỷ Lệ Quay Lại</div>
-        <div class="metric-value">${((summary.customer_retention_rate || 0) * 100).toFixed(1)}%</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-label">⚠️ Sản Phẩm Sắp Hết</div>
-        <div class="metric-value">${formatNumber(summary.low_stock_count || 0)} sản phẩm</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-label">🔴 Sản Phẩm Hết Hàng</div>
-        <div class="metric-value">${formatNumber(summary.out_of_stock_count || 0)} sản phẩm</div>
+    <table class="table" style="margin-bottom: 20px;">
+      <thead>
+        <tr>
+          <th>Chỉ Tiêu</th>
+          <th>Giá Trị</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${summary.total_revenue !== undefined ? `
+          <tr>
+            <td><strong>DOANH THU & ĐƠN HÀNG</strong></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>Doanh Thu</td>
+            <td>${formatNumber(summary.total_revenue || 0)} VNĐ</td>
+          </tr>
+          <tr>
+            <td>Số Đơn Hàng</td>
+            <td>${formatNumber(summary.order_count || 0)} đơn</td>
+          </tr>
+          <tr>
+            <td>Giá Trị TB/Đơn</td>
+            <td>${formatNumber(summary.avg_order_value || 0)} VNĐ</td>
+          </tr>
+        ` : ''}
+        ${summary.customer_count !== undefined ? `
+          <tr>
+            <td><strong>KHÁCH HÀNG</strong></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>Tổng Khách Hàng</td>
+            <td>${formatNumber(summary.customer_count || 0)} người</td>
+          </tr>
+          <tr>
+            <td>Khách Hàng Mới</td>
+            <td>${formatNumber(summary.new_customers || 0)} người</td>
+          </tr>
+          <tr>
+            <td>Khách Hàng Quay Lại</td>
+            <td>${formatNumber(summary.repeat_customers || 0)} người</td>
+          </tr>
+        ` : ''}
+        ${summary.unique_products_sold !== undefined ? `
+          <tr>
+            <td><strong>SẢN PHẨM</strong></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>Sản Phẩm Đã Bán</td>
+            <td>${formatNumber(summary.unique_products_sold || 0)} sản phẩm</td>
+          </tr>
+        ` : ''}
+        ${summary.avg_review_score !== undefined ? `
+          <tr>
+            <td><strong>ĐÁNH GIÁ</strong></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>Đánh Giá Trung Bình</td>
+            <td>${(summary.avg_review_score || 0).toFixed(2)}/5</td>
+          </tr>
+          <tr>
+            <td>Tổng Đánh Giá</td>
+            <td>${formatNumber(summary.total_reviews || 0)} đánh giá</td>
+          </tr>
+        ` : ''}
+        ${summary.low_stock_count !== undefined || summary.out_of_stock_count !== undefined ? `
+          <tr>
+            <td><strong>TỒN KHO</strong></td>
+            <td></td>
+          </tr>
+          ${summary.low_stock_count !== undefined ? `
+            <tr>
+              <td>Sản Phẩm Sắp Hết</td>
+              <td>${formatNumber(summary.low_stock_count || 0)} sản phẩm</td>
+            </tr>
+          ` : ''}
+          ${summary.out_of_stock_count !== undefined ? `
+            <tr>
+              <td>Sản Phẩm Hết Hàng</td>
+              <td>${formatNumber(summary.out_of_stock_count || 0)} sản phẩm</td>
+            </tr>
+          ` : ''}
+          ${summary.total_inventory_value !== undefined ? `
+            <tr>
+              <td>Giá Trị Tồn Kho</td>
+              <td>${formatNumber(summary.total_inventory_value || 0)} VNĐ</td>
+            </tr>
+          ` : ''}
+          ${(summary as any).material_cost !== undefined ? `
+            <tr>
+              <td>Chi Phí Nguyên Liệu</td>
+              <td>${formatNumber((summary as any).material_cost || 0)} VNĐ</td>
+            </tr>
+          ` : ''}
+        ` : ''}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 2. Phân Tích AI -->
+  ${analysisSections.summary.length > 0 || analysisSections.strengths.length > 0 || analysisSections.weaknesses.length > 0 || analysisSections.issues.length > 0 ? `
+    <div class="section">
+      <div class="section-title">2. Phân Tích AI</div>
+      
+      <!-- 2.1. Tóm Tắt Tình Hình Hoạt Động -->
+      ${analysisSections.summary.length > 0 ? `
+        <div class="subsection-title">2.1. Tóm Tắt Tình Hình Hoạt Động</div>
+        <div class="analysis-box">
+          ${analysisSections.summary.map(item => `<div class="analysis-item">${item}</div>`).join('')}
+        </div>
+      ` : ''}
+      
+      <!-- 2.2. Điểm Mạnh Và Điểm Yếu -->
+      ${analysisSections.strengths.length > 0 || analysisSections.weaknesses.length > 0 ? `
+        <div class="subsection-title">2.2. Điểm Mạnh Và Điểm Yếu</div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 15px 0;">
+          ${analysisSections.strengths.length > 0 ? `
+            <div class="analysis-box strengths-box">
+              <div style="font-weight: bold; margin-bottom: 10px;">Điểm Mạnh:</div>
+              ${analysisSections.strengths.map(item => `<div class="analysis-item">${item}</div>`).join('')}
+            </div>
+          ` : '<div class="analysis-box strengths-box"><div class="analysis-item">Chưa có thông tin</div></div>'}
+          
+          ${analysisSections.weaknesses.length > 0 ? `
+            <div class="analysis-box weaknesses-box">
+              <div style="font-weight: bold; margin-bottom: 10px;">Điểm Yếu:</div>
+              ${analysisSections.weaknesses.map(item => `<div class="analysis-item">${item}</div>`).join('')}
+            </div>
+          ` : '<div class="analysis-box weaknesses-box"><div class="analysis-item">Không có vấn đề</div></div>'}
+        </div>
+      ` : ''}
+      
+      <!-- 2.3. Các Vấn Đề Cần Chú Ý -->
+      ${hasAnomaly && anomalyFeatures.length > 0 || analysisSections.issues.length > 0 || rawData?.inventory_metrics?.lowStockItems?.length > 0 || rawData?.inventory_metrics?.outOfStockItems?.length > 0 ? `
+        <div class="subsection-title">2.3. Các Vấn Đề Cần Chú Ý</div>
+        
+        ${hasAnomaly && anomalyFeatures.length > 0 ? `
+          <div class="analysis-box issues-box">
+            <div style="font-weight: bold; margin-bottom: 10px;">⚠️ Phát hiện Bất thường</div>
+            ${anomalyFeatures
+              .filter((feature: any) => {
+                const featureText = typeof feature === 'string' ? feature : 
+                  feature.name || feature.feature || feature.description || JSON.stringify(feature);
+                const lowerText = featureText.toLowerCase();
+                // Lọc bỏ các feature có chứa từ khóa về dự báo
+                return !lowerText.includes('dự báo') && 
+                       !lowerText.includes('dự đoán') && 
+                       !lowerText.includes('forecast') &&
+                       !lowerText.includes('prophet') &&
+                       !lowerText.includes('ngày tiếp theo') &&
+                       !lowerText.includes('7 ngày') &&
+                       !/ngày\s+\d+\/\d+/.test(lowerText);
+              })
+              .map((feature: any) => {
+                const featureText = typeof feature === 'string' ? feature : 
+                  feature.name || feature.feature || feature.description || JSON.stringify(feature);
+                const change = typeof feature === 'object' ? (feature.change || feature.percentage) : null;
+                const severity = typeof feature === 'object' ? (feature.severity || feature.muc_do) : null;
+                
+                return `
+                  <div class="analysis-item">
+                    ${featureText}
+                    ${change ? ` (Thay đổi: ${change > 0 ? '+' : ''}${change}%)` : ''}
+                    ${severity ? ` - Mức độ: ${severity}` : ''}
+                  </div>
+                `;
+              }).join('')}
+          </div>
+        ` : !hasAnomaly ? `
+          <div class="analysis-box issues-box">
+            <div class="analysis-item">✓ Không có bất thường được phát hiện</div>
+          </div>
+        ` : ''}
+        
+        ${analysisSections.issues.length > 0 ? `
+          <div class="analysis-box issues-box" style="margin-top: 15px;">
+            ${analysisSections.issues
+              .filter(item => {
+                const lowerItem = item.toLowerCase();
+                // Lọc bỏ các item có chứa từ khóa về dự báo
+                return !lowerItem.includes('dự báo') && 
+                       !lowerItem.includes('dự đoán') && 
+                       !lowerItem.includes('forecast') &&
+                       !lowerItem.includes('prophet') &&
+                       !lowerItem.includes('ngày tiếp theo') &&
+                       !lowerItem.includes('7 ngày') &&
+                       !lowerItem.includes('độ tin cậy') &&
+                       !/ngày\s+\d+\/\d+/.test(lowerItem) && // Pattern như "ngày 9/11"
+                       !/\d+\s+đơn/.test(lowerItem) && // Pattern như "219 đơn", "222 đơn"
+                       !lowerItem.includes('dự kiến') &&
+                       !lowerItem.includes('dự tính');
+              })
+              .map(item => `<div class="analysis-item">${item}</div>`).join('')}
+          </div>
+        ` : ''}
+        
+        ${rawData?.inventory_metrics?.lowStockItems?.length > 0 || rawData?.inventory_metrics?.outOfStockItems?.length > 0 ? `
+          <div class="analysis-box issues-box" style="margin-top: 15px;">
+            <div style="font-weight: bold; margin-bottom: 10px;">📦 Cảnh Báo Tồn Kho</div>
+            ${rawData.inventory_metrics.outOfStockItems?.map((item: any) => `
+              <div class="analysis-item">${item.ingredientName || 'N/A'} - Hết hàng (Còn: ${item.currentQuantity || 0} ${item.unitName || ''})</div>
+            `).join('') || ''}
+            ${rawData.inventory_metrics.lowStockItems?.map((item: any) => `
+              <div class="analysis-item">${item.ingredientName || 'N/A'} - Sắp hết (Còn: ${item.currentQuantity || 0}/${item.threshold || 0} ${item.unitName || ''})</div>
+            `).join('') || ''}
+          </div>
+        ` : ''}
+      ` : ''}
+    </div>
+  ` : ''}
+
+  <!-- 3. Khuyến Nghị Hành Động -->
+  ${recommendations.length > 0 || analysisSections.recommendations.length > 0 ? `
+    <div class="section">
+      <div class="section-title">3. Khuyến Nghị Hành Động</div>
+      
+      <div class="analysis-box recommendations-box">
+        ${recommendations.length > 0 ? recommendations.map((rec, idx) => {
+          const priority = rec.toLowerCase().includes('khẩn cấp') || rec.toLowerCase().includes('khẩn') ? 'high' :
+                          rec.toLowerCase().includes('quan trọng') || rec.toLowerCase().includes('nên') ? 'medium' : 'low';
+          const badgeClass = priority === 'high' ? 'badge-high' : priority === 'medium' ? 'badge-medium' : 'badge-low';
+          const badgeText = priority === 'high' ? 'Khẩn cấp' : priority === 'medium' ? 'Quan trọng' : 'Theo dõi';
+          
+          return `
+            <div class="analysis-item" style="margin-bottom: 12px;">
+              <span class="badge ${badgeClass}">${badgeText}</span>
+              <span style="margin-left: 8px;">${idx + 1}. ${rec}</span>
+            </div>
+          `;
+        }).join('') : analysisSections.recommendations.map((rec, idx) => `
+          <div class="analysis-item">${idx + 1}. ${rec}</div>
+        `).join('')}
       </div>
     </div>
+  ` : ''}
 
+  <!-- 4. Biểu Đồ Thống Kê -->
+  <div class="section">
+    <div class="section-title">4. Biểu Đồ Thống Kê</div>
+    
+    <!-- 4.1. Doanh Thu Theo Giờ -->
     ${revenueByHour.length > 0 ? `
-      <div class="subsection-title">📊 Doanh Thu Theo Giờ</div>
+      <div class="chart-container">
+        <div class="chart-title">Doanh Thu Theo Giờ</div>
+        ${generateLineChartHTML(revenueByHour.map((item: any) => ({
+          hour: item.hour || 0,
+          revenue: item.revenue || 0
+        })))}
+        <div class="chart-legend">
+          <div class="legend-item">
+            <div class="legend-color" style="background: #667eea;"></div>
+            <span>Doanh Thu (VNĐ)</span>
+          </div>
+        </div>
+      </div>
+    ` : ''}
+    
+    <!-- 4.2. Top Sản Phẩm Bán Chạy -->
+    ${topProducts.length > 0 ? `
+      <div class="chart-container">
+        <div class="chart-title">Top 10 Sản Phẩm Bán Chạy</div>
+        ${generateBarChartHTML(topProducts.slice(0, 10).map((product: any) => ({
+          name: product.name,
+          value: product.quantity
+        })))}
+      </div>
+    ` : ''}
+    
+    <!-- 4.3. Dự Báo Tương Lai -->
+    ${forecastData.length > 0 ? `
+      <div class="chart-container">
+        <div class="chart-title">Dự Báo Tương Lai (7 Ngày Tiếp Theo)</div>
+        ${generateForecastChartHTML(forecastData.slice(0, 7).map((item: any) => ({
+          ngay: item.ngay || '',
+          du_bao: item.du_bao || 0,
+          khoang_tin_cay: item.khoang_tin_cay || { min: item.du_bao || 0, max: item.du_bao || 0 }
+        })))}
+        <div class="analysis-item" style="margin-top: 15px;">
+          Độ tin cậy: ${typeof forecast?.do_tin_cay === 'object' 
+            ? `${forecast.do_tin_cay.phan_tram || forecast.do_tin_cay.muc_do || 'N/A'}%` 
+            : forecast?.do_tin_cay || 'N/A'}
+        </div>
+      </div>
+    ` : ''}
+  </div>
+
+  <!-- 5. Dự Báo Tương Lai (Chi Tiết) -->
+  ${forecastData.length > 0 ? `
+    <div class="section">
+      <div class="section-title">5. Dự Báo Tương Lai (Chi Tiết)</div>
+      
       <table class="table">
+        <thead>
+          <tr>
+            <th>Ngày</th>
+            <th>Dự Báo</th>
+            <th>Khoảng Tin Cậy (Min - Max)</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${forecastData.map((item: any) => {
+            const forecastValue = item.du_bao || 0;
+            const min = item.khoang_tin_cay?.min || forecastValue;
+            const max = item.khoang_tin_cay?.max || forecastValue;
+            const chiTieuCode = forecast?.chi_tieu_code || 'order_count';
+            const unit = chiTieuCode === 'order_count' ? 'đơn' : 'VNĐ';
+            return `
+              <tr>
+                <td>${item.ngay || 'N/A'}</td>
+                <td>${formatNumber(forecastValue)} ${unit}</td>
+                <td>${formatNumber(min)} - ${formatNumber(max)} ${unit}</td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  ` : ''}
+
+  <!-- 6. Dữ Liệu Chi Tiết -->
+  <div class="section">
+    <div class="section-title">6. Dữ Liệu Chi Tiết</div>
+    
+    <!-- 6.1. Tình Trạng Đơn Hàng -->
+    <div class="subsection-title">6.1. Tình Trạng Đơn Hàng</div>
+    <table class="table" style="margin-bottom: 20px;">
+      <thead>
+        <tr>
+          <th>Tình Trạng</th>
+          <th>Số Lượng</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Hoàn thành</td>
+          <td>${formatNumber(orderStatus.completed)}</td>
+        </tr>
+        <tr>
+          <td>Đang chờ</td>
+          <td>${formatNumber(orderStatus.pending)}</td>
+        </tr>
+        <tr>
+          <td>Đã hủy</td>
+          <td>${formatNumber(orderStatus.cancelled)}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- 6.2. Doanh Thu Theo Giờ (Bảng) -->
+    ${revenueByHour.length > 0 ? `
+      <div class="subsection-title">6.2. Doanh Thu Theo Giờ (Bảng)</div>
+      <table class="table" style="margin-bottom: 20px;">
         <thead>
           <tr>
             <th>Giờ</th>
@@ -479,174 +1198,12 @@ const generatePDFHTML = (options: PDFExportOptions): string => {
         </tbody>
       </table>
     ` : ''}
-
-    <div class="subsection-title">📋 Tình Trạng Đơn Hàng</div>
-    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 15px 0;">
-      <div class="metric-card" style="background: #f0fdf4; border-left: 4px solid #10b981;">
-        <div class="metric-label">Hoàn thành</div>
-        <div class="metric-value" style="color: #10b981;">${formatNumber(orderStatus.completed)}</div>
-      </div>
-      <div class="metric-card" style="background: #fffbeb; border-left: 4px solid #f59e0b;">
-        <div class="metric-label">Đang chờ</div>
-        <div class="metric-value" style="color: #f59e0b;">${formatNumber(orderStatus.pending)}</div>
-      </div>
-      <div class="metric-card" style="background: #fef2f2; border-left: 4px solid #ef4444;">
-        <div class="metric-label">Đã hủy</div>
-        <div class="metric-value" style="color: #ef4444;">${formatNumber(orderStatus.cancelled)}</div>
-      </div>
-    </div>
-
-    ${analysisSections.summary.length > 0 ? `
-      <div class="analysis-box">
-        ${analysisSections.summary.map(item => `<div class="analysis-item">${item}</div>`).join('')}
-      </div>
-    ` : ''}
   </div>
 
-  <!-- 2. Điểm Mạnh Và Điểm Yếu -->
-  <div class="section">
-    <div class="section-title">2. Điểm Mạnh Và Điểm Yếu</div>
-    
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-      ${analysisSections.strengths.length > 0 ? `
-        <div class="analysis-box strengths-box">
-          <div class="subsection-title">Điểm Mạnh</div>
-          ${analysisSections.strengths.map(item => `<div class="analysis-item">${item}</div>`).join('')}
-        </div>
-      ` : '<div class="analysis-box strengths-box"><div class="analysis-item">Chưa có thông tin</div></div>'}
-      
-      ${analysisSections.weaknesses.length > 0 ? `
-        <div class="analysis-box weaknesses-box">
-          <div class="subsection-title">Điểm Yếu</div>
-          ${analysisSections.weaknesses.map(item => `<div class="analysis-item">${item}</div>`).join('')}
-        </div>
-      ` : '<div class="analysis-box weaknesses-box"><div class="analysis-item">Không có vấn đề</div></div>'}
-    </div>
-  </div>
-
-  <!-- 3. Các Vấn Đề Cần Chú Ý -->
-  <div class="section">
-    <div class="section-title">3. Các Vấn Đề Cần Chú Ý</div>
-    
-    ${hasAnomaly && anomalyFeatures.length > 0 ? `
-      <div class="analysis-box issues-box">
-        <div class="subsection-title">⚠️ Phát hiện Bất thường</div>
-        ${anomalyFeatures.map((feature: any) => {
-          const featureText = typeof feature === 'string' ? feature : 
-            feature.name || feature.feature || feature.description || JSON.stringify(feature);
-          const change = typeof feature === 'object' ? (feature.change || feature.percentage) : null;
-          const severity = typeof feature === 'object' ? (feature.severity || feature.muc_do) : null;
-          
-          return `
-            <div class="analysis-item">
-              ${featureText}
-              ${change ? ` (Thay đổi: ${change > 0 ? '+' : ''}${change}%)` : ''}
-              ${severity ? ` - Mức độ: ${severity}` : ''}
-            </div>
-          `;
-        }).join('')}
-      </div>
-    ` : `
-      <div class="analysis-box issues-box">
-        <div class="analysis-item">✓ Không có bất thường được phát hiện</div>
-      </div>
-    `}
-    
-    ${analysisSections.issues.length > 0 ? `
-      <div class="analysis-box issues-box" style="margin-top: 15px;">
-        ${analysisSections.issues.map(item => `<div class="analysis-item">${item}</div>`).join('')}
-      </div>
-    ` : ''}
-    
-    ${rawData?.inventory_metrics?.lowStockItems?.length > 0 || rawData?.inventory_metrics?.outOfStockItems?.length > 0 ? `
-      <div class="analysis-box issues-box" style="margin-top: 15px;">
-        <div class="subsection-title">📦 Cảnh Báo Tồn Kho</div>
-        ${rawData.inventory_metrics.outOfStockItems?.map((item: any) => `
-          <div class="analysis-item">${item.ingredientName || 'N/A'} - Hết hàng (Còn: ${item.currentQuantity || 0} ${item.unitName || ''})</div>
-        `).join('') || ''}
-        ${rawData.inventory_metrics.lowStockItems?.map((item: any) => `
-          <div class="analysis-item">${item.ingredientName || 'N/A'} - Sắp hết (Còn: ${item.currentQuantity || 0}/${item.threshold || 0} ${item.unitName || ''})</div>
-        `).join('') || ''}
-      </div>
-    ` : ''}
-  </div>
-
-  <!-- 4. Khuyến Nghị Hành Động -->
-  <div class="section">
-    <div class="section-title">4. Khuyến Nghị Hành Động</div>
-    
-    <div class="analysis-box recommendations-box">
-      ${recommendations.length > 0 ? recommendations.map((rec) => {
-        const priority = rec.toLowerCase().includes('khẩn cấp') || rec.toLowerCase().includes('khẩn') ? 'high' :
-                        rec.toLowerCase().includes('quan trọng') || rec.toLowerCase().includes('nên') ? 'medium' : 'low';
-        const badgeClass = priority === 'high' ? 'badge-high' : priority === 'medium' ? 'badge-medium' : 'badge-low';
-        const badgeText = priority === 'high' ? 'Khẩn cấp' : priority === 'medium' ? 'Quan trọng' : 'Theo dõi';
-        
-        return `
-          <div class="analysis-item" style="margin-bottom: 12px;">
-            <span class="badge ${badgeClass}">${badgeText}</span>
-            <span style="margin-left: 8px;">${rec}</span>
-          </div>
-        `;
-      }).join('') : analysisSections.recommendations.map((rec, idx) => `
-        <div class="analysis-item">${idx + 1}. ${rec}</div>
-      `).join('')}
-      
-      ${recommendations.length === 0 && analysisSections.recommendations.length === 0 ? `
-        <div class="analysis-item">Chưa có khuyến nghị</div>
-      ` : ''}
-    </div>
-  </div>
-
-  <!-- 5. Dự Báo Tương Lai -->
-  ${forecastData.length > 0 ? `
-    <div class="section">
-      <div class="section-title">5. Dự Báo Tương Lai</div>
-      
-      <div class="analysis-box">
-        <div class="subsection-title">📈 Dự Báo ${forecast?.chi_tieu || 'Số Đơn Hàng'}</div>
-        <div class="analysis-item">
-          Dự báo ${forecastData.length} ngày tiếp theo với độ tin cậy: 
-          ${typeof forecast?.do_tin_cay === 'object' 
-            ? `${forecast.do_tin_cay.phan_tram || forecast.do_tin_cay.muc_do || 'N/A'}%` 
-            : forecast?.do_tin_cay || 'N/A'}
-        </div>
-        
-        ${forecastData.length > 0 ? `
-          <table class="table" style="margin-top: 15px;">
-            <thead>
-              <tr>
-                <th>Ngày</th>
-                <th>Dự Báo</th>
-                <th>Khoảng Tin Cậy (Min - Max)</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${forecastData.map((item: any) => {
-                const forecastValue = item.du_bao || 0;
-                const min = item.khoang_tin_cay?.min || forecastValue;
-                const max = item.khoang_tin_cay?.max || forecastValue;
-                const chiTieuCode = forecast?.chi_tieu_code || 'order_count';
-                const unit = chiTieuCode === 'order_count' ? 'đơn' : 'VNĐ';
-                return `
-                  <tr>
-                    <td>${item.ngay || 'N/A'}</td>
-                    <td>${formatNumber(forecastValue)} ${unit}</td>
-                    <td>${formatNumber(min)} - ${formatNumber(max)} ${unit}</td>
-                  </tr>
-                `;
-              }).join('')}
-            </tbody>
-          </table>
-        ` : ''}
-      </div>
-    </div>
-  ` : ''}
-
-  <!-- 6. Sản Phẩm Bán Chạy -->
+  <!-- 7. Sản Phẩm Bán Chạy -->
   ${topProducts.length > 0 ? `
     <div class="section">
-      <div class="section-title">6. Sản Phẩm Bán Chạy</div>
+      <div class="section-title">7. Sản Phẩm Bán Chạy</div>
       
       <table class="table">
         <thead>
@@ -691,10 +1248,10 @@ const generatePDFHTML = (options: PDFExportOptions): string => {
     </div>
   ` : ''}
 
-  <!-- 7. Khách Hàng Hàng Đầu -->
+  <!-- 8. Khách Hàng Hàng Đầu -->
   ${topCustomers.length > 0 ? `
     <div class="section">
-      <div class="section-title">7. Khách Hàng Hàng Đầu</div>
+      <div class="section-title">8. Khách Hàng Hàng Đầu</div>
       
       <table class="table">
         <thead>
@@ -719,10 +1276,10 @@ const generatePDFHTML = (options: PDFExportOptions): string => {
     </div>
   ` : ''}
 
-  <!-- 8. Phản Hồi Khách Hàng -->
+  <!-- 9. Phản Hồi Khách Hàng -->
   ${recentReviews.length > 0 || Object.keys(reviewDistribution).length > 0 ? `
     <div class="section">
-      <div class="section-title">8. Phản Hồi Khách Hàng</div>
+      <div class="section-title">9. Phản Hồi Khách Hàng</div>
       
       ${Object.keys(reviewDistribution).length > 0 ? `
         <div class="subsection-title">Phân Bố Đánh Giá</div>
@@ -772,10 +1329,10 @@ const generatePDFHTML = (options: PDFExportOptions): string => {
     </div>
   ` : ''}
 
-  <!-- 9. Nguyên Liệu & Chi Phí -->
+  <!-- 10. Nguyên Liệu & Chi Phí -->
   ${topIngredientsByValue.length > 0 || topCostIngredients.length > 0 ? `
     <div class="section">
-      <div class="section-title">9. Nguyên Liệu & Chi Phí</div>
+      <div class="section-title">10. Nguyên Liệu & Chi Phí</div>
       
       ${topIngredientsByValue.length > 0 ? `
         <div class="subsection-title">Nguyên Liệu Có Giá Trị Cao Nhất</div>
@@ -827,10 +1384,10 @@ const generatePDFHTML = (options: PDFExportOptions): string => {
     </div>
   ` : ''}
 
-  <!-- 10. Doanh Thu Theo Phương Thức Thanh Toán -->
+  <!-- 11. Doanh Thu Theo Phương Thức Thanh Toán -->
   ${Object.keys(revenueByPaymentMethod).length > 0 ? `
     <div class="section">
-      <div class="section-title">10. Doanh Thu Theo Phương Thức Thanh Toán</div>
+      <div class="section-title">11. Doanh Thu Theo Phương Thức Thanh Toán</div>
       
       <table class="table">
         <thead>
