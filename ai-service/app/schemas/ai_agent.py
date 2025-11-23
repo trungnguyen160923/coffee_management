@@ -38,6 +38,14 @@ class AIAgentResponse(BaseModel):
         None,
         description="Raw JSON data collected from services"
     )
+    ai_quality_score: Optional[float] = Field(
+        None,
+        description="AI response quality score (0.0-1.0)"
+    )
+    overall_confidence: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Overall confidence score with breakdown"
+    )
     message: Optional[str] = Field(None, description="Additional message or error")
 
 
@@ -66,5 +74,13 @@ class AllBranchesAIAgentResponse(BaseModel):
     raw_data: Optional[Dict[str, Any]] = Field(
         None,
         description="Raw JSON data collected from services for all branches"
+    )
+    ai_quality_score: Optional[float] = Field(
+        None,
+        description="AI response quality score (0.0-1.0)"
+    )
+    overall_confidence: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Overall confidence score with breakdown"
     )
     message: Optional[str] = Field(None, description="Additional message or error")
