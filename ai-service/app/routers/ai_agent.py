@@ -73,6 +73,11 @@ async def analyze_with_ai(
         report_id = None
         if save_to_db:
             try:
+                # Extract confidence scores từ aggregated_data và ai_result
+                overall_confidence = ai_result.get("overall_confidence", {})
+                confidence_breakdown = overall_confidence.get("breakdown", {}) if isinstance(overall_confidence, dict) else {}
+                warnings = overall_confidence.get("warnings", []) if isinstance(overall_confidence, dict) else []
+                
                 report_create = ReportCreate(
                     branch_id=request.branch_id,
                     report_date=datetime.combine(request.date, datetime.min.time()),
@@ -83,7 +88,14 @@ async def analyze_with_ai(
                     raw_data=aggregated_data,
                     query=request.query,
                     ai_model=settings.OPENAI_MODEL,
-                    processing_time_ms=processing_time_ms
+                    processing_time_ms=processing_time_ms,
+                    # Confidence scores (Phase 4)
+                    data_quality_score=aggregated_data.get("data_quality_score"),
+                    ml_confidence_score=aggregated_data.get("ml_confidence_score"),
+                    ai_quality_score=ai_result.get("ai_quality_score"),
+                    overall_confidence_score=overall_confidence.get("overall") if isinstance(overall_confidence, dict) else None,
+                    confidence_breakdown=confidence_breakdown,
+                    validation_flags={"warnings": warnings} if warnings else None
                 )
                 db_report = report_service.create_report(db, report_create)
                 report_id = db_report.id
@@ -101,6 +113,8 @@ async def analyze_with_ai(
             summary=ai_result.get("summary"),
             recommendations=ai_result.get("recommendations"),
             raw_data=aggregated_data,
+            ai_quality_score=ai_result.get("ai_quality_score"),
+            overall_confidence=ai_result.get("overall_confidence"),
             message=f"Analysis completed successfully. Report ID: {report_id}" if report_id else "Analysis completed successfully"
         )
         return response
@@ -292,6 +306,11 @@ async def analyze_all_branches_with_ai(
         report_id = None
         if save_to_db:
             try:
+                # Extract confidence scores từ aggregated_data và ai_result
+                overall_confidence = ai_result.get("overall_confidence", {})
+                confidence_breakdown = overall_confidence.get("breakdown", {}) if isinstance(overall_confidence, dict) else {}
+                warnings = overall_confidence.get("warnings", []) if isinstance(overall_confidence, dict) else []
+                
                 # Use branch_id=0 to represent "all branches" admin report
                 report_create = ReportCreate(
                     branch_id=0,  # 0 = all branches (admin report)
@@ -303,7 +322,14 @@ async def analyze_all_branches_with_ai(
                     raw_data=aggregated_data,
                     query=target_query,
                     ai_model=settings.OPENAI_MODEL,
-                    processing_time_ms=processing_time_ms
+                    processing_time_ms=processing_time_ms,
+                    # Confidence scores (Phase 4)
+                    data_quality_score=aggregated_data.get("data_quality_score"),
+                    ml_confidence_score=aggregated_data.get("ml_confidence_score"),
+                    ai_quality_score=ai_result.get("ai_quality_score"),
+                    overall_confidence_score=overall_confidence.get("overall") if isinstance(overall_confidence, dict) else None,
+                    confidence_breakdown=confidence_breakdown,
+                    validation_flags={"warnings": warnings} if warnings else None
                 )
                 db_report = report_service.create_report(db, report_create)
                 report_id = db_report.id
@@ -320,6 +346,8 @@ async def analyze_all_branches_with_ai(
             summary=ai_result.get("summary"),
             recommendations=ai_result.get("recommendations"),
             raw_data=aggregated_data,
+            ai_quality_score=ai_result.get("ai_quality_score"),
+            overall_confidence=ai_result.get("overall_confidence"),
             message=f"Analysis completed successfully in {processing_time_ms}ms. Report ID: {report_id}" if report_id else f"Analysis completed successfully in {processing_time_ms}ms"
         )
         return response

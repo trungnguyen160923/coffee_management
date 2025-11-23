@@ -37,7 +37,14 @@ class ReportService:
                 raw_data=report_data.raw_data,
                 query=report_data.query,
                 ai_model=report_data.ai_model,
-                processing_time_ms=report_data.processing_time_ms
+                processing_time_ms=report_data.processing_time_ms,
+                # Confidence scores (Phase 4)
+                data_quality_score=report_data.data_quality_score,
+                ml_confidence_score=report_data.ml_confidence_score,
+                ai_quality_score=report_data.ai_quality_score,
+                overall_confidence_score=report_data.overall_confidence_score,
+                confidence_breakdown=report_data.confidence_breakdown,
+                validation_flags=report_data.validation_flags
             )
             db.add(db_report)
             db.commit()

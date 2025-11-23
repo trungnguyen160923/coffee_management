@@ -6,6 +6,7 @@ from datetime import date
 from typing import Optional
 from app.services.anomaly_service import AnomalyService
 from app.services.data_collector import DataCollectorService
+from app.services.ai_agent_service import AIAgentService
 from app.schemas.anomaly import (
     AnomalyDetectionRequest,
     AnomalyDetectionResponse,
@@ -22,6 +23,7 @@ router = APIRouter(prefix="/api/ai", tags=["AI Analytics"])
 # Initialize services
 anomaly_service = AnomalyService()
 data_collector = DataCollectorService()
+ai_agent_service = AIAgentService()
 
 
 @router.get("/health")
@@ -124,5 +126,29 @@ async def collect_metrics(
         raise
     except Exception as e:
         logger.error(f"Error in collect_metrics endpoint: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/collect-data")
+async def collect_data(
+    branch_id: int = Query(..., description="Branch ID"),
+    date: date = Query(..., description="Date to collect data")
+):
+    """
+    Chỉ thu thập dữ liệu từ các service cho 1 chi nhánh (6 API + 2 ML predictions, không xử lý AI)
+    Dùng để test hoặc debug
+    Alias endpoint cho /api/ai/agent/collect-data
+    """
+    try:
+        aggregated_data = await ai_agent_service.collect_three_json_data(
+            branch_id=branch_id,
+            target_date=date
+        )
+        return {
+            "success": True,
+            "data": aggregated_data
+        }
+    except Exception as e:
+        logger.error(f"Error in collect_data endpoint: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -12,6 +12,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from app.config import settings
 from app.clients.order_client import OrderServiceClient
 from app.clients.catalog_client import CatalogServiceClient
+from app.services.confidence_service import ConfidenceService
 import logging
 
 logger = logging.getLogger(__name__)
@@ -28,6 +29,7 @@ class AIAgentService:
     def __init__(self):
         self.order_client = OrderServiceClient()
         self.catalog_client = CatalogServiceClient()
+        self.confidence_service = ConfidenceService()
         
         # Initialize OpenAI LLM with custom base_url
         if settings.OPENAI_API_KEY:
@@ -301,6 +303,30 @@ class AIAgentService:
                 "prophet_forecast": prophet_forecast_data or {}
             }
             
+            # Tính Data Quality Score và ML Confidence Score
+            try:
+                data_quality_score = self.confidence_service.calculate_data_quality_score(
+                    aggregated_data, target_date
+                )
+                ml_confidence_score = self.confidence_service.calculate_ml_confidence_score(
+                    aggregated_data
+                )
+                
+                # Thêm confidence scores vào aggregated_data
+                aggregated_data["data_quality_score"] = data_quality_score
+                aggregated_data["ml_confidence_score"] = ml_confidence_score
+                
+                logger.info(
+                    f"Confidence scores calculated - "
+                    f"Data Quality: {data_quality_score:.2f}, "
+                    f"ML Confidence: {ml_confidence_score:.2f}"
+                )
+            except Exception as e:
+                logger.warning(f"Error calculating confidence scores: {e}", exc_info=True)
+                # Vẫn tiếp tục nếu tính confidence lỗi
+                aggregated_data["data_quality_score"] = 0.0
+                aggregated_data["ml_confidence_score"] = 0.0
+            
             logger.info(f"Collected data from 6 APIs + 2 ML predictions - Revenue: {bool(revenue_data)}, Customer: {bool(customer_data)}, Product: {bool(product_data)}, Review: {bool(review_data)}, Inventory: {bool(inventory_data)}, Material Cost: {bool(material_cost_data)}, Isolation Forest: {bool(isolation_forest_data)}, Prophet: {bool(prophet_forecast_data)}")
             
             return aggregated_data
@@ -318,6 +344,8 @@ class AIAgentService:
                 "material_cost_metrics": {},
                 "isolation_forest_anomaly": {},
                 "prophet_forecast": {},
+                "data_quality_score": 0.0,
+                "ml_confidence_score": 0.0,
                 "error": str(e)
             }
     
@@ -386,11 +414,47 @@ Hãy phân tích toàn diện dữ liệu này và đưa ra:
             summary = self._extract_summary(aggregated_data)
             recommendations = self._extract_recommendations(analysis_text)
             
+            # Tính AI Quality Score
+            try:
+                ai_quality_score = self.confidence_service.calculate_ai_quality_score(
+                    analysis_text, aggregated_data
+                )
+                logger.info(f"AI Quality Score calculated: {ai_quality_score:.2f}")
+            except Exception as e:
+                logger.warning(f"Error calculating AI quality score: {e}", exc_info=True)
+                ai_quality_score = 0.5  # Default: trung bình
+            
+            # Tính Overall Confidence Score
+            try:
+                data_quality_score = aggregated_data.get("data_quality_score", 0.0)
+                ml_confidence_score = aggregated_data.get("ml_confidence_score", 0.0)
+                branch_id = aggregated_data.get("branch_id")
+                
+                overall_confidence = self.confidence_service.calculate_overall_confidence(
+                    data_quality_score=data_quality_score,
+                    ml_confidence_score=ml_confidence_score,
+                    ai_quality_score=ai_quality_score,
+                    historical_accuracy_score=None,  # Sẽ tự tính từ database
+                    branch_id=branch_id,
+                    aggregated_data=aggregated_data
+                )
+                logger.info(f"Overall Confidence Score calculated: {overall_confidence.get('overall', 0.0):.2f} ({overall_confidence.get('level', 'UNKNOWN')})")
+            except Exception as e:
+                logger.warning(f"Error calculating overall confidence: {e}", exc_info=True)
+                overall_confidence = {
+                    "overall": 0.5,
+                    "breakdown": {},
+                    "level": "MEDIUM",
+                    "warnings": []
+                }
+            
             return {
                 "success": True,
                 "analysis": analysis_text,
                 "summary": summary,
-                "recommendations": recommendations
+                "recommendations": recommendations,
+                "ai_quality_score": ai_quality_score,
+                "overall_confidence": overall_confidence
             }
             
         except Exception as e:
@@ -738,11 +802,49 @@ Hãy trình bày rõ ràng, chi tiết và có cấu trúc để admin dễ dàn
             summary = self._extract_all_branches_summary(aggregated_data)
             recommendations = self._extract_recommendations(analysis_text)
             
+            # Tính AI Quality Score
+            try:
+                ai_quality_score = self.confidence_service.calculate_ai_quality_score(
+                    analysis_text, aggregated_data
+                )
+                logger.info(f"AI Quality Score (all branches) calculated: {ai_quality_score:.2f}")
+            except Exception as e:
+                logger.warning(f"Error calculating AI quality score: {e}", exc_info=True)
+                ai_quality_score = 0.5  # Default: trung bình
+            
+            # Tính Overall Confidence Score
+            try:
+                # Lấy data_quality và ml_confidence từ aggregated_data (nếu có)
+                data_quality_score = aggregated_data.get("data_quality_score", 0.0)
+                ml_confidence_score = aggregated_data.get("ml_confidence_score", 0.0)
+                # Với all branches, không có branch_id cụ thể, dùng None
+                branch_id = aggregated_data.get("branch_id")  # Có thể là None
+                
+                overall_confidence = self.confidence_service.calculate_overall_confidence(
+                    data_quality_score=data_quality_score,
+                    ml_confidence_score=ml_confidence_score,
+                    ai_quality_score=ai_quality_score,
+                    historical_accuracy_score=None,  # Sẽ tự tính từ database nếu có branch_id
+                    branch_id=branch_id,
+                    aggregated_data=aggregated_data
+                )
+                logger.info(f"Overall Confidence Score (all branches) calculated: {overall_confidence.get('overall', 0.0):.2f} ({overall_confidence.get('level', 'UNKNOWN')})")
+            except Exception as e:
+                logger.warning(f"Error calculating overall confidence: {e}", exc_info=True)
+                overall_confidence = {
+                    "overall": 0.5,
+                    "breakdown": {},
+                    "level": "MEDIUM",
+                    "warnings": []
+                }
+            
             return {
                 "success": True,
                 "analysis": analysis_text,
                 "summary": summary,
-                "recommendations": recommendations
+                "recommendations": recommendations,
+                "ai_quality_score": ai_quality_score,
+                "overall_confidence": overall_confidence
             }
             
         except Exception as e:

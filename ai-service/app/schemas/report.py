@@ -18,6 +18,13 @@ class ReportCreate(BaseModel):
     query: Optional[str] = None
     ai_model: Optional[str] = None
     processing_time_ms: Optional[int] = None
+    # Confidence scores (Phase 4)
+    data_quality_score: Optional[float] = None
+    ml_confidence_score: Optional[float] = None
+    ai_quality_score: Optional[float] = None
+    overall_confidence_score: Optional[float] = None
+    confidence_breakdown: Optional[Dict[str, Any]] = None
+    validation_flags: Optional[Dict[str, Any]] = None
 
 
 class ReportResponse(BaseModel):
@@ -37,6 +44,13 @@ class ReportResponse(BaseModel):
     query: Optional[str]
     ai_model: Optional[str]
     processing_time_ms: Optional[int]
+    # Confidence scores (Phase 4)
+    data_quality_score: Optional[float] = None
+    ml_confidence_score: Optional[float] = None
+    ai_quality_score: Optional[float] = None
+    overall_confidence_score: Optional[float] = None
+    confidence_breakdown: Optional[Dict[str, Any]] = None
+    validation_flags: Optional[Dict[str, Any]] = None
     
     class Config:
         from_attributes = True
