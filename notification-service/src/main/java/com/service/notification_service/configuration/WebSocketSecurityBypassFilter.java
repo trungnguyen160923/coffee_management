@@ -28,7 +28,10 @@ public class WebSocketSecurityBypassFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
         String servletPath = request.getServletPath();
-        boolean isWebSocketPath = servletPath.startsWith("/ws") || servletPath.equals("/ws");
+        String requestURI = request.getRequestURI();
+        // Check both servletPath and requestURI to handle gateway routing
+        boolean isWebSocketPath = servletPath.startsWith("/ws") || servletPath.equals("/ws")
+                || requestURI.contains("/ws/") || requestURI.endsWith("/ws");
         
         if (isWebSocketPath) {
             // Set anonymous authentication BEFORE any Spring Security filter runs

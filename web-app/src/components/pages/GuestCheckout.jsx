@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { cartService } from '../../services/cartService';
 import { orderService } from '../../services/orderService';
 import { notificationService } from '../../services/notificationService';
-import { emailService } from '../../services/emailService';
+// import { emailService } from '../../services/emailService'; // TEMPORARILY COMMENTED FOR TESTING
 import { discountService } from '../../services/discountService';
 import { branchService } from '../../services/branchService';
 import { stockService } from '../../services/stockService';
@@ -442,25 +442,25 @@ const GuestCheckout = () => {
                 console.error('Failed to notify staff about guest order:', notifyError);
             }
 
-            // Send order confirmation email
-            try {
-                const emailData = {
-                    email: formData.email,
-                    customerName: formData.name,
-                    orderId: orderResult?.orderId || 'N/A',
-                    orderItems: cartItems,
-                    totalAmount: cartItems.reduce((total, item) => total + (item.price * item.quantity), 0),
-                    deliveryAddress: fullDeliveryAddress,
-                    paymentMethod: formData.paymentMethod,
-                    orderDate: new Date().toLocaleString('vi-VN')
-                };
-                await emailService.sendOrderConfirmation(emailData);
-            } catch (emailError) {
-                console.error('Failed to send confirmation email:', emailError);
-                // Don't fail the order if email fails
-            }
+            // Send order confirmation email - TEMPORARILY COMMENTED FOR TESTING
+            // try {
+            //     const emailData = {
+            //         email: formData.email,
+            //         customerName: formData.name,
+            //         orderId: orderResult?.orderId || 'N/A',
+            //         orderItems: cartItems,
+            //         totalAmount: cartItems.reduce((total, item) => total + (item.price * item.quantity), 0),
+            //         deliveryAddress: fullDeliveryAddress,
+            //         paymentMethod: formData.paymentMethod,
+            //         orderDate: new Date().toLocaleString('vi-VN')
+            //     };
+            //     await emailService.sendOrderConfirmation(emailData);
+            // } catch (emailError) {
+            //     console.error('Failed to send confirmation email:', emailError);
+            //     // Don't fail the order if email fails
+            // }
 
-            showToast('Guest order placed successfully! Confirmation email has been sent.', 'success');
+            showToast('Guest order placed successfully!', 'success');
             window.dispatchEvent(new Event('cartUpdated'));
             navigate('/coffee');
         } catch (error) {

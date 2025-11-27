@@ -27,14 +27,16 @@ app = FastAPI(
     description="AI Analytics Service for Coffee Management System"
 )
 
-# CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# CORS middleware - DISABLED because API Gateway handles CORS
+# All requests go through API Gateway, so we don't want duplicate CORS headers
+# If you need direct access to ai-service, uncomment and configure appropriately
+# app.add_middleware(
+#     CORSMiddleware,
+#     allow_origins=["*"],  # Configure appropriately for production
+#     allow_credentials=True,
+#     allow_methods=["*"],
+#     allow_headers=["*"],
+# )
 
 # Include routers
 app.include_router(analytics.router)

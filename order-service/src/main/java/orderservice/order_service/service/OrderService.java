@@ -1,5 +1,6 @@
 package orderservice.order_service.service;
 
+import feign.FeignException;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +26,7 @@ import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -39,6 +41,9 @@ public class OrderService {
         CatalogServiceClient catalogServiceClient;
         BranchSelectionService branchSelectionService;
         DiscountService discountService;
+        OrderEventProducer orderEventProducer;
+
+        private static final Set<String> CANCEL_ALLOWED_STATUSES = Set.of("PENDING", "PREPARING");
 
         @Transactional
         public OrderResponse createOrder(CreateOrderRequest request, String token) {
@@ -117,6 +122,7 @@ public class OrderService {
                                         .customerId(request.getCustomerId())
                                         .customerName(request.getCustomerName())
                                         .phone(request.getPhone())
+                                        .email(request.getEmail())
                                         .deliveryAddress(request.getDeliveryAddress())
                                         .branchId(selectedBranch.getBranchId())
                                         .tableId(request.getTableId())
@@ -194,6 +200,14 @@ public class OrderService {
                                 orderItemRepository.save(orderItem);
                         }
 
+                        // Publish order created event to Kafka for staff notification
+                        try {
+                                publishOrderCreatedEvent(order, request);
+                        } catch (Exception e) {
+                                log.error("Failed to publish order created event for orderId: {}", order.getOrderId(), e);
+                                // Don't fail order creation if event publishing fails
+                        }
+
                         return convertToOrderResponse(order);
                 } catch (Exception e) {
                         throw new AppException(ErrorCode.ORDER_CREATION_FAILED);
@@ -221,12 +235,75 @@ public class OrderService {
         }
 
         @Transactional
+        public void cancelOrderByCustomer(Integer orderId) {
+                Order order = orderRepository.findById(orderId)
+                                .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
+
+                if (!isCancelableStatus(order.getStatus())) {
+                        throw new AppException(ErrorCode.ORDER_CANNOT_BE_CANCELLED);
+                }
+
+                releaseActiveReservationsForOrder(orderId);
+                updateOrderStatus(orderId, "CANCELLED");
+        }
+
+        @Transactional
         public OrderResponse updateOrderStatus(Integer orderId, String status) {
                 Order order = orderRepository.findById(orderId)
                                 .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
 
+                if ("CANCELLED".equalsIgnoreCase(status) && !isCancelableStatus(order.getStatus())) {
+                        throw new AppException(ErrorCode.ORDER_CANNOT_BE_CANCELLED);
+                }
+
                 order.setStatus(status);
                 order = orderRepository.save(order);
+
+                // Publish event when order is completed
+                if ("COMPLETED".equals(status) && order.getCustomerId() != null) {
+                        try {
+                                orderservice.order_service.events.OrderCompletedEvent event = 
+                                        orderservice.order_service.events.OrderCompletedEvent.builder()
+                                                .orderId(order.getOrderId())
+                                                .branchId(order.getBranchId())
+                                                .customerId(order.getCustomerId())
+                                                .customerName(order.getCustomerName())
+                                                .customerEmail(order.getEmail())
+                                                .phone(order.getPhone())
+                                                .totalAmount(order.getTotalAmount())
+                                                .paymentMethod(order.getPaymentMethod())
+                                                .completedAt(java.time.Instant.now())
+                                                .build();
+                                orderEventProducer.publishOrderCompleted(event);
+                        } catch (Exception e) {
+                                log.error("[OrderService] Failed to publish order.completed event for orderId: {}", 
+                                        order.getOrderId(), e);
+                                // Don't throw exception to avoid breaking order status update flow
+                        }
+                }
+
+                // Publish event when order is cancelled
+                if (("CANCELLED".equals(status) || "cancelled".equalsIgnoreCase(status)) && order.getCustomerId() != null) {
+                        try {
+                                orderservice.order_service.events.OrderCompletedEvent event = 
+                                        orderservice.order_service.events.OrderCompletedEvent.builder()
+                                                .orderId(order.getOrderId())
+                                                .branchId(order.getBranchId())
+                                                .customerId(order.getCustomerId())
+                                                .customerName(order.getCustomerName())
+                                                .customerEmail(order.getEmail())
+                                                .phone(order.getPhone())
+                                                .totalAmount(order.getTotalAmount())
+                                                .paymentMethod(order.getPaymentMethod())
+                                                .completedAt(java.time.Instant.now())
+                                                .build();
+                                orderEventProducer.publishOrderCancelled(event);
+                        } catch (Exception e) {
+                                log.error("[OrderService] Failed to publish order.cancelled event for orderId: {}", 
+                                        order.getOrderId(), e);
+                                // Don't throw exception to avoid breaking order status update flow
+                        }
+                }
 
                 return convertToOrderResponse(order);
         }
@@ -258,6 +335,7 @@ public class OrderService {
                                 .customerId(order.getCustomerId())
                                 .customerName(order.getCustomerName())
                                 .phone(order.getPhone())
+                                .email(order.getEmail())
                                 .deliveryAddress(order.getDeliveryAddress())
                                 .branchId(order.getBranchId())
                                 .tableId(order.getTableId())
@@ -385,6 +463,7 @@ public class OrderService {
                                         .customerId(null) // Guest order không có customerId
                                         .customerName(request.getCustomerName())
                                         .phone(request.getPhone())
+                                        .email(request.getEmail())
                                         .deliveryAddress(request.getDeliveryAddress())
                                         .branchId(selectedBranch.getBranchId())
                                         .tableId(request.getTableId())
@@ -443,9 +522,99 @@ public class OrderService {
                                 }
                         }
 
+                        // Publish order created event to Kafka for staff notification
+                        log.info("=== [OrderService] Preparing to publish guest order created event ===");
+                        log.info("OrderId: {}, BranchId: {}, CustomerName: {}, TotalAmount: {}", 
+                                order.getOrderId(), order.getBranchId(), order.getCustomerName(), order.getTotalAmount());
+                        try {
+                                publishOrderCreatedEvent(order, request);
+                                log.info("[OrderService] ✅ Successfully triggered event publishing for guest orderId: {}", order.getOrderId());
+                        } catch (Exception e) {
+                                log.error("[OrderService] ❌ Failed to publish order created event for guest orderId: {}", order.getOrderId(), e);
+                                // Don't fail order creation if event publishing fails
+                        }
+
                         return convertToOrderResponse(order);
 
                 } catch (Exception e) {
+                        throw e;
+                }
+        }
+
+        private boolean isCancelableStatus(String status) {
+                return status != null && CANCEL_ALLOWED_STATUSES.contains(status.toUpperCase());
+        }
+
+        private void releaseActiveReservationsForOrder(Integer orderId) {
+                try {
+                        ApiResponse<Map<String, Object>> holdIdResponse = catalogServiceClient.getHoldIdByOrderId(orderId);
+                        if (holdIdResponse == null || holdIdResponse.getResult() == null) {
+                                log.info("No reservations linked to order {}. Skipping release.", orderId);
+                                return;
+                        }
+
+                        Object holdIdValue = holdIdResponse.getResult().get("holdId");
+                        if (holdIdValue == null) {
+                                log.info("Hold ID missing in reservation lookup for order {}. Skipping release.", orderId);
+                                return;
+                        }
+
+                        Map<String, Object> releaseRequest = Map.of("holdId", holdIdValue.toString());
+                        catalogServiceClient.releaseReservation(releaseRequest);
+                        log.info("Released reservations for order {} with holdId {}", orderId, holdIdValue);
+                } catch (FeignException.NotFound e) {
+                        log.info("No active reservation found for order {}. Nothing to release.", orderId);
+                } catch (Exception e) {
+                        log.error("Failed to release reservations for order {}: {}", orderId, e.getMessage(), e);
+                        throw new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION,
+                                        "Failed to release stock reservations. Please try again later.");
+                }
+        }
+
+        private void publishOrderCreatedEvent(Order order, CreateOrderRequest request) {
+                try {
+                        log.info("[OrderService] Building OrderCreatedEvent for orderId: {}", order.getOrderId());
+                        orderservice.order_service.events.OrderCreatedEvent event = orderservice.order_service.events.OrderCreatedEvent.builder()
+                                        .orderId(order.getOrderId())
+                                        .branchId(order.getBranchId())
+                                        .customerId(order.getCustomerId())
+                                        .customerName(order.getCustomerName())
+                                        .customerEmail(order.getEmail())
+                                        .phone(order.getPhone())
+                                        .totalAmount(order.getTotalAmount())
+                                        .paymentMethod(order.getPaymentMethod())
+                                        .createdAt(java.time.Instant.now())
+                                        .items(null) // Items not needed for notification, can be populated if needed
+                                        .build();
+                        log.info("[OrderService] Event built successfully, calling OrderEventProducer...");
+                        orderEventProducer.publishOrderCreated(event);
+                        log.info("[OrderService] ✅ Event publishing completed for orderId: {}", order.getOrderId());
+                } catch (Exception e) {
+                        log.error("[OrderService] ❌ Error creating order created event for orderId: {}", order.getOrderId(), e);
+                        throw e;
+                }
+        }
+
+        private void publishOrderCreatedEvent(Order order, CreateGuestOrderRequest request) {
+                try {
+                        log.info("[OrderService] Building OrderCreatedEvent for guest orderId: {}", order.getOrderId());
+                        orderservice.order_service.events.OrderCreatedEvent event = orderservice.order_service.events.OrderCreatedEvent.builder()
+                                        .orderId(order.getOrderId())
+                                        .branchId(order.getBranchId())
+                                        .customerId(null) // Guest order
+                                        .customerName(order.getCustomerName())
+                                        .customerEmail(order.getEmail())
+                                        .phone(order.getPhone())
+                                        .totalAmount(order.getTotalAmount())
+                                        .paymentMethod(order.getPaymentMethod())
+                                        .createdAt(java.time.Instant.now())
+                                        .items(null)
+                                        .build();
+                        log.info("[OrderService] Event built successfully, calling OrderEventProducer...");
+                        orderEventProducer.publishOrderCreated(event);
+                        log.info("[OrderService] ✅ Event publishing completed for guest orderId: {}", order.getOrderId());
+                } catch (Exception e) {
+                        log.error("[OrderService] ❌ Error creating order created event for guest orderId: {}", order.getOrderId(), e);
                         throw e;
                 }
         }

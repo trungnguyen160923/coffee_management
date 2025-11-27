@@ -176,7 +176,6 @@ export const getCartIdFromAPI = async () => {
 
         if (response.ok) {
             const data = await response.json();
-            console.log('Cart API response:', data);
             if (data.result && data.result.cartId) {
                 // Lưu cart ID vào localStorage
                 updateCartId(data.result.cartId);
@@ -213,8 +212,6 @@ export const getOrCreateCartId = async () => {
 
         // Nếu vẫn chưa có, cart sẽ được tạo tự động khi gọi GET /api/cart
         // Không cần tạo cart mới, vì CartService sẽ tự động tạo khi cần
-        console.log('Cart will be created automatically when needed');
-
         return null;
     } catch (error) {
         console.error('Error getting or creating cart ID:', error);

@@ -21,9 +21,13 @@ public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
             HttpServletRequest request, HttpServletResponse response, AuthenticationException authException)
             throws IOException {
         String servletPath = request.getServletPath();
-        boolean isWebSocketPath = servletPath.startsWith("/ws") || servletPath.equals("/ws");
+        String requestURI = request.getRequestURI();
+        // Check both servletPath and requestURI to handle gateway routing
+        boolean isWebSocketPath = servletPath.startsWith("/ws") || servletPath.equals("/ws")
+                || requestURI.contains("/ws/") || requestURI.endsWith("/ws");
         
-        log.info("JwtAuthenticationEntryPoint.commence() called for path: {}", servletPath);
+        log.info("JwtAuthenticationEntryPoint.commence() called for path: {} (servletPath: {}, requestURI: {})", 
+                servletPath, servletPath, requestURI);
         log.info("Is WebSocket path: {}", isWebSocketPath);
         
         // For WebSocket endpoints, do NOT send 403 - allow request to continue to authorizeHttpRequests

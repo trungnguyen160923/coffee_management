@@ -11,6 +11,7 @@ export { default as tableService } from './tableService';
 export { default as discountService } from './discountService';
 export { default as posService } from './posService';
 export { default as aiStatisticsService } from './aiStatisticsService';
+export { analyticsService } from './analyticsService';
 
 // Export API client
 export { default as apiClient } from '../config/api';

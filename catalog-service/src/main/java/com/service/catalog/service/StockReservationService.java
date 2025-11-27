@@ -35,6 +35,7 @@ public class StockReservationService {
     private final RecipeService recipeService;
     private final OrderClient orderClient;
     private final UnitConversionService unitConversionService;
+    private final InventoryAlertService inventoryAlertService;
     
     // TTL cho reservation (15 phút)
     private static final int RESERVATION_TTL_MINUTES = 15;
@@ -94,11 +95,36 @@ public class StockReservationService {
             request.getGuestId()
         );
         
-        // 4. Lưu reservations
+        // 4. Tăng reservedQuantity trong Stock để đánh dấu đã được đặt chỗ
+        for (StockReservation reservation : reservations) {
+            try {
+                Optional<Stock> stockOpt = stockRepository.findByBranchIdAndIngredientIngredientId(
+                    reservation.getBranchId(), reservation.getIngredientId());
+                
+                if (stockOpt.isPresent()) {
+                    Stock stock = stockOpt.get();
+                    BigDecimal currentReservedQuantity = stock.getReservedQuantity();
+                    BigDecimal newReservedQuantity = currentReservedQuantity.add(reservation.getQuantityReserved());
+                    
+                    stock.setReservedQuantity(newReservedQuantity);
+                    stock.setLastUpdated(LocalDateTime.now());
+                    stockRepository.save(stock);
+                    
+                    log.debug("Increased reservedQuantity for ingredient {}: {} -> {}", 
+                            reservation.getIngredientId(), currentReservedQuantity, newReservedQuantity);
+                }
+            } catch (Exception e) {
+                log.error("Error updating reservedQuantity for ingredient {}: {}", 
+                        reservation.getIngredientId(), e.getMessage());
+                // Không throw exception để không rollback toàn bộ transaction
+            }
+        }
+        
+        // 5. Lưu reservations
         List<StockReservation> savedReservations = stockReservationRepository.saveAll(reservations);
         log.info("Created {} reservations with group ID: {}", savedReservations.size(), reservationGroupId);
         
-        // 5. Tạo response
+        // 6. Tạo response
         return CheckAndReserveResponse.builder()
             .holdId(reservationGroupId)
             .expiresAt(expiresAt)
@@ -147,15 +173,23 @@ public class StockReservationService {
                     throw new IllegalStateException("Insufficient stock for ingredient " + reservation.getIngredientId());
                 }
                 
-                // Trừ kho thật
+                // Trừ kho thật và giảm reservedQuantity (vì đã trừ kho thật rồi, không cần reserve nữa)
                 BigDecimal newQuantity = currentQuantity.subtract(quantityToDeduct);
                 BigDecimal newReservedQuantity = reservedQuantity.subtract(quantityToDeduct);
+                
+                // Đảm bảo reservedQuantity không âm (phòng trường hợp có lỗi logic trước đó)
+                if (newReservedQuantity.compareTo(BigDecimal.ZERO) < 0) {
+                    log.warn("ReservedQuantity would be negative for ingredient {}: {}, setting to 0", 
+                            reservation.getIngredientId(), newReservedQuantity);
+                    newReservedQuantity = BigDecimal.ZERO;
+                }
                 
                 stock.setQuantity(newQuantity);
                 stock.setReservedQuantity(newReservedQuantity);
                 stock.setLastUpdated(LocalDateTime.now());
                 
                 stockRepository.save(stock);
+                inventoryAlertService.evaluateAndPublish(stock);
                 
                 log.info("Deducted stock for ingredient {}: {} -> {} (reserved: {} -> {})", 
                         reservation.getIngredientId(), currentQuantity, newQuantity, 
@@ -203,7 +237,39 @@ public class StockReservationService {
             return;
         }
         
-        // 2. Cập nhật status thành RELEASED
+        // 2. Giảm reservedQuantity trong Stock (hoàn trả lại vì không commit)
+        for (StockReservation reservation : reservations) {
+            try {
+                Optional<Stock> stockOpt = stockRepository.findByBranchIdAndIngredientIngredientId(
+                    reservation.getBranchId(), reservation.getIngredientId());
+                
+                if (stockOpt.isPresent()) {
+                    Stock stock = stockOpt.get();
+                    BigDecimal currentReservedQuantity = stock.getReservedQuantity();
+                    BigDecimal newReservedQuantity = currentReservedQuantity.subtract(reservation.getQuantityReserved());
+                    
+                    // Đảm bảo reservedQuantity không âm
+                    if (newReservedQuantity.compareTo(BigDecimal.ZERO) < 0) {
+                        log.warn("ReservedQuantity would be negative for ingredient {}: {}, setting to 0", 
+                                reservation.getIngredientId(), newReservedQuantity);
+                        newReservedQuantity = BigDecimal.ZERO;
+                    }
+                    
+                    stock.setReservedQuantity(newReservedQuantity);
+                    stock.setLastUpdated(LocalDateTime.now());
+                    stockRepository.save(stock);
+                    
+                    log.debug("Decreased reservedQuantity for ingredient {}: {} -> {}", 
+                            reservation.getIngredientId(), currentReservedQuantity, newReservedQuantity);
+                }
+            } catch (Exception e) {
+                log.error("Error updating reservedQuantity for ingredient {}: {}", 
+                        reservation.getIngredientId(), e.getMessage());
+                // Không throw exception để không rollback toàn bộ transaction
+            }
+        }
+        
+        // 3. Cập nhật status thành RELEASED
         stockReservationRepository.updateStatusByGroupId(
             request.getHoldId(), 
             StockReservation.ReservationStatus.RELEASED, 
@@ -336,15 +402,61 @@ public class StockReservationService {
             return 0;
         }
         
-        // Cập nhật status thành RELEASED
-        int updatedCount = stockReservationRepository.updateStatusByGroupId(
-            expiredReservations.get(0).getReservationGroupId(),
-            StockReservation.ReservationStatus.RELEASED,
-            now
-        );
+        // Nhóm reservations theo groupId để xử lý từng nhóm
+        Map<String, List<StockReservation>> reservationsByGroup = expiredReservations.stream()
+            .collect(Collectors.groupingBy(StockReservation::getReservationGroupId));
         
-        log.info("Cleaned up {} expired reservations", updatedCount);
-        return updatedCount;
+        int totalUpdated = 0;
+        
+        for (Map.Entry<String, List<StockReservation>> entry : reservationsByGroup.entrySet()) {
+            String groupId = entry.getKey();
+            List<StockReservation> groupReservations = entry.getValue();
+            
+            // Giảm reservedQuantity trong Stock cho từng reservation trong nhóm
+            for (StockReservation reservation : groupReservations) {
+                try {
+                    Optional<Stock> stockOpt = stockRepository.findByBranchIdAndIngredientIngredientId(
+                        reservation.getBranchId(), reservation.getIngredientId());
+                    
+                    if (stockOpt.isPresent()) {
+                        Stock stock = stockOpt.get();
+                        BigDecimal currentReservedQuantity = stock.getReservedQuantity();
+                        BigDecimal newReservedQuantity = currentReservedQuantity.subtract(reservation.getQuantityReserved());
+                        
+                        // Đảm bảo reservedQuantity không âm
+                        if (newReservedQuantity.compareTo(BigDecimal.ZERO) < 0) {
+                            log.warn("ReservedQuantity would be negative for ingredient {}: {}, setting to 0", 
+                                    reservation.getIngredientId(), newReservedQuantity);
+                            newReservedQuantity = BigDecimal.ZERO;
+                        }
+                        
+                        stock.setReservedQuantity(newReservedQuantity);
+                        stock.setLastUpdated(LocalDateTime.now());
+                        stockRepository.save(stock);
+                        
+                        log.debug("Decreased reservedQuantity for expired reservation - ingredient {}: {} -> {}", 
+                                reservation.getIngredientId(), currentReservedQuantity, newReservedQuantity);
+                    }
+                } catch (Exception e) {
+                    log.error("Error updating reservedQuantity for expired reservation ingredient {}: {}", 
+                            reservation.getIngredientId(), e.getMessage());
+                    // Không throw exception để không rollback toàn bộ transaction
+                }
+            }
+            
+            // Cập nhật status thành RELEASED cho cả nhóm
+            int updatedCount = stockReservationRepository.updateStatusByGroupId(
+                groupId,
+                StockReservation.ReservationStatus.RELEASED,
+                now
+            );
+            
+            totalUpdated += updatedCount;
+            log.info("Cleaned up {} expired reservations for group {}", updatedCount, groupId);
+        }
+        
+        log.info("Total cleaned up {} expired reservations", totalUpdated);
+        return totalUpdated;
     }
     
     /**

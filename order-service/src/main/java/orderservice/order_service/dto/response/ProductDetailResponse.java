@@ -15,6 +15,7 @@ public class ProductDetailResponse {
     Integer pdId;
     SizeResponse size;
     BigDecimal price;
+    Boolean active;
     LocalDateTime createAt;
     LocalDateTime updateAt;
 }

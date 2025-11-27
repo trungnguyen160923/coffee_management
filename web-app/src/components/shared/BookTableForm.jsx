@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { reservationService } from '../../services/reservationService';
+import { notificationService } from '../../services/notificationService';
 import { showToast } from '../../utils/toast';
 
 const BookTableForm = () => {
@@ -155,8 +156,26 @@ const BookTableForm = () => {
                 const userId = user?.userId || user?.user_id || user?.id;
                 console.log('Extracted userId:', userId, 'Type:', typeof userId);
 
+                // Validate userId before sending
+                if (!userId) {
+                    const msg = 'User ID not found. Please log in again.';
+                    setError(msg);
+                    showToast(msg, 'error');
+                    setLoading(false);
+                    return;
+                }
+
+                const customerId = parseInt(userId, 10);
+                if (isNaN(customerId) || customerId <= 0) {
+                    const msg = 'Invalid user ID. Please log in again.';
+                    setError(msg);
+                    showToast(msg, 'error');
+                    setLoading(false);
+                    return;
+                }
+
                 payload = {
-                    customerId: userId ? parseInt(userId, 10) : null,
+                    customerId: customerId,
                     branchId,
                     reservedAt,
                     partySize: formData.partySize,
@@ -191,6 +210,28 @@ const BookTableForm = () => {
                 const msg = resp.message || 'Table booking request submitted successfully!';
                 setSuccess(msg);
                 showToast(msg, 'success');
+
+                // Trigger notification for staff
+                const reservationId = resp.result?.reservationId || resp.data?.reservationId;
+                if (reservationId) {
+                    try {
+                        await notificationService.notifyReservationCreated({
+                            reservationId: reservationId,
+                            branchId: branchId,
+                            customerId: isAuthenticated ? (user?.userId || user?.user_id || user?.id) : null,
+                            customerName: isAuthenticated ? (user?.username || user?.name) : (payload.customerName || ''),
+                            phone: isAuthenticated ? (user?.phone || '') : (payload.phone || ''),
+                            email: isAuthenticated ? (user?.email || '') : (payload.email || ''),
+                            reservedAt: reservedAt,
+                            partySize: payload.partySize || 1,
+                            notes: payload.notes || '',
+                            createdAt: new Date().toISOString()
+                        });
+                    } catch (notifyError) {
+                        console.error('Failed to notify reservation created:', notifyError);
+                        // Don't fail the reservation creation if notification fails
+                    }
+                }
             } else if (resp && resp.message) {
                 // API returned non-200 code but has message
                 setError(resp.message);

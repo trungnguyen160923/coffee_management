@@ -41,6 +41,7 @@ export default function StaffOrders() {
     const [detailOrder, setDetailOrder] = useState<any | null>(null);
     const [detailLoading, setDetailLoading] = useState<boolean>(false);
     const [editingOrderId, setEditingOrderId] = useState<number | string | null>(null);
+    const [selectedStatus, setSelectedStatus] = useState<string>('');
     const [productDetails, setProductDetails] = useState<Map<string, CatalogProduct>>(new Map());
     const [recipeModalOpen, setRecipeModalOpen] = useState<boolean>(false);
     const [selectedRecipe, setSelectedRecipe] = useState<CatalogRecipe | null>(null);
@@ -203,49 +204,48 @@ export default function StaffOrders() {
 
     const handleUpdateStatus = async (orderId?: number | string, status?: string) => {
         if (!orderId || !status) return;
+        
         try {
             setError(null);
 
             if (activeTab === 'regular') {
                 // Gọi API reservation trước (nếu cần)
-            if (status === 'ready') {
-                // Khi chuyển sang ready → commit reservation trước
-                try {
-                    await stockService.commitReservation(String(orderId));
-                    console.log('Reservation committed for order:', orderId);
-                } catch (reservationError: any) {
-                    console.error('Failed to commit reservation:', reservationError);
-                    const errorMessage = reservationError?.response?.data?.message || 
-                                       reservationError?.message || 
-                                       'Unknown error occurred';
-                    toast.error(`Failed to commit reservation: ${errorMessage}`);
-                    return; // Dừng lại, không cập nhật trạng thái
+                if (status === 'ready') {
+                    // Khi chuyển sang ready → commit reservation trước
+                    try {
+                        await stockService.commitReservation(String(orderId));
+                    } catch (reservationError: any) {
+                        const errorMessage = reservationError?.response?.data?.message || 
+                                           reservationError?.message || 
+                                           'Unknown error occurred';
+                        toast.error(`Failed to commit reservation: ${errorMessage}`);
+                        return; // Dừng lại, không cập nhật trạng thái
+                    }
+                } else if (status === 'cancelled') {
+                    // Khi chuyển sang cancelled → release reservation trước
+                    try {
+                        await stockService.releaseReservation(String(orderId));
+                    } catch (reservationError: any) {
+                        const errorMessage = reservationError?.response?.data?.message || 
+                                           reservationError?.message || 
+                                           'Unknown error occurred';
+                        toast.error(`Failed to release reservation: ${errorMessage}`);
+                        return; // Dừng lại, không cập nhật trạng thái
+                    }
                 }
-            } else if (status === 'cancelled') {
-                // Khi chuyển sang cancelled → release reservation trước
-                try {
-                    await stockService.releaseReservation(String(orderId));
-                    console.log('Reservation released for order:', orderId);
-                } catch (reservationError: any) {
-                    console.error('Failed to release reservation:', reservationError);
-                    const errorMessage = reservationError?.response?.data?.message || 
-                                       reservationError?.message || 
-                                       'Unknown error occurred';
-                    toast.error(`Failed to release reservation: ${errorMessage}`);
-                    return; // Dừng lại, không cập nhật trạng thái
-                }
-            }
-            
-            // Chỉ cập nhật trạng thái order nếu reservation API thành công (hoặc không cần gọi)
-            // Convert status to uppercase before sending to backend
-            const uppercaseStatus = status.toUpperCase();
-            const updated = await orderService.updateOrderStatus(String(orderId), uppercaseStatus as any);
-
+                
+                // Chỉ cập nhật trạng thái order nếu reservation API thành công (hoặc không cần gọi)
+                // Convert status to uppercase before sending to backend
+                const uppercaseStatus = status.toUpperCase();
+                const updated = await orderService.updateOrderStatus(String(orderId), uppercaseStatus as any);
+                const newStatus = updated?.status ?? status;
+                
                 setOrders(prev => prev.map(o =>
                     String(o.orderId) === String(orderId)
-                        ? { ...o, status: updated?.status ?? status }
+                        ? { ...o, status: newStatus }
                         : o
                 ));
+                
                 toast.success(`Order status updated to ${status}`);
             } else {
                 const updated: any = await posService.updatePOSOrderStatus(Number(orderId), status);
@@ -282,11 +282,6 @@ export default function StaffOrders() {
                 return ['pending', 'preparing', 'ready', 'completed', 'cancelled'];
         }
     };
-    const statuses = useMemo(() => {
-        return activeTab === 'pos'
-            ? ['pending', 'preparing', 'ready', 'completed'] // POS orders không có cancelled
-            : ['pending', 'preparing', 'ready', 'completed', 'cancelled']; // Regular orders có đầy đủ
-    }, [activeTab]);
 
     const openDetail = async (orderId?: number | string) => {
         if (!orderId) return;
@@ -680,7 +675,10 @@ export default function StaffOrders() {
                                                     {activeTab === 'regular' && !['completed', 'cancelled'].includes((o.status || '').toLowerCase()) && (
                                                         <>
                                                             <button
-                                                                onClick={() => setEditingOrderId(o.orderId!)}
+                                                                onClick={() => {
+                                                                    setEditingOrderId(o.orderId!);
+                                                                    setSelectedStatus(''); // Reset selected status when opening
+                                                                }}
                                                                 className="px-2 py-1 text-xs rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 inline-flex"
                                                                 title="Edit status"
                                                             >
@@ -694,13 +692,33 @@ export default function StaffOrders() {
                                                                 <select
                                                                     autoFocus
                                                                     className="px-2 py-1 text-xs rounded-lg border border-gray-200 text-gray-700 bg-white inline-flex"
-                                                                    // Đã sửa conflict: Lấy giá trị mặc định từ pos_order, logic options từ HEAD (vì HEAD có getNextStatuses)
-                                                                    defaultValue={(o.status || '').toLowerCase()}
-                                                                    onBlur={() => setEditingOrderId(null)}
-                                                                    onChange={async (e) => {
-                                                                        if (e.target.value) {
-                                                                            await handleUpdateStatus(o.orderId, e.target.value);
+                                                                    value={selectedStatus || ''}
+                                                                    onBlur={() => {
+                                                                        // Delay onBlur để onChange có cơ hội chạy trước
+                                                                        setTimeout(() => {
                                                                             setEditingOrderId(null);
+                                                                            setSelectedStatus('');
+                                                                        }, 200);
+                                                                    }}
+                                                                    onChange={async (e) => {
+                                                                        const selectedValue = e.target.value;
+                                                                        
+                                                                        // Update selected status immediately to ensure controlled component works
+                                                                        setSelectedStatus(selectedValue);
+                                                                        
+                                                                        // Always process if it's a valid status option (not the placeholder)
+                                                                        if (selectedValue && getNextStatuses(o.status).includes(selectedValue)) {
+                                                                            // Prevent onBlur from closing select immediately
+                                                                            e.target.focus();
+                                                                            
+                                                                            try {
+                                                                                await handleUpdateStatus(o.orderId, selectedValue);
+                                                                                setEditingOrderId(null);
+                                                                                setSelectedStatus('');
+                                                                            } catch (error) {
+                                                                                // Don't close select on error so user can try again
+                                                                                setSelectedStatus(selectedValue); // Keep the selection
+                                                                            }
                                                                         }
                                                                     }}
                                                                 >

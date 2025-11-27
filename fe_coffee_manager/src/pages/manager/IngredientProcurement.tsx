@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Truck, ShoppingCart, Search, Loader, RefreshCw, Plus, Minus, Trash2 } from 'lucide-react';
+import { Truck, ShoppingCart, Search, Loader, RefreshCw, Plus, Minus, Trash2, AlertTriangle, X } from 'lucide-react';
 import catalogService from '../../services/catalogService';
+import { stockService } from '../../services/stockService';
 import { CatalogIngredient, CatalogSupplier, IngredientPageResponse } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 
@@ -11,7 +13,8 @@ type CartItem = {
 };
 
 export default function IngredientProcurement() {
-  const { managerBranch } = useAuth();
+  const { managerBranch, user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [supplierList, setSupplierList] = useState<CatalogSupplier[]>([]);
   const [selectedSupplierId, setSelectedSupplierId] = useState<number | undefined>(undefined);
   const [keyword, setKeyword] = useState('');
@@ -21,6 +24,18 @@ export default function IngredientProcurement() {
   const [page, setPage] = useState(0);
   const [size, setSize] = useState(10);
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [lowStockItems, setLowStockItems] = useState<any[]>([]);
+  const [showLowStockModal, setShowLowStockModal] = useState(false);
+  const [loadingLowStock, setLoadingLowStock] = useState(false);
+  const [autoAddProcessed, setAutoAddProcessed] = useState(false);
+
+  // Get branch ID
+  const branchId = useMemo(() => {
+    if (managerBranch?.branchId) return managerBranch.branchId;
+    if (user?.branch?.branchId) return user.branch.branchId;
+    if (user?.branchId) return Number(user.branchId);
+    return null;
+  }, [user, managerBranch]);
 
   // Load suppliers once
   useEffect(() => {
@@ -31,6 +46,25 @@ export default function IngredientProcurement() {
       } catch {}
     })();
   }, []);
+
+  // Load low stock items
+  useEffect(() => {
+    const loadLowStockItems = async () => {
+      if (!branchId) return;
+      
+      try {
+        setLoadingLowStock(true);
+        const items = await stockService.getLowOrOutOfStockItems(branchId);
+        setLowStockItems(items || []);
+      } catch (err) {
+        console.error('Error loading low stock items:', err);
+      } finally {
+        setLoadingLowStock(false);
+      }
+    };
+
+    loadLowStockItems();
+  }, [branchId]);
 
   // Debounce search input
   useEffect(() => {
@@ -58,7 +92,7 @@ export default function IngredientProcurement() {
 
   useEffect(() => { loadIngredients(); }, [page, size, debouncedKeyword, selectedSupplierId]);
 
-  const addToCart = (ingredient: CatalogIngredient) => {
+  const addToCart = (ingredient: CatalogIngredient, autoSelectSupplier = false) => {
     setCart(prev => {
       const existingIdx = prev.findIndex(ci => ci.ingredient.ingredientId === ingredient.ingredientId);
       if (existingIdx >= 0) {
@@ -68,6 +102,11 @@ export default function IngredientProcurement() {
       }
       return [...prev, { ingredient, quantity: 1 }];
     });
+
+    // Auto-select supplier if ingredient has a supplier and autoSelectSupplier is true
+    if (autoSelectSupplier && ingredient.supplier?.supplierId) {
+      setSelectedSupplierId(ingredient.supplier.supplierId);
+    }
   };
 
   const updateQty = (ingredientId: number, qty: number) => {
@@ -112,6 +151,85 @@ export default function IngredientProcurement() {
     }
   };
 
+  // Auto-add ingredient from URL parameter (when navigating from dashboard)
+  useEffect(() => {
+    const ingredientIdParam = searchParams.get('ingredientId');
+    if (ingredientIdParam && !autoAddProcessed && supplierList.length > 0) {
+      const ingredientId = Number(ingredientIdParam);
+      if (!isNaN(ingredientId)) {
+        setAutoAddProcessed(true);
+        (async () => {
+          try {
+            // Search for ingredient by ID
+            let ingredient: CatalogIngredient | undefined;
+            
+            // First, try to find in current page if already loaded
+            ingredient = ingredientsPage?.content.find(
+              ing => ing.ingredientId === ingredientId
+            );
+
+            // If not found, search without supplier filter
+            if (!ingredient) {
+              const searchResult = await catalogService.searchIngredients({
+                page: 0,
+                size: 100,
+                // Don't filter by supplierId to get all possible matches
+                sortBy: 'updateAt',
+                sortDirection: 'DESC'
+              });
+
+              // Find ingredient by exact ingredientId match
+              ingredient = searchResult?.content?.find(
+                ing => ing.ingredientId === ingredientId
+              );
+            }
+
+            if (!ingredient) {
+              toast.error(`Ingredient #${ingredientId} not found. Please search and add manually.`);
+              // Remove the parameter from URL
+              const newParams = new URLSearchParams(searchParams);
+              newParams.delete('ingredientId');
+              setSearchParams(newParams, { replace: true });
+              return;
+            }
+
+            // Verify ingredient has a supplier
+            if (!ingredient.supplier?.supplierId) {
+              toast.error(`Ingredient "${ingredient.name}" does not have a supplier assigned.`);
+              // Remove the parameter from URL
+              const newParams = new URLSearchParams(searchParams);
+              newParams.delete('ingredientId');
+              setSearchParams(newParams, { replace: true });
+              return;
+            }
+
+            // Add to cart and auto-select supplier
+            addToCart(ingredient, true);
+            
+            // Show success message
+            toast.success(`Added ${ingredient.name} to cart. Supplier selected: ${ingredient.supplier.name}`);
+            
+            // Reload ingredients list to show items from the selected supplier
+            await loadIngredients();
+            
+            // Remove the parameter from URL after processing
+            const newParams = new URLSearchParams(searchParams);
+            newParams.delete('ingredientId');
+            setSearchParams(newParams, { replace: true });
+          } catch (err: any) {
+            console.error('Error auto-adding ingredient to cart:', err);
+            toast.error(err?.message || 'Failed to add ingredient to cart');
+            // Remove the parameter from URL even on error
+            const newParams = new URLSearchParams(searchParams);
+            newParams.delete('ingredientId');
+            setSearchParams(newParams, { replace: true });
+          }
+        })();
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, autoAddProcessed, supplierList.length]);
+
   const totalPages = ingredientsPage?.totalPages || 0;
   const totalElements = ingredientsPage?.totalElements || 0;
 
@@ -131,6 +249,20 @@ export default function IngredientProcurement() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                {/* Low Stock Notification Button */}
+                {lowStockItems.length > 0 && (
+                  <button
+                    onClick={() => setShowLowStockModal(true)}
+                    className="relative flex items-center space-x-2 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors"
+                    title="Low stock alerts"
+                  >
+                    <AlertTriangle className="w-5 h-5" />
+                    <span className="font-medium">Low Stock</span>
+                    <span className="absolute -top-2 -right-2 bg-white text-red-600 text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">
+                      {lowStockItems.length}
+                    </span>
+                  </button>
+                )}
                 <button
                   onClick={loadIngredients}
                   disabled={loading}
@@ -307,6 +439,142 @@ export default function IngredientProcurement() {
           </div>
         </div>
       </div>
+
+      {/* Low Stock Modal */}
+      {showLowStockModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-hidden">
+            <div className="bg-gradient-to-r from-red-500 to-orange-500 px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <AlertTriangle className="w-6 h-6 text-white" />
+                <h2 className="text-xl font-bold text-white">Low Stock Alerts</h2>
+              </div>
+              <button
+                onClick={() => setShowLowStockModal(false)}
+                className="text-white hover:bg-white/20 rounded-lg p-1 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto max-h-[60vh]">
+              {loadingLowStock ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader className="w-6 h-6 animate-spin text-gray-400" />
+                </div>
+              ) : lowStockItems.length > 0 ? (
+                <div className="space-y-3">
+                  {lowStockItems.map((item: any, index: number) => (
+                    <div
+                      key={index}
+                      className="flex items-center justify-between p-4 bg-red-50 rounded-xl border border-red-100 hover:bg-red-100 transition-colors"
+                    >
+                      <div className="flex-1">
+                        <p className="font-medium text-gray-900">
+                          {item.ingredientName || `Ingredient #${item.ingredientId}`}
+                        </p>
+                        <p className="text-sm text-red-600 mt-1">
+                          Available: {Number(item.availableQuantity || item.quantity || 0).toFixed(2)}{' '}
+                          {item.unitName || item.unitCode || ''}
+                          {item.threshold && (
+                            <span className="ml-2">
+                              (Minimum: {Number(item.threshold).toFixed(2)}{' '}
+                              {item.unitName || item.unitCode || ''})
+                            </span>
+                          )}
+                        </p>
+                        {item.isOutOfStock && (
+                          <span className="inline-block mt-2 px-2 py-1 bg-red-600 text-white text-xs font-medium rounded">
+                            Out of Stock
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        className="ml-4 px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors"
+                        onClick={async () => {
+                          try {
+                            // Search for ingredient by name without supplier filter to find all matches
+                            // Then filter by exact ingredientId to get the correct one
+                            let ingredient: CatalogIngredient | undefined;
+                            
+                            // First, try to find in current page (if supplier matches)
+                            ingredient = ingredientsPage?.content.find(
+                              ing => ing.ingredientId === item.ingredientId
+                            );
+
+                            // If not found, search without supplier filter
+                            if (!ingredient) {
+                              const searchResult = await catalogService.searchIngredients({
+                                page: 0,
+                                size: 100, // Get more results to find the right one
+                                search: item.ingredientName || undefined, // Search by name
+                                // Don't filter by supplierId to get all possible matches
+                                sortBy: 'updateAt',
+                                sortDirection: 'DESC'
+                              });
+
+                              // Find ingredient by exact ingredientId match
+                              ingredient = searchResult?.content?.find(
+                                ing => ing.ingredientId === item.ingredientId
+                              );
+                            }
+
+                            if (!ingredient) {
+                              toast.error(`Ingredient "${item.ingredientName || `#${item.ingredientId}`}" not found. Please search and add manually.`);
+                              return;
+                            }
+
+                            // Verify ingredient has a supplier
+                            if (!ingredient.supplier?.supplierId) {
+                              toast.error(`Ingredient "${ingredient.name}" does not have a supplier assigned.`);
+                              return;
+                            }
+
+                            // Store current supplier selection to check if we need to change it
+                            const currentSupplierId = selectedSupplierId;
+                            const ingredientSupplierId = ingredient.supplier.supplierId;
+
+                            // Add to cart and auto-select supplier if different
+                            addToCart(ingredient, true);
+                            
+                            // Show success message with supplier info
+                            if (currentSupplierId !== ingredientSupplierId) {
+                              toast.success(`Added ${ingredient.name} to cart. Supplier changed to: ${ingredient.supplier.name}`);
+                            } else {
+                              toast.success(`Added ${ingredient.name} to cart`);
+                            }
+                            
+                            // Reload ingredients list to show items from the selected supplier
+                            // This ensures the ingredient appears in the list
+                            await loadIngredients();
+                          } catch (err: any) {
+                            console.error('Error adding ingredient to cart:', err);
+                            toast.error(err?.message || 'Failed to add ingredient to cart');
+                          }
+                        }}
+                      >
+                        Add to Cart
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <AlertTriangle className="w-12 h-12 mx-auto mb-2 text-green-500" />
+                  <p>No low stock alerts</p>
+                </div>
+              )}
+            </div>
+            <div className="px-6 py-4 bg-gray-50 border-t flex justify-end">
+              <button
+                onClick={() => setShowLowStockModal(false)}
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

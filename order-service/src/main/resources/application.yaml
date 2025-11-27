@@ -1,89 +1,95 @@
 server:
-  port: 8002
+  port: ${SERVER_PORT:8002}
   servlet:
-    context-path: /order-service
+    context-path: ${SERVER_CONTEXT_PATH:/order-service}
   tomcat:
-    uri-encoding: UTF-8
+    uri-encoding: ${SERVER_URI_ENCODING:UTF-8}
 
 spring:
+  config:
+    import: optional:file:.env[.properties]
   application:
     name: order-service
   mvc:
-    locale: vi_VN
-    locale-resolver: accept-header
+    locale: ${SPRING_MVC_LOCALE:vi_VN}
+    locale-resolver: ${SPRING_MVC_LOCALE_RESOLVER:accept-header}
   http:
     encoding:
-      charset: UTF-8
-      enabled: true
-      force: true
+      charset: ${SPRING_HTTP_ENCODING_CHARSET:UTF-8}
+      enabled: ${SPRING_HTTP_ENCODING_ENABLED:true}
+      force: ${SPRING_HTTP_ENCODING_FORCE:true}
   datasource:
-    url: "jdbc:mysql://localhost:3306/order_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
+    url: ${DB_URL:jdbc:mysql://localhost:3306/order_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
     driver-class-name: com.mysql.cj.jdbc.Driver
-    username: root
-    password: 12345678
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:12345678}
   jpa:
     hibernate:
-      ddl-auto: update
-    show-sql: true
+      ddl-auto: ${JPA_DDL_AUTO:update}
+    show-sql: ${JPA_SHOW_SQL:true}
     properties:
       hibernate:
-        format_sql: true
-    database-platform: org.hibernate.dialect.MySQLDialect
+        format_sql: ${JPA_FORMAT_SQL:true}
+    database-platform: ${JPA_DATABASE_PLATFORM:org.hibernate.dialect.MySQLDialect}
   thymeleaf:
-    cache: false
-    enabled: true
+    cache: ${THYMELEAF_CACHE:false}
+    enabled: ${THYMELEAF_ENABLED:true}
   mail:
-    host: smtp.gmail.com
-    port: 587
-    username: hyngotraidat@gmail.com
-    password: aeca cqkr gahw nfvr
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:example@example.com}
+    password: ${MAIL_PASSWORD:change-me}
     properties:
       mail:
         smtp:
-          auth: true
+          auth: ${MAIL_SMTP_AUTH:true}
           starttls:
-            enable: true
+            enable: ${MAIL_SMTP_STARTTLS:true}
           ssl:
-            trust: smtp.gmail.com
-
-logging:
-  charset:
-    console: UTF-8
-    file: UTF-8
-  pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
-    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+            trust: ${MAIL_SMTP_SSL_TRUST:smtp.gmail.com}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9094}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        spring.json.add.type.headers: ${KAFKA_ADD_TYPE_HEADERS:false}
+  jackson:
+    serialization:
+      write-dates-as-timestamps: ${JACKSON_WRITE_DATES_AS_TIMESTAMPS:false}
+    deserialization:
+      fail-on-unknown-properties: ${JACKSON_FAIL_ON_UNKNOWN:false}
 
 jwt:
-  signerKey: "1TjXchw5FloESb63Kc+DFhTARvpWL4jUGCwfGWxuG5SIf/1y/LgJxHnMqaF6A/ij"
+  signerKey: "${JWT_SIGNER_KEY:1TjXchw5FloESb63Kc+DFhTARvpWL4jUGCwfGWxuG5SIf/1y/LgJxHnMqaF6A/ij}"
 
 auth:
   service:
-    url: http://localhost:8001/auth-service
+    url: ${AUTH_SERVICE_URL:http://localhost:8001/auth-service}
 
 # Feign configuration
 feign:
   client:
     config:
       default:
-        connectTimeout: 5000
-        readTimeout: 10000
-        loggerLevel: basic
+        connectTimeout: ${FEIGN_DEFAULT_CONNECT_TIMEOUT:5000}
+        readTimeout: ${FEIGN_DEFAULT_READ_TIMEOUT:10000}
+        loggerLevel: ${FEIGN_DEFAULT_LOGGER_LEVEL:basic}
       catalog-service:
-        connectTimeout: 5000
-        readTimeout: 10000
-        loggerLevel: basic
+        connectTimeout: ${FEIGN_CATALOG_CONNECT_TIMEOUT:5000}
+        readTimeout: ${FEIGN_CATALOG_READ_TIMEOUT:10000}
+        loggerLevel: ${FEIGN_CATALOG_LOGGER_LEVEL:basic}
   httpclient:
-    enabled: true
-    max-connections: 200
-    max-connections-per-route: 50
+    enabled: ${FEIGN_HTTPCLIENT_ENABLED:true}
+    max-connections: ${FEIGN_HTTPCLIENT_MAX_CONNECTIONS:200}
+    max-connections-per-route: ${FEIGN_HTTPCLIENT_MAX_CONNECTIONS_PER_ROUTE:50}
 
 # Nominatim configuration
 nominatim:
-  userAgent: "coffee-order-service/1.0 (contact: youremail@example.com)"
-  email: "caoha3829@gmail.com"
+  userAgent: "${NOMINATIM_USER_AGENT:coffee-order-service/1.0 (contact: youremail@example.com)}"
+  email: "${NOMINATIM_EMAIL:caoha3829@gmail.com}"
 # Geocoding configuration
 geocoding:
   api:
-    key: "dd6d33ea0b6b467b9b2ffed8e92c4e1a"
-  mandatory: true  # Set to false to allow branch creation without geocoding
+    key: "${GEOCODING_API_KEY:dd6d33ea0b6b467b9b2ffed8e92c4e1a}"
+  mandatory: ${GEOCODING_MANDATORY:true}  # Set to false to allow branch creation without geocoding

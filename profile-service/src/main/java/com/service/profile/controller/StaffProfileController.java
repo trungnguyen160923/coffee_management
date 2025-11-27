@@ -5,6 +5,7 @@ import com.service.profile.dto.ApiResponse;
 import com.service.profile.dto.request.StaffProfileCreationRequest;
 import com.service.profile.dto.request.StaffProfileUpdateRequest;
 import com.service.profile.dto.response.StaffProfileResponse;
+import com.service.profile.dto.response.StaffWithUserResponse;
 import com.service.profile.service.StaffProfileService;
 
 import java.util.List;
@@ -62,9 +63,29 @@ public class StaffProfileController {
         return ApiResponse.<List<StaffProfileResponse>>builder().result(result).build();
     }
 
+    /**
+     * Public endpoint for internal services (notification-service, etc.)
+     * to get staff by branch without authentication
+     */
+    @GetMapping("/internal/branch/{branchId}")
+    ApiResponse<List<StaffProfileResponse>> getStaffProfilesByBranchInternal(@PathVariable Integer branchId) {
+        List<StaffProfileResponse> result = staffProfileService.getStaffProfilesByBranchInternal(branchId);
+        return ApiResponse.<List<StaffProfileResponse>>builder().result(result).build();
+    }
+
     @DeleteMapping("/{userId}")
     ApiResponse<Void> deleteStaffProfile(@PathVariable Integer userId) {
         staffProfileService.deleteStaffProfile(userId);
         return ApiResponse.<Void>builder().build();
+    }
+
+    /**
+     * GET /staff-profiles/branch/{branchId}/with-user-info
+     * Lấy danh sách nhân viên ở chi nhánh kèm thông tin đầy đủ từ auth-service
+     */
+    @GetMapping("/branch/{branchId}/with-user-info")
+    ApiResponse<List<StaffWithUserResponse>> getStaffsWithUserInfoByBranch(@PathVariable Integer branchId) {
+        List<StaffWithUserResponse> result = staffProfileService.getStaffsWithUserInfoByBranch(branchId);
+        return ApiResponse.<List<StaffWithUserResponse>>builder().result(result).build();
     }
 }

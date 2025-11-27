@@ -3,6 +3,7 @@ package orderservice.order_service.controller;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import lombok.extern.slf4j.Slf4j;
 import orderservice.order_service.client.CatalogServiceClient;
 import orderservice.order_service.dto.ApiResponse;
 import orderservice.order_service.dto.request.CreateOrderRequest;
@@ -22,6 +23,7 @@ import java.util.List;
 @RequestMapping("/api/orders")
 @RequiredArgsConstructor
 @FieldDefaults(level = lombok.AccessLevel.PRIVATE, makeFinal = true)
+@Slf4j
 public class OrderController {
 
     OrderService orderService;
@@ -230,7 +232,7 @@ public class OrderController {
     @PutMapping("/public/{orderId}/cancel")
     public ResponseEntity<ApiResponse<Void>> cancelOrderPublic(@PathVariable Integer orderId) {
         try {
-            orderService.updateOrderStatus(orderId, "CANCELLED");
+            orderService.cancelOrderByCustomer(orderId);
             ApiResponse<Void> response = ApiResponse.<Void>builder()
                     .code(200)
                     .message("Order cancelled successfully")

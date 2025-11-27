@@ -29,11 +29,14 @@ public class Notification {
     @Column(length = 36)
     private String id;
 
-    @Column(name = "user_id", nullable = false)
-    private Long userId;
+    @Column(name = "user_id", nullable = true)
+    private Long userId; // NULL for branch-level notifications
 
     @Column(name = "branch_id")
     private Integer branchId;
+
+    @Column(name = "target_role", length = 20)
+    private String targetRole; // "STAFF", "MANAGER", or null for all roles
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)

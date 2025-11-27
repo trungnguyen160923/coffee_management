@@ -37,7 +37,8 @@ public class SecurityConfig {
     @Order(1)
     public SecurityFilterChain websocketSecurityFilterChain(HttpSecurity httpSecurity) throws Exception {
         httpSecurity
-                // Try multiple patterns to ensure match
+                // Match all possible WebSocket paths (gateway strips prefix, but we need to match both)
+                // Note: /**/ws/** is invalid - cannot have anything after **
                 .securityMatcher("/ws/**", "/ws", "/notification-service/ws/**", "/notification-service/ws")
                 // CRITICAL: Do NOT call authorizeHttpRequests - this prevents FilterSecurityInterceptor from being added
                 // Instead, WebSocketSecurityBypassFilter will handle authentication

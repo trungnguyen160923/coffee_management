@@ -14,9 +14,11 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.format.TextStyle;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -484,6 +486,153 @@ public class AnalyticsService {
         }
     }
 
+    /**
+     * Lấy thống kê đơn hàng và doanh thu theo ngày của chi nhánh
+     */
+    public BranchDailyStatsResponse getBranchDailyStats(Integer branchId, LocalDate date) {
+        try {
+            log.info("Getting daily stats for branch {} on date {}", branchId, date);
+            
+            // 1. Tổng số đơn hàng trong ngày (chỉ tính các đơn có status = 'COMPLETED')
+            Long totalOrders = orderRepository.countOrdersByBranchAndDate(branchId, date);
+            
+            // 2. Tổng doanh thu trong ngày (chỉ tính các đơn có status = 'COMPLETED')
+            BigDecimal totalRevenue = orderRepository.getTotalRevenueByBranchAndDate(branchId, date);
+            if (totalRevenue == null) {
+                totalRevenue = BigDecimal.ZERO;
+            }
+            
+            // 3. Danh sách số đơn hàng theo giờ
+            List<Object[]> hourlyData = orderRepository.countOrdersByHourAndBranchAndDate(branchId, date);
+            
+            // Tạo map để dễ lookup
+            Map<Integer, Long> hourlyOrderCountMap = new HashMap<>();
+            for (Object[] row : hourlyData) {
+                Integer hour = ((Number) row[0]).intValue();
+                Long count = ((Number) row[1]).longValue();
+                hourlyOrderCountMap.put(hour, count);
+            }
+            
+            // Tạo danh sách đầy đủ 24 giờ (0-23), nếu không có dữ liệu thì = 0
+            List<BranchDailyStatsResponse.HourlyOrderCount> hourlyOrderCounts = new ArrayList<>();
+            for (int hour = 0; hour < 24; hour++) {
+                Long count = hourlyOrderCountMap.getOrDefault(hour, 0L);
+                hourlyOrderCounts.add(BranchDailyStatsResponse.HourlyOrderCount.builder()
+                        .hour(hour)
+                        .orderCount(count)
+                        .build());
+            }
+            
+            return BranchDailyStatsResponse.builder()
+                    .branchId(branchId)
+                    .date(date.toString())
+                    .totalOrders(totalOrders)
+                    .totalRevenue(totalRevenue)
+                    .hourlyOrderCounts(hourlyOrderCounts)
+                    .build();
+                    
+        } catch (Exception e) {
+            log.error("Error getting daily stats for branch {} on date {}", branchId, date, e);
+            return BranchDailyStatsResponse.builder()
+                    .branchId(branchId)
+                    .date(date.toString())
+                    .totalOrders(0L)
+                    .totalRevenue(BigDecimal.ZERO)
+                    .hourlyOrderCounts(new ArrayList<>())
+                    .build();
+        }
+    }
+    
+    /**
+     * Lấy doanh thu theo tuần hiện tại của chi nhánh
+     */
+    public BranchWeeklyRevenueResponse getBranchWeeklyRevenue(Integer branchId) {
+        try {
+            log.info("Getting weekly revenue for branch {}", branchId);
+            
+            // Tính toán tuần hiện tại (từ thứ 2 đến chủ nhật) - theo giờ Việt Nam
+            LocalDate today = LocalDate.now();
+            LocalDate weekStart = today.with(DayOfWeek.MONDAY);
+            LocalDate weekEnd = weekStart.plusDays(6); // Chủ nhật
+            
+            // Convert từ giờ Việt Nam sang UTC để query (trừ 7 giờ)
+            LocalDateTime startDateTime = weekStart.atStartOfDay().minusHours(7);
+            LocalDateTime endDateTime = weekEnd.atTime(LocalTime.MAX).plusSeconds(1).minusHours(7); // Bao gồm cả ngày cuối
+            
+            // Lấy doanh thu theo ngày trong tuần (query sẽ convert lại sang giờ Việt Nam)
+            List<Object[]> dailyRevenueData = orderRepository.getDailyRevenueByBranchAndDateRange(
+                    branchId, startDateTime, endDateTime);
+            
+            // Tạo map để dễ lookup
+            Map<LocalDate, DailyRevenueData> dailyRevenueMap = new HashMap<>();
+            for (Object[] row : dailyRevenueData) {
+                LocalDate date;
+                if (row[0] instanceof java.sql.Date) {
+                    date = ((java.sql.Date) row[0]).toLocalDate();
+                } else if (row[0] instanceof java.time.LocalDate) {
+                    date = (LocalDate) row[0];
+                } else {
+                    // Fallback: parse từ string hoặc timestamp
+                    date = LocalDate.parse(row[0].toString());
+                }
+                BigDecimal revenue = (BigDecimal) row[1];
+                if (revenue == null) {
+                    revenue = BigDecimal.ZERO;
+                }
+                Long orderCount = ((Number) row[2]).longValue();
+                dailyRevenueMap.put(date, new DailyRevenueData(revenue, orderCount));
+            }
+            
+            // Tạo danh sách đầy đủ 7 ngày trong tuần
+            List<BranchWeeklyRevenueResponse.DailyRevenue> dailyRevenues = new ArrayList<>();
+            BigDecimal totalRevenue = BigDecimal.ZERO;
+            Long totalOrders = 0L;
+            
+            for (int i = 0; i < 7; i++) {
+                LocalDate currentDate = weekStart.plusDays(i);
+                DailyRevenueData data = dailyRevenueMap.getOrDefault(currentDate, 
+                        new DailyRevenueData(BigDecimal.ZERO, 0L));
+                
+                DayOfWeek dayOfWeek = currentDate.getDayOfWeek();
+                String dayName = dayOfWeek.getDisplayName(TextStyle.FULL, Locale.ENGLISH);
+                
+                dailyRevenues.add(BranchWeeklyRevenueResponse.DailyRevenue.builder()
+                        .date(currentDate.toString())
+                        .dayOfWeek(dayName)
+                        .revenue(data.revenue)
+                        .orderCount(data.orderCount)
+                        .build());
+                
+                totalRevenue = totalRevenue.add(data.revenue);
+                totalOrders += data.orderCount;
+            }
+            
+            return BranchWeeklyRevenueResponse.builder()
+                    .branchId(branchId)
+                    .weekStartDate(weekStart.toString())
+                    .weekEndDate(weekEnd.toString())
+                    .totalRevenue(totalRevenue)
+                    .totalOrders(totalOrders)
+                    .dailyRevenues(dailyRevenues)
+                    .build();
+                    
+        } catch (Exception e) {
+            log.error("Error getting weekly revenue for branch {}", branchId, e);
+            LocalDate today = LocalDate.now();
+            LocalDate weekStart = today.with(DayOfWeek.MONDAY);
+            LocalDate weekEnd = weekStart.plusDays(6);
+            
+            return BranchWeeklyRevenueResponse.builder()
+                    .branchId(branchId)
+                    .weekStartDate(weekStart.toString())
+                    .weekEndDate(weekEnd.toString())
+                    .totalRevenue(BigDecimal.ZERO)
+                    .totalOrders(0L)
+                    .dailyRevenues(new ArrayList<>())
+                    .build();
+        }
+    }
+    
     // Helper classes
     private static class CustomerOrderStats {
         int count;
@@ -497,6 +646,172 @@ public class AnalyticsService {
         }
     }
 
+    /**
+     * Get top selling products
+     * 
+     * @param branchId Optional branch ID filter (null = all branches)
+     * @param startDate Optional start date filter (null = no start limit)
+     * @param endDate Optional end date filter (null = no end limit)
+     * @param limit Number of top products to return (default: 10)
+     * @param sortBy Sort by "quantity" or "revenue" (default: "quantity")
+     * @return TopSellingProductsResponse
+     */
+    public TopSellingProductsResponse getTopSellingProducts(
+            Integer branchId,
+            LocalDate startDate,
+            LocalDate endDate,
+            Integer limit,
+            String sortBy) {
+        try {
+            // Set defaults
+            if (limit == null || limit <= 0) {
+                limit = 10;
+            }
+            if (sortBy == null || sortBy.isEmpty()) {
+                sortBy = "quantity";
+            }
+
+            // Build date range
+            LocalDateTime startDateTime = startDate != null ? startDate.atStartOfDay() : null;
+            LocalDateTime endDateTime = endDate != null ? endDate.atTime(LocalTime.MAX) : null;
+
+            // Query orders - only COMPLETED orders
+            List<Order> orders;
+            if (branchId != null && startDateTime != null && endDateTime != null) {
+                orders = orderRepository.findByBranchIdAndDateRange(branchId, startDateTime, endDateTime);
+            } else if (branchId != null) {
+                orders = orderRepository.findByBranchIdOrderByOrderDateDesc(branchId);
+            } else if (startDateTime != null && endDateTime != null) {
+                // Query all branches within date range
+                orders = orderRepository.findAll().stream()
+                        .filter(o -> o.getCreateAt() != null 
+                                && o.getCreateAt().isAfter(startDateTime.minusSeconds(1))
+                                && o.getCreateAt().isBefore(endDateTime.plusSeconds(1)))
+                        .collect(Collectors.toList());
+            } else {
+                orders = orderRepository.findAll();
+            }
+
+            // Filter only COMPLETED orders
+            List<Order> completedOrders = orders.stream()
+                    .filter(o -> "COMPLETED".equals(o.getStatus()))
+                    .collect(Collectors.toList());
+
+            if (completedOrders.isEmpty()) {
+                return TopSellingProductsResponse.builder()
+                        .branchId(branchId)
+                        .startDate(startDate)
+                        .endDate(endDate)
+                        .totalProducts(0)
+                        .topProducts(new ArrayList<>())
+                        .build();
+            }
+
+            List<Integer> orderIds = completedOrders.stream()
+                    .map(Order::getOrderId)
+                    .collect(Collectors.toList());
+
+            // Get all order items for these orders
+            List<OrderItem> orderItems = orderItemRepository.findAll().stream()
+                    .filter(item -> orderIds.contains(item.getOrder().getOrderId()))
+                    .collect(Collectors.toList());
+
+            // Group by productId and calculate stats
+            Map<Integer, ProductSalesStatsWithOrders> productStats = orderItems.stream()
+                    .collect(Collectors.groupingBy(
+                            OrderItem::getProductId,
+                            Collectors.collectingAndThen(
+                                    Collectors.toList(),
+                                    itemList -> {
+                                        BigDecimal quantity = itemList.stream()
+                                                .map(OrderItem::getQuantity)
+                                                .reduce(BigDecimal.ZERO, BigDecimal::add);
+                                        BigDecimal revenue = itemList.stream()
+                                                .map(OrderItem::getTotalPrice)
+                                                .reduce(BigDecimal.ZERO, BigDecimal::add);
+                                        // Count unique orders containing this product
+                                        Set<Integer> uniqueOrderIds = itemList.stream()
+                                                .map(item -> item.getOrder().getOrderId())
+                                                .collect(Collectors.toSet());
+                                        int orderCount = uniqueOrderIds.size();
+                                        BigDecimal avgOrderValue = orderCount > 0
+                                                ? revenue.divide(BigDecimal.valueOf(orderCount), 2, RoundingMode.HALF_UP)
+                                                : BigDecimal.ZERO;
+                                        return new ProductSalesStatsWithOrders(quantity, revenue, orderCount, avgOrderValue);
+                                    }
+                            )
+                    ));
+
+            // Get product information from catalog service
+            Map<Integer, ProductResponse> productMap = new HashMap<>();
+            try {
+                ApiResponse<List<ProductResponse>> allProductsResponse = catalogServiceClient.getAllProducts();
+                if (allProductsResponse != null && allProductsResponse.getResult() != null) {
+                    Map<Integer, ProductResponse> fetchedProducts = allProductsResponse.getResult().stream()
+                            .collect(Collectors.toMap(ProductResponse::getProductId, p -> p));
+                    productMap.putAll(fetchedProducts);
+                }
+            } catch (Exception e) {
+                log.warn("Failed to fetch products from catalog service: {}", e.getMessage());
+            }
+            final Map<Integer, ProductResponse> finalProductMap = productMap;
+
+            // Sort and limit
+            Comparator<Map.Entry<Integer, ProductSalesStatsWithOrders>> comparator;
+            if ("revenue".equalsIgnoreCase(sortBy)) {
+                comparator = Comparator.comparing(e -> e.getValue().revenue);
+            } else {
+                comparator = Comparator.comparing(e -> e.getValue().quantity);
+            }
+
+            List<TopSellingProductsResponse.TopSellingProduct> topProducts = productStats.entrySet().stream()
+                    .sorted(comparator.reversed())
+                    .limit(limit)
+                    .map(entry -> {
+                        Integer productId = entry.getKey();
+                        ProductSalesStatsWithOrders stats = entry.getValue();
+                        ProductResponse product = finalProductMap.get(productId);
+                        
+                        return TopSellingProductsResponse.TopSellingProduct.builder()
+                                .productId(productId)
+                                .productName(product != null ? product.getName() : "Unknown Product")
+                                .categoryName(product != null && product.getCategory() != null 
+                                        ? product.getCategory().getName() : null)
+                                .totalQuantitySold(stats.quantity)
+                                .totalRevenue(stats.revenue)
+                                .orderCount(stats.orderCount)
+                                .avgOrderValue(stats.avgOrderValue)
+                                .rank(0) // Will be set below
+                                .build();
+                    })
+                    .collect(Collectors.toList());
+
+            // Set ranks
+            for (int i = 0; i < topProducts.size(); i++) {
+                topProducts.get(i).setRank(i + 1);
+            }
+
+            return TopSellingProductsResponse.builder()
+                    .branchId(branchId)
+                    .startDate(startDate)
+                    .endDate(endDate)
+                    .totalProducts(productStats.size())
+                    .topProducts(topProducts)
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Error getting top selling products for branch {} from {} to {}", 
+                    branchId, startDate, endDate, e);
+            return TopSellingProductsResponse.builder()
+                    .branchId(branchId)
+                    .startDate(startDate)
+                    .endDate(endDate)
+                    .totalProducts(0)
+                    .topProducts(new ArrayList<>())
+                    .build();
+        }
+    }
+
     private static class ProductSalesStats {
         BigDecimal quantity;
         BigDecimal revenue;
@@ -504,6 +819,30 @@ public class AnalyticsService {
         ProductSalesStats(BigDecimal quantity, BigDecimal revenue) {
             this.quantity = quantity;
             this.revenue = revenue;
+        }
+    }
+
+    private static class ProductSalesStatsWithOrders {
+        BigDecimal quantity;
+        BigDecimal revenue;
+        int orderCount;
+        BigDecimal avgOrderValue;
+
+        ProductSalesStatsWithOrders(BigDecimal quantity, BigDecimal revenue, int orderCount, BigDecimal avgOrderValue) {
+            this.quantity = quantity;
+            this.revenue = revenue;
+            this.orderCount = orderCount;
+            this.avgOrderValue = avgOrderValue;
+        }
+    }
+    
+    private static class DailyRevenueData {
+        BigDecimal revenue;
+        Long orderCount;
+        
+        DailyRevenueData(BigDecimal revenue, Long orderCount) {
+            this.revenue = revenue;
+            this.orderCount = orderCount;
         }
     }
 }

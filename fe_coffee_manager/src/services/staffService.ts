@@ -148,6 +148,20 @@ class StaffService {
       throw error;
     }
   }
+
+  async getStaffsWithUserInfoByBranch(branchId: number): Promise<any[]> {
+    try {
+      const response = await apiClient.get<{ code: number; result: any[] }>(`${this.staffProfileUrl}/branch/${branchId}/with-user-info`);
+      if (response.code === 200 || response.code === 1000) {
+        return response.result || [];
+      } else {
+        throw new Error(`API Error: ${response.code}`);
+      }
+    } catch (error) {
+      console.error('Error fetching staffs with user info by branch:', error);
+      throw error;
+    }
+  }
 }
 
 export default new StaffService();

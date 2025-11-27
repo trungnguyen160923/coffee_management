@@ -10,6 +10,7 @@ import orderservice.order_service.entity.Branch;
 import orderservice.order_service.entity.CafeTable;
 import orderservice.order_service.entity.Reservation;
 import orderservice.order_service.entity.ReservationTable;
+import orderservice.order_service.events.ReservationCreatedEvent;
 import orderservice.order_service.exception.AppException;
 import orderservice.order_service.exception.ErrorCode;
 import orderservice.order_service.repository.BranchRepository;
@@ -19,6 +20,7 @@ import orderservice.order_service.repository.ReservationTableRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import lombok.extern.slf4j.Slf4j;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -27,6 +29,7 @@ import java.util.stream.Collectors;
 
 @Service
 @Transactional
+@Slf4j
 public class ReservationService {
 
     private final ReservationRepository reservationRepository;
@@ -35,6 +38,7 @@ public class ReservationService {
     private final ReservationTableRepository reservationTableRepository;
     private final AuthServiceClient authServiceClient;
     private final EmailService emailService;
+    private final OrderEventProducer orderEventProducer;
 
     @Autowired
     public ReservationService(ReservationRepository reservationRepository,
@@ -42,13 +46,15 @@ public class ReservationService {
             CafeTableRepository cafeTableRepository,
             ReservationTableRepository reservationTableRepository,
             AuthServiceClient authServiceClient,
-            EmailService emailService) {
+            EmailService emailService,
+            OrderEventProducer orderEventProducer) {
         this.reservationRepository = reservationRepository;
         this.branchRepository = branchRepository;
         this.cafeTableRepository = cafeTableRepository;
         this.reservationTableRepository = reservationTableRepository;
         this.authServiceClient = authServiceClient;
         this.emailService = emailService;
+        this.orderEventProducer = orderEventProducer;
     }
 
     public ReservationResponse createReservation(CreateReservationRequest request, String token) {
@@ -96,6 +102,9 @@ public class ReservationService {
                 } else {
                     throw new AppException(ErrorCode.EMAIL_NOT_EXISTED);
                 }
+            } catch (AppException e) {
+                // Re-throw AppException as-is
+                throw e;
             } catch (Exception e) {
                 throw new AppException(ErrorCode.EMAIL_NOT_EXISTED);
             }
@@ -130,6 +139,29 @@ public class ReservationService {
                     savedReservation.getReservationId());
         }
 
+        // Publish reservation created event to Kafka for staff notification
+        try {
+            ReservationCreatedEvent event = ReservationCreatedEvent.builder()
+                    .reservationId(savedReservation.getReservationId())
+                    .branchId(savedReservation.getBranchId())
+                    .customerId(savedReservation.getCustomerId())
+                    .customerName(savedReservation.getCustomerName())
+                    .phone(savedReservation.getPhone())
+                    .email(savedReservation.getEmail())
+                    .reservedAt(savedReservation.getReservedAt())
+                    .partySize(savedReservation.getPartySize())
+                    .notes(savedReservation.getNotes())
+                    .createdAt(java.time.Instant.now())
+                    .build();
+            orderEventProducer.publishReservationCreated(event);
+            log.info("[ReservationService] ✅ Successfully triggered event publishing for reservationId: {}", 
+                    savedReservation.getReservationId());
+        } catch (Exception e) {
+            log.error("[ReservationService] ❌ Failed to publish reservation created event for reservationId: {}", 
+                    savedReservation.getReservationId(), e);
+            // Don't fail reservation creation if event publishing fails
+        }
+
         return convertToResponse(savedReservation, branch);
     }
 
@@ -158,6 +190,56 @@ public class ReservationService {
 
         reservation.setStatus(status);
         Reservation updatedReservation = reservationRepository.save(reservation);
+
+        // Publish event when reservation is confirmed or cancelled
+        if (("CONFIRMED".equals(status) || "confirmed".equalsIgnoreCase(status)) && updatedReservation.getCustomerId() != null) {
+            try {
+                ReservationCreatedEvent event = ReservationCreatedEvent.builder()
+                        .reservationId(updatedReservation.getReservationId())
+                        .branchId(updatedReservation.getBranchId())
+                        .customerId(updatedReservation.getCustomerId())
+                        .customerName(updatedReservation.getCustomerName())
+                        .phone(updatedReservation.getPhone())
+                        .email(updatedReservation.getEmail())
+                        .reservedAt(updatedReservation.getReservedAt())
+                        .partySize(updatedReservation.getPartySize())
+                        .notes(updatedReservation.getNotes())
+                        .createdAt(java.time.Instant.now())
+                        .build();
+                orderEventProducer.publishReservationConfirmed(event);
+                log.info("[ReservationService] ✅ Successfully triggered event publishing for confirmed reservationId: {}", 
+                        updatedReservation.getReservationId());
+            } catch (Exception e) {
+                log.error("[ReservationService] ❌ Failed to publish reservation confirmed event for reservationId: {}", 
+                        updatedReservation.getReservationId(), e);
+                // Don't fail status update if event publishing fails
+            }
+        }
+
+        if (("CANCELLED".equals(status) || "cancelled".equalsIgnoreCase(status)) && updatedReservation.getCustomerId() != null) {
+            try {
+                ReservationCreatedEvent event = ReservationCreatedEvent.builder()
+                        .reservationId(updatedReservation.getReservationId())
+                        .branchId(updatedReservation.getBranchId())
+                        .customerId(updatedReservation.getCustomerId())
+                        .customerName(updatedReservation.getCustomerName())
+                        .phone(updatedReservation.getPhone())
+                        .email(updatedReservation.getEmail())
+                        .reservedAt(updatedReservation.getReservedAt())
+                        .partySize(updatedReservation.getPartySize())
+                        .notes(updatedReservation.getNotes())
+                        .createdAt(java.time.Instant.now())
+                        .build();
+                orderEventProducer.publishReservationCancelled(event);
+                log.info("[ReservationService] ✅ Successfully triggered event publishing for cancelled reservationId: {}", 
+                        updatedReservation.getReservationId());
+            } catch (Exception e) {
+                log.error("[ReservationService] ❌ Failed to publish reservation cancelled event for reservationId: {}", 
+                        updatedReservation.getReservationId(), e);
+                // Don't fail status update if event publishing fails
+            }
+        }
+
         return convertToResponse(updatedReservation);
     }
 
@@ -167,7 +249,32 @@ public class ReservationService {
 
         if ("CONFIRMED".equals(reservation.getStatus()) || "PENDING".equals(reservation.getStatus())) {
             reservation.setStatus("CANCELLED");
-            reservationRepository.save(reservation);
+            Reservation updatedReservation = reservationRepository.save(reservation);
+
+            // Publish event when reservation is cancelled
+            if (updatedReservation.getCustomerId() != null) {
+                try {
+                    ReservationCreatedEvent event = ReservationCreatedEvent.builder()
+                            .reservationId(updatedReservation.getReservationId())
+                            .branchId(updatedReservation.getBranchId())
+                            .customerId(updatedReservation.getCustomerId())
+                            .customerName(updatedReservation.getCustomerName())
+                            .phone(updatedReservation.getPhone())
+                            .email(updatedReservation.getEmail())
+                            .reservedAt(updatedReservation.getReservedAt())
+                            .partySize(updatedReservation.getPartySize())
+                            .notes(updatedReservation.getNotes())
+                            .createdAt(java.time.Instant.now())
+                            .build();
+                    orderEventProducer.publishReservationCancelled(event);
+                    log.info("[ReservationService] ✅ Successfully triggered event publishing for cancelled reservationId: {}", 
+                            updatedReservation.getReservationId());
+                } catch (Exception e) {
+                    log.error("[ReservationService] ❌ Failed to publish reservation cancelled event for reservationId: {}", 
+                            updatedReservation.getReservationId(), e);
+                    // Don't fail cancellation if event publishing fails
+                }
+            }
         } else {
             throw new AppException(ErrorCode.RESERVATION_CANNOT_BE_CANCELLED);
         }

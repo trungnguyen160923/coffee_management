@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { cartService } from '../../services/cartService';
 import { orderService } from '../../services/orderService';
-import { emailService } from '../../services/emailService';
+// import { emailService } from '../../services/emailService'; // TEMPORARILY COMMENTED FOR TESTING
 import { addressService } from '../../services/addressService';
 import { authService } from '../../services/authService';
 import { discountService } from '../../services/discountService';
@@ -352,8 +352,9 @@ const CheckoutPage = () => {
             setSubmitting(true);
             setIsCheckingStock(true);
             
-            // Fetch cart to build order items
-            const cartItems = await cartService.getCartItems();
+            // Fetch cart to build order items và lấy cartId
+            const cartData = await cartService.getCartWithId();
+            const cartItems = cartData.cartItems;
             if (!cartItems || cartItems.length === 0) {
                 showToast('Your cart is empty. Please add items before checkout.', 'warning');
                 return;
@@ -386,10 +387,21 @@ const CheckoutPage = () => {
 
             // Chi nhánh đã được kiểm tra và chọn khi chọn địa chỉ
 
-            // Lấy thông tin session để liên kết với reservations
-            const userSession = await getCurrentUserSessionAsync();
-            const cartId = userSession?.cartId || null;
-            const guestId = userSession?.guestId || null;
+            // Lấy cartId và guestId
+            // Ưu tiên lấy cartId từ response của getCart API
+            let cartId = cartData.cartId;
+            
+            // Nếu chưa có cartId, thử lấy từ localStorage hoặc userSession
+            if (!cartId) {
+                const userSession = await getCurrentUserSessionAsync();
+                cartId = userSession?.cartId || localStorage.getItem('cartId');
+                if (cartId) {
+                    cartId = parseInt(cartId);
+                }
+            }
+            
+            // Lấy guestId từ localStorage (luôn có, kể cả khi đã đăng nhập)
+            const guestId = localStorage.getItem('guestId') || null;
 
             const payload = {
                 customerId: customerId,
@@ -415,25 +427,25 @@ const CheckoutPage = () => {
             const orderResult = await orderService.createOrder(payload);
             try { await cartService.clearCart(); } catch (_) { }
 
-            // Send order confirmation email
-            try {
-                const emailData = {
-                    email: formData.email,
-                    customerName: formData.name,
-                    orderId: orderResult?.orderId || 'N/A',
-                    orderItems: cartItems,
-                    totalAmount: cartItems.reduce((total, item) => total + (item.price * item.quantity), 0),
-                    deliveryAddress: fullDeliveryAddress,
-                    paymentMethod: formData.paymentMethod,
-                    orderDate: new Date().toLocaleString('vi-VN')
-                };
-                await emailService.sendOrderConfirmation(emailData);
-            } catch (emailError) {
-                console.error('Failed to send confirmation email:', emailError);
-                // Don't fail the order if email fails
-            }
+            // Send order confirmation email - TEMPORARILY COMMENTED FOR TESTING
+            // try {
+            //     const emailData = {
+            //         email: formData.email,
+            //         customerName: formData.name,
+            //         orderId: orderResult?.orderId || 'N/A',
+            //         orderItems: cartItems,
+            //         totalAmount: cartItems.reduce((total, item) => total + (item.price * item.quantity), 0),
+            //         deliveryAddress: fullDeliveryAddress,
+            //         paymentMethod: formData.paymentMethod,
+            //         orderDate: new Date().toLocaleString('vi-VN')
+            //     };
+            //     await emailService.sendOrderConfirmation(emailData);
+            // } catch (emailError) {
+            //     console.error('Failed to send confirmation email:', emailError);
+            //     // Don't fail the order if email fails
+            // }
 
-            showToast('Order placed successfully! Confirmation email has been sent.', 'success');
+            showToast('Order placed successfully!', 'success');
             window.dispatchEvent(new Event('cartUpdated'));
             navigate('/coffee');
         } catch (error) {

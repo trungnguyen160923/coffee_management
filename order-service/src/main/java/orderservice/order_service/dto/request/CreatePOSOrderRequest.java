@@ -26,6 +26,7 @@ public class CreatePOSOrderRequest {
     Integer customerId;
     String customerName;
     String phone;
+    String email;
 
     // Table information
     @NotEmpty(message = "At least one table must be selected")

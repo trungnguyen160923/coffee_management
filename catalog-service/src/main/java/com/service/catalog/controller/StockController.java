@@ -14,15 +14,24 @@ import java.util.HashMap;
 
 import com.service.catalog.dto.request.stock.CheckAndReserveRequest;
 import com.service.catalog.dto.request.stock.CommitReservationRequest;
+import com.service.catalog.dto.request.stock.DailyStockReconciliationRequest;
+import com.service.catalog.dto.request.stock.ManagerStockAdjustmentRequest;
+import com.service.catalog.dto.request.stock.UpdateStockAdjustmentRequest;
 import com.service.catalog.dto.request.stock.ReleaseReservationRequest;
 import com.service.catalog.dto.response.stock.CheckAndReserveResponse;
+import com.service.catalog.dto.response.stock.DailyStockReconciliationResponse;
+import com.service.catalog.dto.response.stock.StockAdjustmentResponse;
+import com.service.catalog.entity.StockAdjustment;
 import com.service.catalog.exception.InsufficientStockException;
 import com.service.catalog.service.StockReservationService;
+import com.service.catalog.service.StockAdjustmentService;
 import com.service.catalog.dto.ApiResponse;
 import org.springframework.http.HttpStatus;
 import jakarta.validation.Valid;
+import org.springframework.format.annotation.DateTimeFormat;
 import java.util.Map;
 import java.util.List;
+import java.time.LocalDate;
 
 @RestController
 @RequestMapping("/stocks")
@@ -31,6 +40,8 @@ import java.util.List;
 public class StockController {
 
     private final StockService stockService;
+    private final StockAdjustmentService stockAdjustmentService;
+    private final org.springframework.context.ApplicationContext applicationContext;
 
     @GetMapping("/search")
     @PreAuthorize("hasRole('STAFF') or hasRole('MANAGER') or hasRole('ADMIN')")
@@ -66,6 +77,18 @@ public class StockController {
     public ResponseEntity<List<StockResponse>> getLowStockItems(
             @RequestParam Integer branchId) {
         List<StockResponse> result = stockService.getLowStockItems(branchId);
+        return ResponseEntity.ok(result);
+    }
+
+    /**
+     * GET /api/stocks/low-or-out-of-stock?branchId={branchId}
+     * Lấy danh sách nguyên liệu tồn kho thấp hoặc hết hàng của chi nhánh
+     */
+    @GetMapping("/low-or-out-of-stock")
+    @PreAuthorize("hasRole('STAFF') or hasRole('MANAGER') or hasRole('ADMIN')")
+    public ResponseEntity<List<StockResponse>> getLowOrOutOfStockItems(
+            @RequestParam Integer branchId) {
+        List<StockResponse> result = stockService.getLowOrOutOfStockItems(branchId);
         return ResponseEntity.ok(result);
     }
 
@@ -130,6 +153,140 @@ public class StockController {
                     .message("Internal server error: " + e.getMessage())
                     .build());
         }
+    }
+
+    @PostMapping("/daily-reconciliation")
+    @PreAuthorize("hasRole('STAFF') or hasRole('MANAGER') or hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<DailyStockReconciliationResponse>> reconcileDailyUsage(
+            @Valid @RequestBody DailyStockReconciliationRequest request,
+            org.springframework.security.core.Authentication authentication) {
+        // Validate: Staff chỉ được ghi ngày hiện tại, Manager/Admin có thể ghi ngày đã qua
+        if (authentication != null && authentication.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("STAFF"))) {
+            LocalDate today = LocalDate.now();
+            if (!request.getAdjustmentDate().equals(today)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(ApiResponse.<DailyStockReconciliationResponse>builder()
+                                .code(403)
+                                .message("Staff chỉ được ghi nhận nguyên liệu cho ngày hôm nay")
+                                .build());
+            }
+        }
+        
+        DailyStockReconciliationResponse response = stockAdjustmentService.reconcile(request);
+        return ResponseEntity.ok(ApiResponse.<DailyStockReconciliationResponse>builder()
+                .code(200)
+                .message(request.isCommitImmediately() ? "Adjustments committed successfully" : "Adjustments saved in pending status")
+                .result(response)
+                .build());
+    }
+
+    @PostMapping("/adjustments/{adjustmentId}/commit")
+    @PreAuthorize("hasRole('MANAGER') or hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> commitAdjustment(@PathVariable Long adjustmentId) {
+        stockAdjustmentService.manualCommit(adjustmentId);
+        Map<String, Object> result = Map.of(
+                "adjustmentId", adjustmentId,
+                "status", "COMMITTED");
+        return ResponseEntity.ok(ApiResponse.<Map<String, Object>>builder()
+                .code(200)
+                .message("Adjustment committed successfully")
+                .result(result)
+                .build());
+    }
+
+    @GetMapping("/adjustments")
+    @PreAuthorize("hasRole('STAFF') or hasRole('MANAGER') or hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<Page<StockAdjustmentResponse>>> getAdjustments(
+            @RequestParam(required = false) Integer branchId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate adjustmentDate,
+            @RequestParam(required = false) StockAdjustment.AdjustmentStatus status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+
+        Page<StockAdjustmentResponse> response = stockAdjustmentService.searchAdjustments(
+                branchId,
+                adjustmentDate,
+                status,
+                page,
+                size);
+
+        return ResponseEntity.ok(ApiResponse.<Page<StockAdjustmentResponse>>builder()
+                .code(200)
+                .message("Adjustments fetched successfully")
+                .result(response)
+                .build());
+    }
+
+    /**
+     * GET /api/stocks/daily-usage-summary
+     * Lấy danh sách nguyên liệu đã được dùng trong ngày (từ orders) với system quantity
+     */
+    @GetMapping("/daily-usage-summary")
+    @PreAuthorize("hasRole('STAFF') or hasRole('MANAGER') or hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<com.service.catalog.dto.response.stock.DailyUsageSummaryResponse>> getDailyUsageSummary(
+            @RequestParam Integer branchId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        
+        com.service.catalog.dto.response.stock.DailyUsageSummaryResponse response = 
+                stockAdjustmentService.getDailyUsageSummary(branchId, date);
+        
+        return ResponseEntity.ok(ApiResponse.<com.service.catalog.dto.response.stock.DailyUsageSummaryResponse>builder()
+                .code(200)
+                .message("Daily usage summary retrieved successfully")
+                .result(response)
+                .build());
+    }
+
+    /**
+     * PUT /api/stocks/adjustments/{adjustmentId}
+     * Cập nhật adjustment (chỉ cho PENDING)
+     */
+    @PutMapping("/adjustments/{adjustmentId}")
+    @PreAuthorize("hasRole('STAFF') or hasRole('MANAGER') or hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<StockAdjustmentResponse>> updateAdjustment(
+            @PathVariable Long adjustmentId,
+            @Valid @RequestBody UpdateStockAdjustmentRequest request) {
+        
+        StockAdjustmentResponse response = stockAdjustmentService.updateAdjustment(adjustmentId, request);
+        
+        return ResponseEntity.ok(ApiResponse.<StockAdjustmentResponse>builder()
+                .code(200)
+                .message("Adjustment updated successfully")
+                .result(response)
+                .build());
+    }
+
+    /**
+     * DELETE /api/stocks/adjustments/{adjustmentId}
+     * Xóa adjustment (chỉ cho PENDING hoặc CANCELLED)
+     */
+    @DeleteMapping("/adjustments/{adjustmentId}")
+    @PreAuthorize("hasRole('STAFF') or hasRole('MANAGER') or hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> deleteAdjustment(@PathVariable Long adjustmentId) {
+        stockAdjustmentService.deleteAdjustment(adjustmentId);
+        
+        Map<String, Object> result = Map.of(
+                "adjustmentId", adjustmentId,
+                "message", "Adjustment deleted successfully");
+        
+        return ResponseEntity.ok(ApiResponse.<Map<String, Object>>builder()
+                .code(200)
+                .message("Adjustment deleted successfully")
+                .result(result)
+                .build());
+    }
+    
+    @PostMapping("/manager-adjustment")
+    @PreAuthorize("hasRole('MANAGER') or hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<StockAdjustmentResponse>> recordManagerAdjustment(
+            @Valid @RequestBody ManagerStockAdjustmentRequest request) {
+        StockAdjustmentResponse response = stockAdjustmentService.recordManagerAdjustment(request);
+        return ResponseEntity.ok(ApiResponse.<StockAdjustmentResponse>builder()
+                .code(200)
+                .message("Stock adjusted successfully")
+                .result(response)
+                .build());
     }
 
     /**
@@ -419,5 +576,44 @@ public class StockController {
             .message("Service is healthy")
             .result(result)
             .build());
+    }
+
+    /**
+     * GET /api/stocks/scheduler/status
+     * Kiểm tra trạng thái của Stock Adjustment Scheduler
+     */
+    @GetMapping("/scheduler/status")
+    @PreAuthorize("hasRole('MANAGER') or hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getSchedulerStatus() {
+        try {
+            com.service.catalog.service.StockAdjustmentScheduler scheduler = 
+                applicationContext.getBean(com.service.catalog.service.StockAdjustmentScheduler.class);
+            
+            Map<String, Object> result = new java.util.HashMap<>();
+            result.put("enabled", true);
+            result.put("isRunning", scheduler.isRunning());
+            result.put("lastRunTime", scheduler.getLastRunTime() != null 
+                ? scheduler.getLastRunTime().toString() 
+                : "Never");
+            result.put("lastCommittedCount", scheduler.getLastCommittedCount());
+            result.put("currentTime", java.time.LocalDateTime.now().toString());
+            
+            return ResponseEntity.ok(ApiResponse.<Map<String, Object>>builder()
+                .code(200)
+                .message("Scheduler status retrieved successfully")
+                .result(result)
+                .build());
+        } catch (Exception ex) {
+            // Scheduler might not be enabled or not found
+            Map<String, Object> result = Map.of(
+                "enabled", false,
+                "message", "Scheduler is not enabled or not found"
+            );
+            return ResponseEntity.ok(ApiResponse.<Map<String, Object>>builder()
+                .code(200)
+                .message("Scheduler is not active")
+                .result(result)
+                .build());
+        }
     }
 }

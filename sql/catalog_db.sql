@@ -563,6 +563,64 @@ END$$
 
 DELIMITER ;
 
+
+-- Stock adjustment records for daily reconciliation
+DROP TABLE IF EXISTS stock_adjustments;
+CREATE TABLE stock_adjustments (
+  adjustment_id     BIGINT PRIMARY KEY NOT NULL AUTO_INCREMENT,
+  branch_id         INT NOT NULL,
+  ingredient_id     INT NOT NULL,
+  adjustment_type   ENUM('ADJUST_IN','ADJUST_OUT') NOT NULL,
+  status            ENUM('PENDING','COMMITTED','CANCELLED','AUTO_COMMITTED') NOT NULL DEFAULT 'PENDING',
+  quantity          DECIMAL(12,4) NOT NULL DEFAULT 0,
+  system_quantity   DECIMAL(12,4) NOT NULL DEFAULT 0,
+  actual_quantity   DECIMAL(12,4) NOT NULL DEFAULT 0,
+  variance          DECIMAL(12,4) NOT NULL DEFAULT 0,
+  entry_count       INT NOT NULL DEFAULT 0,
+  last_entry_at     DATETIME DEFAULT NULL,
+  reason            VARCHAR(100) DEFAULT 'DAILY_RECONCILIATION',
+  user_id           INT DEFAULT NULL,
+  adjusted_by       VARCHAR(100) DEFAULT NULL,
+  adjustment_date   DATE NOT NULL,
+  notes             VARCHAR(255) DEFAULT NULL,
+  created_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CHECK (quantity >= 0)
+);
+
+CREATE INDEX idx_sa_branch_date ON stock_adjustments(branch_id, adjustment_date);
+CREATE INDEX idx_sa_ingredient ON stock_adjustments(ingredient_id);
+CREATE INDEX idx_sa_variance ON stock_adjustments(ingredient_id, adjustment_date, adjustment_type);
+CREATE INDEX idx_sa_status ON stock_adjustments(status, adjustment_date);
+
+ALTER TABLE stock_adjustments
+  ADD CONSTRAINT fk_sa_ingredient FOREIGN KEY (ingredient_id) REFERENCES ingredients(ingredient_id) ON DELETE RESTRICT,
+  ADD CONSTRAINT fk_sa_stock_pair FOREIGN KEY (ingredient_id, branch_id) REFERENCES stocks(ingredient_id, branch_id) ON DELETE CASCADE;
+
+DROP TABLE IF EXISTS stock_adjustment_entries;
+CREATE TABLE stock_adjustment_entries (
+  entry_id        BIGINT PRIMARY KEY NOT NULL AUTO_INCREMENT,
+  adjustment_id   BIGINT NOT NULL,
+  branch_id       INT NOT NULL,
+  ingredient_id   INT NOT NULL,
+  entry_quantity  DECIMAL(12,4) NOT NULL DEFAULT 0,
+  recorded_by     VARCHAR(100) DEFAULT NULL,
+  user_id         INT DEFAULT NULL,
+  entry_time      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  notes           VARCHAR(255) DEFAULT NULL,
+  source          VARCHAR(50) DEFAULT 'MANUAL',
+  created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CHECK (entry_quantity >= 0)
+);
+
+CREATE INDEX idx_sae_adjustment ON stock_adjustment_entries(adjustment_id);
+CREATE INDEX idx_sae_branch_ing ON stock_adjustment_entries(branch_id, ingredient_id);
+
+ALTER TABLE stock_adjustment_entries
+  ADD CONSTRAINT fk_sae_adjustment FOREIGN KEY (adjustment_id) REFERENCES stock_adjustments(adjustment_id) ON DELETE CASCADE,
+  ADD CONSTRAINT fk_sae_ingredient FOREIGN KEY (ingredient_id) REFERENCES ingredients(ingredient_id) ON DELETE RESTRICT;
+
+
 -- Stored Procedure để cleanup expired reservations
 DELIMITER $$
 

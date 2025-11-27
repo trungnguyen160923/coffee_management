@@ -46,6 +46,7 @@ public class GoodsReceiptService {
     private final GoodsReceiptMapper goodsReceiptMapper;
     private final UnitConversionService unitConversionService;
     private final PurchaseOrderStatusHistoryRepository purchaseOrderStatusHistoryRepository;
+    private final InventoryAlertService inventoryAlertService;
 
     @Transactional
     @PreAuthorize("hasRole('STAFF') or hasRole('MANAGER')")
@@ -394,6 +395,7 @@ public class GoodsReceiptService {
             stock.setLastUpdated(LocalDateTime.now());
             stock.setUnit(detail.getIngredient().getUnit());
             stockRepository.save(stock);
+            inventoryAlertService.evaluateAndPublish(stock);
 
             InventoryCostId costId = new InventoryCostId();
             costId.setBranchId(branchId);

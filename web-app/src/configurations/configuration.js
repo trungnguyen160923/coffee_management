@@ -63,4 +63,5 @@ export const API = {
   // Stock reservation APIs
   CLEAR_RESERVATIONS: "/catalogs/stocks/clear-reservations",
   NOTIFY_ORDER_CREATED: "/notifications/orders",
+  NOTIFY_RESERVATION_CREATED: "/notifications/reservations",
 };

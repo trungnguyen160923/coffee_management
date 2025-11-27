@@ -56,6 +56,18 @@ public interface StockReservationRepository extends JpaRepository<StockReservati
      */
     @Query("SELECT COALESCE(SUM(sr.quantityReserved), 0) FROM StockReservation sr WHERE sr.branchId = :branchId AND sr.ingredientId = :ingredientId AND sr.status = 'ACTIVE'")
     Double getTotalReservedQuantity(@Param("branchId") Integer branchId, @Param("ingredientId") Integer ingredientId);
+
+    @Query("SELECT sr.ingredientId, COALESCE(SUM(sr.quantityReserved), 0) " +
+            "FROM StockReservation sr " +
+            "WHERE sr.branchId = :branchId " +
+            "AND sr.status = :status " +
+            "AND sr.updatedAt >= :start " +
+            "AND sr.updatedAt < :end " +
+            "GROUP BY sr.ingredientId")
+    List<Object[]> sumCommittedQuantityByBranchAndDate(@Param("branchId") Integer branchId,
+                                                       @Param("start") LocalDateTime start,
+                                                       @Param("end") LocalDateTime end,
+                                                       @Param("status") StockReservation.ReservationStatus status);
     
     /**
      * Tìm reservations theo group ID và ingredient

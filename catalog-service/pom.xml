@@ -30,6 +30,7 @@
 		<java.version>21</java.version>
 		<mapstruct.version>1.5.5.Final</mapstruct.version>
 		<spring-cloud.version>2025.0.0</spring-cloud.version>
+		<spring-dotenv.version>4.0.0</spring-dotenv.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -96,6 +97,11 @@
 		<dependency>
 			<groupId>org.springframework.cloud</groupId>
 			<artifactId>spring-cloud-starter-openfeign</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>me.paulschwarz</groupId>
+			<artifactId>spring-dotenv</artifactId>
+			<version>${spring-dotenv.version}</version>
 		</dependency>
 	</dependencies>
 

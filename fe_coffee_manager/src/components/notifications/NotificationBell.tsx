@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Bell, Check, Inbox } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../hooks';
@@ -19,6 +20,7 @@ function formatTimeAgo(iso?: string) {
 
 export function NotificationBell() {
   const { user, managerBranch } = useAuth();
+  const navigate = useNavigate();
   const branchId = useMemo(() => {
     if (user?.branch?.branchId) return user.branch.branchId;
     if (user?.branchId) return Number(user.branchId);
@@ -35,16 +37,46 @@ export function NotificationBell() {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  const handleNotificationClick = (notification: any) => {
+    // Determine navigation based on title or metadata
+    const title = notification.title || '';
+    const metadata = notification.metadata || {};
+    
+    // Check if it's an order notification
+    if (title.includes('Đơn hàng') || title.includes('đơn hàng') || metadata.orderId) {
+      markAsRead(notification.id);
+      navigate('/staff/orders');
+      setOpen(false);
+      return;
+    }
+    
+    // Check if it's a reservation notification
+    if (title.includes('Đặt bàn') || title.includes('đặt bàn') || metadata.reservationId) {
+      markAsRead(notification.id);
+      navigate('/staff/reservations');
+      setOpen(false);
+      return;
+    }
+    
+    // For other notification types, just mark as read
+    markAsRead(notification.id);
+  };
+
+  const userRole = useMemo(() => {
+    return user?.role || undefined; // 'staff', 'manager', etc.
+  }, [user]);
+
   const {
     notifications,
     unreadCount,
     markAsRead,
-    clearAll,
+    markAllAsRead,
     isConnected,
   } = useNotifications({
     branchId,
     userId,
     enabled: !!branchId || !!userId,
+    role: userRole,
   });
 
   useEffect(() => {
@@ -77,19 +109,21 @@ export function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-3 w-80 rounded-xl border border-amber-100 bg-white shadow-2xl ring-1 ring-black/5">
+        <div className="absolute right-0 mt-3 w-80 rounded-xl border border-amber-100 bg-white shadow-2xl ring-1 ring-black/5" style={{ zIndex: 10000 }}>
           <div className="flex items-center justify-between border-b border-amber-50 px-4 py-3">
             <div>
               <p className="text-sm font-semibold text-slate-900">Notifications</p>
               <p className="text-xs text-slate-500">{unreadCount} unread</p>
             </div>
             <div className="flex gap-2">
-              <button
-                onClick={() => clearAll()}
-                className="rounded-full border border-amber-200 px-2.5 py-1 text-xs text-slate-500 transition hover:border-amber-300 hover:text-amber-600"
-              >
-                Clear all
-              </button>
+              {unreadCount > 0 && (
+                <button
+                  onClick={() => markAllAsRead()}
+                  className="rounded-full border border-amber-200 px-2.5 py-1 text-xs text-slate-500 transition hover:border-amber-300 hover:text-amber-600"
+                >
+                  Mark all as read
+                </button>
+              )}
             </div>
           </div>
 
@@ -106,7 +140,7 @@ export function NotificationBell() {
                   className={`cursor-pointer px-4 py-3 transition hover:bg-amber-50 ${
                     notification.isRead ? 'bg-white' : 'bg-amber-50/70'
                   }`}
-                  onClick={() => markAsRead(notification.id)}
+                  onClick={() => handleNotificationClick(notification)}
                 >
                   <div className="flex justify-between">
                     <p className="text-sm font-medium text-slate-900">

@@ -122,6 +122,16 @@ public enum ErrorCode {
     INVALID_BRANCH_ID(1107, "Branch ID must be a positive number", HttpStatus.BAD_REQUEST),
     TABLE_IN_USE(1108, "Table is currently in use and cannot be deleted", HttpStatus.BAD_REQUEST),
     INVALID_TABLE_STATUS(1109, "Invalid table status", HttpStatus.BAD_REQUEST),
+
+    STOCK_NOT_FOUND(1200, "Stock not found for branch/ingredient", HttpStatus.NOT_FOUND),
+    ADJUSTMENT_NOT_FOUND(1201, "Stock adjustment not found", HttpStatus.NOT_FOUND),
+    INSUFFICIENT_STOCK(1202, "Insufficient stock to commit adjustment", HttpStatus.BAD_REQUEST),
+    ADJUSTMENT_NOT_PENDING(1203, "Only PENDING adjustments can be updated", HttpStatus.BAD_REQUEST),
+    ADJUSTMENT_ALREADY_COMMITTED(1204, "Cannot delete committed adjustments", HttpStatus.BAD_REQUEST),
+    INVALID_PHYSICAL_QUANTITY(1205, "Physical quantity must be non-negative", HttpStatus.BAD_REQUEST),
+    NO_STOCK_CHANGE(1206, "Physical quantity matches system quantity, no change recorded", HttpStatus.BAD_REQUEST),
+    ADJUSTMENT_BLOCKED_DURING_BUSINESS(1207, "Adjustments are locked during business hours", HttpStatus.BAD_REQUEST),
+    ADJUSTMENT_FORCE_REASON_REQUIRED(1208, "Reason is required when forcing adjustments during business hours", HttpStatus.BAD_REQUEST),
     ;
 
     ErrorCode(int code, String message, HttpStatusCode statusCode) {
