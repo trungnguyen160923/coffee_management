@@ -14,5 +14,11 @@ public interface ProfileServiceClient {
 
     @GetMapping("/staff-profiles/branch/{branchId}")
     ApiResponse<List<StaffProfileResponse>> getStaffByBranch(@PathVariable("branchId") Integer branchId);
+
+    /**
+     * Internal endpoint - no authentication required
+     */
+    @GetMapping("/staff-profiles/internal/branch/{branchId}")
+    ApiResponse<List<StaffProfileResponse>> getStaffByBranchInternal(@PathVariable("branchId") Integer branchId);
 }
 

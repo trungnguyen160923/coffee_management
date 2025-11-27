@@ -6,6 +6,9 @@ import { DiscountApplicationResponse, Discount } from '../../types/discount';
 import catalogService from '../../services/catalogService';
 import { posService, tableService } from '../../services';
 import discountService from '../../services/discountService';
+import { NotificationBell } from '../../components/notifications/NotificationBell';
+import { UsageFloatingWidget } from '../../components/stock/UsageFloatingWidget';
+import { useNavigate } from 'react-router-dom';
 import {
     ShoppingCart,
     Plus,
@@ -18,7 +21,8 @@ import {
     CheckCircle,
     Users,
     Tag,
-    X
+    X,
+    ArrowLeft
 } from 'lucide-react';
 
 interface CartItem {
@@ -33,6 +37,7 @@ interface CartItem {
 
 export default function StaffPOS() {
     const { user } = useAuth();
+    const navigate = useNavigate();
     const [products, setProducts] = useState<CatalogProduct[]>([]);
     const [cart, setCart] = useState<CartItem[]>([]);
     const [selectedTable, setSelectedTable] = useState<Table | null>(null);
@@ -304,7 +309,7 @@ export default function StaffPOS() {
     };
 
     const formatCurrency = (amount: number) => {
-        return amount.toLocaleString('vi-VN') + 'đ';
+        return amount.toLocaleString('en-US') + ' ₫';
     };
 
     const handlePrintReceipt = () => {
@@ -324,7 +329,7 @@ export default function StaffPOS() {
             <!DOCTYPE html>
             <html>
             <head>
-                <title>Hóa đơn POS</title>
+                <title>POS Receipt</title>
                 <style>
                     body { 
                         font-family: 'Courier New', monospace; 
@@ -466,14 +471,26 @@ export default function StaffPOS() {
     };
 
     return (
+        <>
         <div className="h-screen bg-gray-50 flex">
             {/* Left Panel - Products */}
             <div className="flex-1 flex flex-col">
                 {/* Header */}
                 <div className="bg-white border-b border-gray-200 p-4">
                     <div className="flex items-center justify-between mb-4">
-                        <h1 className="text-2xl font-bold text-gray-800">POS - In-Store Orders</h1>
                         <div className="flex items-center space-x-4">
+                            <button
+                                onClick={() => navigate('/staff/orders')}
+                                className="flex items-center space-x-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
+                                title="Go back to the orders screen"
+                            >
+                                <ArrowLeft className="h-4 w-4" />
+                                <span className="text-sm font-medium">Back</span>
+                            </button>
+                            <h1 className="text-2xl font-bold text-gray-800">POS - In-Store Orders</h1>
+                        </div>
+                        <div className="flex items-center space-x-4">
+                            <NotificationBell />
                             <div className="text-sm text-gray-600">
                                 Staff: {user?.name || 'Unknown'}
                             </div>
@@ -1411,5 +1428,7 @@ export default function StaffPOS() {
                 </div>
             )}
         </div>
+        <UsageFloatingWidget />
+        </>
     );
 }

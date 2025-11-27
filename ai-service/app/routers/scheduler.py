@@ -93,6 +93,56 @@ async def trigger_daily_reports(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/trigger/daily-metrics")
+async def trigger_daily_metrics(
+    target_date: Optional[date] = Query(None, description="Date to aggregate metrics for"),
+    branch_ids: Optional[List[int]] = Query(None, description="List of branch IDs (default: all)"),
+):
+    """
+    Manually trigger daily metrics aggregation job
+    """
+    try:
+        service = get_scheduler_service()
+        result = await service.run_daily_metrics_job(
+            target_date=target_date,
+            branch_ids=branch_ids
+        )
+        if not result.get("success"):
+            raise HTTPException(status_code=500, detail=result.get("error", "Metrics job failed"))
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error triggering daily metrics job: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/trigger/retrain-models")
+async def trigger_model_retraining(
+    branch_ids: Optional[List[int]] = Query(None, description="Subset of branch IDs; default all"),
+    target_metric: Optional[str] = Query(None, description="Override target metric for forecast training"),
+    algorithm: Optional[str] = Query(None, description="Override forecasting algorithm (default Prophet)")
+):
+    """
+    Manually trigger weekly ML model retraining job
+    """
+    try:
+        service = get_scheduler_service()
+        result = await service.run_model_retraining_job(
+            branch_ids=branch_ids,
+            target_metric=target_metric,
+            algorithm=algorithm
+        )
+        if not result.get("success"):
+            raise HTTPException(status_code=500, detail=result.get("error", "Retraining job failed"))
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error triggering model retraining job: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/trigger/send-unsent")
 async def trigger_send_unsent(
     db: Session = Depends(get_db)

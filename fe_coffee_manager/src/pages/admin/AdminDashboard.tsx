@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   TrendingUp, 
   Store, 
@@ -10,39 +10,177 @@ import {
   Calendar
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
+import { comprehensiveMetricsService, ComprehensiveMetricsResponse } from '../../services/comprehensiveMetricsService';
+import { analyticsService, TopSellingProductsResponse } from '../../services/analyticsService';
+import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 
 export function AdminDashboard() {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [metrics, setMetrics] = useState<ComprehensiveMetricsResponse | null>(null);
+  const [topProducts, setTopProducts] = useState<TopSellingProductsResponse | null>(null);
+
+  useEffect(() => {
+    const loadMetrics = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        // Load comprehensive metrics and top selling products in parallel
+        const [comprehensiveData, topProductsData] = await Promise.all([
+          comprehensiveMetricsService.getComprehensiveMetrics(),
+          analyticsService.getTopSellingProducts(undefined, undefined, undefined, 5, 'quantity')
+        ]);
+        
+        setMetrics(comprehensiveData);
+        setTopProducts(topProductsData);
+      } catch (err: any) {
+        console.error('Error loading metrics:', err);
+        setError(err.message || 'Failed to load metrics');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadMetrics();
+  }, []);
+
+  // Format currency
+  const formatCurrency = (amount: number): string => {
+    if (amount >= 1000000000) {
+      return `${(amount / 1000000000).toFixed(2)}B`;
+    } else if (amount >= 1000000) {
+      return `${(amount / 1000000).toFixed(1)}M`;
+    } else if (amount >= 1000) {
+      return `${(amount / 1000).toFixed(1)}K`;
+    }
+    return amount.toFixed(0);
+  };
+
+  // Format number with commas
+  const formatNumber = (num: number): string => {
+    return num.toLocaleString('vi-VN');
+  };
+
+  // Get month name
+  const getMonthName = (month: number): string => {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return months[month - 1] || '';
+  };
+
+  // Prepare product sales pie chart data from top selling products (useMemo must be before early returns)
+  const productSales = useMemo(() => {
+    if (!topProducts || !topProducts.topProducts || topProducts.topProducts.length === 0) {
+      return [
+        { name: 'No Data', value: 100, color: '#E5E7EB' }
+      ];
+    }
+
+    // Calculate total quantity for percentage calculation
+    const totalQuantity = topProducts.topProducts.reduce(
+      (sum, product) => sum + product.totalQuantitySold,
+      0
+    );
+
+    // Generate colors for products
+    const colors = [
+      '#8B4513', // Brown
+      '#D2691E', // Chocolate
+      '#CD853F', // Peru
+      '#F4A460', // Sandy Brown
+      '#DEB887', // Burlywood
+      '#D2B48C', // Tan
+      '#BC8F8F', // Rosy Brown
+      '#A0522D', // Sienna
+    ];
+
+    // Map top products to chart data with percentages
+    const chartData = topProducts.topProducts.map((product, index) => {
+      const percentage = totalQuantity > 0
+        ? Math.round((product.totalQuantitySold / totalQuantity) * 100)
+        : 0;
+      
+      return {
+        name: product.productName || `Product ${product.productId}`,
+        value: percentage,
+        quantity: product.totalQuantitySold,
+        revenue: product.totalRevenue,
+        color: colors[index % colors.length]
+      };
+    });
+
+    return chartData;
+  }, [topProducts]);
+
+  if (loading) {
+    return (
+      <div className="p-8 flex items-center justify-center min-h-screen">
+        <LoadingSpinner />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-8">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <p className="text-red-800">Error: {error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!metrics) {
+    return null;
+  }
+
+  // Prepare stats cards data
   const stats = [
-    { title: 'Total Revenue', value: '2.5B', change: '+12%', icon: DollarSign, color: 'bg-green-500' },
-    { title: 'Branches', value: '15', change: '+3', icon: Store, color: 'bg-blue-500' },
-    { title: 'Managers', value: '18', change: '+2', icon: Users, color: 'bg-purple-500' },
-    { title: 'Products', value: '45', change: '+5', icon: Coffee, color: 'bg-amber-500' }
+    { 
+      title: 'Daily Revenue', 
+      value: formatCurrency(metrics.daily_revenue.total_revenue), 
+      change: `${metrics.daily_revenue.branch_count} branches`, 
+      icon: DollarSign, 
+      color: 'bg-green-500' 
+    },
+    { 
+      title: 'Total Branches', 
+      value: metrics.branch_count.total_branches.toString(), 
+      change: `${metrics.branch_count.branches_with_data} with data`, 
+      icon: Store, 
+      color: 'bg-blue-500' 
+    },
+    { 
+      title: 'Yearly Revenue', 
+      value: formatCurrency(metrics.yearly_revenue_orders.total_revenue), 
+      change: `${formatNumber(metrics.yearly_revenue_orders.total_orders)} orders`, 
+      icon: TrendingUp, 
+      color: 'bg-purple-500' 
+    },
+    { 
+      title: 'Yearly Orders', 
+      value: formatNumber(metrics.yearly_revenue_orders.total_orders), 
+      change: `Avg: ${formatNumber(Math.round(metrics.yearly_revenue_orders.total_orders / 12))}/month`, 
+      icon: ShoppingBag, 
+      color: 'bg-amber-500' 
+    }
   ];
 
-  const branchRevenue = [
-    { name: 'District 1', revenue: 450 },
-    { name: 'District 3', revenue: 380 },
-    { name: 'District 7', revenue: 290 },
-    { name: 'Thu Duc', revenue: 420 },
-    { name: 'Binh Thanh', revenue: 350 }
-  ];
+  // Prepare branch revenue chart data (top branches)
+  const branchRevenue = metrics.monthly_top_branches.top_branches
+    .filter(b => b.total_revenue > 0)
+    .slice(0, 5)
+    .map(branch => ({
+      name: `Branch ${branch.branch_id}`,
+      revenue: Math.round(branch.total_revenue / 1000000) // Convert to millions
+    }));
 
-  const monthlyTrend = [
-    { month: 'Jan', revenue: 2100, orders: 1200 },
-    { month: 'Feb', revenue: 2300, orders: 1350 },
-    { month: 'Mar', revenue: 2500, orders: 1480 },
-    { month: 'Apr', revenue: 2200, orders: 1290 },
-    { month: 'May', revenue: 2800, orders: 1650 },
-    { month: 'Jun', revenue: 3200, orders: 1890 }
-  ];
-
-  const productSales = [
-    { name: 'Iced Coffee', value: 35, color: '#8B4513' },
-    { name: 'Coffee with Milk', value: 25, color: '#D2691E' },
-    { name: 'Cappuccino', value: 20, color: '#CD853F' },
-    { name: 'Latte', value: 15, color: '#F4A460' },
-    { name: 'Others', value: 5, color: '#DEB887' }
-  ];
+  // Prepare monthly trend chart data
+  const monthlyTrend = metrics.yearly_revenue_orders.monthly_data.map(month => ({
+    month: getMonthName(month.month),
+    revenue: Math.round(month.total_revenue / 1000000), // Convert to millions
+    orders: month.total_orders
+  }));
 
   return (
     <div className="p-8">
@@ -72,52 +210,75 @@ export function AdminDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         {/* Branch Revenue Chart */}
         <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">Revenue by Branch</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={branchRevenue}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="name" stroke="#666" />
-              <YAxis stroke="#666" />
-              <Tooltip 
-                contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px' }}
-                labelStyle={{ color: '#374151' }}
-              />
-              <Bar dataKey="revenue" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">
+            Top Branches Revenue (Month {metrics.monthly_top_branches.month}/{metrics.monthly_top_branches.year})
+          </h3>
+          {branchRevenue.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={branchRevenue}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="name" stroke="#666" />
+                <YAxis stroke="#666" />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px' }}
+                  labelStyle={{ color: '#374151' }}
+                  formatter={(value: number) => `${value}M VND`}
+                />
+                <Bar dataKey="revenue" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex items-center justify-center h-[300px] text-gray-500">
+              No revenue data available
+            </div>
+          )}
         </div>
 
         {/* Product Sales Pie Chart */}
         <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
           <h3 className="text-lg font-semibold text-gray-800 mb-4">Top Selling Products</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={productSales}
-                cx="50%"
-                cy="50%"
-                innerRadius={60}
-                outerRadius={100}
-                paddingAngle={5}
-                dataKey="value"
-              >
-                {productSales.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
+          {productSales.length > 0 && productSales[0].name !== 'No Data' ? (
+            <>
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie
+                    data={productSales}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={100}
+                    paddingAngle={5}
+                    dataKey="value"
+                  >
+                    {productSales.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px' }}
+                    formatter={(value: number, name: string, props: any) => [
+                      `${value}% (${props.payload.quantity.toFixed(0)} units)`,
+                      props.payload.name
+                    ]}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="flex flex-wrap justify-center gap-4 mt-4">
+                {productSales.map((item, index) => (
+                  <div key={index} className="flex items-center">
+                    <div className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: item.color }}></div>
+                    <span className="text-sm text-gray-600">
+                      {item.name} ({item.value}%)
+                    </span>
+                  </div>
                 ))}
-              </Pie>
-              <Tooltip 
-                contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px' }}
-              />
-            </PieChart>
-          </ResponsiveContainer>
-          <div className="flex flex-wrap justify-center gap-4 mt-4">
-            {productSales.map((item, index) => (
-              <div key={index} className="flex items-center">
-                <div className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: item.color }}></div>
-                <span className="text-sm text-gray-600">{item.name} ({item.value}%)</span>
               </div>
-            ))}
-          </div>
+            </>
+          ) : (
+            <div className="flex items-center justify-center h-[300px] text-gray-500">
+              No product sales data available
+            </div>
+          )}
         </div>
       </div>
 
@@ -141,7 +302,7 @@ export function AdminDashboard() {
               stroke="#f59e0b" 
               strokeWidth={3} 
               dot={{ fill: '#f59e0b', strokeWidth: 2, r: 6 }}
-              name="Doanh thu (triệu)"
+              name="Doanh thu (triệu VND)"
             />
             <Line 
               yAxisId="right" 
@@ -181,31 +342,42 @@ export function AdminDashboard() {
         </div>
 
         <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">Top chi nhánh hiệu suất</h3>
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">
+            Top chi nhánh hiệu suất (Tháng {metrics.monthly_top_branches.month}/{metrics.monthly_top_branches.year})
+          </h3>
           <div className="space-y-4">
-            {[
-              { name: 'Chi nhánh Quận 1', revenue: '450 triệu', growth: '+15%', rank: 1 },
-              { name: 'Chi nhánh Thủ Đức', revenue: '420 triệu', growth: '+12%', rank: 2 },
-              { name: 'Chi nhánh Quận 3', revenue: '380 triệu', growth: '+8%', rank: 3 },
-              { name: 'Chi nhánh Bình Thạnh', revenue: '350 triệu', growth: '+5%', rank: 4 }
-            ].map((branch) => (
-              <div key={branch.rank} className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg transition-colors duration-200">
-                <div className="flex items-center space-x-3">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white ${
-                    branch.rank === 1 ? 'bg-yellow-500' : 
-                    branch.rank === 2 ? 'bg-gray-400' : 
-                    branch.rank === 3 ? 'bg-amber-600' : 'bg-gray-300'
-                  }`}>
-                    {branch.rank}
+            {metrics.monthly_top_branches.top_branches
+              .filter(branch => branch.total_revenue > 0)
+              .slice(0, 10)
+              .map((branch) => (
+                <div key={branch.branch_id} className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg transition-colors duration-200">
+                  <div className="flex items-center space-x-3">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white ${
+                      branch.rank === 1 ? 'bg-yellow-500' : 
+                      branch.rank === 2 ? 'bg-gray-400' : 
+                      branch.rank === 3 ? 'bg-amber-600' : 'bg-gray-300'
+                    }`}>
+                      {branch.rank}
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900">Chi nhánh {branch.branch_id}</p>
+                      <p className="text-sm text-gray-500">
+                        {formatCurrency(branch.total_revenue)} • {formatNumber(branch.order_count)} đơn hàng
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-medium text-gray-900">{branch.name}</p>
-                    <p className="text-sm text-gray-500">{branch.revenue}</p>
+                  <div className="text-right">
+                    <span className="text-sm font-medium text-green-600">
+                      {formatCurrency(branch.avg_order_value)}/đơn
+                    </span>
                   </div>
                 </div>
-                <span className="text-sm font-medium text-green-600">{branch.growth}</span>
+              ))}
+            {metrics.monthly_top_branches.top_branches.filter(b => b.total_revenue > 0).length === 0 && (
+              <div className="text-center text-gray-500 py-8">
+                No branch performance data available
               </div>
-            ))}
+            )}
           </div>
         </div>
       </div>

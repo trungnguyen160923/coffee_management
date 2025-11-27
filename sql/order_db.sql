@@ -79,6 +79,7 @@ CREATE TABLE orders (
   customer_id INT DEFAULT NULL, -- loose reference to customer_profiles/user_id
   customer_name VARCHAR(50) DEFAULT NULL,
   phone VARCHAR(20) DEFAULT NULL,
+  email VARCHAR(100) DEFAULT NULL,
   branch_id INT NOT NULL,
   table_id INT DEFAULT NULL,
   reservation_id INT DEFAULT NULL,

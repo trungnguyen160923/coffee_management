@@ -55,6 +55,7 @@ public enum ErrorCode {
     ORDER_NOT_FOUND(1040, "Order not found", HttpStatus.NOT_FOUND),
     ORDER_CREATION_FAILED(1041, "Order creation failed", HttpStatus.INTERNAL_SERVER_ERROR),
     CART_ITEM_NOT_FOUND(1042, "Cart item not found", HttpStatus.NOT_FOUND),
+    ORDER_CANNOT_BE_CANCELLED(1044, "Order cannot be cancelled in the current status", HttpStatus.BAD_REQUEST),
     VALIDATION_FAILED(4000, "Validation failed", HttpStatus.BAD_REQUEST),
     BRANCH_IN_USE(1040, "Branch is in use", HttpStatus.BAD_REQUEST),
     GEOCODING_FAILED(1043, "Geocoding failed", HttpStatus.BAD_REQUEST),

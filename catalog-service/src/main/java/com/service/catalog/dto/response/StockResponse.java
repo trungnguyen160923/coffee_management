@@ -23,7 +23,10 @@ public class StockResponse {
     private String unitCode;
     private String unitName;
     private BigDecimal threshold;
+    private BigDecimal reservedQuantity;
+    private BigDecimal availableQuantity;
     private LocalDateTime lastUpdated;
     private Boolean isLowStock;
+    private Boolean isOutOfStock;
     private BigDecimal avgCost;
 }

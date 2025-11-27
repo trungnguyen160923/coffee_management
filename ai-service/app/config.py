@@ -25,7 +25,7 @@ class Settings:
     ORDER_SERVICE_URL: str = os.getenv("ORDER_SERVICE_URL", "http://localhost:8002")
     CATALOG_SERVICE_URL: str = os.getenv("CATALOG_SERVICE_URL", "http://localhost:8004")
     
-    # Database
+    # Database (Analytics DB)
     DATABASE_URL: Optional[str] = os.getenv("DATABASE_URL")
     DB_HOST: str = os.getenv("DB_HOST", "localhost")
     DB_PORT: int = int(os.getenv("DB_PORT", "3306"))
@@ -33,10 +33,28 @@ class Settings:
     DB_PASSWORD: str = os.getenv("DB_PASSWORD", "12345678")
     DB_NAME: str = os.getenv("DB_NAME", "analytics_db")
     
+    # Source databases for raw metrics
+    ORDER_DB_URL: Optional[str] = os.getenv("ORDER_DB_URL")
+    ORDER_DB_NAME: str = os.getenv("ORDER_DB_NAME", "order_db")
+    CATALOG_DB_URL: Optional[str] = os.getenv("CATALOG_DB_URL")
+    CATALOG_DB_NAME: str = os.getenv("CATALOG_DB_NAME", "catalog_db")
+    
     # ML Model Settings
     MODEL_RETRAIN_FREQUENCY_DAYS: int = 7
     ANOMALY_THRESHOLD: float = 0.1
     MIN_TRAINING_SAMPLES: int = 30
+    IFOREST_TRAINING_DAYS: int = int(os.getenv("IFOREST_TRAINING_DAYS", "180"))
+    IFOREST_N_ESTIMATORS: int = int(os.getenv("IFOREST_N_ESTIMATORS", "200"))
+    IFOREST_CONTAMINATION: float = float(os.getenv("IFOREST_CONTAMINATION", "0.1"))
+    FORECAST_TRAINING_DAYS: int = int(os.getenv("FORECAST_TRAINING_DAYS", "120"))
+    FORECAST_TARGET_METRIC: str = os.getenv("FORECAST_TARGET_METRIC", "order_count")
+    FORECAST_ALGORITHM: str = os.getenv("FORECAST_ALGORITHM", "PROPHET")
+    FORECAST_MODEL_VERSION: str = os.getenv("FORECAST_MODEL_VERSION", "v1.0")
+    FORECAST_CREATED_BY: str = os.getenv("FORECAST_CREATED_BY", "scheduler")
+    FORECAST_YEARLY_SEASONALITY: bool = os.getenv("FORECAST_YEARLY_SEASONALITY", "true").lower() == "true"
+    FORECAST_WEEKLY_SEASONALITY: bool = os.getenv("FORECAST_WEEKLY_SEASONALITY", "true").lower() == "true"
+    FORECAST_USE_REGRESSORS: bool = os.getenv("FORECAST_USE_REGRESSORS", "true").lower() == "true"
+    FORECAST_SEASONALITY_MODE: str = os.getenv("FORECAST_SEASONALITY_MODE", "multiplicative")
     
     # AI Provider Settings (OpenAI or Gemini)
     AI_PROVIDER: str = os.getenv("AI_PROVIDER", "openai")

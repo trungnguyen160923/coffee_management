@@ -224,7 +224,7 @@ const OrdersPage = () => {
     const handleCancelOrder = async (orderId) => {
         if (window.confirm('Are you sure you want to cancel this order?')) {
             try {
-                await orderService.cancelOrder(orderId);
+                await orderService.cancelOrderPublic(orderId);
                 alert('Order cancelled successfully!');
                 // Refresh the orders list
                 fetchOrders();

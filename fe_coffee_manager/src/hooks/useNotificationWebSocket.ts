@@ -16,7 +16,10 @@ export interface NotificationPayload {
 
 interface UseNotificationWebSocketOptions {
   branchId?: number | null;
+  userId?: number | null;
   enabled?: boolean;
+  subscribeBranch?: boolean;
+  subscribeUserQueue?: boolean;
   onMessage?: (message: NotificationPayload) => void;
 }
 
@@ -40,17 +43,25 @@ const buildSockJsUrl = (baseUrl: string): string => {
 
 export function useNotificationWebSocket({
   branchId,
+  userId,
   enabled = true,
+  subscribeBranch,
+  subscribeUserQueue,
   onMessage,
 }: UseNotificationWebSocketOptions) {
   const clientRef = useRef<Client | null>(null);
-  const subscriptionRef = useRef<StompSubscription | null>(null);
+  const subscriptionRef = useRef<StompSubscription[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const [lastMessage, setLastMessage] = useState<NotificationPayload | null>(null);
 
+  const shouldSubscribeBranch = Boolean(subscribeBranch ?? branchId);
+  const shouldSubscribeUserQueue = Boolean(subscribeUserQueue ?? userId);
+
   const disconnect = useCallback(() => {
-    subscriptionRef.current?.unsubscribe();
-    subscriptionRef.current = null;
+    if (subscriptionRef.current.length) {
+      subscriptionRef.current.forEach((sub) => sub?.unsubscribe());
+    }
+    subscriptionRef.current = [];
     clientRef.current?.deactivate();
     clientRef.current = null;
     setIsConnected(false);
@@ -70,12 +81,15 @@ export function useNotificationWebSocket({
   );
 
   useEffect(() => {
-    if (!enabled || !branchId) {
+    if (
+      !enabled ||
+      (!shouldSubscribeBranch && !shouldSubscribeUserQueue) ||
+      (!branchId && !userId)
+    ) {
       disconnect();
       return;
     }
 
-    const token = localStorage.getItem('coffee-token');
     const sockJsUrl = buildSockJsUrl(API_BASE_URL);
 
     const client = new Client({
@@ -88,7 +102,14 @@ export function useNotificationWebSocket({
 
     client.onConnect = () => {
       setIsConnected(true);
-      subscriptionRef.current = client.subscribe(`/topic/staff.${branchId}`, handleMessage);
+      const subs: StompSubscription[] = [];
+      if (shouldSubscribeBranch && branchId) {
+        subs.push(client.subscribe(`/topic/staff.${branchId}`, handleMessage));
+      }
+      if (shouldSubscribeUserQueue && userId) {
+        subs.push(client.subscribe(`/queue/user.${userId}`, handleMessage));
+      }
+      subscriptionRef.current = subs;
     };
 
     client.onStompError = (frame) => {
@@ -110,7 +131,15 @@ export function useNotificationWebSocket({
     return () => {
       disconnect();
     };
-  }, [branchId, enabled, handleMessage, disconnect]);
+  }, [
+    branchId,
+    userId,
+    enabled,
+    shouldSubscribeBranch,
+    shouldSubscribeUserQueue,
+    handleMessage,
+    disconnect,
+  ]);
 
   return {
     isConnected,

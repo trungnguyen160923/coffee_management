@@ -20,6 +20,7 @@ public class CreateOrderRequest {
 
     String customerName;
     String phone;
+    String email;
     String deliveryAddress;
 
     // Địa chỉ để tìm chi nhánh (chỉ district + province)

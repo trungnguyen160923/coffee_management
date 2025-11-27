@@ -38,16 +38,7 @@ export const orderService = {
     },
 
     cancelOrderPublic: async (orderId) => {
-        // Create a separate axios instance for public endpoints without authentication
-        const publicClient = axios.create({
-            baseURL: CONFIG.API_GATEWAY,
-            timeout: 30000,
-            headers: {
-                "Content-Type": "application/json",
-            },
-        });
-
-        const response = await publicClient.put(`${API.CANCEL_ORDER_PUBLIC}/${orderId}/cancel`);
+        const response = await httpClient.put(`${API.CANCEL_ORDER_PUBLIC}/${orderId}/cancel`);
         return response.data;
     }
 };

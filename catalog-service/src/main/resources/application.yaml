@@ -1,70 +1,80 @@
 server:
-  port: 8004
+  port: ${SERVER_PORT:8004}
   servlet:
-    context-path: /catalogs
+    context-path: ${SERVER_CONTEXT_PATH:/catalogs}
+
 spring:
+  config:
+    import: optional:file:.env[.properties]
   application:
     name: catalog-service
   datasource:
-    url: "jdbc:mysql://localhost:3306/catalog_db"
+    url: ${DB_URL:jdbc:mysql://localhost:3306/catalog_db}
     driver-class-name: com.mysql.cj.jdbc.Driver
-    username: root
-    password: 12345678
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:12345678}
   jpa:
     hibernate:
-      ddl-auto: update
-    show-sql: true
+      ddl-auto: ${JPA_DDL_AUTO:update}
+    show-sql: ${JPA_SHOW_SQL:true}
   servlet:
     multipart:
-      max-file-size: 10MB
-      max-request-size: 10MB
-      enabled: true
+      max-file-size: ${MULTIPART_MAX_FILE_SIZE:10MB}
+      max-request-size: ${MULTIPART_MAX_REQUEST_SIZE:10MB}
+      enabled: ${MULTIPART_ENABLED:true}
   task:
     scheduling:
-      enabled: true
+      enabled: ${TASK_SCHEDULING_ENABLED:true}
       pool:
-        size: 2
-      thread-name-prefix: "scheduled-"
+        size: ${TASK_POOL_SIZE:2}
+      thread-name-prefix: "${TASK_THREAD_PREFIX:scheduled-}"
   mail:
-    host: smtp.gmail.com
-    port: 587
-    username: nguyenthanht632@gmail.com
-    password: xxhh uiyr wzxg txbq
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:example@example.com}
+    password: ${MAIL_PASSWORD:change-me}
     properties:
       mail:
         smtp:
-          auth: true
+          auth: ${MAIL_SMTP_AUTH:true}
           starttls:
-            enable: true
+            enable: ${MAIL_SMTP_STARTTLS:true}
           ssl:
-            trust: smtp.gmail.com
+            trust: ${MAIL_SMTP_SSL_TRUST:smtp.gmail.com}
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9094}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        spring.json.add.type.headers: false
+    properties:
+      spring.json.trusted.packages: "${KAFKA_JSON_TRUSTED_PACKAGES:*}"
 
 # File upload configuration
 app:
   upload:
-    dir: ./uploads
+    dir: ${UPLOAD_DIR:./uploads}
   services:
-    order: http://localhost:8002
-    auth: http://localhost:8001
-  
-  # kafka:
-  #   bootstrap-servers: localhost:9094
-  #   consumer:
-  #     group-id: profile-service-group
-  #     auto-offset-reset: earliest
-  #     key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-  #     value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
-  #     properties:
-  #       spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
-  #       spring.json.trusted.packages: "com.service.profile.events,com.service.auth.events"
-  #   producer:
-  #     key-serializer: org.apache.kafka.common.serialization.StringSerializer
-  #     value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    order: ${ORDER_SERVICE_URL:http://localhost:8002}
+    auth: ${AUTH_SERVICE_URL:http://localhost:8001}
+  kafka:
+    topics:
+      inventory-low-stock: ${TOPIC_INVENTORY_LOW_STOCK:inventory.low.stock}
+      inventory-out-of-stock: ${TOPIC_INVENTORY_OUT_OF_STOCK:inventory.out.of.stock}
+  inventory-alert:
+    scheduler:
+      enabled: ${INVENTORY_ALERT_SCHEDULER_ENABLED:true}
+      cron: "${INVENTORY_ALERT_CRON:0 */10 * * * ?}"
+  stock-adjustment:
+    scheduler:
+      cron: "${STOCK_ADJUSTMENT_CRON:0 */5 * * * ?}"
 
 jwt:
-  signerKey: "1TjXchw5FloESb63Kc+DFhTARvpWL4jUGCwfGWxuG5SIf/1y/LgJxHnMqaF6A/ij"
+  signerKey: "${JWT_SIGNER_KEY:1TjXchw5FloESb63Kc+DFhTARvpWL4jUGCwfGWxuG5SIf/1y/LgJxHnMqaF6A/ij}"
 
 # Logging configuration
 logging:
   level:
-    com.service.catalog: INFO
+    com.service.catalog: ${CATALOG_LOG_LEVEL:INFO}

@@ -15,6 +15,7 @@ import IngredientManagement from './pages/admin/IngredientManagement';
 import RecipeManagement from './pages/admin/RecipeManagement';
 import AdminDiscountManagementPage from './pages/admin/DiscountManagement';
 import AIStatistics from './pages/admin/AIStatistics';
+import { AdminBranchActivities } from './pages/admin/AdminBranchActivities';
 import { ManagerDashboard } from './pages/manager/ManagerDashboard';
 import StaffManagement from './pages/manager/StaffManagement';
 import ManagerSupplierManagement from './pages/manager/SupplierManagement';
@@ -36,6 +37,7 @@ import StaffReservations from './pages/staff/StaffReservations';
 import StaffRecipes from './pages/staff/StaffRecipes';
 import StaffPOS from './pages/staff/StaffPOS';
 import StaffTables from './pages/staff/StaffTables';
+import StaffStockUsage from './pages/staff/StaffStockUsage';
 
 function AppRoutes() {
   const { user, loading } = useAuth();
@@ -96,6 +98,7 @@ function AppRoutes() {
             <Route path="ingredients" element={<Layout><IngredientManagement /></Layout>} />
             <Route path="recipes" element={<Layout><RecipeManagement /></Layout>} />
             <Route path="branches" element={<Layout><BranchManagement /></Layout>} />
+            <Route path="branch-activities" element={<Layout><AdminBranchActivities /></Layout>} />
             <Route path="managers" element={<Layout><ManagerManagement /></Layout>} />
             <Route path="discounts" element={<Layout><AdminDiscountManagementPage /></Layout>} />
             <Route path="statistics" element={<Layout><AIStatistics /></Layout>} />
@@ -149,6 +152,7 @@ function AppRoutes() {
             <Route path="tables" element={<Layout><StaffTables /></Layout>} />
             <Route path="recipes" element={<Layout><StaffRecipes /></Layout>} />
             <Route path="pos" element={<StaffPOS />} />
+            <Route path="stock-usage" element={<Layout><StaffStockUsage /></Layout>} />
             <Route path="*" element={<NotFoundPage showLoginButton={false} />} />
           </Routes>
         </ProtectedRoute>

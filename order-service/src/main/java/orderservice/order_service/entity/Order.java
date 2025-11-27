@@ -30,6 +30,9 @@ public class Order {
     @Column(name = "phone", length = 20)
     String phone;
 
+    @Column(name = "email", length = 100)
+    String email;
+
     @Column(name = "delivery_address", length = 255)
     String deliveryAddress;
 

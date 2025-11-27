@@ -10,12 +10,38 @@ const httpClient = axios.create({
   },
 });
 
-// Request interceptor để thêm token vào header
+// Request interceptor để thêm token, user_id và guestId vào header
 httpClient.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
   if (token && !isTokenExpired(token)) {
     config.headers.Authorization = `Bearer ${token}`;
+    
+    // Nếu đã đăng nhập, thêm X-User-Id vào header
+    const user = localStorage.getItem('user');
+    if (user) {
+      try {
+        const userData = JSON.parse(user);
+        if (userData.userId) {
+          config.headers['X-User-Id'] = userData.userId.toString();
+        }
+      } catch (e) {
+        console.warn('Failed to parse user data for X-User-Id header', e);
+      }
+    }
   }
+  
+  // Tự động thêm X-Guest-Id nếu chưa có trong header
+  // Luôn thêm guestId để đảm bảo nhất quán, kể cả khi đã đăng nhập
+  if (!config.headers['X-Guest-Id']) {
+    let guestId = localStorage.getItem('guestId');
+    if (!guestId) {
+      // Tạo guestId mới nếu chưa có
+      guestId = `GUEST_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      localStorage.setItem('guestId', guestId);
+    }
+    config.headers['X-Guest-Id'] = guestId;
+  }
+  
   return config;
 });
 

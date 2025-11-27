@@ -12,9 +12,6 @@ import orderservice.order_service.exception.AppException;
 import orderservice.order_service.service.CartService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -30,11 +27,12 @@ public class CartController {
 
     @PostMapping
     public ResponseEntity<ApiResponse<CartItemResponse>> addToCart(
+            @RequestHeader(value = "X-User-Id", required = false) String userIdHeader,
             @RequestHeader(value = "X-Guest-Id", required = false) String guestHeader,
             @RequestParam(value = "guestId", required = false) String guestParam,
             @Valid @RequestBody AddToCartRequest request) {
         try {
-            Integer userId = requireUserId(guestHeader, guestParam);
+            Integer userId = requireUserId(userIdHeader, guestHeader, guestParam);
             CartItemResponse result = cartService.addToCart(userId, request);
             ApiResponse<CartItemResponse> response = ApiResponse.<CartItemResponse>builder()
                     .code(200)
@@ -62,10 +60,11 @@ public class CartController {
 
     @GetMapping
     public ResponseEntity<ApiResponse<CartResponse>> getCart(
+            @RequestHeader(value = "X-User-Id", required = false) String userIdHeader,
             @RequestHeader(value = "X-Guest-Id", required = false) String guestHeader,
             @RequestParam(value = "guestId", required = false) String guestParam) {
         try {
-            Integer userId = requireUserId(guestHeader, guestParam);
+            Integer userId = requireUserId(userIdHeader, guestHeader, guestParam);
             CartResponse cart = cartService.getCart(userId);
             ApiResponse<CartResponse> response = ApiResponse.<CartResponse>builder()
                     .code(200)
@@ -86,11 +85,12 @@ public class CartController {
 
     @PutMapping("/{productId}")
     public ResponseEntity<ApiResponse<CartItemResponse>> updateCartItem(@PathVariable Integer productId,
+            @RequestHeader(value = "X-User-Id", required = false) String userIdHeader,
             @RequestHeader(value = "X-Guest-Id", required = false) String guestHeader,
             @RequestParam(value = "guestId", required = false) String guestParam,
             @Valid @RequestBody UpdateCartItemRequest request) {
         try {
-            Integer userId = requireUserId(guestHeader, guestParam);
+            Integer userId = requireUserId(userIdHeader, guestHeader, guestParam);
             CartItemResponse result = cartService.updateCartItem(userId, productId, request);
             ApiResponse<CartItemResponse> response = ApiResponse.<CartItemResponse>builder()
                     .code(200)
@@ -111,10 +111,11 @@ public class CartController {
 
     @DeleteMapping("/{productId}")
     public ResponseEntity<ApiResponse<Void>> removeFromCart(@PathVariable Integer productId,
+            @RequestHeader(value = "X-User-Id", required = false) String userIdHeader,
             @RequestHeader(value = "X-Guest-Id", required = false) String guestHeader,
             @RequestParam(value = "guestId", required = false) String guestParam) {
         try {
-            Integer userId = requireUserId(guestHeader, guestParam);
+            Integer userId = requireUserId(userIdHeader, guestHeader, guestParam);
             cartService.removeFromCart(userId, productId);
             ApiResponse<Void> response = ApiResponse.<Void>builder()
                     .code(200)
@@ -135,10 +136,11 @@ public class CartController {
 
     @DeleteMapping
     public ResponseEntity<ApiResponse<Void>> clearCart(
+            @RequestHeader(value = "X-User-Id", required = false) String userIdHeader,
             @RequestHeader(value = "X-Guest-Id", required = false) String guestHeader,
             @RequestParam(value = "guestId", required = false) String guestParam) {
         try {
-            Integer userId = requireUserId(guestHeader, guestParam);
+            Integer userId = requireUserId(userIdHeader, guestHeader, guestParam);
             cartService.clearCart(userId);
             ApiResponse<Void> response = ApiResponse.<Void>builder()
                     .code(200)
@@ -159,10 +161,11 @@ public class CartController {
 
     @GetMapping("/total")
     public ResponseEntity<ApiResponse<CartTotalResponse>> getCartTotal(
+            @RequestHeader(value = "X-User-Id", required = false) String userIdHeader,
             @RequestHeader(value = "X-Guest-Id", required = false) String guestHeader,
             @RequestParam(value = "guestId", required = false) String guestParam) {
         try {
-            Integer userId = requireUserId(guestHeader, guestParam);
+            Integer userId = requireUserId(userIdHeader, guestHeader, guestParam);
             CartTotalResponse total = cartService.getCartTotal(userId);
             ApiResponse<CartTotalResponse> response = ApiResponse.<CartTotalResponse>builder()
                     .code(200)
@@ -181,34 +184,16 @@ public class CartController {
         }
     }
 
-    private Integer requireUserId(String guestHeader, String guestParam) {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        // 1) If authenticated, get user_id from JWT/credentials
-        if (authentication != null) {
+    private Integer requireUserId(String userIdHeader, String guestHeader, String guestParam) {
+        // 1) Ưu tiên: Kiểm tra X-User-Id header trước (nếu có thì đã đăng nhập)
+        if (userIdHeader != null && !userIdHeader.isBlank()) {
             try {
-                if (authentication.getPrincipal() instanceof Jwt jwt) {
-                    Object claim = jwt.getClaim("user_id");
-                    if (claim instanceof Integer i)
-                        return i;
-                    if (claim instanceof Long l)
-                        return l.intValue();
-                    if (claim instanceof String s)
-                        return Integer.parseInt(s);
+                int userId = Integer.parseInt(userIdHeader.trim());
+                if (userId > 0) {
+                    return userId;
                 }
-
-                Object credentials = authentication.getCredentials();
-                if (credentials instanceof String token && !token.isBlank()) {
-                    com.nimbusds.jwt.SignedJWT signedJWT = com.nimbusds.jwt.SignedJWT.parse(token);
-                    Object claim = signedJWT.getJWTClaimsSet().getClaim("user_id");
-                    if (claim instanceof Integer i)
-                        return i;
-                    if (claim instanceof Long l)
-                        return l.intValue();
-                    if (claim instanceof String s)
-                        return Integer.parseInt(s);
-                }
-            } catch (Exception ex) {
-                log.warn("Auth present but user_id not found, will try guest id");
+            } catch (NumberFormatException e) {
+                log.warn("Invalid X-User-Id header value: {}, will try guest id", userIdHeader);
             }
         }
 
@@ -224,14 +209,16 @@ public class CartController {
                 }
             } catch (NumberFormatException ignored) {
                 // Nếu không parse được thành số, sử dụng hash của chuỗi
-                // Sử dụng hash code trực tiếp, không dùng Math.abs() để tránh inconsistency
+                // Normalize hashCode() thành số dương để đảm bảo nhất quán
                 int hash = raw.hashCode();
-                return hash;
+                int normalizedHash = hash == Integer.MIN_VALUE ? Integer.MAX_VALUE : Math.abs(hash);
+                return normalizedHash;
             }
         }
 
-        // 3) As a last resort, generate a guest id based on session-less timestamp hash
-        // Nhưng chỉ tạo mới nếu thực sự cần thiết
+        // 3) As a last resort, nếu không có guestId thì log warning và tạo số mới
+        // Trường hợp này không nên xảy ra nếu frontend hoạt động đúng
+        log.warn("No user_id or guestId provided, generating temporary guest id");
         int generated = Math.abs((int) (System.currentTimeMillis() % Integer.MAX_VALUE));
         return generated;
     }

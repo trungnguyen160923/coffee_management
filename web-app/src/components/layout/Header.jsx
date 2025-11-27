@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { authService } from '../../services/authService';
 import { cartService } from '../../services/cartService';
+import { NotificationBell } from '../notifications/NotificationBell';
 
 const Header = () => {
     const { isAuthenticated, user, logout } = useAuth();
@@ -133,6 +134,13 @@ const Header = () => {
                                 )}
                             </Link>
                         </li>
+
+                        {/* Notification bell - only show when authenticated */}
+                        {isAuthenticated && (
+                            <li className="nav-item">
+                                <NotificationBell />
+                            </li>
+                        )}
 
                         {isAuthenticated ? (
                             <li className="nav-item dropdown">

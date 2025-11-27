@@ -17,6 +17,7 @@ public class OrderResponse {
     Integer customerId;
     String customerName;
     String phone;
+    String email;
     String deliveryAddress;
     Integer branchId;
     Integer tableId;

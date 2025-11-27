@@ -20,5 +20,7 @@ public class NotificationResponse {
     NotificationStatus status;
     boolean read;
     LocalDateTime createdAt;
+    String metadata; // JSON string containing orderId, reservationId, etc.
+    String targetRole; // "STAFF", "MANAGER", or null for all roles
 }
 

@@ -37,6 +37,7 @@ public class POSService {
     CafeTableRepository cafeTableRepository;
     CatalogServiceClient catalogServiceClient;
     DiscountService discountService;
+    OrderEventProducer orderEventProducer;
 
     @Transactional
     public POSOrderResponse createPOSOrder(CreatePOSOrderRequest request) {
@@ -107,6 +108,7 @@ public class POSService {
                     .customerId(request.getCustomerId())
                     .customerName(request.getCustomerName())
                     .phone(request.getPhone())
+                    .email(request.getEmail())
                     .deliveryAddress("") // POS orders don't need delivery address
                     .branchId(request.getBranchId())
                     .tableId(request.getTableIds().get(0)) // Use first table as primary
@@ -177,6 +179,15 @@ public class POSService {
                             e.getMessage());
                     throw e;
                 }
+            }
+
+            // Publish order created event to Kafka for staff notification
+            try {
+                publishOrderCreatedEvent(order);
+                log.info("[POSService] ✅ Successfully triggered event publishing for POS orderId: {}", order.getOrderId());
+            } catch (Exception e) {
+                log.error("[POSService] ❌ Failed to publish order created event for POS orderId: {}", order.getOrderId(), e);
+                // Don't fail order creation if event publishing fails
             }
 
             return convertToPOSOrderResponse(order);
@@ -305,6 +316,7 @@ public class POSService {
                 .customerId(order.getCustomerId())
                 .customerName(order.getCustomerName())
                 .phone(order.getPhone())
+                .email(order.getEmail())
                 .tableIds(tableIds)
                 .status(order.getStatus())
                 .paymentMethod(order.getPaymentMethod())
@@ -352,6 +364,30 @@ public class POSService {
                     .totalPrice(orderItem.getTotalPrice())
                     .notes(orderItem.getNotes())
                     .build();
+        }
+    }
+
+    private void publishOrderCreatedEvent(Order order) {
+        try {
+            log.info("[POSService] Building OrderCreatedEvent for POS orderId: {}", order.getOrderId());
+            orderservice.order_service.events.OrderCreatedEvent event = orderservice.order_service.events.OrderCreatedEvent.builder()
+                    .orderId(order.getOrderId())
+                    .branchId(order.getBranchId())
+                    .customerId(order.getCustomerId())
+                    .customerName(order.getCustomerName())
+                    .customerEmail(order.getEmail())
+                    .phone(order.getPhone())
+                    .totalAmount(order.getTotalAmount())
+                    .paymentMethod(order.getPaymentMethod())
+                    .createdAt(java.time.Instant.now())
+                    .items(null) // Items not needed for notification
+                    .build();
+            log.info("[POSService] Event built successfully, calling OrderEventProducer...");
+            orderEventProducer.publishOrderCreated(event);
+            log.info("[POSService] ✅ Event publishing completed for POS orderId: {}", order.getOrderId());
+        } catch (Exception e) {
+            log.error("[POSService] ❌ Error creating order created event for POS orderId: {}", order.getOrderId(), e);
+            throw e;
         }
     }
 }

@@ -2,6 +2,11 @@ import { apiClient } from '../config/api';
 
 const baseUrl = '/api/catalogs';
 
+interface ApiResponse<T> {
+  code: number;
+  message?: string;
+  result: T;
+}
 
 export interface StockSearchParams {
   search?: string;
@@ -23,11 +28,14 @@ export interface StockResponse {
   branchId: number;
   branchName?: string;
   quantity: number;
+  reservedQuantity?: number;
+  availableQuantity?: number;
   unitCode: string;
   unitName: string;
   threshold: number;
   lastUpdated: string;
   isLowStock: boolean;
+  isOutOfStock?: boolean;
   avgCost: number;
 }
 
@@ -60,6 +68,120 @@ export interface StockPageResponse {
   };
 }
 
+export type StockAdjustmentStatus = 'PENDING' | 'COMMITTED' | 'CANCELLED' | 'AUTO_COMMITTED';
+
+export interface StockAdjustment {
+  adjustmentId: number;
+  branchId: number;
+  ingredientId: number;
+  ingredientName?: string;
+  adjustmentType: 'ADJUST_IN' | 'ADJUST_OUT';
+  status: StockAdjustmentStatus;
+  quantity: number;
+  systemQuantity: number;
+  actualQuantity: number;
+  variance: number;
+  adjustmentDate: string;
+  notes?: string;
+  adjustedBy?: string;
+  userId?: number;
+  entryCount?: number;
+  lastEntryAt?: string;
+  reason?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PaginatedResponse<T> {
+  content: T[];
+  totalElements: number;
+  totalPages: number;
+  size: number;
+  number: number;
+  first: boolean;
+  last: boolean;
+  empty: boolean;
+}
+
+export interface DailyStockAdjustmentItem {
+  ingredientId: number;
+  actualUsedQuantity: number;
+  notes?: string;
+}
+
+export interface DailyStockReconciliationPayload {
+  branchId: number;
+  adjustmentDate: string;
+  userId?: number;
+  adjustedBy?: string;
+  commitImmediately?: boolean;
+  items: DailyStockAdjustmentItem[];
+}
+
+export interface DailyStockReconciliationResult {
+  ingredientId: number;
+  ingredientName?: string;
+  systemQuantity: number;
+  actualQuantity: number;
+  variance: number;
+  adjustmentType?: string | null;
+  status?: string | null;
+  adjustmentId?: number | null;
+  notes?: string;
+  entryCount?: number;
+  lastEntryAt?: string;
+  entryId?: number | null;
+  entryQuantity?: number | null;
+  entryTime?: string | null;
+}
+
+export interface DailyStockReconciliationResponse {
+  branchId: number;
+  adjustmentDate: string;
+  processedItems: number;
+  committedItems: number;
+  totalVariance: number;
+  results: DailyStockReconciliationResult[];
+}
+
+export interface ManagerStockAdjustPayload {
+  branchId: number;
+  ingredientId: number;
+  physicalQuantity: number;
+  notes?: string;
+  reason?: string;
+  adjustmentDate?: string;
+  adjustedBy?: string;
+  userId?: number;
+  forceAdjust?: boolean;
+}
+
+export interface StockAdjustmentQuery {
+  branchId: number;
+  adjustmentDate?: string;
+  status?: StockAdjustmentStatus;
+  page?: number;
+  size?: number;
+}
+
+export interface DailyUsageItem {
+  ingredientId: number;
+  ingredientName: string;
+  unitCode: string;
+  unitName: string;
+  systemQuantity: number;
+  hasAdjustment: boolean;
+  actualQuantity?: number;
+  variance?: number;
+  adjustmentStatus?: string;
+}
+
+export interface DailyUsageSummaryResponse {
+  branchId: number;
+  date: string;
+  items: DailyUsageItem[];
+}
+
 export const stockService = {
   // Tìm kiếm kho với phân trang
   searchStocks: async (params: StockSearchParams): Promise<StockPageResponse> => {
@@ -79,10 +201,28 @@ export const stockService = {
     return response;
   },
 
+  adjustStockQuantity: async (payload: ManagerStockAdjustPayload): Promise<StockAdjustment> => {
+    const response = await apiClient.post<ApiResponse<StockAdjustment>>(
+      `${baseUrl}/stocks/manager-adjustment`,
+      payload
+    );
+    return response.result;
+  },
+
   // Lấy danh sách hàng tồn kho thấp
   getLowStockItems: async (branchId: number): Promise<StockResponse[]> => {
     const response = await apiClient.get(`${baseUrl}/stocks/low-stock?branchId=${branchId}`) as StockResponse[];
     return response;
+  },
+
+  // Lấy danh sách hàng tồn kho thấp hoặc hết hàng
+  getLowOrOutOfStockItems: async (branchId: number): Promise<StockResponse[]> => {
+    const response = await apiClient.get(`${baseUrl}/stocks/low-or-out-of-stock?branchId=${branchId}`) as any;
+    // Handle ApiResponse wrapper
+    if (response.code && response.result) {
+      return response.result;
+    }
+    return Array.isArray(response) ? response : [];
   },
 
   // Lấy thông tin chi tiết một kho
@@ -128,7 +268,6 @@ export const stockService = {
     });
     return response;
   },
-
   // Release reservation khi order bị cancelled
   releaseReservation: async (orderId: string): Promise<any> => {
     // Lấy holdId từ orderId trước
@@ -142,5 +281,60 @@ export const stockService = {
       holdId: holdId
     });
     return response;
+  },
+
+  reconcileDailyUsage: async (payload: DailyStockReconciliationPayload): Promise<DailyStockReconciliationResponse> => {
+    const response = await apiClient.post<ApiResponse<DailyStockReconciliationResponse>>(
+      `${baseUrl}/stocks/daily-reconciliation`,
+      payload
+    );
+    return response.result;
+  },
+
+  getStockAdjustments: async (params: StockAdjustmentQuery): Promise<PaginatedResponse<StockAdjustment>> => {
+    const query = new URLSearchParams();
+    query.append('branchId', params.branchId.toString());
+    if (params.adjustmentDate) query.append('adjustmentDate', params.adjustmentDate);
+    if (params.status) query.append('status', params.status);
+    if (params.page !== undefined) query.append('page', params.page.toString());
+    if (params.size !== undefined) query.append('size', params.size.toString());
+
+    const response = await apiClient.get<ApiResponse<PaginatedResponse<StockAdjustment>>>(
+      `${baseUrl}/stocks/adjustments?${query.toString()}`
+    );
+    return response.result;
+  },
+
+  commitStockAdjustment: async (adjustmentId: number) => {
+    return apiClient.post<ApiResponse<{ status: string }>>(
+      `${baseUrl}/stocks/adjustments/${adjustmentId}/commit`
+    );
+  },
+
+  // Lấy danh sách nguyên liệu đã được dùng trong ngày với system quantity
+  getDailyUsageSummary: async (branchId: number, date: string): Promise<DailyUsageSummaryResponse> => {
+    const response = await apiClient.get<ApiResponse<DailyUsageSummaryResponse>>(
+      `${baseUrl}/stocks/daily-usage-summary?branchId=${branchId}&date=${date}`
+    );
+    return response.result;
+  },
+
+  // Cập nhật adjustment
+  updateStockAdjustment: async (adjustmentId: number, actualQuantity: number, notes?: string): Promise<StockAdjustment> => {
+    const response = await apiClient.put<ApiResponse<StockAdjustment>>(
+      `${baseUrl}/stocks/adjustments/${adjustmentId}`,
+      {
+        actualQuantity,
+        notes
+      }
+    );
+    return response.result;
+  },
+
+  // Xóa adjustment
+  deleteStockAdjustment: async (adjustmentId: number): Promise<void> => {
+    await apiClient.delete<ApiResponse<{ adjustmentId: number; message: string }>>(
+      `${baseUrl}/stocks/adjustments/${adjustmentId}`
+    );
   }
 };

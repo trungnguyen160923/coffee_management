@@ -7,7 +7,9 @@ import com.service.notification_service.websocket.dto.NotificationMessage;
 import com.service.notification_service.websocket.dto.NotificationType;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class NotificationWebSocketService {
@@ -22,22 +24,35 @@ public class NotificationWebSocketService {
         if (branchId == null) {
             throw new IllegalArgumentException("branchId is required to send staff notification");
         }
-        messagingTemplate.convertAndSend(
-                STAFF_TOPIC_TEMPLATE.formatted(branchId),
-                message);
+        String destination = STAFF_TOPIC_TEMPLATE.formatted(branchId);
+        log.info("[NotificationWebSocketService] 📤 Sending WebSocket message to branch staff");
+        log.info("  Destination: {}", destination);
+        log.info("  MessageId: {}, Type: {}, Title: {}", 
+                message.getId(), message.getType(), message.getTitle());
+        messagingTemplate.convertAndSend(destination, message);
+        log.info("[NotificationWebSocketService] ✅ WebSocket message sent to {}", destination);
     }
 
     public void sendToUser(Integer userId, NotificationMessage message) {
         if (userId == null) {
             throw new IllegalArgumentException("userId is required to send user notification");
         }
-        messagingTemplate.convertAndSend(
-                USER_QUEUE_TEMPLATE.formatted(userId),
-                message);
+        String destination = USER_QUEUE_TEMPLATE.formatted(userId);
+        log.info("[NotificationWebSocketService] 📤 Sending WebSocket message to user");
+        log.info("  Destination: {}", destination);
+        log.info("  UserId: {}, MessageId: {}, Type: {}, Title: {}", 
+                userId, message.getId(), message.getType(), message.getTitle());
+        messagingTemplate.convertAndSend(destination, message);
+        log.info("[NotificationWebSocketService] ✅ WebSocket message sent to {}", destination);
     }
 
     public void broadcast(NotificationMessage message) {
+        log.info("[NotificationWebSocketService] 📤 Broadcasting WebSocket message to all");
+        log.info("  Destination: {}", BROADCAST_TOPIC);
+        log.info("  MessageId: {}, Type: {}, Title: {}", 
+                message.getId(), message.getType(), message.getTitle());
         messagingTemplate.convertAndSend(BROADCAST_TOPIC, message);
+        log.info("[NotificationWebSocketService] ✅ Broadcast message sent");
     }
 
     public NotificationMessage buildOrderCreatedMessage(String notificationId,

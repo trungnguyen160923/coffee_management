@@ -22,7 +22,10 @@ public class WebSocketCorsHeaderRemovalFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
         String servletPath = request.getServletPath();
-        boolean isWebSocketPath = servletPath.startsWith("/ws") || servletPath.equals("/ws");
+        String requestURI = request.getRequestURI();
+        // Check both servletPath and requestURI for WebSocket paths (after API Gateway stripping)
+        boolean isWebSocketPath = (servletPath.startsWith("/ws") || servletPath.equals("/ws")) ||
+                                  (requestURI != null && (requestURI.contains("/ws") || requestURI.contains("/notification-service/ws")));
         
         if (isWebSocketPath) {
             // Wrap response to intercept and remove CORS headers

@@ -1,6 +1,7 @@
 """
 Scheduler service for automated report generation and distribution
 """
+import asyncio
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from sqlalchemy.orm import Session
@@ -10,6 +11,8 @@ from app.database import SessionLocal
 from app.services.ai_agent_service import AIAgentService
 from app.services.distribution_service import DistributionService
 from app.services.report_service import ReportService
+from app.services.daily_metrics_service import DailyMetricsService
+from app.services.model_training_service import ModelTrainingService
 from app.config import settings
 import logging
 
@@ -24,6 +27,8 @@ class SchedulerService:
         self.ai_agent_service = AIAgentService()
         self.distribution_service = DistributionService()
         self.report_service = ReportService()
+        self.daily_metrics_service = DailyMetricsService()
+        self.model_training_service = ModelTrainingService()
         self._is_running = False
     
     def start(self):
@@ -36,6 +41,24 @@ class SchedulerService:
                 trigger=CronTrigger(hour=23, minute=0),
                 id='daily_reports',
                 name='Generate and send daily AI reports',
+                replace_existing=True
+            )
+            
+            # Schedule daily metrics ingestion before report generation
+            self.scheduler.add_job(
+                self.run_daily_metrics_job,
+                trigger=CronTrigger(hour=22, minute=30),
+                id='daily_branch_metrics',
+                name='Aggregate daily branch metrics',
+                replace_existing=True
+            )
+            
+            # Schedule weekly model retraining every Sunday at 22:00
+            self.scheduler.add_job(
+                self.run_model_retraining_job,
+                trigger=CronTrigger(day_of_week='sun', hour=22, minute=0),
+                id='weekly_model_training',
+                name='Retrain ML models for all branches',
                 replace_existing=True
             )
             
@@ -202,4 +225,65 @@ class SchedulerService:
             return result
         finally:
             db.close()
+
+    async def run_daily_metrics_job(
+        self,
+        target_date: Optional[date] = None,
+        branch_ids: Optional[List[int]] = None
+    ):
+        """
+        Job to aggregate raw KPIs into daily_branch_metrics
+        """
+        loop = asyncio.get_running_loop()
+        try:
+            result = await loop.run_in_executor(
+                None,
+                lambda: self.daily_metrics_service.compute_and_store_metrics(
+                    target_date=target_date,
+                    branch_ids=branch_ids
+                )
+            )
+            logger.info(
+                "Daily metrics job finished for %s: %s branches processed",
+                result.get("date"),
+                len(result.get("results", []))
+            )
+            return result
+        except Exception as exc:
+            logger.error("Daily metrics job failed: %s", exc, exc_info=True)
+            return {
+                "success": False,
+                "error": str(exc)
+            }
+
+    async def run_model_retraining_job(
+        self,
+        branch_ids: Optional[List[int]] = None,
+        target_metric: Optional[str] = None,
+        algorithm: Optional[str] = None
+    ):
+        """
+        Job to retrain ML models (Isolation Forest + Prophet)
+        """
+        loop = asyncio.get_running_loop()
+        try:
+            result = await loop.run_in_executor(
+                None,
+                lambda: self.model_training_service.retrain_all_branches(
+                    branch_ids=branch_ids,
+                    target_metric=target_metric,
+                    algorithm=algorithm
+                )
+            )
+            logger.info(
+                "Model retraining completed: %s branches processed",
+                result.get("branch_count")
+            )
+            return result
+        except Exception as exc:
+            logger.error("Model retraining job failed: %s", exc, exc_info=True)
+            return {
+                "success": False,
+                "error": str(exc)
+            }
 

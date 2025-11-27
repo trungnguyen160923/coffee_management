@@ -11,12 +11,14 @@ import orderservice.order_service.entity.Branch;
 import orderservice.order_service.entity.CafeTable;
 import orderservice.order_service.entity.Reservation;
 import orderservice.order_service.entity.ReservationTable;
+import orderservice.order_service.events.ReservationCreatedEvent;
 import orderservice.order_service.exception.AppException;
 import orderservice.order_service.exception.ErrorCode;
 import orderservice.order_service.repository.BranchRepository;
 import orderservice.order_service.repository.CafeTableRepository;
 import orderservice.order_service.repository.ReservationRepository;
 import orderservice.order_service.repository.ReservationTableRepository;
+import orderservice.order_service.service.OrderEventProducer;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,7 +26,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -36,16 +37,19 @@ public class TableManagementService {
     private final ReservationTableRepository reservationTableRepository;
     private final ReservationRepository reservationRepository;
     private final BranchRepository branchRepository;
+    private final OrderEventProducer orderEventProducer;
 
     @Autowired
     public TableManagementService(CafeTableRepository cafeTableRepository,
             ReservationTableRepository reservationTableRepository,
             ReservationRepository reservationRepository,
-            BranchRepository branchRepository) {
+            BranchRepository branchRepository,
+            OrderEventProducer orderEventProducer) {
         this.cafeTableRepository = cafeTableRepository;
         this.reservationTableRepository = reservationTableRepository;
         this.reservationRepository = reservationRepository;
         this.branchRepository = branchRepository;
+        this.orderEventProducer = orderEventProducer;
     }
 
     // Create new table
@@ -149,7 +153,32 @@ public class TableManagementService {
         // Update reservation status to CONFIRMED if it was PENDING
         if ("PENDING".equals(reservation.getStatus())) {
             reservation.setStatus("CONFIRMED");
-            reservationRepository.save(reservation);
+            Reservation updatedReservation = reservationRepository.save(reservation);
+
+            // Publish event when reservation is confirmed (if customerId exists)
+            if (updatedReservation.getCustomerId() != null) {
+                try {
+                    ReservationCreatedEvent event = ReservationCreatedEvent.builder()
+                            .reservationId(updatedReservation.getReservationId())
+                            .branchId(updatedReservation.getBranchId())
+                            .customerId(updatedReservation.getCustomerId())
+                            .customerName(updatedReservation.getCustomerName())
+                            .phone(updatedReservation.getPhone())
+                            .email(updatedReservation.getEmail())
+                            .reservedAt(updatedReservation.getReservedAt())
+                            .partySize(updatedReservation.getPartySize())
+                            .notes(updatedReservation.getNotes())
+                            .createdAt(java.time.Instant.now())
+                            .build();
+                    orderEventProducer.publishReservationConfirmed(event);
+                    log.info("[TableManagementService] ✅ Successfully triggered event publishing for confirmed reservationId: {}", 
+                            updatedReservation.getReservationId());
+                } catch (Exception e) {
+                    log.error("[TableManagementService] ❌ Failed to publish reservation confirmed event for reservationId: {}", 
+                            updatedReservation.getReservationId(), e);
+                    // Don't fail table assignment if event publishing fails
+                }
+            }
         }
 
         // Create response

@@ -21,6 +21,7 @@ public class POSOrderResponse {
     Integer customerId;
     String customerName;
     String phone;
+    String email;
     List<Integer> tableIds;
     String status;
     String paymentMethod;

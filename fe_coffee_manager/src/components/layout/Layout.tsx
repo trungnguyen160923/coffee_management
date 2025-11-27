@@ -19,11 +19,13 @@ import {
   UtensilsCrossed,
   Square,
   Tag,
-  Terminal
+  Terminal,
+  Eye,
+  Droplet
 } from 'lucide-react';
 
-import { DEFAULT_IMAGES } from '../../config/constants';
 import { NotificationBell } from '../notifications/NotificationBell';
+import { UsageFloatingWidget } from '../stock/UsageFloatingWidget';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -49,6 +51,7 @@ export function Layout({ children }: LayoutProps) {
         { icon: UtensilsCrossed, label: 'Ingredients', path: '/admin/ingredients' },
         { icon: BookOpen, label: 'Recipes', path: '/admin/recipes' },
         { icon: Store, label: 'Branches', path: '/admin/branches' },
+        { icon: Eye, label: 'Branch Activities', path: '/admin/branch-activities' },
         { icon: Users, label: 'Managers', path: '/admin/managers' },
         { icon: Tag, label: 'Discounts', path: '/admin/discounts' },
         { icon: BarChart3, label: 'Statistics', path: '/admin/statistics' },
@@ -77,6 +80,7 @@ export function Layout({ children }: LayoutProps) {
         { icon: Calendar, label: 'Reservations', path: '/staff/reservations' },
         { icon: Square, label: 'Tables', path: '/staff/tables' },
         { icon: BookOpen, label: 'Recipes', path: '/staff/recipes' },
+        { icon: Droplet, label: 'Stock Usage', path: '/staff/stock-usage' },
       ];
     }
   };
@@ -288,6 +292,7 @@ export function Layout({ children }: LayoutProps) {
             </div>
           </div>
           {children}
+          <UsageFloatingWidget />
         </div>
       </div>
     </div>

@@ -51,11 +51,18 @@ public class StockService {
     }
 
     public List<StockResponse> getLowStockItems(Integer branchId) {
-        List<Stock> stocks = stockRepository.findAll().stream()
-                .filter(stock -> stock.getBranchId().equals(branchId))
-                .filter(stock -> stock.getQuantity().compareTo(stock.getThreshold()) <= 0)
+        List<Stock> stocks = stockRepository.findLowStockItems(branchId);
+        return stocks.stream()
+                .map(this::convertToResponse)
                 .collect(Collectors.toList());
+    }
 
+    /**
+     * Lấy danh sách nguyên liệu tồn kho thấp hoặc hết hàng của chi nhánh
+     * Bao gồm cả low stock (available <= threshold) và out of stock (available <= 0)
+     */
+    public List<StockResponse> getLowOrOutOfStockItems(Integer branchId) {
+        List<Stock> stocks = stockRepository.findLowOrOutOfStockItems(branchId);
         return stocks.stream()
                 .map(this::convertToResponse)
                 .collect(Collectors.toList());
@@ -83,6 +90,10 @@ public class StockService {
             log.warn("Could not fetch average cost for stock {}: {}", stock.getStockId(), e.getMessage());
         }
 
+        BigDecimal availableQuantity = stock.getAvailableQuantity();
+        boolean isLowStock = availableQuantity.compareTo(stock.getThreshold()) <= 0;
+        boolean isOutOfStock = availableQuantity.compareTo(BigDecimal.ZERO) <= 0;
+
         return StockResponse.builder()
                 .stockId(stock.getStockId())
                 .ingredientId(stock.getIngredient().getIngredientId())
@@ -90,11 +101,14 @@ public class StockService {
                 .ingredientSku(null) // Ingredient entity không có SKU field
                 .branchId(stock.getBranchId())
                 .quantity(stock.getQuantity())
+                .reservedQuantity(stock.getReservedQuantity())
+                .availableQuantity(availableQuantity)
                 .unitCode(stock.getUnit() != null ? stock.getUnit().getCode() : null)
                 .unitName(stock.getUnit() != null ? stock.getUnit().getName() : null)
                 .threshold(stock.getThreshold())
                 .lastUpdated(stock.getLastUpdated())
-                .isLowStock(stock.getQuantity().compareTo(stock.getThreshold()) <= 0)
+                .isLowStock(isLowStock)
+                .isOutOfStock(isOutOfStock)
                 .avgCost(avgCost)
                 .build();
     }

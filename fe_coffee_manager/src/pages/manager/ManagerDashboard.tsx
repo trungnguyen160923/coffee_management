@@ -1,69 +1,221 @@
-import React from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Users, 
-  Package, 
-  TrendingUp, 
-  Clock,
   DollarSign,
   ShoppingBag,
   AlertTriangle,
   CheckCircle
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
+import { useAuth } from '../../context/AuthContext';
+import { stockService } from '../../services/stockService';
+import staffService from '../../services/staffService';
+import { analyticsService } from '../../services/analyticsService';
+import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 
 export function ManagerDashboard() {
-  const stats = [
-    { title: 'Today\'s Revenue', value: '12.5M', change: '+8%', icon: DollarSign, color: 'bg-green-500' },
-    { title: 'Orders', value: '156', change: '+12', icon: ShoppingBag, color: 'bg-blue-500' },
-    { title: 'Staff', value: '12', change: '2 shifts', icon: Users, color: 'bg-purple-500' },
-    { title: 'Inventory', value: '8 low', change: 'need restock', icon: AlertTriangle, color: 'bg-red-500' }
-  ];
+  const { user, managerBranch } = useAuth();
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
+  // Data states
+  const [dailyStats, setDailyStats] = useState<any>(null);
+  const [weeklyRevenue, setWeeklyRevenue] = useState<any>(null);
+  const [lowStockItems, setLowStockItems] = useState<any[]>([]);
+  const [staffList, setStaffList] = useState<any[]>([]);
 
-  const hourlyOrders = [
-    { hour: '6h', orders: 5 },
-    { hour: '7h', orders: 12 },
-    { hour: '8h', orders: 25 },
-    { hour: '9h', orders: 18 },
-    { hour: '10h', orders: 15 },
-    { hour: '11h', orders: 22 },
-    { hour: '12h', orders: 35 },
-    { hour: '13h', orders: 28 },
-    { hour: '14h', orders: 20 },
-    { hour: '15h', orders: 24 },
-    { hour: '16h', orders: 30 },
-    { hour: '17h', orders: 18 }
-  ];
+  // Get branch ID
+  const branchId = useMemo(() => {
+    if (managerBranch?.branchId) return managerBranch.branchId;
+    if (user?.branch?.branchId) return user.branch.branchId;
+    if (user?.branchId) return Number(user.branchId);
+    return null;
+  }, [user, managerBranch]);
 
-  const weeklyRevenue = [
-    { day: 'T2', revenue: 8.5, target: 10 },
-    { day: 'T3', revenue: 12.3, target: 10 },
-    { day: 'T4', revenue: 11.2, target: 10 },
-    { day: 'T5', revenue: 15.8, target: 10 },
-    { day: 'T6', revenue: 18.5, target: 10 },
-    { day: 'T7', revenue: 22.1, target: 10 },
-    { day: 'CN', revenue: 19.8, target: 10 }
-  ];
+  // Format currency
+  const formatCurrency = (amount: number) => {
+    if (amount >= 1000000) {
+      return `${(amount / 1000000).toFixed(1)}M`;
+    } else if (amount >= 1000) {
+      return `${(amount / 1000).toFixed(1)}K`;
+    }
+    return amount.toFixed(0);
+  };
 
-  const lowStockItems = [
-    { name: 'Cà phê Arabica', current: 2, min: 10, unit: 'kg' },
-    { name: 'Sữa tươi', current: 5, min: 20, unit: 'lít' },
-    { name: 'Đường trắng', current: 3, min: 15, unit: 'kg' },
-    { name: 'Ly giấy size M', current: 50, min: 200, unit: 'cái' }
-  ];
+  // Get initials from name
+  const getInitials = (name: string): string => {
+    if (!name) return '?';
+    const words = name.trim().split(/\s+/);
+    if (words.length === 0) return '?';
+    if (words.length === 1) return words[0][0].toUpperCase();
+    // Take first letter of first word and first letter of last word
+    return (words[0][0] + words[words.length - 1][0]).toUpperCase();
+  };
 
-  const todayStaff = [
-    { name: 'Nguyễn Văn A', shift: 'Ca sáng', status: 'active', avatar: 'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg?auto=compress&cs=tinysrgb&w=150' },
-    { name: 'Trần Thị B', shift: 'Ca sáng', status: 'active', avatar: 'https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=150' },
-    { name: 'Lê Văn C', shift: 'Ca chiều', status: 'scheduled', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=150' },
-    { name: 'Phạm Thị D', shift: 'Ca tối', status: 'scheduled', avatar: 'https://images.pexels.com/photos/762020/pexels-photo-762020.jpeg?auto=compress&cs=tinysrgb&w=150' }
-  ];
+  // Get color for avatar based on name
+  const getAvatarColor = (name: string): string => {
+    const colors = [
+      'bg-blue-500',
+      'bg-green-500',
+      'bg-purple-500',
+      'bg-pink-500',
+      'bg-indigo-500',
+      'bg-yellow-500',
+      'bg-red-500',
+      'bg-teal-500',
+    ];
+    if (!name) return colors[0];
+    const index = name.charCodeAt(0) % colors.length;
+    return colors[index];
+  };
 
+  // Load all data
+  useEffect(() => {
+    const loadDashboardData = async () => {
+      if (!branchId) {
+        setError('Branch not found');
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Get today's date in YYYY-MM-DD format
+        const today = new Date().toISOString().split('T')[0];
+
+        // Load all data in parallel
+        const [dailyStatsData, weeklyRevenueData, lowStockData, staffData] = await Promise.all([
+          analyticsService.getBranchDailyStats(branchId, today),
+          analyticsService.getBranchWeeklyRevenue(branchId),
+          stockService.getLowOrOutOfStockItems(branchId),
+          staffService.getStaffsWithUserInfoByBranch(branchId)
+        ]);
+
+        setDailyStats(dailyStatsData);
+        setWeeklyRevenue(weeklyRevenueData);
+        setLowStockItems(lowStockData || []);
+        setStaffList(staffData || []);
+      } catch (err: any) {
+        console.error('Error loading dashboard data:', err);
+        setError(err.message || 'Failed to load dashboard data');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadDashboardData();
+  }, [branchId]);
+
+  // Prepare stats cards data
+  const stats = useMemo(() => {
+    if (!dailyStats || !weeklyRevenue) return [];
+    
+    return [
+      { 
+        title: 'Today\'s Revenue', 
+        value: formatCurrency(Number(dailyStats.totalRevenue || 0)), 
+        change: `${dailyStats.totalOrders || 0} orders`, 
+        icon: DollarSign, 
+        color: 'bg-green-500' 
+      },
+      { 
+        title: 'Today\'s Orders', 
+        value: String(dailyStats.totalOrders || 0), 
+        change: 'Completed', 
+        icon: ShoppingBag, 
+        color: 'bg-blue-500' 
+      },
+      { 
+        title: 'Staff', 
+        value: String(staffList.length), 
+        change: 'Total', 
+        icon: Users, 
+        color: 'bg-purple-500' 
+      },
+      { 
+        title: 'Inventory', 
+        value: `${lowStockItems.length} alerts`, 
+        change: 'Need restock', 
+        icon: AlertTriangle, 
+        color: 'bg-red-500' 
+      }
+    ];
+  }, [dailyStats, weeklyRevenue, staffList.length, lowStockItems.length]);
+
+  // Prepare hourly orders chart data
+  const hourlyOrders = useMemo(() => {
+    if (!dailyStats?.hourlyOrderCounts) return [];
+    
+    return dailyStats.hourlyOrderCounts
+      .filter((item: any) => item.orderCount > 0) // Only show hours with orders
+      .map((item: any) => ({
+        hour: `${item.hour}h`,
+        orders: item.orderCount
+      }));
+  }, [dailyStats]);
+
+  // Prepare weekly revenue chart data
+  const weeklyRevenueChart = useMemo(() => {
+    if (!weeklyRevenue?.dailyRevenues) return [];
+    
+    const dayMap: Record<string, string> = {
+      'Monday': 'Mon',
+      'Tuesday': 'Tue',
+      'Wednesday': 'Wed',
+      'Thursday': 'Thu',
+      'Friday': 'Fri',
+      'Saturday': 'Sat',
+      'Sunday': 'Sun'
+    };
+
+    return weeklyRevenue.dailyRevenues.map((day: any) => ({
+      day: dayMap[day.dayOfWeek] || day.dayOfWeek,
+      revenue: Number(day.revenue || 0) / 1000000, // Convert to millions
+      target: 10 // Keep target line for reference
+    }));
+  }, [weeklyRevenue]);
+
+  // Get branch name
+  const branchName = managerBranch?.name || user?.branch?.name || 'Branch';
+
+  if (loading) {
+    return (
+      <div className="p-8 flex items-center justify-center min-h-screen">
+        <LoadingSpinner />
+      </div>
+    );
+  }
+
+  if (error) {
   return (
     <div className="p-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-800 mb-2">Quản lý chi nhánh</h1>
-        <p className="text-gray-600">Chi nhánh Quận 1 - Hôm nay, {new Date().toLocaleDateString('vi-VN')}</p>
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <p className="text-red-800">{error}</p>
+        </div>
       </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50">
+      <div className="max-w-7xl mx-auto px-2 py-0 sm:px-4 lg:px-2">
+        <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+          {/* Header */}
+          <div className="bg-gradient-to-r from-amber-600 to-orange-600 px-8 py-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-3xl font-bold text-white mb-1">Branch Management</h1>
+                <p className="text-amber-100">{branchName} - Today, {new Date().toLocaleDateString('en-US')}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Content */}
+          <div className="p-8">
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -86,7 +238,8 @@ export function ManagerDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         {/* Hourly Orders */}
         <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">Đơn hàng theo giờ</h3>
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">Orders by Hour</h3>
+                {hourlyOrders.length > 0 ? (
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={hourlyOrders}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -99,19 +252,26 @@ export function ManagerDashboard() {
               <Bar dataKey="orders" fill="#3b82f6" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
+                ) : (
+                  <div className="flex items-center justify-center h-[300px] text-gray-500">
+                    <p>No hourly order data</p>
+                  </div>
+                )}
         </div>
 
         {/* Weekly Revenue */}
         <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">Doanh thu tuần này</h3>
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">This Week's Revenue</h3>
+                {weeklyRevenueChart.length > 0 ? (
           <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={weeklyRevenue}>
+                    <LineChart data={weeklyRevenueChart}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis dataKey="day" stroke="#666" />
               <YAxis stroke="#666" />
               <Tooltip 
                 contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px' }}
                 labelStyle={{ color: '#374151' }}
+                        formatter={(value: any) => `${Number(value).toFixed(1)}M VND`}
               />
               <Line 
                 type="monotone" 
@@ -119,7 +279,7 @@ export function ManagerDashboard() {
                 stroke="#10b981" 
                 strokeWidth={3} 
                 dot={{ fill: '#10b981', strokeWidth: 2, r: 6 }}
-                name="Doanh thu (triệu)"
+                        name="Revenue (M VND)"
               />
               <Line 
                 type="monotone" 
@@ -128,10 +288,15 @@ export function ManagerDashboard() {
                 strokeWidth={2} 
                 strokeDasharray="5 5"
                 dot={false}
-                name="Target (triệu)"
+                        name="Target (M VND)"
               />
             </LineChart>
           </ResponsiveContainer>
+                ) : (
+                  <div className="flex items-center justify-center h-[300px] text-gray-500">
+                    <p>No weekly revenue data</p>
+                  </div>
+                )}
         </div>
       </div>
 
@@ -139,61 +304,73 @@ export function ManagerDashboard() {
         {/* Low Stock Alert */}
         <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-800">Cảnh báo hàng tồn kho</h3>
+                  <h3 className="text-lg font-semibold text-gray-800">Low Stock Alerts</h3>
             <AlertTriangle className="h-5 w-5 text-red-500" />
           </div>
           <div className="space-y-4">
-            {lowStockItems.map((item, index) => (
+                  {lowStockItems.length > 0 ? (
+                    lowStockItems.map((item: any, index: number) => (
               <div key={index} className="flex items-center justify-between p-4 bg-red-50 rounded-xl border border-red-100">
                 <div>
-                  <p className="font-medium text-gray-900">{item.name}</p>
+                          <p className="font-medium text-gray-900">{item.ingredientName || `Ingredient #${item.ingredientId}`}</p>
                   <p className="text-sm text-red-600">
-                    Còn {item.current} {item.unit} (tối thiểu: {item.min} {item.unit})
+                            Available: {Number(item.availableQuantity || item.quantity || 0).toFixed(2)} {item.unitName || item.unitCode || ''} 
+                            {item.threshold && ` (minimum: ${Number(item.threshold).toFixed(2)} ${item.unitName || item.unitCode || ''})`}
                   </p>
                 </div>
-                <button className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors duration-200">
-                  Nhập hàng
+                <button 
+                  onClick={() => navigate(`/manager/procurement?ingredientId=${item.ingredientId}`)}
+                  className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors duration-200"
+                >
+                  Restock
                 </button>
               </div>
-            ))}
+                    ))
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">
+                      <CheckCircle className="h-12 w-12 mx-auto mb-2 text-green-500" />
+                      <p>No low stock alerts</p>
+                    </div>
+                  )}
           </div>
         </div>
 
         {/* Today's Staff */}
         <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-800">Nhân viên hôm nay</h3>
+                  <h3 className="text-lg font-semibold text-gray-800">Today's Staff</h3>
             <Users className="h-5 w-5 text-blue-500" />
           </div>
           <div className="space-y-4">
-            {todayStaff.map((staff, index) => (
+                  {staffList.length > 0 ? (
+                    staffList.map((staff: any, index: number) => (
               <div key={index} className="flex items-center justify-between p-4 hover:bg-gray-50 rounded-xl transition-colors duration-200">
                 <div className="flex items-center space-x-3">
-                  <img
-                    src={staff.avatar}
-                    alt={staff.name}
-                    className="w-10 h-10 rounded-full object-cover"
-                  />
+                  <div className={`w-10 h-10 rounded-full ${getAvatarColor(staff.fullname || staff.name || '')} flex items-center justify-center text-white font-semibold text-sm`}>
+                    {getInitials(staff.fullname || staff.name || `Staff #${staff.userId}`)}
+                  </div>
                   <div>
-                    <p className="font-medium text-gray-900">{staff.name}</p>
-                    <p className="text-sm text-gray-500">{staff.shift}</p>
+                            <p className="font-medium text-gray-900">{staff.fullname || staff.name || `Staff #${staff.userId}`}</p>
+                            <p className="text-sm text-gray-500">{staff.position || 'Staff'}</p>
                   </div>
                 </div>
                 <div className="flex items-center space-x-2">
-                  {staff.status === 'active' ? (
                     <div className="flex items-center space-x-2">
                       <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                      <span className="text-sm text-green-600 font-medium">Đang làm</span>
+                            <span className="text-sm text-green-600 font-medium">Active</span>
+                          </div>
+                        </div>
                     </div>
+                    ))
                   ) : (
-                    <div className="flex items-center space-x-2">
-                      <Clock className="h-4 w-4 text-gray-400" />
-                      <span className="text-sm text-gray-500 font-medium">Chờ ca</span>
+                    <div className="text-center py-8 text-gray-500">
+                      <Users className="h-12 w-12 mx-auto mb-2 text-gray-400" />
+                      <p>No staff members</p>
                     </div>
                   )}
                 </div>
               </div>
-            ))}
+            </div>
           </div>
         </div>
       </div>

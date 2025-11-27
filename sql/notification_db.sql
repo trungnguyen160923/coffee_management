@@ -21,7 +21,8 @@ CREATE TABLE notification_templates (
 -- Table: notifications (lưu instance thông báo)
 CREATE TABLE notifications (
   id VARCHAR(36) NOT NULL COMMENT 'UUID thông báo',
-  user_id INT NOT NULL COMMENT 'Người nhận (tham chiếu auth/profile service)',
+  user_id INT DEFAULT NULL COMMENT 'Người nhận (tham chiếu auth/profile service). NULL cho branch-level notifications',
+  target_role VARCHAR(20) DEFAULT NULL COMMENT 'Vai trò người nhận (STAFF, MANAGER, NULL cho tất cả)',
   channel ENUM('EMAIL','SMS','PUSH','WEBSOCKET') NOT NULL COMMENT 'Kênh thực tế được gửi',
   template_code VARCHAR(100) DEFAULT NULL COMMENT 'Template đã dùng để render',
   title VARCHAR(255) DEFAULT NULL COMMENT 'Tiêu đề hiển thị (email/push/in-app)',
@@ -32,10 +33,13 @@ CREATE TABLE notifications (
   metadata JSON DEFAULT NULL COMMENT 'Thông tin thêm: requestId, error message, payload gốc',
   sent_at DATETIME DEFAULT NULL COMMENT 'Ghi nhận thời gian gửi thành công',
   delivered_at DATETIME DEFAULT NULL COMMENT 'Thời gian client xác nhận đã nhận',
+  branch_id INT DEFAULT NULL COMMENT 'Chi nhánh gửi thông báo (NULL cho user-level notifications)',
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   KEY idx_notifications_user (user_id),
-  KEY idx_notifications_status (status)
+  KEY idx_notifications_branch (branch_id),
+  KEY idx_notifications_status (status),
+  KEY idx_notifications_target_role (target_role)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Table: user_notification_preferences (tùy chọn từng người dùng)
@@ -76,7 +80,26 @@ CREATE TABLE push_subscriptions (
 INSERT INTO notification_templates (name, code, channel, subject, content, variables)
 VALUES
 ('Order Confirmation Email', 'ORDER_CONFIRMATION_EMAIL', 'EMAIL',
- 'Đơn hàng #${orderCode} đã được tạo',
- '<p>Xin chào ${customerName},</p><p>Bạn đã đặt thành công đơn #${orderCode} với tổng tiền ${totalAmount}.</p>',
- '["customerName","orderCode","totalAmount"]');
+'Đơn hàng #${orderCode} đã được tạo',
+'<p>Xin chào ${customerName},</p><p>Bạn đã đặt thành công đơn #${orderCode} với tổng tiền ${totalAmount}.</p>',
+'["customerName","orderCode","totalAmount"]'),
+('Low Stock Alert Email', 'LOW_STOCK_ALERT_EMAIL', 'EMAIL',
+'Cảnh báo tồn kho thấp - ${ingredientName}',
+CONCAT(
+'<p>Chi nhánh: <strong>${branchName}</strong></p>',
+'<p>Nguyên liệu: <strong>${ingredientName}</strong></p>',
+'<p>Số lượng còn lại: <strong>${availableQuantity} ${unitCode}</strong></p>',
+'<p>Ngưỡng cảnh báo: <strong>${threshold} ${unitCode}</strong></p>',
+'<p>Vui lòng kiểm tra và lập phiếu nhập hàng sớm.</p>'
+),
+'["branchName","ingredientName","availableQuantity","threshold","unitCode"]'),
+('Out Of Stock Alert Email', 'OUT_OF_STOCK_ALERT_EMAIL', 'EMAIL',
+'Hết hàng - ${ingredientName}',
+CONCAT(
+'<p>Chi nhánh: <strong>${branchName}</strong></p>',
+'<p>Nguyên liệu: <strong>${ingredientName}</strong></p>',
+'<p>Tình trạng: <strong>Hết hàng</strong></p>',
+'<p>Vui lòng ưu tiên nhập kho ngay để tránh gián đoạn kinh doanh.</p>'
+),
+'["branchName","ingredientName"]');
 

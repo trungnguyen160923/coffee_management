@@ -59,7 +59,22 @@ class CartService {
     async getCartItems() {
         const response = await httpClient.get(API.GET_CART, { headers: this.buildHeaders() });
         const items = response.data.result?.cartItems || [];
+        const cartId = response.data.result?.cartId || null;
+        
+        // Lưu cartId vào localStorage nếu có (cho user đã đăng nhập)
+        if (cartId) {
+            localStorage.setItem('cartId', cartId.toString());
+        }
+        
         return this.mapCartItems(items);
+    }
+    
+    async getCartWithId() {
+        const response = await httpClient.get(API.GET_CART, { headers: this.buildHeaders() });
+        return {
+            cartId: response.data.result?.cartId || null,
+            cartItems: this.mapCartItems(response.data.result?.cartItems || [])
+        };
     }
 
     async addToCart(productId, productDetailId, quantity = 1) {

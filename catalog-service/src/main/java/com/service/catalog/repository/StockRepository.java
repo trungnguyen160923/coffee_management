@@ -89,4 +89,14 @@ public interface StockRepository extends JpaRepository<Stock, Integer> {
             @Param("unitCode") String unitCode,
             @Param("lowStock") Boolean lowStock,
             Pageable pageable);
+
+    @Query("SELECT DISTINCT s.branchId FROM Stock s WHERE s.branchId IS NOT NULL")
+    List<Integer> findDistinctBranchIds();
+
+    /**
+     * Tìm stocks tồn kho thấp hoặc hết hàng
+     * Bao gồm cả low stock (available <= threshold) và out of stock (available <= 0)
+     */
+    @Query("SELECT s FROM Stock s WHERE s.branchId = :branchId AND (s.quantity - s.reservedQuantity) <= s.threshold ORDER BY (s.quantity - s.reservedQuantity) ASC")
+    List<Stock> findLowOrOutOfStockItems(@Param("branchId") Integer branchId);
 }
