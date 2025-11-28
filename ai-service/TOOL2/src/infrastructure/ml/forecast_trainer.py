@@ -511,20 +511,42 @@ class ForecastTrainer:
             ID của model đã lưu
         """
         model_name = f"forecast_{algorithm.lower()}_{target_metric}_branch_{branch_id}"
-        
+
         # Serialize model
         model_binary = pickle.dumps(model)
-        
-        # Deactivate model cũ cùng loại
+
+        # Deactivate model cũ cùng loại (bất kể version nào)
         model_repository.deactivate_by_name(model_name)
-        
+
+        # Tìm một model_version chưa bị trùng (model_name, model_version)
+        final_version = model_version
+        try:
+            check_query = """
+            SELECT 1 FROM ml_models
+            WHERE model_name = %s AND model_version = %s
+            LIMIT 1
+            """
+            suffix = 1
+            while True:
+                rows = model_repository.db.execute_query(
+                    check_query, (model_name, final_version)
+                )
+                if not rows:
+                    break
+                # Nếu bị trùng, cộng thêm hậu tố -1, -2, ...
+                final_version = f"{model_version}-{suffix}"
+                suffix += 1
+        except Exception:
+            # Nếu có lỗi khi kiểm tra, fallback về version gốc
+            final_version = model_version
+
         # Tạo entity
         from datetime import date
         from ...domain.entities.ml_model import MLModel
         
         model_entity = MLModel(
             model_name=model_name,
-            model_version=model_version,
+            model_version=final_version,
             model_type=algorithm,
             model_data=model_binary,
             hyperparameters=json.dumps(metadata),
