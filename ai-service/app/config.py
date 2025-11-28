@@ -56,6 +56,13 @@ class Settings:
     FORECAST_USE_REGRESSORS: bool = os.getenv("FORECAST_USE_REGRESSORS", "true").lower() == "true"
     FORECAST_SEASONALITY_MODE: str = os.getenv("FORECAST_SEASONALITY_MODE", "multiplicative")
     
+    # Hyperparameter Tuning Settings
+    ENABLE_HYPERPARAMETER_TUNING: bool = os.getenv("ENABLE_HYPERPARAMETER_TUNING", "true").lower() == "true"
+    TUNING_N_TRIALS: int = int(os.getenv("TUNING_N_TRIALS", "20"))
+    TUNING_TIMEOUT_SECONDS: Optional[int] = int(os.getenv("TUNING_TIMEOUT_SECONDS", "300")) if os.getenv("TUNING_TIMEOUT_SECONDS") else None
+    TUNING_VALIDATION_RATIO: float = float(os.getenv("TUNING_VALIDATION_RATIO", "0.2"))
+    MODEL_COMPARISON_THRESHOLD: float = float(os.getenv("MODEL_COMPARISON_THRESHOLD", "0.0"))  # % improvement required (0.0 = chỉ cần >=)
+    
     # AI Provider Settings (OpenAI or Gemini)
     AI_PROVIDER: str = os.getenv("AI_PROVIDER", "openai")
     
