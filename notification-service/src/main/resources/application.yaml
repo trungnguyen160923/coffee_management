@@ -11,7 +11,7 @@ spring:
   datasource:
     url: ${DB_URL:jdbc:mysql://localhost:3306/notification_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
     username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:12345678}
+    password: ${DB_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
@@ -55,7 +55,7 @@ spring:
     host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:587}
     username: ${MAIL_USERNAME:changeme@gmail.com}
-    password: ${MAIL_PASSWORD:changeme-app-password}
+    password: ${MAIL_PASSWORD}
     properties:
       mail:
         smtp:
@@ -66,7 +66,7 @@ spring:
             trust: ${MAIL_SMTP_SSL_TRUST:smtp.gmail.com}
 
 jwt:
-  signerKey: "${JWT_SIGNER_KEY:1TjXchw5FloESb63Kc+DFhTARvpWL4jUGCwfGWxuG5SIf/1y/LgJxHnMqaF6A/ij}"
+  signerKey: "${JWT_SIGNER_KEY}"
 
 jackson:
   serialization:

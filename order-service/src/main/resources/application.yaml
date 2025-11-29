@@ -22,7 +22,7 @@ spring:
     url: ${DB_URL:jdbc:mysql://localhost:3306/order_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
     driver-class-name: com.mysql.cj.jdbc.Driver
     username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:12345678}
+    password: ${DB_PASSWORD}
   jpa:
     hibernate:
       ddl-auto: ${JPA_DDL_AUTO:update}
@@ -38,7 +38,7 @@ spring:
     host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:587}
     username: ${MAIL_USERNAME:example@example.com}
-    password: ${MAIL_PASSWORD:change-me}
+    password: ${MAIL_PASSWORD}
     properties:
       mail:
         smtp:
@@ -61,7 +61,7 @@ spring:
       fail-on-unknown-properties: ${JACKSON_FAIL_ON_UNKNOWN:false}
 
 jwt:
-  signerKey: "${JWT_SIGNER_KEY:1TjXchw5FloESb63Kc+DFhTARvpWL4jUGCwfGWxuG5SIf/1y/LgJxHnMqaF6A/ij}"
+  signerKey: "${JWT_SIGNER_KEY}"
 
 auth:
   service:
@@ -91,5 +91,5 @@ nominatim:
 # Geocoding configuration
 geocoding:
   api:
-    key: "${GEOCODING_API_KEY:dd6d33ea0b6b467b9b2ffed8e92c4e1a}"
+    key: "${GEOCODING_API_KEY}"
   mandatory: ${GEOCODING_MANDATORY:true}  # Set to false to allow branch creation without geocoding

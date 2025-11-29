@@ -12,7 +12,7 @@ spring:
     url: ${DB_URL:jdbc:mysql://localhost:3306/catalog_db}
     driver-class-name: com.mysql.cj.jdbc.Driver
     username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:12345678}
+    password: ${DB_PASSWORD}
   jpa:
     hibernate:
       ddl-auto: ${JPA_DDL_AUTO:update}
@@ -32,7 +32,7 @@ spring:
     host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:587}
     username: ${MAIL_USERNAME:example@example.com}
-    password: ${MAIL_PASSWORD:change-me}
+    password: ${MAIL_PASSWORD}
     properties:
       mail:
         smtp:
@@ -72,7 +72,7 @@ app:
       cron: "${STOCK_ADJUSTMENT_CRON:0 */5 * * * ?}"
 
 jwt:
-  signerKey: "${JWT_SIGNER_KEY:1TjXchw5FloESb63Kc+DFhTARvpWL4jUGCwfGWxuG5SIf/1y/LgJxHnMqaF6A/ij}"
+  signerKey: "${JWT_SIGNER_KEY}"
 
 # Logging configuration
 logging:
