@@ -24,10 +24,15 @@ ENV/
 *.log
 logs/
 
-# Model files
+# # Model files
+# *.pkl
+# *.model
+# models/
+
 *.pkl
-*.model
-models/
+*.joblib
+*.h5
+saved_models/
 
 # OS
 .DS_Store
