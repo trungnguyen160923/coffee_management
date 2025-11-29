@@ -19,14 +19,9 @@ Note: JSON output sẽ được in ra console, không lưu file và không tạo
   3. Active model (mặc định)
 """
 import argparse
-import sys
 import json
-from pathlib import Path
 from datetime import date, timedelta, datetime
 from typing import List, Optional, Tuple
-
-# Add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 import numpy as np
 import matplotlib
@@ -55,12 +50,12 @@ except Exception:
 
 plt.rcParams['axes.unicode_minus'] = False
 
-from src.infrastructure.database.connection import DatabaseConnection
-from src.infrastructure.repositories.metrics_repository_impl import MetricsRepositoryImpl
-from src.infrastructure.repositories.model_repository_impl import ModelRepositoryImpl
-from src.infrastructure.ml.ml_predictor import MLPredictor
-from src.infrastructure.ml.weekday_comparator_db import WeekdayComparatorDB
-from src.domain.entities.metrics import DailyBranchMetrics
+from ..infrastructure.database.connection import DatabaseConnection
+from ..infrastructure.repositories.metrics_repository_impl import MetricsRepositoryImpl
+from ..infrastructure.repositories.model_repository_impl import ModelRepositoryImpl
+from ..infrastructure.ml.ml_predictor import MLPredictor
+from ..infrastructure.ml.weekday_comparator_db import WeekdayComparatorDB
+from ..domain.entities.metrics import DailyBranchMetrics
 
 
 def parse_args() -> argparse.Namespace:

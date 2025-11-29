@@ -12,15 +12,11 @@ Usage (PowerShell):
     [--no-save]
 """
 import argparse
-import sys
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-
-from src.infrastructure.database.connection import DatabaseConnection
-from src.infrastructure.ml.ml_trainer import MLTrainer
-from src.infrastructure.repositories.metrics_repository_impl import MetricsRepositoryImpl
-from src.infrastructure.repositories.model_repository_impl import ModelRepositoryImpl
+from ..infrastructure.database.connection import DatabaseConnection
+from ..infrastructure.ml.ml_trainer import MLTrainer
+from ..infrastructure.repositories.metrics_repository_impl import MetricsRepositoryImpl
+from ..infrastructure.repositories.model_repository_impl import ModelRepositoryImpl
 
 
 def parse_args() -> argparse.Namespace:

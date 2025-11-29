@@ -14,20 +14,15 @@ Usage (PowerShell):
 Note: JSON output sẽ được in ra console, không lưu file.
 """
 import argparse
-import sys
 import json
-from pathlib import Path
 from datetime import date, datetime
 
-# Add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-
-from src.infrastructure.database.connection import DatabaseConnection
-from src.infrastructure.repositories.metrics_repository_impl import MetricsRepositoryImpl
-from src.infrastructure.repositories.model_repository_impl import ModelRepositoryImpl
-from src.infrastructure.repositories.forecast_repository_impl import ForecastRepositoryImpl
-from src.application.use_cases.predict_forecast_use_case import PredictForecastUseCase
-from src.presentation.evaluate_forecast_confidence import calculate_confidence_score
+from ..infrastructure.database.connection import DatabaseConnection
+from ..infrastructure.repositories.metrics_repository_impl import MetricsRepositoryImpl
+from ..infrastructure.repositories.model_repository_impl import ModelRepositoryImpl
+from ..infrastructure.repositories.forecast_repository_impl import ForecastRepositoryImpl
+from ..application.use_cases.predict_forecast_use_case import PredictForecastUseCase
+from .evaluate_forecast_confidence import calculate_confidence_score
 
 
 def create_forecast_json_output(

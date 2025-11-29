@@ -2,18 +2,13 @@
 Đánh giá độ tin cậy của forecast dựa trên confidence intervals và historical performance
 """
 
-import sys
-from pathlib import Path
 from datetime import date, datetime
 from typing import Dict, List
 import json
 
-# Add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-
-from src.infrastructure.database.connection import DatabaseConnection
-from src.infrastructure.repositories.forecast_repository_impl import ForecastRepositoryImpl
-from src.infrastructure.repositories.model_repository_impl import ModelRepositoryImpl
+from ..infrastructure.database.connection import DatabaseConnection
+from ..infrastructure.repositories.forecast_repository_impl import ForecastRepositoryImpl
+from ..infrastructure.repositories.model_repository_impl import ModelRepositoryImpl
 
 
 def calculate_confidence_score(forecast_values: Dict[str, float],

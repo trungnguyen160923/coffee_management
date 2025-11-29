@@ -3,29 +3,22 @@ Service responsible for retraining ML models (Isolation Forest & Prophet)
 using TOOL2 infrastructure modules.
 """
 import logging
-import sys
 import json
 import numpy as np
 import pandas as pd
-from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from app.config import settings
 
-# Ensure TOOL2 modules are importable
-TOOL2_PATH = Path(__file__).parent.parent / "TOOL2"
-if str(TOOL2_PATH) not in sys.path:
-    sys.path.insert(0, str(TOOL2_PATH))
-
-from src.infrastructure.database.connection import DatabaseConnection  # type: ignore
-from src.infrastructure.repositories.metrics_repository_impl import MetricsRepositoryImpl  # type: ignore
-from src.infrastructure.repositories.model_repository_impl import ModelRepositoryImpl  # type: ignore
-from src.infrastructure.ml.ml_trainer import MLTrainer  # type: ignore
-from src.infrastructure.ml.ml_predictor import MLPredictor  # type: ignore
-from src.infrastructure.ml.forecast_trainer import ForecastTrainer  # type: ignore
-from src.infrastructure.ml.forecast_predictor import ForecastPredictor  # type: ignore
-from src.infrastructure.ml.hyperparameter_tuner import HyperparameterTuner  # type: ignore
-from src.application.use_cases.train_forecast_model_use_case import TrainForecastModelUseCase  # type: ignore
+from app.TOOL2.src.infrastructure.database.connection import DatabaseConnection  # type: ignore
+from app.TOOL2.src.infrastructure.repositories.metrics_repository_impl import MetricsRepositoryImpl  # type: ignore
+from app.TOOL2.src.infrastructure.repositories.model_repository_impl import ModelRepositoryImpl  # type: ignore
+from app.TOOL2.src.infrastructure.ml.ml_trainer import MLTrainer  # type: ignore
+from app.TOOL2.src.infrastructure.ml.ml_predictor import MLPredictor  # type: ignore
+from app.TOOL2.src.infrastructure.ml.forecast_trainer import ForecastTrainer  # type: ignore
+from app.TOOL2.src.infrastructure.ml.forecast_predictor import ForecastPredictor  # type: ignore
+from app.TOOL2.src.infrastructure.ml.hyperparameter_tuner import HyperparameterTuner  # type: ignore
+from app.TOOL2.src.application.use_cases.train_forecast_model_use_case import TrainForecastModelUseCase  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -464,7 +457,7 @@ class ModelTrainingService:
         """
         result = model_repo.db.execute_query(query, (model_name,))
         if result:
-            from src.domain.entities.ml_model import MLModel  # type: ignore
+            from app.TOOL2.src.domain.entities.ml_model import MLModel  # type: ignore
             return MLModel.from_dict(result[0])
         return None
     
