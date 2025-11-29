@@ -42,9 +42,19 @@ public class WebClientConfiguration {
     CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration corsConfiguration = new CorsConfiguration();
         corsConfiguration.setAllowedOrigins(List.of(
+                // Development
                 "http://localhost:5173",
                 "http://localhost:8000",
-                "http://localhost:3000"));
+                "http://localhost:3000",
+                // Production domains
+                "http://coffeemanager.click",
+                "https://coffeemanager.click",
+                "http://www.coffeemanager.click",
+                "https://www.coffeemanager.click",
+                "http://admin.coffeemanager.click",
+                "https://admin.coffeemanager.click",
+                // IP access (if needed)
+                "http://213.163.201.60"));
         corsConfiguration.setAllowedHeaders(List.of("*"));
         corsConfiguration.setAllowedMethods(List.of("*"));
         corsConfiguration.setAllowCredentials(true);
