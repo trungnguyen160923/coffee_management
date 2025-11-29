@@ -12,7 +12,7 @@ spring:
     url: ${DB_URL:jdbc:mysql://localhost:3306/profile_db}
     driver-class-name: com.mysql.cj.jdbc.Driver
     username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:12345678}
+    password: ${DB_PASSWORD}
   jpa:
     hibernate:
       ddl-auto: ${JPA_DDL_AUTO:update}
@@ -32,7 +32,7 @@ spring:
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
 
 jwt:
-  signerKey: "${JWT_SIGNER_KEY:1TjXchw5FloESb63Kc+DFhTARvpWL4jUGCwfGWxuG5SIf/1y/LgJxHnMqaF6A/ij}"
+  signerKey: "${JWT_SIGNER_KEY}"
 
 app:
   services:

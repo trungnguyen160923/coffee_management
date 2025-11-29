@@ -4,7 +4,7 @@
 - Mục tiêu: đưa hệ thống microservices (Spring Boot, Python AI, React frontend) lên môi trường production ổn định, bảo mật.
 - Mô hình: Docker Compose trên VPS Ubuntu 22.04/24.04 với Nginx reverse proxy và Certbot SSL.
 - Thành phần chính:
-  1. Java services (api-gateway, auth, catalog, order, profile, notification, analytics)
+  1. Java services (api-gateway, auth, catalog, order, profile, notification) - 6 services
   2. Python `ai-service`
   3. Frontend Vite (`fe_coffee_manager`) build thành static và phục vụ qua Nginx container
   4. CSDL MySQL (có thể dùng managed DB hoặc container riêng)
@@ -70,7 +70,7 @@
 ### 5. Docker Compose production
 1. Tạo `docker-compose.prod.yml` với các service:
    - `config-server`
-   - `api-gateway`, `auth`, `catalog-service`, `order-service`, `profile-service`, `notification-service`, `analytics-service`
+   - `api-gateway`, `auth`, `catalog-service`, `order-service`, `profile-service`, `notification-service`
    - `ai-service`
    - `frontend` (Nginx phục vụ static, tự xử lý routing)
    - `mysql` (hoặc external DB)
