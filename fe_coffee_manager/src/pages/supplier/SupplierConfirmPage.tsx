@@ -3,9 +3,10 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { CheckCircle, XCircle, Calendar, MessageSquare } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatCurrency, formatQuantity } from '../../utils/helpers';
+import { API_BASE_URL } from '../../config/api';
 
 export default function SupplierConfirmPage() {
-  const BASE_URL = "http://localhost:8000/api/catalogs/public/purchase-orders";
+  const BASE_URL = `${API_BASE_URL}/api/catalogs/public/purchase-orders`;
   const { poId } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();

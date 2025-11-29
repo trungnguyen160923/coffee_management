@@ -1,5 +1,5 @@
 export const CONFIG = {
-  API_GATEWAY: "http://localhost:8000/api",
+  API_GATEWAY: process.env.REACT_APP_API_GATEWAY || "http://localhost:8000/api",
 };
 
 export const API = {

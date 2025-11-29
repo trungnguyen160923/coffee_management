@@ -11,6 +11,7 @@ import { getCurrentUserSessionAsync, createGuestSession } from '../../utils/user
 import MomoPaymentPage from './MomoPaymentPage';
 import axios from 'axios';
 import { showToast } from '../../utils/toast';
+import { CONFIG } from '../../configurations/configuration';
 
 const GuestCheckout = () => {
     const navigate = useNavigate();
@@ -52,7 +53,7 @@ const GuestCheckout = () => {
 
     const fetchProvinces = async () => {
         try {
-            const response = await axios.get('http://localhost:8000/api/provinces/p');
+            const response = await axios.get(`${CONFIG.API_GATEWAY}/provinces/p`);
             setProvinces(response.data);
         } catch (error) {
             console.error('Error fetching provinces:', error);
@@ -192,7 +193,7 @@ const GuestCheckout = () => {
 
     const fetchDistricts = async (provinceCode) => {
         try {
-            const response = await axios.get(`http://localhost:8000/api/provinces/p/${provinceCode}?depth=2`);
+            const response = await axios.get(`${CONFIG.API_GATEWAY}/provinces/p/${provinceCode}?depth=2`);
             setDistricts(response.data.districts || []);
             setWards([]);
         } catch (error) {
@@ -202,7 +203,7 @@ const GuestCheckout = () => {
 
     const fetchWards = async (districtCode) => {
         try {
-            const response = await axios.get(`http://localhost:8000/api/provinces/d/${districtCode}?depth=2`);
+            const response = await axios.get(`${CONFIG.API_GATEWAY}/provinces/d/${districtCode}?depth=2`);
             setWards(response.data.wards || []);
         } catch (error) {
             console.error('Error fetching wards:', error);

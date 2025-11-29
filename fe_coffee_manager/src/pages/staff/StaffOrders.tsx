@@ -6,6 +6,7 @@ import catalogService from '../../services/catalogService';
 import { stockService } from '../../services/stockService';
 import { CatalogProduct, CatalogRecipe } from '../../types';
 import toast from 'react-hot-toast';
+import { API_BASE_URL } from '../../config/api';
 
 interface SimpleOrderItem {
     productName?: string;
@@ -832,8 +833,7 @@ export default function StaffOrders() {
                                                         {detailOrder.orderItems.map((it: any, i: number) => {
                                                             const productId = String(it.productId || '');
                                                             const product = productDetails.get(productId);
-                                                            const API_BASE = (import.meta as any).env?.API_BASE_URL || 'http://localhost:8000';
-                                                            const imageSrc = product?.imageUrl && (product.imageUrl.startsWith('http') ? product.imageUrl : `${API_BASE}/api/catalogs${product.imageUrl}`);
+                                                            const imageSrc = product?.imageUrl && (product.imageUrl.startsWith('http') ? product.imageUrl : `${API_BASE_URL}/api/catalogs${product.imageUrl}`);
     
                                                             return (
                                                                 <tr key={i}>

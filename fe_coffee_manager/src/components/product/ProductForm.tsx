@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { CatalogSize, CatalogProduct, CatalogCategory } from '../../types';
 import { Plus, X } from 'lucide-react';
+import { API_BASE_URL } from '../../config/api';
 
 interface ProductFormProps {
   product?: CatalogProduct;
@@ -318,7 +319,7 @@ export default function ProductForm({
                   previewUrl.startsWith('data:')
                 )
                   ? previewUrl
-                  : `${(import.meta as any).env?.API_BASE_URL || 'http://localhost:8000'}/api/catalogs${previewUrl}`}
+                  : `${API_BASE_URL}/api/catalogs${previewUrl}`}
                 alt="Product preview"
                 className="w-32 h-32 object-cover rounded-lg border border-gray-300"
               />
