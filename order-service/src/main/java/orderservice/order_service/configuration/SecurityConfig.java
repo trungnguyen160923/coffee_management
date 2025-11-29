@@ -19,8 +19,8 @@ public class SecurityConfig {
 
     private static final String[] PUBLIC_ENDPOINTS = {
             "/customer-profiles/internal",
-            "/api/branches", // Allow public access to get branches list
-            "/api/branches/**", // Allow public access to all branch endpoints
+            // Note: /api/branches GET is public, but POST/PUT/DELETE require ADMIN role
+            // So we don't add /api/branches to PUBLIC_ENDPOINTS - let it go through protectedFilterChain
             "/api/cart",
             "/api/cart/**",
             "/api/orders/guest", // Allow guest checkout without authentication
@@ -29,7 +29,6 @@ public class SecurityConfig {
             "/api/discounts/apply", // Allow public access to discount application
             "/api/discounts/available",// Allow public access to available discounts
             "/reviews/filter",
-            "/api/discounts/available", // Allow public access to available discounts
             "/api/reservations/public/**", // Allow public access to track reservation status
             "/api/orders/public/**", // Allow public access to track order status
             "/api/analytics/metrics/**" // Allow access for AI service
@@ -57,7 +56,11 @@ public class SecurityConfig {
     public SecurityFilterChain protectedFilterChain(HttpSecurity httpSecurity) throws Exception {
         httpSecurity
                 .authorizeHttpRequests(request -> request
-                        // Specific role-based rules for branches (only for non-GET methods)
+                        // Branches: GET is public, POST/PUT/DELETE require ADMIN
+                        .requestMatchers(HttpMethod.GET, "/api/branches")
+                        .permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/branches/**")
+                        .permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/branches")
                         .hasRole("ADMIN")
                         .requestMatchers(HttpMethod.PUT, "/api/branches/**")
