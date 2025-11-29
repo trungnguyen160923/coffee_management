@@ -32,6 +32,9 @@ COPY --from=builder /opt/venv /opt/venv
 # Make sure we use venv's Python
 ENV PATH="/opt/venv/bin:$PATH"
 
+# Set PYTHONPATH so Python can find the app module
+ENV PYTHONPATH="/app"
+
 # Copy application code
 COPY app ./app
 
