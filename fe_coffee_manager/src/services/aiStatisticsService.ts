@@ -1,5 +1,5 @@
 // AI Statistics Service - Real API Integration
-import { aiApiClient } from '../config/api';
+import { apiClient } from '../config/api';
 import { API_ENDPOINTS } from '../config/constants';
 
 // Types matching backend API structure
@@ -116,7 +116,7 @@ const aiStatisticsService: AIStatisticsService = {
         params.append('tool_type', request.tool_type);
       }
 
-      const response = await aiApiClient.get<AIAnalysisResponse>(
+      const response = await apiClient.get<AIAnalysisResponse>(
         `${API_ENDPOINTS.AI_STATISTICS.AI_ANALYSIS}?${params.toString()}`
       );
       
@@ -137,7 +137,7 @@ const aiStatisticsService: AIStatisticsService = {
     pageSize: number = 10
   ): Promise<ReportListResponse> {
     try {
-      const response = await aiApiClient.get<ReportListResponse>(
+      const response = await apiClient.get<ReportListResponse>(
         API_ENDPOINTS.AI_STATISTICS.REPORTS.BY_BRANCH(branchId, page, pageSize)
       );
       
@@ -153,7 +153,7 @@ const aiStatisticsService: AIStatisticsService = {
    */
   async getReportById(reportId: number): Promise<ReportResponse> {
     try {
-      const response = await aiApiClient.get<ReportResponse>(
+      const response = await apiClient.get<ReportResponse>(
         API_ENDPOINTS.AI_STATISTICS.REPORTS.BY_ID(reportId)
       );
       
@@ -169,7 +169,7 @@ const aiStatisticsService: AIStatisticsService = {
    */
   async getReportByBranchAndDate(branchId: number, date: string): Promise<ReportResponse> {
     try {
-      const response = await aiApiClient.get<ReportResponse>(
+      const response = await apiClient.get<ReportResponse>(
         API_ENDPOINTS.AI_STATISTICS.REPORTS.BY_BRANCH_AND_DATE(branchId, date)
       );
       
@@ -191,7 +191,7 @@ const aiStatisticsService: AIStatisticsService = {
       }
       params.append('limit', limit.toString());
 
-      const response = await aiApiClient.get<ReportListResponse>(
+      const response = await apiClient.get<ReportListResponse>(
         `${API_ENDPOINTS.AI_STATISTICS.REPORTS.UNSENT}?${params.toString()}`
       );
       
@@ -214,7 +214,7 @@ const aiStatisticsService: AIStatisticsService = {
         });
       }
 
-      const response = await aiApiClient.post<any>(
+      const response = await apiClient.post<any>(
         `${API_ENDPOINTS.AI_STATISTICS.DISTRIBUTION.SEND(reportId)}${params.toString() ? `?${params.toString()}` : ''}`
       );
       
@@ -241,7 +241,7 @@ const aiStatisticsService: AIStatisticsService = {
       }
       params.append('limit', limit.toString());
 
-      const response = await aiApiClient.post<any>(
+      const response = await apiClient.post<any>(
         `${API_ENDPOINTS.AI_STATISTICS.DISTRIBUTION.SEND_UNSENT}?${params.toString()}`
       );
       
@@ -257,7 +257,7 @@ const aiStatisticsService: AIStatisticsService = {
    */
   async getDistributionStatus(): Promise<any> {
     try {
-      const response = await aiApiClient.get<any>(
+      const response = await apiClient.get<any>(
         API_ENDPOINTS.AI_STATISTICS.DISTRIBUTION.STATUS
       );
       
@@ -273,7 +273,7 @@ const aiStatisticsService: AIStatisticsService = {
    */
   async getSchedulerStatus(): Promise<any> {
     try {
-      const response = await aiApiClient.get<any>(
+      const response = await apiClient.get<any>(
         API_ENDPOINTS.AI_STATISTICS.SCHEDULER.STATUS
       );
       
@@ -299,7 +299,7 @@ const aiStatisticsService: AIStatisticsService = {
         });
       }
 
-      const response = await aiApiClient.post<any>(
+      const response = await apiClient.post<any>(
         `${API_ENDPOINTS.AI_STATISTICS.SCHEDULER.TRIGGER_DAILY}${params.toString() ? `?${params.toString()}` : ''}`
       );
       
