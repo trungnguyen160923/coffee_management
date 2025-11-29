@@ -44,13 +44,13 @@ const LoginPage = () => {
             const tokenPayload = JSON.parse(atob(token.split('.')[1]));
             const userId = tokenPayload.user_id;
 
+            // Lưu token vào localStorage TRƯỚC khi gọi getMe()
+            // để httpClient interceptor có thể đọc được token
+            localStorage.setItem('token', token);
+
             // Get user profile information to get fullname
             let fullname = formData.email.split('@')[0]; // fallback to username
             try {
-                // Set token to httpClient before calling profile API
-                const httpClient = (await import('../../../configurations/httpClient')).default;
-                httpClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-                
                 const userResponse = await authService.getMe();
                 console.log('userResponse', userResponse);
                 if (userResponse.result && userResponse.result.fullname) {
@@ -76,7 +76,23 @@ const LoginPage = () => {
             navigate('/coffee');
 
         } catch (err) {
-            setError('Login failed. Please check your credentials.');
+            // Extract error message from backend response
+            let errorMessage = 'Login failed. Please check your credentials.';
+            
+            if (err.response) {
+                // Backend returned an error response
+                const errorData = err.response.data;
+                errorMessage = errorData?.message 
+                    || errorData?.result?.message 
+                    || errorData?.error 
+                    || errorMessage;
+            } else if (err.message) {
+                // Network error or other error
+                errorMessage = err.message;
+            }
+            
+            setError(errorMessage);
+            console.error('Login error:', err);
         } finally {
             setLoading(false);
         }
