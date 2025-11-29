@@ -106,7 +106,7 @@ public class StaffProfileService {
                 .toList();
     }
 
-    @PreAuthorize("hasRole('STAFF')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER') or hasRole('STAFF')")
     public StaffProfileResponse getStaffProfile(Integer userId){
         StaffProfile staffProfile = staffProfileRepository.findById(userId).orElseThrow(() -> new AppException(ErrorCode.USER_ID_NOT_FOUND));
         if(staffProfile.getBranchId() == null){
