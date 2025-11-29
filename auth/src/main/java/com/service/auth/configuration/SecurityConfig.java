@@ -23,7 +23,9 @@ public class SecurityConfig {
     };
 
     private static final String[] PUBLIC_GET_ENDPOINTS = {
-            "/users/**" // Allow GET /users/** for internal service calls
+            "/users/{userId}", // Allow GET /users/{userId} for internal service calls (by ID)
+            "/users/staffs", "/users/customers", "/users/managers", // Allow listing endpoints
+            "/users/staffs/**", "/users/customers/**", "/users/managers/**" // Allow nested endpoints
     };
 
     private static final String[] INTERNAL_SERVICE_ENDPOINTS = {
@@ -45,6 +47,9 @@ public class SecurityConfig {
                 .permitAll()
                 .requestMatchers(INTERNAL_SERVICE_ENDPOINTS)
                 .permitAll()
+                // /users/me requires authentication
+                .requestMatchers(HttpMethod.GET, "/users/me")
+                .authenticated()
                 .anyRequest()
                 .authenticated());
 
