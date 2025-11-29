@@ -1,6 +1,7 @@
 package com.caffee_management.api_gateway.configuration;
 
 import com.caffee_management.api_gateway.repository.AuthClient;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
@@ -17,10 +18,14 @@ import java.util.List;
 
 @Configuration
 public class WebClientConfiguration {
+    @Value("${AUTH_SERVICE_URL:http://localhost:8001}")
+    private String authServiceUrl;
+    
     @Bean
     WebClient webClient() {
+        String baseUrl = authServiceUrl + "/auth-service";
         return WebClient.builder()
-                .baseUrl("http://localhost:8001/auth-service")
+                .baseUrl(baseUrl)
                 .build();
     }
 
