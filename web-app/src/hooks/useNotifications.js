@@ -36,6 +36,14 @@ export function useNotifications({ userId, enabled = true, role }) {
         setNotifications([]);
         return;
       }
+      
+      // Kiểm tra token trước khi gọi API
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.warn('[useNotifications] No token found, skipping fetch');
+        return;
+      }
+      
       try {
         const response = await fetchUserNotifications(userId, 50, role);
         if (!isActive) return;
