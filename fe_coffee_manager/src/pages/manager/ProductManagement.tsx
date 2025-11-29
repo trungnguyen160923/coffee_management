@@ -3,6 +3,7 @@ import catalogService from '../../services/catalogService';
 import { CatalogProduct, ProductPageResponse, CatalogCategory } from '../../types';
 import { Coffee, Loader, RefreshCw, Search, Eye } from 'lucide-react';
 import ProductDetailModal from '../../components/manager/staff/ProductDetailModal';
+import { API_BASE_URL } from '../../config/api';
 
 export default function ProductManagement() {
   const [data, setData] = useState<ProductPageResponse | null>(null);
@@ -160,8 +161,7 @@ export default function ProductManagement() {
                   </thead>
                   <tbody>
                     {data?.content.map(product => {
-                      const API_BASE = (import.meta as any).env?.API_BASE_URL || 'http://localhost:8000';
-                      const imageSrc = product.imageUrl && (product.imageUrl.startsWith('http') ? product.imageUrl : `${API_BASE}/api/catalogs${product.imageUrl}`);
+                      const imageSrc = product.imageUrl && (product.imageUrl.startsWith('http') ? product.imageUrl : `${API_BASE_URL}/api/catalogs${product.imageUrl}`);
                       return (
                         <tr key={product.productId} className="border-t hover:bg-gray-50">
                           <td className="px-4 py-2 w-1/4">

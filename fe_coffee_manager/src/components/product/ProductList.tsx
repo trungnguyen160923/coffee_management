@@ -1,6 +1,7 @@
 import { Coffee, Pencil as Edit, Trash2, Eye, Undo2 } from 'lucide-react';
 // import { toast } from 'react-hot-toast';
 import { CatalogProduct } from '../../types';
+import { API_BASE_URL } from '../../config/api';
 
 interface ProductListProps {
   products: CatalogProduct[];
@@ -34,8 +35,7 @@ export default function ProductList({ products, onEdit, onDelete, onView, onRest
         </thead>
         <tbody>
           {products.map((product) => {
-            const API_BASE = (import.meta as any).env?.API_BASE_URL || 'http://localhost:8000';
-            const imageSrc = product.imageUrl && (product.imageUrl.startsWith('http') ? product.imageUrl : `${API_BASE}/api/catalogs${product.imageUrl}`);
+            const imageSrc = product.imageUrl && (product.imageUrl.startsWith('http') ? product.imageUrl : `${API_BASE_URL}/api/catalogs${product.imageUrl}`);
             return (
             <tr key={product.productId} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
               <td className="py-4 px-4 w-1/4">

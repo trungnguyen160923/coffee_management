@@ -1,6 +1,7 @@
 /**
  * Utility functions để quản lý user session
  */
+import { CONFIG } from '../configurations/configuration';
 
 /**
  * Lấy thông tin user session hiện tại (sync)
@@ -166,7 +167,7 @@ export const getCartIdFromAPI = async () => {
         }
 
         // Gọi API để lấy cart của user
-        const response = await fetch('http://localhost:8000/api/order-service/api/cart', {
+        const response = await fetch(`${CONFIG.API_GATEWAY}/order-service/api/cart`, {
             method: 'GET',
             headers: {
                 'Authorization': `Bearer ${localStorage.getItem('token')}`,

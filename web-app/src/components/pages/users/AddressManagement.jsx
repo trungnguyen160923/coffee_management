@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { addressService } from '../../../services/addressService';
 import axios from 'axios';
 import { showToast } from '../../../utils/toast';
+import { CONFIG } from '../../../configurations/configuration';
 
 const AddressManagement = () => {
     const [addresses, setAddresses] = useState([]);
@@ -68,7 +69,7 @@ const AddressManagement = () => {
 
     const fetchProvinces = async () => {
         try {
-            const response = await axios.get('http://localhost:8000/api/provinces/p');
+            const response = await axios.get(`${CONFIG.API_GATEWAY}/provinces/p`);
             setProvinces(response.data);
             return response.data;
         } catch (error) {
@@ -79,7 +80,7 @@ const AddressManagement = () => {
 
     const fetchDistricts = async (provinceCode) => {
         try {
-            const response = await axios.get(`http://localhost:8000/api/provinces/p/${provinceCode}?depth=2`);
+            const response = await axios.get(`${CONFIG.API_GATEWAY}/provinces/p/${provinceCode}?depth=2`);
             const list = response.data.districts || [];
             setDistricts(list);
             setWards([]);
@@ -92,7 +93,7 @@ const AddressManagement = () => {
 
     const fetchWards = async (districtCode) => {
         try {
-            const response = await axios.get(`http://localhost:8000/api/provinces/d/${districtCode}?depth=2`);
+            const response = await axios.get(`${CONFIG.API_GATEWAY}/provinces/d/${districtCode}?depth=2`);
             const list = response.data.wards || [];
             setWards(list);
             return list;

@@ -9,6 +9,7 @@ import discountService from '../../services/discountService';
 import { NotificationBell } from '../../components/notifications/NotificationBell';
 import { UsageFloatingWidget } from '../../components/stock/UsageFloatingWidget';
 import { useNavigate } from 'react-router-dom';
+import { API_BASE_URL } from '../../config/api';
 import {
     ShoppingCart,
     Plus,
@@ -570,7 +571,7 @@ export default function StaffPOS() {
                                         <div className="aspect-square relative overflow-hidden rounded-t-xl">
                                             {product.imageUrl ? (
                                                 <img
-                                                    src={product.imageUrl.startsWith('http') ? product.imageUrl : `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}/api/catalogs${product.imageUrl}`}
+                                                    src={product.imageUrl.startsWith('http') ? product.imageUrl : `${API_BASE_URL}/api/catalogs${product.imageUrl}`}
                                                     alt={product.name}
                                                     className="w-full h-full object-cover"
                                                 />

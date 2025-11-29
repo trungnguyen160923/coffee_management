@@ -2,6 +2,7 @@ import { Coffee, ChefHat } from 'lucide-react';
 import { CatalogProduct, CatalogRecipe } from '../../types';
 import { useState, useEffect } from 'react';
 import catalogService from '../../services/catalogService';
+import { API_BASE_URL } from '../../config/api';
 
 interface ProductDetailProps {
   product: CatalogProduct;
@@ -50,7 +51,7 @@ export default function ProductDetail({ product, onViewRecipe }: ProductDetailPr
           <img
             src={(product.imageUrl.startsWith('http')
               ? product.imageUrl
-              : `${(import.meta as any).env?.API_BASE_URL || 'http://localhost:8000'}/api/catalogs${product.imageUrl}`)}
+              : `${API_BASE_URL}/api/catalogs${product.imageUrl}`)}
             alt={product.name}
             className="w-32 h-32 rounded-xl object-cover shadow-md"
             loading="lazy"
