@@ -16,10 +16,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Add TOOL2 to path để import các modules
-TOOL2_PATH = Path(__file__).parent.parent.parent / "TOOL2"
-if str(TOOL2_PATH) not in sys.path:
-    sys.path.insert(0, str(TOOL2_PATH))
+# TOOL2 modules are now in app.TOOL2.src
 
 
 class AIAgentService:
@@ -62,12 +59,12 @@ class AIAgentService:
         """
         try:
             # Import các components từ TOOL2
-            from src.infrastructure.database.connection import DatabaseConnection
-            from src.infrastructure.repositories.metrics_repository_impl import MetricsRepositoryImpl
-            from src.infrastructure.repositories.model_repository_impl import ModelRepositoryImpl
-            from src.infrastructure.ml.ml_predictor import MLPredictor
-            from src.infrastructure.ml.weekday_comparator_db import WeekdayComparatorDB
-            from src.presentation.predict_iforest_for_date_db import (
+            from app.TOOL2.src.infrastructure.database.connection import DatabaseConnection
+            from app.TOOL2.src.infrastructure.repositories.metrics_repository_impl import MetricsRepositoryImpl
+            from app.TOOL2.src.infrastructure.repositories.model_repository_impl import ModelRepositoryImpl
+            from app.TOOL2.src.infrastructure.ml.ml_predictor import MLPredictor
+            from app.TOOL2.src.infrastructure.ml.weekday_comparator_db import WeekdayComparatorDB
+            from app.TOOL2.src.presentation.predict_iforest_for_date_db import (
                 create_anomaly_json_output,
                 adjust_confidence_with_historical
             )
@@ -156,16 +153,16 @@ class AIAgentService:
         """
         try:
             # Import các components từ TOOL2
-            from src.infrastructure.database.connection import DatabaseConnection
-            from src.infrastructure.repositories.metrics_repository_impl import MetricsRepositoryImpl
-            from src.infrastructure.repositories.model_repository_impl import ModelRepositoryImpl
-            from src.infrastructure.repositories.forecast_repository_impl import ForecastRepositoryImpl
-            from src.application.use_cases.predict_forecast_use_case import PredictForecastUseCase
-            from src.presentation.predict_forecast_db import (
+            from app.TOOL2.src.infrastructure.database.connection import DatabaseConnection
+            from app.TOOL2.src.infrastructure.repositories.metrics_repository_impl import MetricsRepositoryImpl
+            from app.TOOL2.src.infrastructure.repositories.model_repository_impl import ModelRepositoryImpl
+            from app.TOOL2.src.infrastructure.repositories.forecast_repository_impl import ForecastRepositoryImpl
+            from app.TOOL2.src.application.use_cases.predict_forecast_use_case import PredictForecastUseCase
+            from app.TOOL2.src.presentation.predict_forecast_db import (
                 create_forecast_json_output,
                 calculate_confidence_percentage
             )
-            from src.presentation.evaluate_forecast_confidence import calculate_confidence_score
+            from app.TOOL2.src.presentation.evaluate_forecast_confidence import calculate_confidence_score
             
             # Kết nối database - TOOL2 cần dùng analytics_db (không phải analytics_db_report)
             db = DatabaseConnection(database_name='analytics_db')

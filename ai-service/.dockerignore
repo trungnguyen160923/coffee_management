@@ -38,7 +38,12 @@ logs/
 *.env
 
 # Development tools
-TOOL2/
+# TOOL2 is now in app/TOOL2, so we only exclude the root TOOL2 folder and its venv
+TOOL2/venv/
+TOOL2/__pycache__/
+TOOL2/*.md
+TOOL2/*.py
+TOOL2/.gitignore
 *.md
 !README.md
 

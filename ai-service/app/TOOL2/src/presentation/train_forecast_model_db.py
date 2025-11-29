@@ -10,16 +10,11 @@ Usage (PowerShell):
     [--model-version v1.0]
 """
 import argparse
-import sys
-from pathlib import Path
 
-# Add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-
-from src.infrastructure.database.connection import DatabaseConnection
-from src.infrastructure.repositories.metrics_repository_impl import MetricsRepositoryImpl
-from src.infrastructure.repositories.model_repository_impl import ModelRepositoryImpl
-from src.application.use_cases.train_forecast_model_use_case import TrainForecastModelUseCase
+from ..infrastructure.database.connection import DatabaseConnection
+from ..infrastructure.repositories.metrics_repository_impl import MetricsRepositoryImpl
+from ..infrastructure.repositories.model_repository_impl import ModelRepositoryImpl
+from ..application.use_cases.train_forecast_model_use_case import TrainForecastModelUseCase
 
 
 def parse_args() -> argparse.Namespace:
