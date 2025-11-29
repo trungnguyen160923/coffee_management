@@ -61,7 +61,14 @@ export function useNotifications({ userId, enabled = true, role }) {
           }))
         );
       } catch (error) {
-        console.error('[Notifications] Failed to fetch initial list', error);
+        // Nếu 401, có thể token không hợp lệ - dispatch event để logout
+        if (error.response?.status === 401) {
+          console.warn('[Notifications] 401 Unauthorized - Token may be invalid');
+          // Dispatch event để AuthContext xử lý logout
+          window.dispatchEvent(new CustomEvent('tokenExpired'));
+        } else {
+          console.error('[Notifications] Failed to fetch initial list', error);
+        }
       }
     };
 

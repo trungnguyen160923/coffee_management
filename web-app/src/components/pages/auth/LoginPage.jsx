@@ -58,6 +58,12 @@ const LoginPage = () => {
                     console.log('fullname', fullname);
                 }
             } catch (profileErr) {
+                // Nếu getMe() trả về 401, coi như login không thành công
+                if (profileErr.response?.status === 401) {
+                    localStorage.removeItem('token');
+                    localStorage.removeItem('user');
+                    throw new Error('Đăng nhập không thành công. Vui lòng thử lại.');
+                }
                 console.log('Could not fetch user profile, using email username as fallback');
                 // Don't show error or return, just use fallback
             }
@@ -83,6 +89,13 @@ const LoginPage = () => {
             // 3. Các component đã được re-render với token mới
             // Production có thể chậm hơn, nên đợi lâu hơn một chút
             await new Promise(resolve => setTimeout(resolve, 300));
+
+            // Kiểm tra lại token có còn hợp lệ không (có thể bị xóa bởi interceptor nếu 401)
+            const tokenStillValid = localStorage.getItem('token');
+            if (!tokenStillValid || tokenStillValid !== token) {
+              // Token đã bị xóa - có thể do API trả về 401
+              throw new Error('Đăng nhập không thành công. Token không hợp lệ.');
+            }
 
             // Redirect to home page
             navigate('/coffee');

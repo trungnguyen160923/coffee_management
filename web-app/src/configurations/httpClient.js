@@ -91,9 +91,14 @@ httpClient.interceptors.response.use(
             window.location.href = '/auth/login';
           }
         } else {
-          // Token còn hiệu lực nhưng vẫn 401 - có thể là lỗi từ backend
-          // Không xóa auth data ngay, chỉ log warning
-          console.warn('[httpClient] 401 Unauthorized - Token is valid but request was rejected. URL:', error.config?.url);
+          // Token còn hiệu lực nhưng vẫn 401 - token không hợp lệ hoặc không được backend chấp nhận
+          // Xóa auth data và logout ngay
+          console.warn('[httpClient] 401 Unauthorized - Token is valid but request was rejected. Logging out. URL:', error.config?.url);
+          clearAuthData();
+          window.dispatchEvent(new CustomEvent('tokenExpired'));
+          if (window.location.pathname !== '/auth/login') {
+            window.location.href = '/auth/login';
+          }
         }
       }
     }
