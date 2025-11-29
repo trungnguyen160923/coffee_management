@@ -46,7 +46,9 @@ services:
   # MESSAGE BROKER
   # ============================================
   kafka:
-    image: bitnami/kafka:3.7.0
+    # Bitnami đã chuyển image Kafka 3.7.0 sang repo legacy
+    # Thay vì bitnami/kafka:3.7.0 (không còn tồn tại), dùng bitnamilegacy/kafka:3.7.0
+    image: bitnamilegacy/kafka:3.7.0
     container_name: coffee-kafka
     hostname: kafka
     restart: always
@@ -63,12 +65,6 @@ services:
       KAFKA_HEAP_OPTS: "-Xms512m -Xmx512m"
     volumes:
       - kafka-data:/bitnami/kafka
-    healthcheck:
-      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092 || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
     networks:
       - backend-net
     logging:
@@ -106,12 +102,9 @@ services:
       # Kafka
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
     depends_on:
-      kafka:
-        condition: service_healthy
-      auth:
-        condition: service_started
-      catalog-service:
-        condition: service_started
+      - kafka
+      - auth
+      - catalog-service
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/actuator/health || exit 1"]
       interval: 30s
@@ -154,10 +147,8 @@ services:
       # Service URLs
       PROFILE_SERVICE_URL: http://profile:8003
     depends_on:
-      mysql:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
+      - mysql
+      - kafka
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/auth-service/actuator/health || exit 1"]
       interval: 30s
@@ -204,10 +195,8 @@ services:
       MAIL_USERNAME: ${MAIL_USERNAME}
       MAIL_PASSWORD: ${MAIL_PASSWORD}
     depends_on:
-      mysql:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
+      - mysql
+      - kafka
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8004/catalogs/actuator/health || exit 1"]
       interval: 30s
@@ -259,14 +248,10 @@ services:
       # Geocoding API (optional)
       GEOCODING_API_KEY: ${GEOCODING_API_KEY}
     depends_on:
-      mysql:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
-      auth:
-        condition: service_started
-      catalog-service:
-        condition: service_started
+      - mysql
+      - kafka
+      - auth
+      - catalog-service
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8002/order-service/actuator/health || exit 1"]
       interval: 30s
@@ -311,10 +296,8 @@ services:
       ORDER_SERVICE_URL: http://order:8002
       AUTH_SERVICE_URL: http://auth:8001
     depends_on:
-      mysql:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
+      - mysql
+      - kafka
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8003/profiles/actuator/health || exit 1"]
       interval: 30s
@@ -361,10 +344,8 @@ services:
       MAIL_USERNAME: ${MAIL_USERNAME}
       MAIL_PASSWORD: ${MAIL_PASSWORD}
     depends_on:
-      mysql:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
+      - mysql
+      - kafka
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8006/notification-service/actuator/health || exit 1"]
       interval: 30s
