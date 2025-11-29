@@ -1,5 +1,6 @@
 package com.service.auth.service;
 
+import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -148,7 +149,8 @@ public class AuthenticationService {
         JWSObject jwsObject = new JWSObject(header, payload);
 
         try {
-            jwsObject.sign(new MACSigner(SIGNER_KEY.getBytes()));
+            // Sử dụng UTF-8 encoding để đảm bảo nhất quán giữa dev và prod
+            jwsObject.sign(new MACSigner(SIGNER_KEY.getBytes(StandardCharsets.UTF_8)));
             return new TokenInfo(jwsObject.serialize(), expiresAt);
         } catch (JOSEException e) {
             log.error("Cannot create token", e);
@@ -157,7 +159,8 @@ public class AuthenticationService {
     }
 
     private SignedJWT verifyToken(String token, boolean isRefresh) throws JOSEException, ParseException {
-        JWSVerifier verifier = new MACVerifier(SIGNER_KEY.getBytes());
+        // Sử dụng UTF-8 encoding để đảm bảo nhất quán giữa dev và prod
+        JWSVerifier verifier = new MACVerifier(SIGNER_KEY.getBytes(StandardCharsets.UTF_8));
 
         SignedJWT signedJWT = SignedJWT.parse(token);
 

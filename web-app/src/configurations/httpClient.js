@@ -12,14 +12,15 @@ const httpClient = axios.create({
 
 // Request interceptor để thêm token, user_id và guestId vào header
 httpClient.interceptors.request.use((config) => {
+  // Đảm bảo headers object tồn tại
+  if (!config.headers) {
+    config.headers = {};
+  }
+  
   const token = localStorage.getItem('token');
   if (token && !isTokenExpired(token)) {
+    // Đảm bảo token được thêm vào header
     config.headers.Authorization = `Bearer ${token}`;
-    
-    // Debug: Log token được thêm vào header (chỉ log một phần để không expose full token)
-    if (process.env.NODE_ENV === 'development' || window.location.hostname === 'localhost') {
-      console.log('[httpClient] Adding token to request:', config.url, 'Token prefix:', token.substring(0, 20) + '...');
-    }
     
     // Nếu đã đăng nhập, thêm X-User-Id vào header
     const user = localStorage.getItem('user');
@@ -30,15 +31,9 @@ httpClient.interceptors.request.use((config) => {
           config.headers['X-User-Id'] = userData.userId.toString();
         }
       } catch (e) {
-        console.warn('Failed to parse user data for X-User-Id header', e);
+        // Silent fail
       }
     }
-  } else {
-    // Debug: Log khi không có token hoặc token hết hạn
-    console.warn('[httpClient] No valid token for request:', config.url, {
-      hasToken: !!token,
-      isExpired: token ? isTokenExpired(token) : 'N/A'
-    });
   }
   
   // Tự động thêm X-Guest-Id nếu chưa có trong header

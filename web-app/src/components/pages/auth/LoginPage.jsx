@@ -47,6 +47,18 @@ const LoginPage = () => {
             // Lưu token vào localStorage TRƯỚC khi gọi getMe()
             // để httpClient interceptor có thể đọc được token
             localStorage.setItem('token', token);
+            
+            // Đảm bảo token đã được lưu (localStorage là sync nhưng đợi một chút để chắc chắn)
+            // Và đảm bảo httpClient instance đã được khởi tạo với token mới
+            await new Promise(resolve => setTimeout(resolve, 50));
+            
+            // Verify token đã được lưu
+            const savedToken = localStorage.getItem('token');
+            if (!savedToken || savedToken !== token) {
+                throw new Error('Không thể lưu token. Vui lòng thử lại.');
+            }
+            
+            console.log('[LoginPage] Token saved, calling getMe()...');
 
             // Get user profile information to get fullname
             let fullname = formData.email.split('@')[0]; // fallback to username

@@ -31,7 +31,14 @@ export const authService = {
   },
 
   getMe: async () => {
-    const response = await httpClient.get(API.GET_ME);
+    // Đảm bảo token được gửi trong request
+    const token = localStorage.getItem('token');
+    const config = token ? {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    } : {};
+    const response = await httpClient.get(API.GET_ME, config);
     return response.data;
   }
 };
