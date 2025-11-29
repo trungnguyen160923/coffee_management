@@ -336,6 +336,7 @@ services:
       SERVER_PORT: 8006
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
       JAVA_OPTS: ${JAVA_OPTS_NOTIFICATION:--Xms256m -Xmx512m}
+      SERVER_CONTEXT_PATH: ${SERVER_CONTEXT_PATH_NOTIFICATION:-/notification-service}
       # Database
       DB_URL: jdbc:mysql://mysql:3306/notification_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Ho_Chi_Minh
       DB_USERNAME: ${DB_USERNAME:-root}
