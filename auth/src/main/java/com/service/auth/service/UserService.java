@@ -241,6 +241,8 @@ public class UserService {
 
             return userResponses;
         } catch (Exception e) {
+            log.error("[UserService] Error in getAllManagers() - exception type: {}, message: {}", 
+                e.getClass().getSimpleName(), e.getMessage(), e);
             throw new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION);
         }
         
@@ -347,6 +349,8 @@ public class UserService {
                 .totalPages(userPage.getTotalPages())
                 .build();
         } catch (Exception e) {
+            log.error("[UserService] Error in getManagersPaged(page={}, size={}) - exception type: {}, message: {}", 
+                page, size, e.getClass().getSimpleName(), e.getMessage(), e);
             throw new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION);
         }
     }
