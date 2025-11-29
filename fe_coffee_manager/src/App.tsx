@@ -167,7 +167,7 @@ function AppRoutes() {
 function App() {
   return (
     <AuthProvider>
-      <Router basename="/admin">
+      <Router>
         <AppToaster />
         <AppRoutes />
       </Router>
