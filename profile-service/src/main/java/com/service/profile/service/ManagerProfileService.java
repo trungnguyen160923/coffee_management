@@ -80,6 +80,8 @@ public class ManagerProfileService {
             }
         return managerProfileResponses;
         } catch (Exception e) {
+            log.error("[ManagerProfileService] Error in getAllManagerProfiles() - exception type: {}, message: {}", 
+                e.getClass().getSimpleName(), e.getMessage(), e);
             throw new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION);
         }
         
