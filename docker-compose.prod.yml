@@ -96,9 +96,9 @@ services:
       # Service URLs (internal network)
       AUTH_SERVICE_URL: http://auth:8001
       PROFILE_SERVICE_URL: http://profile:8003/profiles
-      ORDER_SERVICE_URL: http://order:8002
-      CATALOG_SERVICE_URL: http://catalog:8004
-      NOTIFICATION_HTTP_URL: http://notification:8006
+      ORDER_SERVICE_URL: http://order:8002/order-service
+      CATALOG_SERVICE_URL: http://catalog:8004/catalogs
+      NOTIFICATION_HTTP_URL: http://notification:8006/notification-service
       # Kafka
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
     depends_on:
@@ -189,6 +189,8 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       # JWT
       JWT_SIGNER_KEY: ${JWT_SIGNER_KEY}
+      # Service URLs
+      ORDER_SERVICE_URL: http://order:8002/order-service
       # Mail (optional)
       MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
       MAIL_PORT: ${MAIL_PORT:-587}
@@ -238,7 +240,7 @@ services:
       # Kafka
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       # Service URLs
-      AUTH_SERVICE_URL: http://auth:8001
+      AUTH_SERVICE_URL: http://auth:8001/auth-service
       CATALOG_SERVICE_URL: http://catalog:8004
       # JWT
       JWT_SIGNER_KEY: ${JWT_SIGNER_KEY}
@@ -297,8 +299,8 @@ services:
       # JWT
       JWT_SIGNER_KEY: ${JWT_SIGNER_KEY}
       # Service URLs
-      ORDER_SERVICE_URL: http://order:8002
-      AUTH_SERVICE_URL: http://auth:8001
+      ORDER_SERVICE_URL: http://order:8002/order-service
+      AUTH_SERVICE_URL: http://auth:8001/auth-service
     depends_on:
       - mysql
       - kafka
