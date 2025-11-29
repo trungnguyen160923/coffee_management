@@ -19,13 +19,9 @@ public class AuthService {
     AuthClient authClient;
 
     public Mono<ApiResponse<IntrospectResponse>> introspect(String token){
-        log.info("[AuthService] Calling introspect for token: {}...", token != null && token.length() > 20 ? token.substring(0, 20) : "null");
         return authClient.introspect(IntrospectRequest.builder()
                         .token(token)
                 .build())
-                .doOnSuccess(response -> {
-                    log.info("[AuthService] Introspect response: valid={}", response != null && response.getResult() != null ? response.getResult().isValid() : "null");
-                })
                 .doOnError(error -> {
                     log.error("[AuthService] Introspect error: {}", error.getMessage(), error);
                 });

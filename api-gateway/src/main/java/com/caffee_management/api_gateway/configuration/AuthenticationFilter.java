@@ -94,21 +94,11 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         String path = exchange.getRequest().getURI().getPath();
-        String method = exchange.getRequest().getMethod().name();
-        String query = exchange.getRequest().getURI().getQuery();
-        
-        log.info("=== API Gateway AuthenticationFilter ===");
-        log.info("Method: {}", method);
-        log.info("Path: {}", path);
-        log.info("Query: {}", query);
-        log.info("Full URI: {}", exchange.getRequest().getURI());
         
         // Skip authentication for WebSocket handshake and SockJS endpoints
         boolean isWebSocketPath = path.contains("/ws/") || path.contains("/notification-service/ws");
-        log.info("Is WebSocket path: {}", isWebSocketPath);
         
         if (isWebSocketPath) {
-            log.info("Skipping authentication for WebSocket/SockJS endpoint");
             return chain.filter(exchange);
         }
 
@@ -121,7 +111,6 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
             return unauthenticated(exchange.getResponse());
 
         String token = authHeader.getFirst().replace("Bearer ", "");
-        log.info("Token: {}", token);
 
         return authService.introspect(token).flatMap(introspectResponse -> {
             if (introspectResponse.getResult().isValid())
@@ -138,19 +127,12 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
 
     private boolean isPublicEndpoint(ServerHttpRequest request) {
         String requestPath = request.getURI().getPath();
-        log.info("Request Path: {}", requestPath);
-        log.info("API Prefix: {}", apiPrefix);
         
-        boolean isPublic = Arrays.stream(publicEndpoints)
+        return Arrays.stream(publicEndpoints)
                 .anyMatch(pattern -> {
                     String fullPattern = apiPrefix + pattern;
-                    boolean matches = requestPath.matches(fullPattern);
-                    log.info("Pattern: {} -> Matches: {}", fullPattern, matches);
-                    return matches;
+                    return requestPath.matches(fullPattern);
                 });
-        
-        log.info("Is Public Endpoint: {}", isPublic);
-        return isPublic;
     }
 
     Mono<Void> unauthenticated(ServerHttpResponse response) {

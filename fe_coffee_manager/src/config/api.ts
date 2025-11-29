@@ -131,7 +131,13 @@ class ApiClient {
         const errorData = await response.json().catch(() => ({}));
 
         // If unauthorized, try one-time refresh then retry
-        if (response.status === 401 && this.refreshToken) {
+        // BUT: Only trigger refresh for auth-related endpoints, not for data endpoints
+        // This prevents clearing localStorage when data APIs fail (e.g., metrics, analytics)
+        const isAuthEndpoint = endpoint.includes('/auth-service/auth/') || 
+                               endpoint.includes('/auth-service/users/me') ||
+                               endpoint === '/api/auth-service/auth/refresh';
+        
+        if (response.status === 401 && this.refreshToken && isAuthEndpoint) {
           try {
             if (!this.isRefreshing) await this.refreshAccessToken();
             // Retry with updated token
@@ -154,12 +160,12 @@ class ApiClient {
               throw retryError;
             }
           } catch (e) {
-            // refresh failed
+            // refresh failed - only clear localStorage for auth endpoints
             const error = new Error(errorData.message || `HTTP error! status: ${response.status}`);
             (error as any).status = response.status;
             (error as any).code = errorData.code;
             (error as any).response = errorData;
-            // Notify app to force logout
+            // Notify app to force logout ONLY for auth endpoints
             try { window.dispatchEvent(new CustomEvent('auth-refresh-failed', { detail: 'unauthenticated' })); } catch { }
             throw error;
           }

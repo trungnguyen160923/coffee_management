@@ -37,33 +37,16 @@ const LoginPage = () => {
             }
 
             // Call real API
-            console.log('[LoginPage] Step 1: Calling login API...', { email: formData.email });
             const response = await authService.login(formData.email, formData.password);
-            console.log('[LoginPage] Step 2: Login response received', { 
-                hasResult: !!response.result, 
-                hasToken: !!response.result?.token 
-            });
 
             // Decode JWT token to get user ID
             const token = response.result.token;
-            console.log('[LoginPage] Step 3: Token extracted', { 
-                tokenLength: token?.length,
-                tokenPreview: token ? `${token.substring(0, 20)}...` : 'null'
-            });
             
             const tokenPayload = JSON.parse(atob(token.split('.')[1]));
             const userId = tokenPayload.user_id;
-            console.log('[LoginPage] Step 4: Token decoded', { 
-                userId, 
-                email: tokenPayload.sub,
-                scope: tokenPayload.scope,
-                exp: tokenPayload.exp,
-                iat: tokenPayload.iat
-            });
 
             // Lưu token vào localStorage TRƯỚC khi gọi getMe()
             // để httpClient interceptor có thể đọc được token
-            console.log('[LoginPage] Step 5: Saving token to localStorage...');
             localStorage.setItem('token', token);
             
             // Đảm bảo token đã được lưu (localStorage là sync nhưng đợi một chút để chắc chắn)
@@ -72,46 +55,25 @@ const LoginPage = () => {
             
             // Verify token đã được lưu
             const savedToken = localStorage.getItem('token');
-            console.log('[LoginPage] Step 6: Token verification', { 
-                saved: !!savedToken, 
-                matches: savedToken === token,
-                savedLength: savedToken?.length
-            });
             if (!savedToken || savedToken !== token) {
                 throw new Error('Không thể lưu token. Vui lòng thử lại.');
             }
             
-            console.log('[LoginPage] Step 7: Calling getMe() API...');
 
             // Get user profile information to get fullname
             let fullname = formData.email.split('@')[0]; // fallback to username
             try {
-                console.log('[LoginPage] Step 8: getMe() request started');
                 const userResponse = await authService.getMe();
-                console.log('[LoginPage] Step 9: getMe() response received', { 
-                    hasResult: !!userResponse.result,
-                    hasFullname: !!userResponse.result?.fullname,
-                    userResponse 
-                });
                 if (userResponse.result && userResponse.result.fullname) {
                     fullname = userResponse.result.fullname;
-                    console.log('[LoginPage] Step 10: Fullname extracted', { fullname });
                 }
             } catch (profileErr) {
-                console.error('[LoginPage] Step 9 ERROR: getMe() failed', {
-                    status: profileErr.response?.status,
-                    statusText: profileErr.response?.statusText,
-                    data: profileErr.response?.data,
-                    message: profileErr.message,
-                    error: profileErr
-                });
                 // Nếu getMe() trả về 401, coi như login không thành công
                 if (profileErr.response?.status === 401) {
                     localStorage.removeItem('token');
                     localStorage.removeItem('user');
                     throw new Error('Đăng nhập không thành công. Vui lòng thử lại.');
                 }
-                console.log('Could not fetch user profile, using email username as fallback');
                 // Don't show error or return, just use fallback
             }
 

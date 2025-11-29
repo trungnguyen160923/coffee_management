@@ -194,6 +194,8 @@ services:
       MAIL_PORT: ${MAIL_PORT:-587}
       MAIL_USERNAME: ${MAIL_USERNAME}
       MAIL_PASSWORD: ${MAIL_PASSWORD}
+      # Frontend URLs (for email links)
+      ADMIN_FRONTEND_URL: ${ADMIN_FRONTEND_URL}
     depends_on:
       - mysql
       - kafka
@@ -247,6 +249,8 @@ services:
       MAIL_PASSWORD: ${MAIL_PASSWORD}
       # Geocoding API (optional)
       GEOCODING_API_KEY: ${GEOCODING_API_KEY}
+      # Frontend URLs (for email links)
+      CUSTOMER_FRONTEND_URL: ${CUSTOMER_FRONTEND_URL}
     depends_on:
       - mysql
       - kafka

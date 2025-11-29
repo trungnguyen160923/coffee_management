@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import java.util.List;
 import java.util.Map;
 
-@FeignClient(name = "catalog-service", url = "http://localhost:8004", path = "/catalogs",
+@FeignClient(name = "catalog-service", url = "${CATALOG_SERVICE_URL:http://localhost:8004}", path = "/catalogs",
         configuration = {AuthenticationRequestInterceptor.class})
 public interface CatalogServiceClient {
 

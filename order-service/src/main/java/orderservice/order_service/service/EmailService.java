@@ -24,6 +24,9 @@ public class EmailService {
     @Value("${spring.mail.username}")
     private String fromEmail;
 
+    @Value("${app.frontend.customer-url:http://localhost:3000}")
+    private String customerFrontendUrl;
+
     public EmailService(JavaMailSender mailSender) {
         this.mailSender = mailSender;
     }
@@ -39,7 +42,7 @@ public class EmailService {
             helper.setTo(toEmail);
             helper.setSubject("Order Confirmation - Coffee Shop #" + orderId);
 
-            String trackingUrl = "http://localhost:3000/track-order/" + orderId;
+            String trackingUrl = customerFrontendUrl + "/track-order/" + orderId;
             String htmlContent = buildOrderConfirmationHtml(customerName, orderId, orderItems,
                     totalAmount, deliveryAddress, paymentMethod, orderDate, trackingUrl);
             helper.setText(htmlContent, true);
@@ -61,7 +64,7 @@ public class EmailService {
             helper.setSubject("Reservation Confirmation - Coffee Shop");
 
             String formattedDate = reservedAt.format(DateTimeFormatter.ofPattern("MM/dd/yyyy HH:mm"));
-            String trackingUrl = "http://localhost:3000/track-reservation/" + reservationId;
+            String trackingUrl = customerFrontendUrl + "/track-reservation/" + reservationId;
             String htmlContent = String.format(
                     """
                             <!DOCTYPE html>

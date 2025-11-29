@@ -20,12 +20,6 @@ public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
     public void commence(
             HttpServletRequest request, HttpServletResponse response, AuthenticationException authException)
             throws IOException {
-        log.error("[JwtAuthenticationEntryPoint] Authentication failed - method={}, uri={}, authHeader={}, exception={}", 
-            request.getMethod(),
-            request.getRequestURI(),
-            request.getHeader("Authorization") != null ? request.getHeader("Authorization").substring(0, Math.min(30, request.getHeader("Authorization").length())) + "..." : "null",
-            authException.getMessage());
-        
         ErrorCode errorCode = ErrorCode.UNAUTHENTICATED;
 
         response.setStatus(errorCode.getStatusCode().value());
