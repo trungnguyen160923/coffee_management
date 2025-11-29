@@ -95,7 +95,7 @@ services:
       JAVA_OPTS: ${JAVA_OPTS_GATEWAY:--Xms256m -Xmx512m}
       # Service URLs (internal network)
       AUTH_SERVICE_URL: http://auth:8001
-      PROFILE_SERVICE_URL: http://profile:8003
+      PROFILE_SERVICE_URL: http://profile:8003/profiles
       ORDER_SERVICE_URL: http://order:8002
       CATALOG_SERVICE_URL: http://catalog:8004
       NOTIFICATION_HTTP_URL: http://notification:8006
@@ -145,7 +145,7 @@ services:
       # JWT
       JWT_SIGNER_KEY: ${JWT_SIGNER_KEY}
       # Service URLs
-      PROFILE_SERVICE_URL: http://profile:8003
+      PROFILE_SERVICE_URL: http://profile:8003/profiles
     depends_on:
       - mysql
       - kafka
