@@ -16,6 +16,11 @@ httpClient.interceptors.request.use((config) => {
   if (token && !isTokenExpired(token)) {
     config.headers.Authorization = `Bearer ${token}`;
     
+    // Debug: Log token được thêm vào header (chỉ log một phần để không expose full token)
+    if (process.env.NODE_ENV === 'development' || window.location.hostname === 'localhost') {
+      console.log('[httpClient] Adding token to request:', config.url, 'Token prefix:', token.substring(0, 20) + '...');
+    }
+    
     // Nếu đã đăng nhập, thêm X-User-Id vào header
     const user = localStorage.getItem('user');
     if (user) {
@@ -28,6 +33,12 @@ httpClient.interceptors.request.use((config) => {
         console.warn('Failed to parse user data for X-User-Id header', e);
       }
     }
+  } else {
+    // Debug: Log khi không có token hoặc token hết hạn
+    console.warn('[httpClient] No valid token for request:', config.url, {
+      hasToken: !!token,
+      isExpired: token ? isTokenExpired(token) : 'N/A'
+    });
   }
   
   // Tự động thêm X-Guest-Id nếu chưa có trong header
@@ -61,15 +72,28 @@ httpClient.interceptors.response.use(
                          error.config?.url?.includes('/order-service/reviews');
       
       if (!isPublicAPI) {
-        // Token hết hạn hoặc không hợp lệ - chỉ redirect nếu không phải API public
-        clearAuthData();
+        // Kiểm tra xem có phải lỗi do thiếu token (không phải token hết hạn)
+        const token = localStorage.getItem('token');
+        if (!token) {
+          // Không có token - có thể là request được gọi trước khi login hoàn tất
+          // Không xóa auth data, chỉ log warning
+          console.warn('[httpClient] 401 Unauthorized - No token found. Request may have been called before login completed.');
+          return Promise.reject(error);
+        }
         
-        // Dispatch event để thông báo cho các component khác
-        window.dispatchEvent(new CustomEvent('tokenExpired'));
-        
-        // Chuyển hướng về trang login nếu không phải trang login
-        if (window.location.pathname !== '/auth/login') {
-          window.location.href = '/auth/login';
+        // Có token nhưng vẫn 401 - có thể token hết hạn hoặc không hợp lệ
+        // Kiểm tra xem token có hết hạn không
+        if (isTokenExpired(token)) {
+          // Token hết hạn - xóa auth data và redirect
+          clearAuthData();
+          window.dispatchEvent(new CustomEvent('tokenExpired'));
+          if (window.location.pathname !== '/auth/login') {
+            window.location.href = '/auth/login';
+          }
+        } else {
+          // Token còn hiệu lực nhưng vẫn 401 - có thể là lỗi từ backend
+          // Không xóa auth data ngay, chỉ log warning
+          console.warn('[httpClient] 401 Unauthorized - Token is valid but request was rejected. URL:', error.config?.url);
         }
       }
     }

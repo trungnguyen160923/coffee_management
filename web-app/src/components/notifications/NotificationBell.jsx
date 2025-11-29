@@ -18,7 +18,7 @@ function formatTimeAgo(iso) {
 }
 
 export function NotificationBell() {
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const userId = useMemo(() => {
     if (user?.userId) return user.userId;
@@ -41,6 +41,14 @@ export function NotificationBell() {
   const [open, setOpen] = useState(false);
   const containerRef = useRef(null);
 
+  // Chỉ enable notifications khi:
+  // 1. User đã authenticated
+  // 2. Có userId
+  // 3. Có token trong localStorage
+  const hasToken = useMemo(() => {
+    return !!localStorage.getItem('token');
+  }, [isAuthenticated, user]);
+
   const {
     notifications,
     unreadCount,
@@ -49,7 +57,7 @@ export function NotificationBell() {
     isConnected,
   } = useNotifications({
     userId,
-    enabled: !!userId,
+    enabled: !!userId && isAuthenticated && hasToken,
     role: userRole,
   });
 

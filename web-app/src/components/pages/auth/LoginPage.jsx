@@ -69,8 +69,20 @@ const LoginPage = () => {
                 userId: userId
             };
 
-            // Use AuthContext login method
+            // Lưu token và user vào localStorage TRƯỚC khi gọi login()
+            // để đảm bảo token có sẵn khi các component khác render
+            localStorage.setItem('token', token);
+            localStorage.setItem('user', JSON.stringify(userData));
+
+            // Use AuthContext login method (cập nhật state)
             login(token, userData);
+
+            // Đợi để đảm bảo:
+            // 1. localStorage đã được cập nhật (đồng bộ, không cần đợi)
+            // 2. AuthContext state đã được update (React state update)
+            // 3. Các component đã được re-render với token mới
+            // Production có thể chậm hơn, nên đợi lâu hơn một chút
+            await new Promise(resolve => setTimeout(resolve, 300));
 
             // Redirect to home page
             navigate('/coffee');
