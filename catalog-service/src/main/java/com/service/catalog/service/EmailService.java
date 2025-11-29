@@ -24,6 +24,9 @@ public class EmailService {
     private final JavaMailSender mailSender;
     private final PDFService pdfService;
 
+    @org.springframework.beans.factory.annotation.Value("${app.frontend.admin-url:http://localhost:5173}")
+    private String adminFrontendUrl;
+
     public EmailResult sendPOToSupplier(PurchaseOrder po, String toEmail, String cc, String subject, String message, 
                                         com.service.catalog.dto.response.BranchResponse branchInfo, 
                                         com.service.catalog.dto.response.UserResponse managerInfo) {
@@ -127,13 +130,13 @@ public class EmailService {
         log.info("Secure token: {}", secureToken);
         
         // Confirm button
-        body.append("<a href='http://localhost:5173/supplier/po/").append(po.getPoId()).append("/confirm?token=").append(secureToken).append("' ");
+        body.append("<a href='").append(adminFrontendUrl).append("/supplier/po/").append(po.getPoId()).append("/confirm?token=").append(secureToken).append("' ");
         body.append("style='display: inline-block; background-color: #28a745; color: white; padding: 12px 24px; ");
         body.append("text-decoration: none; border-radius: 5px; margin: 10px; font-weight: bold;'>");
         body.append("✓ CONFIRM ORDER</a>");
         
         // Cancel button
-        body.append("<a href='http://localhost:5173/supplier/po/").append(po.getPoId()).append("/cancel?token=").append(secureToken).append("' ");
+        body.append("<a href='").append(adminFrontendUrl).append("/supplier/po/").append(po.getPoId()).append("/cancel?token=").append(secureToken).append("' ");
         body.append("style='display: inline-block; background-color: #dc3545; color: white; padding: 12px 24px; ");
         body.append("text-decoration: none; border-radius: 5px; margin: 10px; font-weight: bold;'>");
         body.append("✗ CANCEL ORDER</a>");

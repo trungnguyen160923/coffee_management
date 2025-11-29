@@ -19,26 +19,10 @@ httpClient.interceptors.request.use((config) => {
   
   const token = localStorage.getItem('token');
   const url = config.url || config.baseURL + (config.url || '');
-  const isAuthRequest = url.includes('/auth-service/users/me') || url.includes('/users/me');
-  
-  if (isAuthRequest) {
-    console.log('[httpClient] Request interceptor - GET_ME request', {
-      url,
-      hasToken: !!token,
-      tokenLength: token?.length,
-      tokenExpired: token ? isTokenExpired(token) : 'N/A'
-    });
-  }
   
   if (token && !isTokenExpired(token)) {
     // Đảm bảo token được thêm vào header
     config.headers.Authorization = `Bearer ${token}`;
-    if (isAuthRequest) {
-      console.log('[httpClient] Authorization header added', {
-        headerValue: `Bearer ${token.substring(0, 20)}...`,
-        fullHeader: config.headers.Authorization
-      });
-    }
     
     // Nếu đã đăng nhập, thêm X-User-Id vào header
     const user = localStorage.getItem('user');
@@ -51,13 +35,6 @@ httpClient.interceptors.request.use((config) => {
       } catch (e) {
         // Silent fail
       }
-    }
-  } else {
-    if (isAuthRequest) {
-      console.warn('[httpClient] No token or token expired', {
-        hasToken: !!token,
-        isExpired: token ? isTokenExpired(token) : 'N/A'
-      });
     }
   }
   
@@ -73,18 +50,6 @@ httpClient.interceptors.request.use((config) => {
     config.headers['X-Guest-Id'] = guestId;
   }
   
-  if (isAuthRequest) {
-    console.log('[httpClient] Final request config', {
-      method: config.method,
-      url: config.url || url,
-      headers: {
-        Authorization: config.headers.Authorization ? `${config.headers.Authorization.substring(0, 30)}...` : 'NOT SET',
-        'X-Guest-Id': config.headers['X-Guest-Id'],
-        'X-User-Id': config.headers['X-User-Id'] || 'NOT SET'
-      }
-    });
-  }
-  
   return config;
 });
 
@@ -92,33 +57,11 @@ httpClient.interceptors.request.use((config) => {
 httpClient.interceptors.response.use(
   (response) => {
     const url = response.config?.url || response.config?.baseURL + (response.config?.url || '');
-    const isAuthRequest = url.includes('/auth-service/users/me') || url.includes('/users/me');
-    
-    if (isAuthRequest) {
-      console.log('[httpClient] Response interceptor - GET_ME response', {
-        status: response.status,
-        statusText: response.statusText,
-        hasData: !!response.data,
-        data: response.data
-      });
-    }
     
     return response;
   },
   (error) => {
     const url = error.config?.url || error.config?.baseURL + (error.config?.url || '');
-    const isAuthRequest = url.includes('/auth-service/users/me') || url.includes('/users/me');
-    
-    if (isAuthRequest) {
-      console.error('[httpClient] Response interceptor - GET_ME error', {
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data,
-        message: error.message,
-        hasResponse: !!error.response,
-        hasRequest: !!error.request
-      });
-    }
     
     if (error.response?.status === 401) {
       // Kiểm tra xem có phải API public không cần token
@@ -134,8 +77,6 @@ httpClient.interceptors.response.use(
         const token = localStorage.getItem('token');
         if (!token) {
           // Không có token - có thể là request được gọi trước khi login hoàn tất
-          // Không xóa auth data, chỉ log warning
-          console.warn('[httpClient] 401 Unauthorized - No token found. Request may have been called before login completed.');
           return Promise.reject(error);
         }
         
@@ -151,7 +92,6 @@ httpClient.interceptors.response.use(
         } else {
           // Token còn hiệu lực nhưng vẫn 401 - token không hợp lệ hoặc không được backend chấp nhận
           // Xóa auth data và logout ngay
-          console.warn('[httpClient] 401 Unauthorized - Token is valid but request was rejected. Logging out. URL:', error.config?.url);
           clearAuthData();
           window.dispatchEvent(new CustomEvent('tokenExpired'));
           if (window.location.pathname !== '/auth/login') {

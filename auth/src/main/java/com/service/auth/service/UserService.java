@@ -496,108 +496,66 @@ public class UserService {
     }
 
     public UserResponse getMe() {
-        log.info("[UserService] Step 1: getMe() called");
-        
         // Get current user from SecurityContext
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        log.info("[UserService] Step 2: Getting Authentication from SecurityContext - hasAuth={}, hasPrincipal={}, principalType={}", 
-            auth != null,
-            auth != null && auth.getPrincipal() != null,
-            auth != null && auth.getPrincipal() != null ? auth.getPrincipal().getClass().getName() : "null");
         
         if (auth == null || auth.getPrincipal() == null) {
-            log.error("[UserService] Authentication or Principal is null");
             throw new AppException(ErrorCode.UNAUTHENTICATED);
         }
         
         // Extract userId from JWT token claims
         Integer userId;
         if (auth.getPrincipal() instanceof Jwt jwt) {
-            log.info("[UserService] Step 3: Principal is Jwt, extracting claims - subject={}, claims={}", 
-                jwt.getSubject(),
-                jwt.getClaims().keySet());
-            
             // Get user_id from JWT claims (it's stored as Long, convert to Integer)
             Long userIdLong = jwt.getClaim("user_id");
-            log.info("[UserService] Step 4: Extracted user_id from JWT - userIdLong={}, userIdLongType={}", 
-                userIdLong,
-                userIdLong != null ? userIdLong.getClass().getName() : "null");
             
             if (userIdLong != null) {
                 userId = userIdLong.intValue();
-                log.info("[UserService] Step 5: Converted userId to Integer - userId={}", userId);
             } else {
-                log.error("[UserService] user_id claim is null in JWT");
                 throw new AppException(ErrorCode.UNAUTHENTICATED);
             }
         } else {
-            log.error("[UserService] Principal is not Jwt instance - principalType={}", 
-                auth.getPrincipal().getClass().getName());
             // Fallback: try to get from authorities or other sources
             throw new AppException(ErrorCode.UNAUTHENTICATED);
         }
         
-        log.info("[UserService] Step 6: Fetching user from database - userId={}", userId);
         UserResponse user = userMapper.toUserResponse(userRepository.findById(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_ID_NOT_FOUND)));
-        log.info("[UserService] Step 7: User fetched from database - userId={}, email={}, role={}", 
-            user.getUser_id(),
-            user.getEmail(),
-            user.getRole() != null ? user.getRole().getName() : "null");
-        
-        log.info("[UserService] Step 8: Checking user role and calling profile service - role={}", 
-            user.getRole() != null ? user.getRole().getName() : "null");
 
         if(user.getRole().getName().equals(PredefinedRole.CUSTOMER_ROLE)) {
-            log.info("[UserService] Step 9: User is CUSTOMER, calling profileClient.getCustomerProfile() - userId={}", userId);
             try {
                 CustomerProfileResponse customerProfile = profileClient.getCustomerProfile(userId).getResult();
-                log.info("[UserService] Step 10: Customer profile received - hasDob={}, hasAvatarUrl={}, hasBio={}", 
-                    customerProfile.getDob() != null,
-                    customerProfile.getAvatarUrl() != null,
-                    customerProfile.getBio() != null);
                 user.setDob(customerProfile.getDob());
                 user.setAvatarUrl(customerProfile.getAvatarUrl());
                 user.setBio(customerProfile.getBio());
-                log.info("[UserService] Step 11: Customer profile data set to user response");
             } catch (Exception e) {
                 log.error("[UserService] Error calling profileClient.getCustomerProfile() - userId={}, error={}", userId, e.getMessage(), e);
                 throw e;
             }
         }
         else if(user.getRole().getName().equals(PredefinedRole.MANAGER_ROLE)) {
-            log.info("[UserService] Step 9: User is MANAGER, calling profileClient.getManagerProfile() - userId={}", userId);
             ManagerProfileResponse managerProfile = profileClient.getManagerProfile(userId).getResult();
             user.setIdentityCard(managerProfile.getIdentityCard());
             user.setBranch(managerProfile.getBranch());
             user.setHireDate(managerProfile.getHireDate());
-            log.info("[UserService] Step 10: Manager profile data set to user response");
         }
         else if(user.getRole().getName().equals(PredefinedRole.STAFF_ROLE)) {
-            log.info("[UserService] Step 9: User is STAFF, calling profileClient.getStaffProfile() - userId={}", userId);
             StaffProfileResponse staffProfile = profileClient.getStaffProfile(userId).getResult();
             user.setIdentityCard(staffProfile.getIdentityCard());
             user.setBranch(staffProfile.getBranch());
             user.setHireDate(staffProfile.getHireDate());
             user.setPosition(staffProfile.getPosition());
             user.setSalary(staffProfile.getSalary());
-            log.info("[UserService] Step 10: Staff profile data set to user response");
         }
         else if(user.getRole().getName().equals(PredefinedRole.ADMIN_ROLE)) {
-            log.info("[UserService] Step 9: User is ADMIN, calling profileClient.getAdminProfile() - userId={}", userId);
             AdminProfileResponse adminProfile = profileClient.getAdminProfile(userId).getResult();
             user.setAdminLevel(adminProfile.getAdminLevel());
             user.setNotes(adminProfile.getNotes());
-            log.info("[UserService] Step 10: Admin profile data set to user response");
         }
         else {
             log.error("[UserService] Unknown role - role={}", user.getRole() != null ? user.getRole().getName() : "null");
             throw new AppException(ErrorCode.ROLE_NOT_FOUND);
         }
-        
-        log.info("[UserService] Step 12: getMe() completed successfully - userId={}, email={}", 
-            user.getUser_id(),
-            user.getEmail());
 
         return user;
     }

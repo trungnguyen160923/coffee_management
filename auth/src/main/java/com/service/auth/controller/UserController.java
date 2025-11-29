@@ -128,17 +128,7 @@ public class UserController {
 
     @GetMapping("/me")
     ApiResponse<UserResponse> getMe(@RequestHeader(value = "Authorization", required = false) String authHeader) {
-        log.info("[UserController] Step 1: GET /users/me request received - hasAuthHeader={}, authHeaderPreview={}", 
-            authHeader != null,
-            authHeader != null ? authHeader.substring(0, Math.min(30, authHeader.length())) + "..." : "null");
-        
-        log.info("[UserController] Step 2: Calling userService.getMe()...");
         var result = userService.getMe();
-        log.info("[UserController] Step 3: userService.getMe() completed - hasResult={}, userId={}, email={}", 
-            result != null,
-            result != null ? result.getUser_id() : null,
-            result != null ? result.getEmail() : null);
-        
         return ApiResponse.<UserResponse>builder().result(result).build();
     }
 

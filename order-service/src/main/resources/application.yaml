@@ -67,6 +67,10 @@ auth:
   service:
     url: ${AUTH_SERVICE_URL:http://localhost:8001/auth-service}
 
+app:
+  frontend:
+    customer-url: ${CUSTOMER_FRONTEND_URL:http://localhost:3000}
+
 # Feign configuration
 feign:
   client:

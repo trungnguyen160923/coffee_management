@@ -59,6 +59,8 @@ app:
   services:
     order: ${ORDER_SERVICE_URL:http://localhost:8002}
     auth: ${AUTH_SERVICE_URL:http://localhost:8001}
+  frontend:
+    admin-url: ${ADMIN_FRONTEND_URL:http://localhost:5173}
   kafka:
     topics:
       inventory-low-stock: ${TOPIC_INVENTORY_LOW_STOCK:inventory.low.stock}
