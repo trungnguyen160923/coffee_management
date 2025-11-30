@@ -153,15 +153,20 @@ const DiscountForm: React.FC<DiscountFormProps> = ({ discount, managerBranch, on
             return;
         }
 
-        const submitData = {
+        const submitData: any = {
             ...formData,
             minOrderAmount: formData.minOrderAmount || 0,
             maxDiscountAmount: formData.maxDiscountAmount || undefined,
             usageLimit: formData.usageLimit || 0,
             // For admin: allow clearing branch to set system-wide (null)
             branchId: user?.role === 'admin' ? (formData.branchId ?? null) : (formData.branchId || undefined),
-            clearBranch: user?.role === 'admin' ? (formData.branchId === null) : undefined
         };
+        
+        // For update requests: remove code (not allowed to change) and add clearBranch
+        if (discount) {
+            delete submitData.code; // Code cannot be changed after creation
+            submitData.clearBranch = user?.role === 'admin' ? (formData.branchId === null) : undefined;
+        }
 
         onSubmit(submitData);
     };

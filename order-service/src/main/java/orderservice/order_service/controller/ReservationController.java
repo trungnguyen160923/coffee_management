@@ -11,12 +11,14 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
 import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/reservations")
+@Slf4j
 public class ReservationController {
 
     private final ReservationService reservationService;
@@ -28,12 +30,19 @@ public class ReservationController {
 
     @PostMapping
     public ResponseEntity<ApiResponse<ReservationResponse>> createReservation(
-            @Valid @RequestBody CreateReservationRequest request) {
+            @Valid @RequestBody CreateReservationRequest request,
+            @RequestHeader(value = "Authorization", required = false) String authHeader) {
         try {
-            // Get JWT token from SecurityContext
-            String token = getCurrentToken();
+            log.info("Received reservation request: branchId={}, reservedAt={}, customerId={}, partySize={}", 
+                    request.getBranchId(), request.getReservedAt(), request.getCustomerId(), request.getPartySize());
+            
+            // Get JWT token from Authorization header (works for both authenticated and unauthenticated requests)
+            String token = extractTokenFromHeader(authHeader);
+            log.debug("Token extracted: {}", token != null ? "present" : "null");
 
             ReservationResponse reservation = reservationService.createReservation(request, token);
+            log.info("Reservation created successfully: reservationId={}", reservation.getReservationId());
+            
             ApiResponse<ReservationResponse> response = ApiResponse.<ReservationResponse>builder()
                     .code(200)
                     .message("Reservation created successfully")
@@ -41,6 +50,9 @@ public class ReservationController {
                     .build();
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
         } catch (Exception e) {
+            log.error("Error creating reservation: {}", e.getMessage(), e);
+            log.error("Exception type: {}, Stack trace: ", e.getClass().getName(), e);
+            
             ApiResponse<ReservationResponse> response = ApiResponse.<ReservationResponse>builder()
                     .code(500)
                     .message("Failed to create reservation: " + e.getMessage())
@@ -232,7 +244,11 @@ public class ReservationController {
         }
     }
 
-    private String getCurrentToken() {
+    private String extractTokenFromHeader(String authHeader) {
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            return authHeader.substring(7);
+        }
+        // Fallback: try to get from SecurityContext if available (for authenticated requests)
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication != null && authentication.getCredentials() != null) {
             return authentication.getCredentials().toString();

@@ -58,15 +58,34 @@ public class ReservationService {
     }
 
     public ReservationResponse createReservation(CreateReservationRequest request, String token) {
-        // Validate request
-        validateReservationRequest(request);
+        log.info("Creating reservation: branchId={}, reservedAt={}, customerId={}, partySize={}, token present={}", 
+                request.getBranchId(), request.getReservedAt(), request.getCustomerId(), request.getPartySize(), token != null);
+        
+        try {
+            // Validate request
+            validateReservationRequest(request);
+            log.debug("Request validation passed");
+        } catch (AppException e) {
+            log.error("Request validation failed: {}", e.getMessage());
+            throw e;
+        }
 
         // Check if branch exists
         Branch branch = branchRepository.findById(request.getBranchId())
-                .orElseThrow(() -> new AppException(ErrorCode.BRANCH_NOT_FOUND));
+                .orElseThrow(() -> {
+                    log.error("Branch not found: {}", request.getBranchId());
+                    return new AppException(ErrorCode.BRANCH_NOT_FOUND);
+                });
+        log.debug("Branch found: {}", branch.getName());
 
         // Validate reservation time
-        validateReservationTime(request.getReservedAt());
+        try {
+            validateReservationTime(request.getReservedAt());
+            log.debug("Reservation time validation passed");
+        } catch (AppException e) {
+            log.error("Reservation time validation failed: {}", e.getMessage());
+            throw e;
+        }
 
         // Enforce branch business hours (local time comparison)
         java.time.LocalTime reservedTime = request.getReservedAt().toLocalTime();
@@ -91,25 +110,32 @@ public class ReservationService {
         // Handle customer information
         if (request.getCustomerId() != null) {
             // Authenticated user - get user info from auth service
+            log.info("Fetching user info for customerId={}, token present={}", request.getCustomerId(), token != null);
             try {
                 ApiResponse<UserResponse> response = authServiceClient.getUserById(request.getCustomerId(), token);
+                log.debug("Auth service response: {}", response != null ? "received" : "null");
                 if (response != null && response.getResult() != null) {
                     UserResponse userInfo = response.getResult();
                     reservation.setCustomerId(request.getCustomerId());
                     reservation.setCustomerName(userInfo.getFullname());
                     reservation.setPhone(userInfo.getPhoneNumber());
                     reservation.setEmail(userInfo.getEmail());
+                    log.info("User info retrieved: name={}, email={}", userInfo.getFullname(), userInfo.getEmail());
                 } else {
+                    log.error("User not found or invalid response for customerId={}", request.getCustomerId());
                     throw new AppException(ErrorCode.EMAIL_NOT_EXISTED);
                 }
             } catch (AppException e) {
-                // Re-throw AppException as-is
+                log.error("AppException when fetching user: {}", e.getMessage());
                 throw e;
             } catch (Exception e) {
+                log.error("Exception when fetching user info for customerId={}: {}", request.getCustomerId(), e.getMessage(), e);
                 throw new AppException(ErrorCode.EMAIL_NOT_EXISTED);
             }
         } else {
             // Non-authenticated user - use provided information
+            log.info("Guest reservation: name={}, email={}, phone={}", 
+                    request.getCustomerName(), request.getEmail(), request.getPhone());
             reservation.setCustomerName(request.getCustomerName());
             reservation.setPhone(request.getPhone());
             reservation.setEmail(request.getEmail());
@@ -123,20 +149,29 @@ public class ReservationService {
         reservation.setStatus("PENDING");
 
         Reservation savedReservation = reservationRepository.save(reservation);
+        log.info("Reservation saved successfully: reservationId={}", savedReservation.getReservationId());
 
-        // Send confirmation email if we have an email
+        // Send confirmation email if we have an email (non-blocking - don't fail reservation if email fails)
         String toEmail = reservation.getEmail();
         if (toEmail != null && !toEmail.trim().isEmpty()) {
-            String customerName = reservation.getCustomerName();
-            String branchName = branch.getName();
-            emailService.sendReservationConfirmationEmail(
-                    toEmail,
-                    customerName,
-                    branchName,
-                    reservation.getReservedAt(),
-                    reservation.getPartySize(),
-                    reservation.getNotes(),
-                    savedReservation.getReservationId());
+            try {
+                String customerName = reservation.getCustomerName();
+                String branchName = branch.getName();
+                emailService.sendReservationConfirmationEmail(
+                        toEmail,
+                        customerName,
+                        branchName,
+                        reservation.getReservedAt(),
+                        reservation.getPartySize(),
+                        reservation.getNotes(),
+                        savedReservation.getReservationId());
+            } catch (Exception e) {
+                log.warn("Failed to send reservation confirmation email, but reservation was created successfully: reservationId={}, error={}", 
+                        savedReservation.getReservationId(), e.getMessage());
+                // Don't throw - email failure should not prevent reservation creation
+            }
+        } else {
+            log.info("No email provided, skipping email notification for reservationId={}", savedReservation.getReservationId());
         }
 
         // Publish reservation created event to Kafka for staff notification

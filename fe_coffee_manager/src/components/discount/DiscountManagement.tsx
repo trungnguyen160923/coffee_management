@@ -6,6 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-hot-toast';
 import DiscountForm from './DiscountForm';
 import DiscountDetailModal from './DiscountDetailModal';
+import ConfirmModal from '../common/ConfirmModal';
 
 const DiscountManagement: React.FC = () => {
     const { managerBranch } = useAuth();
@@ -19,6 +20,8 @@ const DiscountManagement: React.FC = () => {
     const [currentPage, setCurrentPage] = useState(0);
     const [totalPages, setTotalPages] = useState(0);
     const [totalElements, setTotalElements] = useState(0);
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [discountToDelete, setDiscountToDelete] = useState<Discount | null>(null);
 
     const loadDiscounts = async () => {
         try {
@@ -86,12 +89,19 @@ const DiscountManagement: React.FC = () => {
         }
     };
 
-    const handleDeleteDiscount = async (discountId: number) => {
-        if (!confirm('Are you sure you want to delete this discount?')) return;
+    const handleDeleteClick = (discount: Discount) => {
+        setDiscountToDelete(discount);
+        setShowDeleteModal(true);
+    };
+
+    const handleDeleteDiscount = async () => {
+        if (!discountToDelete) return;
 
         try {
-            await discountService.deleteDiscount(discountId);
+            await discountService.deleteDiscount(discountToDelete.discountId);
             toast.success('Discount deleted successfully');
+            setShowDeleteModal(false);
+            setDiscountToDelete(null);
             loadDiscounts();
         } catch (error: any) {
             console.error('Error deleting discount:', error);
@@ -284,7 +294,7 @@ const DiscountManagement: React.FC = () => {
                                                     <Edit className="w-4 h-4" />
                                                 </button>
                                                 <button
-                                                    onClick={() => handleDeleteDiscount(discount.discountId)}
+                                                    onClick={() => handleDeleteClick(discount)}
                                                     className="text-red-600 hover:text-red-900"
                                                 >
                                                     <Trash2 className="w-4 h-4" />
@@ -372,6 +382,20 @@ const DiscountManagement: React.FC = () => {
                     }}
                 />
             )}
+
+            {/* Delete Confirmation Modal */}
+            <ConfirmModal
+                open={showDeleteModal}
+                title="Delete Discount"
+                description={`Are you sure you want to delete the discount "${discountToDelete?.name}" (${discountToDelete?.code})? This action cannot be undone.`}
+                confirmText="Delete"
+                cancelText="Cancel"
+                onConfirm={handleDeleteDiscount}
+                onCancel={() => {
+                    setShowDeleteModal(false);
+                    setDiscountToDelete(null);
+                }}
+            />
         </div>
     );
 };
