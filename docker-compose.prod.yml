@@ -93,6 +93,8 @@ services:
       SERVER_PORT: 8000
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
       JAVA_OPTS: ${JAVA_OPTS_GATEWAY:--Xms256m -Xmx512m}
+      # Gateway codec configuration for file uploads (supports up to 20MB)
+      GATEWAY_CODEC_MAX_IN_MEMORY_SIZE: ${GATEWAY_CODEC_MAX_IN_MEMORY_SIZE:20971520} # 20MB
       # Service URLs (internal network)
       AUTH_SERVICE_URL: http://auth:8001
       PROFILE_SERVICE_URL: http://profile:8003/profiles

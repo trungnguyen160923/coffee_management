@@ -10,18 +10,18 @@ import org.springframework.web.reactive.config.WebFluxConfigurer;
  * Optimized for file upload routes (especially catalog service)
  * 
  * This configuration increases the max in-memory buffer size to handle
- * larger file uploads (up to 15MB by default) without affecting other routes.
+ * larger file uploads (up to 20MB by default) without affecting other routes.
  * The buffer is only used when needed, so other routes won't consume extra memory.
  */
 @Configuration
 public class GatewayCodecConfiguration implements WebFluxConfigurer {
 
-    @Value("${gateway.codec.max-in-memory-size:15728640}")
-    private int maxInMemorySize; // Default: 15MB in bytes (15 * 1024 * 1024)
+    @Value("${gateway.codec.max-in-memory-size:20971520}")
+    private int maxInMemorySize; // Default: 20MB in bytes (20 * 1024 * 1024)
 
     /**
      * Configure codec max in-memory size for Gateway
-     * This allows handling larger file uploads (up to 15MB by default)
+     * This allows handling larger file uploads (up to 20MB by default)
      * The buffer is allocated only when needed, so it won't affect
      * memory usage for routes that don't need large buffers.
      */
