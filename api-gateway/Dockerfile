@@ -47,6 +47,12 @@ EXPOSE 8000
 # JVM options via environment variable (can be overridden)
 ENV JAVA_OPTS="-Xms256m -Xmx512m -XX:+UseG1GC"
 
+# Gateway codec configuration for file uploads (optional, has default in application.yaml)
+# This allows handling larger file uploads (up to 15MB by default)
+# Can be overridden via environment variable: GATEWAY_CODEC_MAX_IN_MEMORY_SIZE
+# Default: 15728640 bytes (15MB) - set in application.yaml
+# ENV GATEWAY_CODEC_MAX_IN_MEMORY_SIZE=15728640
+
 # Healthcheck (note: api-gateway may not have actuator, adjust if needed)
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
   CMD curl -f http://localhost:${SERVER_PORT:-8000}/actuator/health || exit 1

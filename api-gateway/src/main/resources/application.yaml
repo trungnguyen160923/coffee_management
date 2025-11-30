@@ -4,6 +4,13 @@ server:
 app:
   api-prefix: ${API_PREFIX:/api}
 
+# Gateway codec configuration for file uploads
+# This allows handling larger file uploads (up to 15MB) for catalog service
+# The buffer is only allocated when needed, so it won't affect other routes
+gateway:
+  codec:
+    max-in-memory-size: ${GATEWAY_CODEC_MAX_IN_MEMORY_SIZE:15728640} # 15MB in bytes
+
 spring:
   config:
     import: optional:file:.env[.properties]
