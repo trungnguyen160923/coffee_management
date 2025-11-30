@@ -51,13 +51,16 @@ public class WebClientConfiguration {
                 "http://localhost:5173",
                 "http://localhost:8000",
                 "http://localhost:3000",
-                // Production domains
+                // Production domains - HTTP (tạm thời, sẽ redirect sang HTTPS)
                 "http://coffeemanager.click",
-                "https://coffeemanager.click",
                 "http://www.coffeemanager.click",
-                "https://www.coffeemanager.click",
                 "http://admin.coffeemanager.click",
+                "http://api.coffeemanager.click",
+                // Production domains - HTTPS
+                "https://coffeemanager.click",
+                "https://www.coffeemanager.click",
                 "https://admin.coffeemanager.click",
+                "https://api.coffeemanager.click",
                 // IP access (if needed)
                 "http://213.163.201.60"));
         corsConfiguration.setAllowedHeaders(List.of("*"));
