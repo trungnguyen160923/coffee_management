@@ -63,6 +63,15 @@ public class WebClientConfiguration {
         corsConfiguration.setAllowedHeaders(List.of("*"));
         corsConfiguration.setAllowedMethods(List.of("*"));
         corsConfiguration.setAllowCredentials(true);
+        // Cache preflight requests for 1 hour
+        corsConfiguration.setMaxAge(3600L);
+        // Expose headers that might be needed by the client
+        corsConfiguration.setExposedHeaders(List.of(
+                "Content-Disposition",
+                "Content-Type",
+                "Content-Length",
+                "Location"
+        ));
 
         UrlBasedCorsConfigurationSource urlBasedCorsConfigurationSource = new UrlBasedCorsConfigurationSource();
         urlBasedCorsConfigurationSource.registerCorsConfiguration("/**", corsConfiguration);

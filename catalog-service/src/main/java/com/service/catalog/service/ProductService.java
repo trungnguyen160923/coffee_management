@@ -47,6 +47,14 @@ public class ProductService {
     @PreAuthorize("hasRole('ADMIN')")
     @Transactional
     public ProductResponse createProduct(ProductCreationRequest request) {
+        // Check if SKU already exists
+        if (request.getSku() != null && !request.getSku().trim().isEmpty()) {
+            if (productRepository.existsBySku(request.getSku())) {
+                throw new AppException(ErrorCode.PRODUCT_SKU_ALREADY_EXISTS, 
+                    String.format("Product SKU '%s' already exists", request.getSku()));
+            }
+        }
+        
         // Tạo Product entity
         Product product = new Product();
         product.setName(request.getName());
@@ -137,7 +145,15 @@ public class ProductService {
                 .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_FOUND));
 
         if (request.getName() != null) product.setName(request.getName());
-        if (request.getSku() != null) product.setSku(request.getSku());
+        if (request.getSku() != null) {
+            // Check if SKU is being changed and if new SKU already exists
+            if (!request.getSku().equals(product.getSku()) && 
+                productRepository.existsBySku(request.getSku())) {
+                throw new AppException(ErrorCode.PRODUCT_SKU_ALREADY_EXISTS, 
+                    String.format("Product SKU '%s' already exists", request.getSku()));
+            }
+            product.setSku(request.getSku());
+        }
         if (request.getDescription() != null) product.setDescription(request.getDescription());
         if (request.getImageUrl() != null) product.setImageUrl(request.getImageUrl());
         if (request.getActive() != null) product.setActive(request.getActive());

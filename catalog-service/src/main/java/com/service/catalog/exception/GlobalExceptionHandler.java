@@ -167,11 +167,29 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<String>> handleDataIntegrityViolationException(DataIntegrityViolationException ex) {
         log.error("Data integrity violation: {}", ex.getMessage(), ex);
         
+        String errorMessage = ex.getMessage();
+        
         // Check if it's a duplicate key constraint for size name
-        if (ex.getMessage().contains("uq_size_name")) {
+        if (errorMessage != null && errorMessage.contains("uq_size_name")) {
             ApiResponse<String> response = ApiResponse.<String>builder()
-                    .code(1028)
-                    .message("Name size is unique")
+                    .code(ErrorCode.SIZE_NAME_ALREADY_EXISTS.getCode())
+                    .message(ErrorCode.SIZE_NAME_ALREADY_EXISTS.getMessage())
+                    .build();
+            
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+        
+        // Check if it's a duplicate key constraint for product SKU
+        if (errorMessage != null && errorMessage.contains("ux_products_sku")) {
+            // Extract SKU from error message if possible
+            String sku = extractSkuFromErrorMessage(errorMessage);
+            String message = sku != null 
+                ? String.format("Product SKU '%s' already exists", sku)
+                : ErrorCode.PRODUCT_SKU_ALREADY_EXISTS.getMessage();
+            
+            ApiResponse<String> response = ApiResponse.<String>builder()
+                    .code(ErrorCode.PRODUCT_SKU_ALREADY_EXISTS.getCode())
+                    .message(message)
                     .build();
             
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
@@ -180,10 +198,26 @@ public class GlobalExceptionHandler {
         // Handle other data integrity violations
         ApiResponse<String> response = ApiResponse.<String>builder()
                 .code(9999)
-                .message("Data integrity violation: " + ex.getMessage())
+                .message("Data integrity violation: " + errorMessage)
                 .build();
         
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+    
+    private String extractSkuFromErrorMessage(String errorMessage) {
+        try {
+            // Error message format: "Duplicate entry 'CF03' for key 'products.ux_products_sku'"
+            if (errorMessage.contains("Duplicate entry '") && errorMessage.contains("' for key")) {
+                int start = errorMessage.indexOf("Duplicate entry '") + "Duplicate entry '".length();
+                int end = errorMessage.indexOf("'", start);
+                if (end > start) {
+                    return errorMessage.substring(start, end);
+                }
+            }
+        } catch (Exception e) {
+            log.debug("Could not extract SKU from error message: {}", errorMessage);
+        }
+        return null;
     }
 
     @ExceptionHandler(Exception.class)

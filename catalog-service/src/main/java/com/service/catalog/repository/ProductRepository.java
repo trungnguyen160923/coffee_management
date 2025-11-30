@@ -34,4 +34,6 @@ public interface ProductRepository extends JpaRepository<Product, Integer> {
            "JOIN p.productDetails pd " +
            "WHERE p.active = true AND pd.active = true")
     List<Product> findAllByActiveTrue();
+    
+    boolean existsBySku(String sku);
 }
