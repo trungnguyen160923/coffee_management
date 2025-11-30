@@ -57,6 +57,8 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
             "/order-service/api/discounts/available",
             "/catalogs/sizes",
             "/catalogs/files/images/products/.*",
+            "/catalogs/files/upload",
+            "/catalogs/files/cleanup",
             "/catalogs/products",
             "/catalogs/products/.*",
             "/catalogs/products/detail/.*",
@@ -101,6 +103,11 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
         boolean isWebSocketPath = path.contains("/ws/") || path.contains("/notification-service/ws");
         
         if (isWebSocketPath) {
+            return chain.filter(exchange);
+        }
+
+        // Skip authentication for OPTIONS preflight requests (handled by CORS filter)
+        if (exchange.getRequest().getMethod() == org.springframework.http.HttpMethod.OPTIONS) {
             return chain.filter(exchange);
         }
 
