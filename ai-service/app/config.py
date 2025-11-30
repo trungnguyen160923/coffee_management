@@ -83,6 +83,7 @@ class Settings:
     
     # Report Distribution Settings
     MANAGER_EMAIL: str = os.getenv("MANAGER_EMAIL", "")  # Default manager email
+    ADMIN_EMAIL: str = os.getenv("ADMIN_EMAIL", "")  # Default admin email
     ENABLE_EMAIL_DISTRIBUTION: bool = os.getenv("ENABLE_EMAIL_DISTRIBUTION", "false").lower() == "true"
     
     # Feature List for ML Model

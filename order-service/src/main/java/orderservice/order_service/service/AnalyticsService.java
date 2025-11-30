@@ -32,6 +32,7 @@ public class AnalyticsService {
     OrderItemRepository orderItemRepository;
     ReviewRepository reviewRepository;
     CatalogServiceClient catalogServiceClient;
+    BranchRepository branchRepository;
 
     public RevenueMetricsResponse getRevenueMetrics(Integer branchId, LocalDate date) {
         try {
@@ -633,6 +634,834 @@ public class AnalyticsService {
         }
     }
     
+    // ========== All Branches Statistics Methods (for Admin) ==========
+
+    public AllBranchesRevenueMetricsResponse getAllBranchesRevenueMetrics(LocalDate date) {
+        try {
+            List<orderservice.order_service.entity.Branch> branches = branchRepository.findAll();
+            LocalDateTime startOfDay = date.atStartOfDay();
+            LocalDateTime endOfDay = date.atTime(LocalTime.MAX);
+
+            BigDecimal totalRevenue = BigDecimal.ZERO;
+            int totalOrderCount = 0;
+            int totalCompletedPaidOrderCount = 0;
+            Map<Integer, Integer> ordersByHour = new HashMap<>();
+            Map<Integer, BigDecimal> revenueByHourMap = new HashMap<>();
+            Map<String, BigDecimal> revenueByPaymentMethod = new HashMap<>();
+            int totalCompletedOrders = 0;
+            int totalCancelledOrders = 0;
+            int totalPendingOrders = 0;
+            List<AllBranchesRevenueMetricsResponse.BranchRevenue> branchRevenues = new ArrayList<>();
+
+            for (orderservice.order_service.entity.Branch branch : branches) {
+                List<Order> branchOrders = orderRepository.findByBranchIdAndDateRange(branch.getBranchId(), startOfDay, endOfDay);
+                List<Object[]> orderHoursData = orderRepository.findOrderHoursByBranchAndDate(branch.getBranchId(), date);
+
+                BigDecimal branchRevenue = BigDecimal.ZERO;
+
+                for (Object[] row : orderHoursData) {
+                    Integer hour = ((Number) row[0]).intValue();
+                    BigDecimal totalAmount = (BigDecimal) row[1];
+                    String status = (String) row[2];
+                    String paymentStatus = (String) row[3];
+
+                    ordersByHour.put(hour, ordersByHour.getOrDefault(hour, 0) + 1);
+
+                    if ("COMPLETED".equals(status) && "PAID".equals(paymentStatus)) {
+                        revenueByHourMap.put(hour, revenueByHourMap.getOrDefault(hour, BigDecimal.ZERO).add(totalAmount));
+                        branchRevenue = branchRevenue.add(totalAmount);
+                        totalRevenue = totalRevenue.add(totalAmount);
+                        totalCompletedPaidOrderCount++;
+                    }
+                }
+
+                totalOrderCount += branchOrders.size();
+                totalCompletedOrders += branchOrders.stream().filter(o -> "COMPLETED".equals(o.getStatus())).count();
+                totalCancelledOrders += branchOrders.stream().filter(o -> "CANCELLED".equals(o.getStatus())).count();
+                totalPendingOrders += branchOrders.stream().filter(o -> "PENDING".equals(o.getStatus()) || "CREATED".equals(o.getStatus())).count();
+
+                List<Order> completedOrders = branchOrders.stream()
+                        .filter(o -> "COMPLETED".equals(o.getStatus()) && "PAID".equals(o.getPaymentStatus()))
+                        .collect(Collectors.toList());
+
+                completedOrders.forEach(o -> {
+                    if (o.getPaymentMethod() != null) {
+                        revenueByPaymentMethod.put(o.getPaymentMethod(),
+                                revenueByPaymentMethod.getOrDefault(o.getPaymentMethod(), BigDecimal.ZERO)
+                                        .add(o.getTotalAmount()));
+                    }
+                });
+
+                branchRevenues.add(AllBranchesRevenueMetricsResponse.BranchRevenue.builder()
+                        .branchId(branch.getBranchId())
+                        .branchName(branch.getName())
+                        .revenue(branchRevenue)
+                        .orderCount(branchOrders.size())
+                        .build());
+            }
+
+            BigDecimal avgOrderValue = totalCompletedPaidOrderCount > 0
+                    ? totalRevenue.divide(BigDecimal.valueOf(totalCompletedPaidOrderCount), 2, RoundingMode.HALF_UP)
+                    : BigDecimal.ZERO;
+
+            int peakHour = ordersByHour.entrySet().stream()
+                    .max(Map.Entry.comparingByValue())
+                    .map(Map.Entry::getKey)
+                    .orElse(0);
+
+            List<AllBranchesRevenueMetricsResponse.HourlyRevenue> revenueByHour = new ArrayList<>();
+            Set<Integer> hoursWithData = new HashSet<>();
+            hoursWithData.addAll(ordersByHour.keySet());
+            hoursWithData.addAll(revenueByHourMap.keySet());
+
+            hoursWithData.stream()
+                    .sorted()
+                    .forEach(hour -> {
+                        BigDecimal revenue = revenueByHourMap.getOrDefault(hour, BigDecimal.ZERO);
+                        int count = ordersByHour.getOrDefault(hour, 0);
+                        if (revenue.compareTo(BigDecimal.ZERO) > 0 || count > 0) {
+                            revenueByHour.add(AllBranchesRevenueMetricsResponse.HourlyRevenue.builder()
+                                    .hour(hour)
+                                    .revenue(revenue)
+                                    .orderCount(count)
+                                    .build());
+                        }
+                    });
+
+            return AllBranchesRevenueMetricsResponse.builder()
+                    .totalRevenue(totalRevenue)
+                    .totalOrderCount(totalOrderCount)
+                    .avgOrderValue(avgOrderValue)
+                    .peakHour(peakHour)
+                    .revenueByHour(revenueByHour)
+                    .revenueByPaymentMethod(revenueByPaymentMethod)
+                    .completedOrders(totalCompletedOrders)
+                    .cancelledOrders(totalCancelledOrders)
+                    .pendingOrders(totalPendingOrders)
+                    .branchRevenues(branchRevenues)
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Error calculating all branches revenue metrics for date {}", date, e);
+            return AllBranchesRevenueMetricsResponse.builder()
+                    .totalRevenue(BigDecimal.ZERO)
+                    .totalOrderCount(0)
+                    .avgOrderValue(BigDecimal.ZERO)
+                    .peakHour(0)
+                    .revenueByHour(new ArrayList<>())
+                    .revenueByPaymentMethod(new HashMap<>())
+                    .completedOrders(0)
+                    .cancelledOrders(0)
+                    .pendingOrders(0)
+                    .branchRevenues(new ArrayList<>())
+                    .build();
+        }
+    }
+
+    public AllBranchesCustomerMetricsResponse getAllBranchesCustomerMetrics(LocalDate date) {
+        try {
+            List<orderservice.order_service.entity.Branch> branches = branchRepository.findAll();
+            LocalDateTime startOfDay = date.atStartOfDay();
+            LocalDateTime endOfDay = date.atTime(LocalTime.MAX);
+
+            Set<Integer> allRegisteredCustomerIds = new HashSet<>();
+            Set<Integer> allRegisteredUniqueCustomerIds = new HashSet<>();
+            long totalWalkInOrderCount = 0;
+            long totalWalkInCompletedPaidCount = 0;
+            Set<Integer> allPreviousRegisteredCustomerIds = new HashSet<>();
+            Map<Integer, CustomerOrderStats> allCustomerStats = new HashMap<>();
+            List<AllBranchesCustomerMetricsResponse.BranchCustomerStats> branchCustomerStats = new ArrayList<>();
+
+            // Get previous customers across all branches
+            for (orderservice.order_service.entity.Branch branch : branches) {
+                List<Order> previousOrders = orderRepository.findByBranchIdAndDateRange(branch.getBranchId(),
+                        LocalDateTime.of(2020, 1, 1, 0, 0), startOfDay);
+                previousOrders.stream()
+                        .filter(o -> o.getCustomerId() != null && o.getCustomerId() != 0)
+                        .forEach(o -> allPreviousRegisteredCustomerIds.add(o.getCustomerId()));
+            }
+
+            for (orderservice.order_service.entity.Branch branch : branches) {
+                List<Order> branchOrders = orderRepository.findByBranchIdAndDateRange(branch.getBranchId(), startOfDay, endOfDay);
+
+                Set<Integer> registeredCustomerIds = branchOrders.stream()
+                        .filter(o -> o.getCustomerId() != null && o.getCustomerId() != 0)
+                        .map(Order::getCustomerId)
+                        .collect(Collectors.toSet());
+
+                long walkInOrderCount = branchOrders.stream()
+                        .filter(o -> o.getCustomerId() != null && o.getCustomerId() == 0)
+                        .count();
+
+                Set<Integer> registeredUniqueCustomerIds = branchOrders.stream()
+                        .filter(o -> o.getCustomerId() != null
+                                && o.getCustomerId() != 0
+                                && "COMPLETED".equals(o.getStatus())
+                                && "PAID".equals(o.getPaymentStatus()))
+                        .map(Order::getCustomerId)
+                        .collect(Collectors.toSet());
+
+                long walkInCompletedPaidCount = branchOrders.stream()
+                        .filter(o -> o.getCustomerId() != null
+                                && o.getCustomerId() == 0
+                                && "COMPLETED".equals(o.getStatus())
+                                && "PAID".equals(o.getPaymentStatus()))
+                        .count();
+
+                allRegisteredCustomerIds.addAll(registeredCustomerIds);
+                allRegisteredUniqueCustomerIds.addAll(registeredUniqueCustomerIds);
+                totalWalkInOrderCount += walkInOrderCount;
+                totalWalkInCompletedPaidCount += walkInCompletedPaidCount;
+
+                int branchCustomerCount = registeredCustomerIds.size() + (int) walkInOrderCount;
+                int branchRepeatCustomers = (int) registeredCustomerIds.stream()
+                        .filter(allPreviousRegisteredCustomerIds::contains)
+                        .count();
+                int branchNewCustomers = registeredCustomerIds.size() - branchRepeatCustomers;
+
+                branchCustomerStats.add(AllBranchesCustomerMetricsResponse.BranchCustomerStats.builder()
+                        .branchId(branch.getBranchId())
+                        .branchName(branch.getName())
+                        .customerCount(branchCustomerCount)
+                        .repeatCustomers(branchRepeatCustomers)
+                        .newCustomers(branchNewCustomers)
+                        .build());
+
+                branchOrders.stream()
+                        .filter(o -> o.getCustomerId() != null)
+                        .forEach(o -> {
+                            CustomerOrderStats stats = allCustomerStats.getOrDefault(o.getCustomerId(),
+                                    new CustomerOrderStats(0, BigDecimal.ZERO, o.getCustomerName()));
+                            stats.count++;
+                            stats.total = stats.total.add(o.getTotalAmount());
+                            allCustomerStats.put(o.getCustomerId(), stats);
+                        });
+            }
+
+            int totalCustomerCount = allRegisteredCustomerIds.size() + (int) totalWalkInOrderCount;
+            int totalUniqueCustomers = allRegisteredUniqueCustomerIds.size() + (int) totalWalkInCompletedPaidCount;
+            int totalRepeatCustomers = (int) allRegisteredCustomerIds.stream()
+                    .filter(allPreviousRegisteredCustomerIds::contains)
+                    .count();
+            int totalNewCustomers = allRegisteredCustomerIds.size() - totalRepeatCustomers;
+
+            BigDecimal overallRetentionRate = allPreviousRegisteredCustomerIds.size() > 0
+                    ? BigDecimal.valueOf(totalRepeatCustomers)
+                            .divide(BigDecimal.valueOf(allPreviousRegisteredCustomerIds.size()), 4, RoundingMode.HALF_UP)
+                    : BigDecimal.ZERO;
+
+            List<AllBranchesCustomerMetricsResponse.TopCustomer> topCustomers = allCustomerStats.entrySet().stream()
+                    .sorted((e1, e2) -> e2.getValue().total.compareTo(e1.getValue().total))
+                    .limit(10)
+                    .map(entry -> AllBranchesCustomerMetricsResponse.TopCustomer.builder()
+                            .customerId(entry.getKey())
+                            .customerName(entry.getValue().name)
+                            .orderCount(entry.getValue().count)
+                            .totalSpent(entry.getValue().total)
+                            .build())
+                    .collect(Collectors.toList());
+
+            return AllBranchesCustomerMetricsResponse.builder()
+                    .totalCustomerCount(totalCustomerCount)
+                    .totalRepeatCustomers(totalRepeatCustomers)
+                    .totalNewCustomers(totalNewCustomers)
+                    .totalUniqueCustomers(totalUniqueCustomers)
+                    .overallCustomerRetentionRate(overallRetentionRate)
+                    .topCustomers(topCustomers)
+                    .branchCustomerStats(branchCustomerStats)
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Error calculating all branches customer metrics for date {}", date, e);
+            return AllBranchesCustomerMetricsResponse.builder()
+                    .totalCustomerCount(0)
+                    .totalRepeatCustomers(0)
+                    .totalNewCustomers(0)
+                    .totalUniqueCustomers(0)
+                    .overallCustomerRetentionRate(BigDecimal.ZERO)
+                    .topCustomers(new ArrayList<>())
+                    .branchCustomerStats(new ArrayList<>())
+                    .build();
+        }
+    }
+
+    public AllBranchesProductMetricsResponse getAllBranchesProductMetrics(LocalDate date) {
+        try {
+            List<orderservice.order_service.entity.Branch> branches = branchRepository.findAll();
+            LocalDateTime startOfDay = date.atStartOfDay();
+            LocalDateTime endOfDay = date.atTime(LocalTime.MAX);
+
+            Set<Integer> allUniqueProductIds = new HashSet<>();
+            Map<Integer, ProductSalesStats> allProductStats = new HashMap<>();
+            Map<Integer, String> productNameMap = new HashMap<>();
+            List<AllBranchesProductMetricsResponse.BranchProductStats> branchProductStats = new ArrayList<>();
+
+            // Get product information from catalog service
+            try {
+                ApiResponse<List<ProductResponse>> allProductsResponse = catalogServiceClient.getAllProducts();
+                if (allProductsResponse != null && allProductsResponse.getResult() != null) {
+                    allProductsResponse.getResult().forEach(p -> productNameMap.put(p.getProductId(), p.getName()));
+                }
+            } catch (Exception e) {
+                log.warn("Failed to fetch products from catalog service: {}", e.getMessage());
+            }
+
+            for (orderservice.order_service.entity.Branch branch : branches) {
+                List<Order> branchOrders = orderRepository.findByBranchIdAndDateRange(branch.getBranchId(), startOfDay, endOfDay);
+                List<Integer> orderIds = branchOrders.stream().map(Order::getOrderId).collect(Collectors.toList());
+
+                if (!orderIds.isEmpty()) {
+                    List<OrderItem> branchOrderItems = orderItemRepository.findAll().stream()
+                            .filter(item -> orderIds.contains(item.getOrder().getOrderId()))
+                            .collect(Collectors.toList());
+
+                    Set<Integer> branchUniqueProductIds = branchOrderItems.stream()
+                            .map(OrderItem::getProductId)
+                            .collect(Collectors.toSet());
+                    allUniqueProductIds.addAll(branchUniqueProductIds);
+
+                    Map<Integer, ProductSalesStats> branchProductStatsMap = branchOrderItems.stream()
+                            .collect(Collectors.groupingBy(
+                                    OrderItem::getProductId,
+                                    Collectors.collectingAndThen(
+                                            Collectors.toList(),
+                                            itemList -> {
+                                                BigDecimal quantity = itemList.stream()
+                                                        .map(OrderItem::getQuantity)
+                                                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+                                                BigDecimal revenue = itemList.stream()
+                                                        .map(OrderItem::getTotalPrice)
+                                                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+                                                return new ProductSalesStats(quantity, revenue);
+                                            }
+                                    )
+                            ));
+
+                    branchProductStatsMap.forEach((productId, stats) -> {
+                        ProductSalesStats existing = allProductStats.getOrDefault(productId,
+                                new ProductSalesStats(BigDecimal.ZERO, BigDecimal.ZERO));
+                        existing.quantity = existing.quantity.add(stats.quantity);
+                        existing.revenue = existing.revenue.add(stats.revenue);
+                        allProductStats.put(productId, existing);
+                    });
+
+                    Map.Entry<Integer, ProductSalesStats> topProduct = branchProductStatsMap.entrySet().stream()
+                            .max(Comparator.comparing(e -> e.getValue().quantity))
+                            .orElse(null);
+
+                    branchProductStats.add(AllBranchesProductMetricsResponse.BranchProductStats.builder()
+                            .branchId(branch.getBranchId())
+                            .branchName(branch.getName())
+                            .uniqueProductsSold(branchUniqueProductIds.size())
+                            .topSellingProductId(topProduct != null ? topProduct.getKey() : null)
+                            .topSellingProductName(topProduct != null ? productNameMap.get(topProduct.getKey()) : null)
+                            .build());
+                } else {
+                    branchProductStats.add(AllBranchesProductMetricsResponse.BranchProductStats.builder()
+                            .branchId(branch.getBranchId())
+                            .branchName(branch.getName())
+                            .uniqueProductsSold(0)
+                            .topSellingProductId(null)
+                            .topSellingProductName(null)
+                            .build());
+                }
+            }
+
+            int totalUniqueProductsSold = allUniqueProductIds.size();
+
+            Map.Entry<Integer, ProductSalesStats> topProduct = allProductStats.entrySet().stream()
+                    .max(Comparator.comparing(e -> e.getValue().quantity))
+                    .orElse(null);
+
+            Integer topSellingProductId = topProduct != null ? topProduct.getKey() : null;
+            String topSellingProductName = topProduct != null ? productNameMap.get(topProduct.getKey()) : null;
+
+            BigDecimal totalItems = allProductStats.values().stream()
+                    .map(s -> s.quantity)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            BigDecimal diversityScore = totalItems.compareTo(BigDecimal.ZERO) > 0
+                    ? BigDecimal.valueOf(totalUniqueProductsSold)
+                            .divide(totalItems, 4, RoundingMode.HALF_UP)
+                    : BigDecimal.ZERO;
+
+            List<AllBranchesProductMetricsResponse.TopProduct> topProducts = allProductStats.entrySet().stream()
+                    .sorted((e1, e2) -> e2.getValue().quantity.compareTo(e1.getValue().quantity))
+                    .limit(10)
+                    .map(entry -> AllBranchesProductMetricsResponse.TopProduct.builder()
+                            .productId(entry.getKey())
+                            .productName(productNameMap.get(entry.getKey()))
+                            .quantitySold(entry.getValue().quantity)
+                            .revenue(entry.getValue().revenue)
+                            .build())
+                    .collect(Collectors.toList());
+
+            Map<String, Integer> productsByCategory = new HashMap<>();
+            // Note: Category mapping would require additional catalog service calls
+            // For now, we'll leave it empty or implement if needed
+
+            return AllBranchesProductMetricsResponse.builder()
+                    .totalUniqueProductsSold(totalUniqueProductsSold)
+                    .topSellingProductId(topSellingProductId)
+                    .topSellingProductName(topSellingProductName)
+                    .overallProductDiversityScore(diversityScore)
+                    .topProducts(topProducts)
+                    .productsByCategory(productsByCategory)
+                    .branchProductStats(branchProductStats)
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Error calculating all branches product metrics for date {}", date, e);
+            return AllBranchesProductMetricsResponse.builder()
+                    .totalUniqueProductsSold(0)
+                    .topSellingProductId(null)
+                    .topSellingProductName(null)
+                    .overallProductDiversityScore(BigDecimal.ZERO)
+                    .topProducts(new ArrayList<>())
+                    .productsByCategory(new HashMap<>())
+                    .branchProductStats(new ArrayList<>())
+                    .build();
+        }
+    }
+
+    public AllBranchesReviewMetricsResponse getAllBranchesReviewMetrics(LocalDate date) {
+        try {
+            List<orderservice.order_service.entity.Branch> branches = branchRepository.findAll();
+
+            List<Review> allReviews = new ArrayList<>();
+            Map<Integer, Integer> reviewDistribution = new HashMap<>();
+            final int[] totalPositiveReviews = {0};
+            final int[] totalNegativeReviews = {0};
+            List<AllBranchesReviewMetricsResponse.BranchReviewStats> branchReviewStats = new ArrayList<>();
+
+            for (orderservice.order_service.entity.Branch branch : branches) {
+                List<Review> branchReviews = reviewRepository.findByBranchIdAndDate(branch.getBranchId(), date);
+                allReviews.addAll(branchReviews);
+
+                if (!branchReviews.isEmpty()) {
+                    double avgScore = branchReviews.stream()
+                            .mapToInt(r -> r.getRating().intValue())
+                            .average()
+                            .orElse(0.0);
+
+                    long positive = branchReviews.stream().filter(r -> r.getRating() >= 4).count();
+                    long negative = branchReviews.stream().filter(r -> r.getRating() < 3).count();
+
+                    branchReviewStats.add(AllBranchesReviewMetricsResponse.BranchReviewStats.builder()
+                            .branchId(branch.getBranchId())
+                            .branchName(branch.getName())
+                            .avgReviewScore(BigDecimal.valueOf(avgScore).setScale(2, RoundingMode.HALF_UP))
+                            .totalReviews(branchReviews.size())
+                            .positiveReviews((int) positive)
+                            .negativeReviews((int) negative)
+                            .build());
+                } else {
+                    branchReviewStats.add(AllBranchesReviewMetricsResponse.BranchReviewStats.builder()
+                            .branchId(branch.getBranchId())
+                            .branchName(branch.getName())
+                            .avgReviewScore(BigDecimal.ZERO)
+                            .totalReviews(0)
+                            .positiveReviews(0)
+                            .negativeReviews(0)
+                            .build());
+                }
+            }
+
+            if (allReviews.isEmpty()) {
+                return AllBranchesReviewMetricsResponse.builder()
+                        .overallAvgReviewScore(BigDecimal.ZERO)
+                        .totalReviews(0)
+                        .reviewDistribution(new HashMap<>())
+                        .totalPositiveReviews(0)
+                        .totalNegativeReviews(0)
+                        .overallReviewRate(BigDecimal.ZERO)
+                        .recentReviews(new ArrayList<>())
+                        .branchReviewStats(branchReviewStats)
+                        .build();
+            }
+
+            double overallAvgScore = allReviews.stream()
+                    .mapToInt(r -> r.getRating().intValue())
+                    .average()
+                    .orElse(0.0);
+
+            allReviews.forEach(r -> {
+                int rating = r.getRating().intValue();
+                reviewDistribution.put(rating, reviewDistribution.getOrDefault(rating, 0) + 1);
+                if (r.getRating() >= 4) totalPositiveReviews[0]++;
+                if (r.getRating() < 3) totalNegativeReviews[0]++;
+            });
+
+            long totalOrderCount = 0;
+            for (orderservice.order_service.entity.Branch branch : branches) {
+                totalOrderCount += orderRepository.countOrdersByBranchAndDate(branch.getBranchId(), date);
+            }
+
+            BigDecimal overallReviewRate = totalOrderCount > 0
+                    ? BigDecimal.valueOf(allReviews.size())
+                            .divide(BigDecimal.valueOf(totalOrderCount), 4, RoundingMode.HALF_UP)
+                    : BigDecimal.ZERO;
+
+            List<AllBranchesReviewMetricsResponse.RecentReview> recentReviews = allReviews.stream()
+                    .sorted(Comparator.comparing(Review::getCreateAt).reversed())
+                    .limit(10)
+                    .map(r -> {
+                        orderservice.order_service.entity.Branch reviewBranch = branches.stream()
+                                .filter(b -> b.getBranchId().equals(r.getBranchId()))
+                                .findFirst()
+                                .orElse(null);
+                        return AllBranchesReviewMetricsResponse.RecentReview.builder()
+                                .reviewId(r.getReviewId())
+                                .branchId(r.getBranchId())
+                                .branchName(reviewBranch != null ? reviewBranch.getName() : null)
+                                .customerId(r.getCustomerId())
+                                .rating(r.getRating())
+                                .comment(r.getComment())
+                                .createdAt(r.getCreateAt())
+                                .build();
+                    })
+                    .collect(Collectors.toList());
+
+            return AllBranchesReviewMetricsResponse.builder()
+                    .overallAvgReviewScore(BigDecimal.valueOf(overallAvgScore).setScale(2, RoundingMode.HALF_UP))
+                    .totalReviews(allReviews.size())
+                    .reviewDistribution(reviewDistribution)
+                    .totalPositiveReviews(totalPositiveReviews[0])
+                    .totalNegativeReviews(totalNegativeReviews[0])
+                    .overallReviewRate(overallReviewRate)
+                    .recentReviews(recentReviews)
+                    .branchReviewStats(branchReviewStats)
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Error calculating all branches review metrics for date {}", date, e);
+            return AllBranchesReviewMetricsResponse.builder()
+                    .overallAvgReviewScore(BigDecimal.ZERO)
+                    .totalReviews(0)
+                    .reviewDistribution(new HashMap<>())
+                    .totalPositiveReviews(0)
+                    .totalNegativeReviews(0)
+                    .overallReviewRate(BigDecimal.ZERO)
+                    .recentReviews(new ArrayList<>())
+                    .branchReviewStats(new ArrayList<>())
+                    .build();
+        }
+    }
+
+    // ========== Branch Stats and Revenue Methods ==========
+
+    public BranchStatsResponse getBranchStats(LocalDate dateFrom, LocalDate dateTo) {
+        try {
+            List<orderservice.order_service.entity.Branch> branches = branchRepository.findAll();
+            LocalDateTime startDate = dateFrom.atStartOfDay();
+            LocalDateTime endDate = dateTo.atTime(LocalTime.MAX);
+
+            BigDecimal totalRevenue = BigDecimal.ZERO;
+            List<BranchStatsResponse.TopPerformingBranch> topPerformingBranches = new ArrayList<>();
+
+            for (orderservice.order_service.entity.Branch branch : branches) {
+                List<Order> branchOrders = orderRepository.findByBranchIdAndDateRange(branch.getBranchId(), startDate, endDate);
+                BigDecimal branchRevenue = branchOrders.stream()
+                        .filter(o -> "COMPLETED".equals(o.getStatus()) && "PAID".equals(o.getPaymentStatus()))
+                        .map(Order::getTotalAmount)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+                totalRevenue = totalRevenue.add(branchRevenue);
+
+                topPerformingBranches.add(BranchStatsResponse.TopPerformingBranch.builder()
+                        .branch(branch)
+                        .revenue(branchRevenue)
+                        .orderCount(branchOrders.size())
+                        .build());
+            }
+
+            topPerformingBranches.sort((a, b) -> b.getRevenue().compareTo(a.getRevenue()));
+            List<BranchStatsResponse.TopPerformingBranch> topBranches = topPerformingBranches.stream()
+                    .limit(10)
+                    .collect(Collectors.toList());
+
+            int totalBranches = branches.size();
+            int activeBranches = (int) branches.stream()
+                    .filter(b -> {
+                        List<Order> orders = orderRepository.findByBranchIdAndDateRange(b.getBranchId(), startDate, endDate);
+                        return !orders.isEmpty();
+                    })
+                    .count();
+
+            BigDecimal averageRevenue = totalBranches > 0
+                    ? totalRevenue.divide(BigDecimal.valueOf(totalBranches), 2, RoundingMode.HALF_UP)
+                    : BigDecimal.ZERO;
+
+            return BranchStatsResponse.builder()
+                    .totalBranches(totalBranches)
+                    .activeBranches(activeBranches)
+                    .totalRevenue(totalRevenue)
+                    .averageRevenue(averageRevenue)
+                    .topPerformingBranches(topBranches)
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Error calculating branch stats from {} to {}", dateFrom, dateTo, e);
+            return BranchStatsResponse.builder()
+                    .totalBranches(0)
+                    .activeBranches(0)
+                    .totalRevenue(BigDecimal.ZERO)
+                    .averageRevenue(BigDecimal.ZERO)
+                    .topPerformingBranches(new ArrayList<>())
+                    .build();
+        }
+    }
+
+    public AllBranchesStatsResponse getAllBranchesStats(LocalDate dateFrom, LocalDate dateTo) {
+        try {
+            List<orderservice.order_service.entity.Branch> branches = branchRepository.findAll();
+            LocalDateTime startDate = dateFrom.atStartOfDay();
+            LocalDateTime endDate = dateTo.atTime(LocalTime.MAX);
+
+            BigDecimal totalRevenue = BigDecimal.ZERO;
+            int totalOrders = 0;
+            List<AllBranchesStatsResponse.TopPerformingBranch> topPerformingBranches = new ArrayList<>();
+            List<AllBranchesStatsResponse.BranchSummary> branchSummaries = new ArrayList<>();
+
+            for (orderservice.order_service.entity.Branch branch : branches) {
+                List<Order> branchOrders = orderRepository.findByBranchIdAndDateRange(branch.getBranchId(), startDate, endDate);
+                BigDecimal branchRevenue = branchOrders.stream()
+                        .filter(o -> "COMPLETED".equals(o.getStatus()) && "PAID".equals(o.getPaymentStatus()))
+                        .map(Order::getTotalAmount)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+                int completedOrders = (int) branchOrders.stream().filter(o -> "COMPLETED".equals(o.getStatus())).count();
+                int cancelledOrders = (int) branchOrders.stream().filter(o -> "CANCELLED".equals(o.getStatus())).count();
+                int pendingOrders = (int) branchOrders.stream().filter(o -> "PENDING".equals(o.getStatus()) || "CREATED".equals(o.getStatus())).count();
+
+                totalRevenue = totalRevenue.add(branchRevenue);
+                totalOrders += branchOrders.size();
+
+                topPerformingBranches.add(AllBranchesStatsResponse.TopPerformingBranch.builder()
+                        .branchId(branch.getBranchId())
+                        .branchName(branch.getName())
+                        .revenue(branchRevenue)
+                        .orderCount(branchOrders.size())
+                        .build());
+
+                branchSummaries.add(AllBranchesStatsResponse.BranchSummary.builder()
+                        .branchId(branch.getBranchId())
+                        .branchName(branch.getName())
+                        .revenue(branchRevenue)
+                        .orderCount(branchOrders.size())
+                        .completedOrders(completedOrders)
+                        .cancelledOrders(cancelledOrders)
+                        .pendingOrders(pendingOrders)
+                        .build());
+            }
+
+            topPerformingBranches.sort((a, b) -> b.getRevenue().compareTo(a.getRevenue()));
+            List<AllBranchesStatsResponse.TopPerformingBranch> topBranches = topPerformingBranches.stream()
+                    .limit(10)
+                    .collect(Collectors.toList());
+
+            int totalBranches = branches.size();
+            int activeBranches = (int) branches.stream()
+                    .filter(b -> {
+                        List<Order> orders = orderRepository.findByBranchIdAndDateRange(b.getBranchId(), startDate, endDate);
+                        return !orders.isEmpty();
+                    })
+                    .count();
+
+            BigDecimal averageRevenuePerBranch = totalBranches > 0
+                    ? totalRevenue.divide(BigDecimal.valueOf(totalBranches), 2, RoundingMode.HALF_UP)
+                    : BigDecimal.ZERO;
+
+            BigDecimal averageOrdersPerBranch = totalBranches > 0
+                    ? BigDecimal.valueOf(totalOrders).divide(BigDecimal.valueOf(totalBranches), 2, RoundingMode.HALF_UP)
+                    : BigDecimal.ZERO;
+
+            return AllBranchesStatsResponse.builder()
+                    .totalBranches(totalBranches)
+                    .activeBranches(activeBranches)
+                    .totalRevenue(totalRevenue)
+                    .averageRevenuePerBranch(averageRevenuePerBranch)
+                    .totalOrders(totalOrders)
+                    .averageOrdersPerBranch(averageOrdersPerBranch)
+                    .topPerformingBranches(topBranches)
+                    .branchSummaries(branchSummaries)
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Error calculating all branches stats from {} to {}", dateFrom, dateTo, e);
+            return AllBranchesStatsResponse.builder()
+                    .totalBranches(0)
+                    .activeBranches(0)
+                    .totalRevenue(BigDecimal.ZERO)
+                    .averageRevenuePerBranch(BigDecimal.ZERO)
+                    .totalOrders(0)
+                    .averageOrdersPerBranch(BigDecimal.ZERO)
+                    .topPerformingBranches(new ArrayList<>())
+                    .branchSummaries(new ArrayList<>())
+                    .build();
+        }
+    }
+
+    public BranchRevenueResponse getBranchRevenue(Integer branchId, LocalDate dateFrom, LocalDate dateTo) {
+        try {
+            LocalDateTime startDate = dateFrom.atStartOfDay();
+            LocalDateTime endDate = dateTo.atTime(LocalTime.MAX);
+
+            List<Order> orders = orderRepository.findByBranchIdAndDateRange(branchId, startDate, endDate);
+            BigDecimal totalRevenue = orders.stream()
+                    .filter(o -> "COMPLETED".equals(o.getStatus()) && "PAID".equals(o.getPaymentStatus()))
+                    .map(Order::getTotalAmount)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            // Group by date
+            Map<String, BigDecimal> dailyRevenueMap = orders.stream()
+                    .filter(o -> "COMPLETED".equals(o.getStatus()) && "PAID".equals(o.getPaymentStatus()))
+                    .collect(Collectors.groupingBy(
+                            o -> o.getCreateAt().toLocalDate().toString(),
+                            Collectors.mapping(Order::getTotalAmount, Collectors.reducing(BigDecimal.ZERO, BigDecimal::add))
+                    ));
+
+            List<BranchRevenueResponse.DailyRevenue> dailyRevenue = dailyRevenueMap.entrySet().stream()
+                    .sorted(Map.Entry.comparingByKey())
+                    .map(entry -> BranchRevenueResponse.DailyRevenue.builder()
+                            .date(entry.getKey())
+                            .revenue(entry.getValue())
+                            .build())
+                    .collect(Collectors.toList());
+
+            // Group by month (YYYY-MM format)
+            Map<String, BigDecimal> monthlyRevenueMap = orders.stream()
+                    .filter(o -> "COMPLETED".equals(o.getStatus()) && "PAID".equals(o.getPaymentStatus()))
+                    .collect(Collectors.groupingBy(
+                            o -> o.getCreateAt().toLocalDate().withDayOfMonth(1).toString(),
+                            Collectors.mapping(Order::getTotalAmount, Collectors.reducing(BigDecimal.ZERO, BigDecimal::add))
+                    ));
+
+            List<BranchRevenueResponse.MonthlyRevenue> monthlyRevenue = monthlyRevenueMap.entrySet().stream()
+                    .sorted(Map.Entry.comparingByKey())
+                    .map(entry -> BranchRevenueResponse.MonthlyRevenue.builder()
+                            .month(entry.getKey())
+                            .revenue(entry.getValue())
+                            .build())
+                    .collect(Collectors.toList());
+
+            return BranchRevenueResponse.builder()
+                    .totalRevenue(totalRevenue)
+                    .dailyRevenue(dailyRevenue)
+                    .monthlyRevenue(monthlyRevenue)
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Error calculating branch revenue for branch {} from {} to {}", branchId, dateFrom, dateTo, e);
+            return BranchRevenueResponse.builder()
+                    .totalRevenue(BigDecimal.ZERO)
+                    .dailyRevenue(new ArrayList<>())
+                    .monthlyRevenue(new ArrayList<>())
+                    .build();
+        }
+    }
+
+    public AllBranchesRevenueResponse getAllBranchesRevenue(LocalDate dateFrom, LocalDate dateTo) {
+        try {
+            List<orderservice.order_service.entity.Branch> branches = branchRepository.findAll();
+            LocalDateTime startDate = dateFrom.atStartOfDay();
+            LocalDateTime endDate = dateTo.atTime(LocalTime.MAX);
+
+            BigDecimal totalRevenue = BigDecimal.ZERO;
+            Map<String, BigDecimal> dailyRevenueMap = new HashMap<>();
+            Map<String, BigDecimal> monthlyRevenueMap = new HashMap<>();
+            List<AllBranchesRevenueResponse.BranchRevenueDetail> branchRevenueDetails = new ArrayList<>();
+
+            for (orderservice.order_service.entity.Branch branch : branches) {
+                List<Order> branchOrders = orderRepository.findByBranchIdAndDateRange(branch.getBranchId(), startDate, endDate);
+                BigDecimal branchTotalRevenue = branchOrders.stream()
+                        .filter(o -> "COMPLETED".equals(o.getStatus()) && "PAID".equals(o.getPaymentStatus()))
+                        .map(Order::getTotalAmount)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+                totalRevenue = totalRevenue.add(branchTotalRevenue);
+
+                // Daily revenue for this branch
+                Map<String, BigDecimal> branchDailyRevenueMap = branchOrders.stream()
+                        .filter(o -> "COMPLETED".equals(o.getStatus()) && "PAID".equals(o.getPaymentStatus()))
+                        .collect(Collectors.groupingBy(
+                                o -> o.getCreateAt().toLocalDate().toString(),
+                                Collectors.mapping(Order::getTotalAmount, Collectors.reducing(BigDecimal.ZERO, BigDecimal::add))
+                        ));
+
+                List<AllBranchesRevenueResponse.DailyRevenue> branchDailyRevenue = branchDailyRevenueMap.entrySet().stream()
+                        .sorted(Map.Entry.comparingByKey())
+                        .map(entry -> AllBranchesRevenueResponse.DailyRevenue.builder()
+                                .date(entry.getKey())
+                                .revenue(entry.getValue())
+                                .build())
+                        .collect(Collectors.toList());
+
+                // Monthly revenue for this branch
+                Map<String, BigDecimal> branchMonthlyRevenueMap = branchOrders.stream()
+                        .filter(o -> "COMPLETED".equals(o.getStatus()) && "PAID".equals(o.getPaymentStatus()))
+                        .collect(Collectors.groupingBy(
+                                o -> o.getCreateAt().toLocalDate().withDayOfMonth(1).toString(),
+                                Collectors.mapping(Order::getTotalAmount, Collectors.reducing(BigDecimal.ZERO, BigDecimal::add))
+                        ));
+
+                List<AllBranchesRevenueResponse.MonthlyRevenue> branchMonthlyRevenue = branchMonthlyRevenueMap.entrySet().stream()
+                        .sorted(Map.Entry.comparingByKey())
+                        .map(entry -> AllBranchesRevenueResponse.MonthlyRevenue.builder()
+                                .month(entry.getKey())
+                                .revenue(entry.getValue())
+                                .build())
+                        .collect(Collectors.toList());
+
+                // Aggregate into overall maps
+                branchDailyRevenueMap.forEach((date, revenue) ->
+                        dailyRevenueMap.put(date, dailyRevenueMap.getOrDefault(date, BigDecimal.ZERO).add(revenue)));
+                branchMonthlyRevenueMap.forEach((month, revenue) ->
+                        monthlyRevenueMap.put(month, monthlyRevenueMap.getOrDefault(month, BigDecimal.ZERO).add(revenue)));
+
+                branchRevenueDetails.add(AllBranchesRevenueResponse.BranchRevenueDetail.builder()
+                        .branchId(branch.getBranchId())
+                        .branchName(branch.getName())
+                        .totalRevenue(branchTotalRevenue)
+                        .dailyRevenue(branchDailyRevenue)
+                        .monthlyRevenue(branchMonthlyRevenue)
+                        .build());
+            }
+
+            List<AllBranchesRevenueResponse.DailyRevenue> dailyRevenue = dailyRevenueMap.entrySet().stream()
+                    .sorted(Map.Entry.comparingByKey())
+                    .map(entry -> AllBranchesRevenueResponse.DailyRevenue.builder()
+                            .date(entry.getKey())
+                            .revenue(entry.getValue())
+                            .build())
+                    .collect(Collectors.toList());
+
+            List<AllBranchesRevenueResponse.MonthlyRevenue> monthlyRevenue = monthlyRevenueMap.entrySet().stream()
+                    .sorted(Map.Entry.comparingByKey())
+                    .map(entry -> AllBranchesRevenueResponse.MonthlyRevenue.builder()
+                            .month(entry.getKey())
+                            .revenue(entry.getValue())
+                            .build())
+                    .collect(Collectors.toList());
+
+            return AllBranchesRevenueResponse.builder()
+                    .totalRevenue(totalRevenue)
+                    .dailyRevenue(dailyRevenue)
+                    .monthlyRevenue(monthlyRevenue)
+                    .branchRevenueDetails(branchRevenueDetails)
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Error calculating all branches revenue from {} to {}", dateFrom, dateTo, e);
+            return AllBranchesRevenueResponse.builder()
+                    .totalRevenue(BigDecimal.ZERO)
+                    .dailyRevenue(new ArrayList<>())
+                    .monthlyRevenue(new ArrayList<>())
+                    .branchRevenueDetails(new ArrayList<>())
+                    .build();
+        }
+    }
+
     // Helper classes
     private static class CustomerOrderStats {
         int count;

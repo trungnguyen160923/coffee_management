@@ -50,6 +50,8 @@ export interface AIAnalysisResponse {
     review_metrics?: any;
     inventory_metrics?: any;
     material_cost_metrics?: any;
+    isolation_forest_anomaly?: any;
+    prophet_forecast?: any;
   };
   message?: string;
 }
