@@ -330,3 +330,364 @@ class MetricsQueryService:
             logger.error(f"Error getting comprehensive metrics: {e}", exc_info=True)
             raise
 
+    def get_branch_monthly_stats(
+        self,
+        db: Session,
+        branch_id: int,
+        target_year: Optional[int] = None,
+        target_month: Optional[int] = None
+    ) -> dict:
+        """
+        Get monthly statistics for a specific branch
+        
+        Args:
+            db: Database session
+            branch_id: Branch ID to query
+            target_year: Year to query (defaults to current year)
+            target_month: Month to query (1-12, defaults to current month)
+            
+        Returns:
+            Dictionary with monthly statistics for the branch
+        """
+        if target_year is None:
+            target_year = datetime.now().year
+        if target_month is None:
+            target_month = datetime.now().month
+        
+        try:
+            # Query monthly aggregates for the specific branch
+            result = db.query(
+                func.sum(DailyBranchMetrics.total_revenue).label('total_revenue'),
+                func.sum(DailyBranchMetrics.order_count).label('total_orders'),
+                func.avg(DailyBranchMetrics.avg_order_value).label('avg_order_value'),
+                func.count(DailyBranchMetrics.report_date).label('days_with_data'),
+                func.sum(DailyBranchMetrics.customer_count).label('customer_count'),
+                func.max(DailyBranchMetrics.top_selling_product_id).label('top_product_id'),
+                func.sum(DailyBranchMetrics.material_cost).label('total_material_cost')
+            ).filter(
+                and_(
+                    DailyBranchMetrics.branch_id == branch_id,
+                    extract('year', DailyBranchMetrics.report_date) == target_year,
+                    extract('month', DailyBranchMetrics.report_date) == target_month
+                )
+            ).first()
+            
+            total_revenue = float(result.total_revenue or 0)
+            total_orders = int(result.total_orders or 0)
+            avg_order_value = float(result.avg_order_value or 0)
+            days_with_data = int(result.days_with_data or 0)
+            customer_count = int(result.customer_count or 0)
+            top_product_id = int(result.top_product_id) if result.top_product_id else None
+            total_material_cost = float(result.total_material_cost or 0)
+            
+            # Calculate profit (thực lời)
+            total_profit = total_revenue - total_material_cost
+            profit_margin = (total_profit / total_revenue * 100) if total_revenue > 0 else 0
+            
+            avg_revenue_per_day = total_revenue / days_with_data if days_with_data > 0 else 0
+            avg_orders_per_day = total_orders / days_with_data if days_with_data > 0 else 0
+            avg_profit_per_day = total_profit / days_with_data if days_with_data > 0 else 0
+            
+            return {
+                "branch_id": branch_id,
+                "year": target_year,
+                "month": target_month,
+                "total_revenue": total_revenue,
+                "total_orders": total_orders,
+                "total_material_cost": total_material_cost,
+                "total_profit": total_profit,
+                "profit_margin": profit_margin,
+                "avg_revenue_per_day": avg_revenue_per_day,
+                "avg_orders_per_day": avg_orders_per_day,
+                "avg_profit_per_day": avg_profit_per_day,
+                "days_with_data": days_with_data,
+                "avg_order_value": avg_order_value,
+                "customer_count": customer_count,
+                "top_product_id": top_product_id
+            }
+        except Exception as e:
+            logger.error(f"Error getting branch monthly stats: {e}", exc_info=True)
+            raise
+
+    def get_branch_yearly_stats(
+        self,
+        db: Session,
+        branch_id: int,
+        target_year: Optional[int] = None
+    ) -> dict:
+        """
+        Get yearly statistics for a specific branch
+        
+        Args:
+            db: Database session
+            branch_id: Branch ID to query
+            target_year: Year to query (defaults to current year)
+            
+        Returns:
+            Dictionary with yearly statistics and monthly breakdown for the branch
+        """
+        if target_year is None:
+            target_year = datetime.now().year
+        
+        try:
+            # Query yearly aggregates for the specific branch
+            yearly_result = db.query(
+                func.sum(DailyBranchMetrics.total_revenue).label('total_revenue'),
+                func.sum(DailyBranchMetrics.order_count).label('total_orders'),
+                func.avg(DailyBranchMetrics.avg_order_value).label('avg_order_value'),
+                func.count(func.distinct(extract('month', DailyBranchMetrics.report_date))).label('months_with_data'),
+                func.sum(DailyBranchMetrics.material_cost).label('total_material_cost')
+            ).filter(
+                and_(
+                    DailyBranchMetrics.branch_id == branch_id,
+                    extract('year', DailyBranchMetrics.report_date) == target_year
+                )
+            ).first()
+            
+            total_revenue = float(yearly_result.total_revenue or 0)
+            total_orders = int(yearly_result.total_orders or 0)
+            avg_order_value = float(yearly_result.avg_order_value or 0)
+            months_with_data = int(yearly_result.months_with_data or 0)
+            total_material_cost = float(yearly_result.total_material_cost or 0)
+            
+            # Calculate profit (thực lời)
+            total_profit = total_revenue - total_material_cost
+            profit_margin = (total_profit / total_revenue * 100) if total_revenue > 0 else 0
+            
+            avg_revenue_per_month = total_revenue / months_with_data if months_with_data > 0 else 0
+            avg_orders_per_month = total_orders / months_with_data if months_with_data > 0 else 0
+            avg_profit_per_month = total_profit / months_with_data if months_with_data > 0 else 0
+            
+            # Query monthly breakdown
+            monthly_results = db.query(
+                extract('month', DailyBranchMetrics.report_date).label('month'),
+                func.sum(DailyBranchMetrics.total_revenue).label('total_revenue'),
+                func.sum(DailyBranchMetrics.order_count).label('total_orders'),
+                func.count(DailyBranchMetrics.report_date).label('days_with_data')
+            ).filter(
+                and_(
+                    DailyBranchMetrics.branch_id == branch_id,
+                    extract('year', DailyBranchMetrics.report_date) == target_year
+                )
+            ).group_by(
+                extract('month', DailyBranchMetrics.report_date)
+            ).order_by('month').all()
+            
+            monthly_data = []
+            for row in monthly_results:
+                month_revenue = float(row.total_revenue or 0)
+                month_orders = int(row.total_orders or 0)
+                days_count = int(row.days_with_data or 0)
+                
+                avg_revenue_per_day = month_revenue / days_count if days_count > 0 else 0
+                avg_orders_per_day = month_orders / days_count if days_count > 0 else 0
+                
+                monthly_data.append({
+                    "year": target_year,
+                    "month": int(row.month),
+                    "total_revenue": month_revenue,
+                    "total_orders": month_orders,
+                    "avg_revenue_per_day": avg_revenue_per_day,
+                    "avg_orders_per_day": avg_orders_per_day,
+                    "branch_count": 1  # Always 1 for single branch
+                })
+            
+            return {
+                "branch_id": branch_id,
+                "year": target_year,
+                "total_revenue": total_revenue,
+                "total_orders": total_orders,
+                "total_material_cost": total_material_cost,
+                "total_profit": total_profit,
+                "profit_margin": profit_margin,
+                "avg_revenue_per_month": avg_revenue_per_month,
+                "avg_orders_per_month": avg_orders_per_month,
+                "avg_profit_per_month": avg_profit_per_month,
+                "months_with_data": months_with_data,
+                "avg_order_value": avg_order_value,
+                "monthly_data": monthly_data
+            }
+        except Exception as e:
+            logger.error(f"Error getting branch yearly stats: {e}", exc_info=True)
+            raise
+
+    def get_all_branches_monthly_stats(
+        self,
+        db: Session,
+        target_year: Optional[int] = None,
+        target_month: Optional[int] = None
+    ) -> dict:
+        """
+        Get monthly statistics aggregated across all branches
+        
+        Args:
+            db: Database session
+            target_year: Year to query (defaults to current year)
+            target_month: Month to query (1-12, defaults to current month)
+            
+        Returns:
+            Dictionary with monthly statistics aggregated across all branches
+        """
+        if target_year is None:
+            target_year = datetime.now().year
+        if target_month is None:
+            target_month = datetime.now().month
+        
+        try:
+            # Query monthly aggregates for all branches
+            result = db.query(
+                func.sum(DailyBranchMetrics.total_revenue).label('total_revenue'),
+                func.sum(DailyBranchMetrics.order_count).label('total_orders'),
+                func.avg(DailyBranchMetrics.avg_order_value).label('avg_order_value'),
+                func.count(DailyBranchMetrics.report_date).label('days_with_data'),
+                func.count(func.distinct(DailyBranchMetrics.branch_id)).label('branch_count'),
+                func.sum(DailyBranchMetrics.customer_count).label('total_customer_count'),
+                func.sum(DailyBranchMetrics.material_cost).label('total_material_cost')
+            ).filter(
+                and_(
+                    extract('year', DailyBranchMetrics.report_date) == target_year,
+                    extract('month', DailyBranchMetrics.report_date) == target_month
+                )
+            ).first()
+            
+            total_revenue = float(result.total_revenue or 0)
+            total_orders = int(result.total_orders or 0)
+            avg_order_value = float(result.avg_order_value or 0)
+            days_with_data = int(result.days_with_data or 0)
+            branch_count = int(result.branch_count or 0)
+            total_customer_count = int(result.total_customer_count or 0)
+            total_material_cost = float(result.total_material_cost or 0)
+            
+            # Calculate profit (thực lời)
+            total_profit = total_revenue - total_material_cost
+            profit_margin = (total_profit / total_revenue * 100) if total_revenue > 0 else 0
+            
+            avg_revenue_per_day = total_revenue / days_with_data if days_with_data > 0 else 0
+            avg_orders_per_day = total_orders / days_with_data if days_with_data > 0 else 0
+            avg_profit_per_day = total_profit / days_with_data if days_with_data > 0 else 0
+            avg_revenue_per_branch = total_revenue / branch_count if branch_count > 0 else 0
+            
+            return {
+                "year": target_year,
+                "month": target_month,
+                "total_revenue": total_revenue,
+                "total_orders": total_orders,
+                "total_material_cost": total_material_cost,
+                "total_profit": total_profit,
+                "profit_margin": profit_margin,
+                "avg_revenue_per_day": avg_revenue_per_day,
+                "avg_orders_per_day": avg_orders_per_day,
+                "avg_profit_per_day": avg_profit_per_day,
+                "avg_revenue_per_branch": avg_revenue_per_branch,
+                "days_with_data": days_with_data,
+                "avg_order_value": avg_order_value,
+                "branch_count": branch_count,
+                "total_customer_count": total_customer_count
+            }
+        except Exception as e:
+            logger.error(f"Error getting all branches monthly stats: {e}", exc_info=True)
+            raise
+
+    def get_all_branches_yearly_stats(
+        self,
+        db: Session,
+        target_year: Optional[int] = None
+    ) -> dict:
+        """
+        Get yearly statistics aggregated across all branches
+        
+        Args:
+            db: Database session
+            target_year: Year to query (defaults to current year)
+            
+        Returns:
+            Dictionary with yearly statistics and monthly breakdown aggregated across all branches
+        """
+        if target_year is None:
+            target_year = datetime.now().year
+        
+        try:
+            # Query yearly aggregates for all branches
+            yearly_result = db.query(
+                func.sum(DailyBranchMetrics.total_revenue).label('total_revenue'),
+                func.sum(DailyBranchMetrics.order_count).label('total_orders'),
+                func.avg(DailyBranchMetrics.avg_order_value).label('avg_order_value'),
+                func.count(func.distinct(extract('month', DailyBranchMetrics.report_date))).label('months_with_data'),
+                func.count(func.distinct(DailyBranchMetrics.branch_id)).label('avg_branch_count'),
+                func.sum(DailyBranchMetrics.material_cost).label('total_material_cost')
+            ).filter(
+                extract('year', DailyBranchMetrics.report_date) == target_year
+            ).first()
+            
+            total_revenue = float(yearly_result.total_revenue or 0)
+            total_orders = int(yearly_result.total_orders or 0)
+            avg_order_value = float(yearly_result.avg_order_value or 0)
+            months_with_data = int(yearly_result.months_with_data or 0)
+            avg_branch_count = int(yearly_result.avg_branch_count or 0)
+            total_material_cost = float(yearly_result.total_material_cost or 0)
+            
+            # Calculate profit (thực lời)
+            total_profit = total_revenue - total_material_cost
+            profit_margin = (total_profit / total_revenue * 100) if total_revenue > 0 else 0
+            
+            avg_revenue_per_month = total_revenue / months_with_data if months_with_data > 0 else 0
+            avg_orders_per_month = total_orders / months_with_data if months_with_data > 0 else 0
+            avg_profit_per_month = total_profit / months_with_data if months_with_data > 0 else 0
+            
+            # Query monthly breakdown
+            monthly_results = db.query(
+                extract('month', DailyBranchMetrics.report_date).label('month'),
+                func.sum(DailyBranchMetrics.total_revenue).label('total_revenue'),
+                func.sum(DailyBranchMetrics.order_count).label('total_orders'),
+                func.count(DailyBranchMetrics.report_date).label('days_with_data'),
+                func.count(func.distinct(DailyBranchMetrics.branch_id)).label('branch_count'),
+                func.sum(DailyBranchMetrics.material_cost).label('total_material_cost')
+            ).filter(
+                extract('year', DailyBranchMetrics.report_date) == target_year
+            ).group_by(
+                extract('month', DailyBranchMetrics.report_date)
+            ).order_by('month').all()
+            
+            monthly_data = []
+            for row in monthly_results:
+                month_revenue = float(row.total_revenue or 0)
+                month_orders = int(row.total_orders or 0)
+                days_count = int(row.days_with_data or 0)
+                branch_count = int(row.branch_count or 0)
+                month_material_cost = float(row.total_material_cost or 0)
+                month_profit = month_revenue - month_material_cost
+                
+                avg_revenue_per_day = month_revenue / days_count if days_count > 0 else 0
+                avg_orders_per_day = month_orders / days_count if days_count > 0 else 0
+                
+                monthly_data.append({
+                    "year": target_year,
+                    "month": int(row.month),
+                    "total_revenue": month_revenue,
+                    "total_orders": month_orders,
+                    "total_material_cost": month_material_cost,
+                    "total_profit": month_profit,
+                    "avg_revenue_per_day": avg_revenue_per_day,
+                    "avg_orders_per_day": avg_orders_per_day,
+                    "branch_count": branch_count
+                })
+            
+            return {
+                "year": target_year,
+                "total_revenue": total_revenue,
+                "total_orders": total_orders,
+                "total_material_cost": total_material_cost,
+                "total_profit": total_profit,
+                "profit_margin": profit_margin,
+                "avg_revenue_per_month": avg_revenue_per_month,
+                "avg_orders_per_month": avg_orders_per_month,
+                "avg_profit_per_month": avg_profit_per_month,
+                "months_with_data": months_with_data,
+                "avg_order_value": avg_order_value,
+                "avg_branch_count": avg_branch_count,
+                "monthly_data": monthly_data
+            }
+        except Exception as e:
+            logger.error(f"Error getting all branches yearly stats: {e}", exc_info=True)
+            raise
+

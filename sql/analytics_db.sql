@@ -217,6 +217,14 @@ CREATE TABLE IF NOT EXISTS ai_reports (
     ai_model VARCHAR(100) NULL COMMENT 'Tên model AI sử dụng',
     processing_time_ms INT NULL COMMENT 'Thời gian xử lý (ms)',
     
+    -- Confidence scores (Phase 4)
+    data_quality_score FLOAT NULL COMMENT 'Data quality score (0.0-1.0)',
+    ml_confidence_score FLOAT NULL COMMENT 'ML confidence score (0.0-1.0)',
+    ai_quality_score FLOAT NULL COMMENT 'AI response quality score (0.0-1.0)',
+    overall_confidence_score FLOAT NULL COMMENT 'Overall confidence score (0.0-1.0)',
+    confidence_breakdown JSON NULL COMMENT 'Detailed confidence breakdown as JSON',
+    validation_flags JSON NULL COMMENT 'Validation warnings/flags as JSON',
+    
     -- Indexes for better query performance
     INDEX idx_branch_id (branch_id),
     INDEX idx_report_date (report_date),

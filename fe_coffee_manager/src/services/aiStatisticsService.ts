@@ -83,6 +83,48 @@ export interface ReportListResponse {
   items: ReportResponse[];
 }
 
+export interface BranchMonthlyStats {
+  branch_id: number;
+  year: number;
+  month: number;
+  total_revenue: number;
+  total_orders: number;
+  total_material_cost?: number;
+  total_profit?: number;
+  profit_margin?: number;
+  avg_revenue_per_day: number;
+  avg_orders_per_day: number;
+  avg_profit_per_day?: number;
+  days_with_data: number;
+  avg_order_value: number;
+  customer_count: number;
+  top_product_id: number | null;
+}
+
+export interface BranchYearlyStats {
+  branch_id: number;
+  year: number;
+  total_revenue: number;
+  total_orders: number;
+  total_material_cost?: number;
+  total_profit?: number;
+  profit_margin?: number;
+  avg_revenue_per_month: number;
+  avg_orders_per_month: number;
+  avg_profit_per_month?: number;
+  months_with_data: number;
+  avg_order_value: number;
+  monthly_data: Array<{
+    year: number;
+    month: number;
+    total_revenue: number;
+    total_orders: number;
+    avg_revenue_per_day: number;
+    avg_orders_per_day: number;
+    branch_count: number;
+  }>;
+}
+
 // Service interface
 export interface AIStatisticsService {
   getAIAnalysis(request: AIAnalysisRequest): Promise<AIAnalysisResponse>;
@@ -95,6 +137,54 @@ export interface AIStatisticsService {
   getDistributionStatus(): Promise<any>;
   getSchedulerStatus(): Promise<any>;
   triggerDailyReports(targetDate?: string, branchIds?: number[]): Promise<any>;
+  getBranchMonthlyStats(branchId: number, year?: number, month?: number): Promise<BranchMonthlyStats>;
+  getBranchYearlyStats(branchId: number, year?: number): Promise<BranchYearlyStats>;
+  getAllBranchesMonthlyStats(year?: number, month?: number): Promise<AllBranchesMonthlyStats>;
+  getAllBranchesYearlyStats(year?: number): Promise<AllBranchesYearlyStats>;
+}
+
+export interface AllBranchesMonthlyStats {
+  year: number;
+  month: number;
+  total_revenue: number;
+  total_orders: number;
+  total_material_cost?: number;
+  total_profit?: number;
+  profit_margin?: number;
+  avg_revenue_per_day: number;
+  avg_orders_per_day: number;
+  avg_profit_per_day?: number;
+  avg_revenue_per_branch: number;
+  days_with_data: number;
+  avg_order_value: number;
+  branch_count: number;
+  total_customer_count: number;
+}
+
+export interface AllBranchesYearlyStats {
+  year: number;
+  total_revenue: number;
+  total_orders: number;
+  total_material_cost?: number;
+  total_profit?: number;
+  profit_margin?: number;
+  avg_revenue_per_month: number;
+  avg_orders_per_month: number;
+  avg_profit_per_month?: number;
+  months_with_data: number;
+  avg_order_value: number;
+  avg_branch_count: number;
+  monthly_data: Array<{
+    year: number;
+    month: number;
+    total_revenue: number;
+    total_orders: number;
+    total_material_cost?: number;
+    total_profit?: number;
+    avg_revenue_per_day: number;
+    avg_orders_per_day: number;
+    branch_count: number;
+  }>;
 }
 
 // Real service implementation
@@ -308,6 +398,70 @@ const aiStatisticsService: AIStatisticsService = {
       return (response as any).result || response;
     } catch (error) {
       console.error('Error triggering daily reports:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get monthly statistics for a specific branch
+   */
+  async getBranchMonthlyStats(branchId: number, year?: number, month?: number): Promise<BranchMonthlyStats> {
+    try {
+      const response = await apiClient.get<BranchMonthlyStats>(
+        API_ENDPOINTS.AI_STATISTICS.METRICS.BRANCH_MONTHLY(branchId, year, month)
+      );
+      
+      return (response as any).result || response;
+    } catch (error) {
+      console.error('Error fetching branch monthly stats:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get yearly statistics for a specific branch
+   */
+  async getBranchYearlyStats(branchId: number, year?: number): Promise<BranchYearlyStats> {
+    try {
+      const response = await apiClient.get<BranchYearlyStats>(
+        API_ENDPOINTS.AI_STATISTICS.METRICS.BRANCH_YEARLY(branchId, year)
+      );
+      
+      return (response as any).result || response;
+    } catch (error) {
+      console.error('Error fetching branch yearly stats:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get monthly statistics aggregated across all branches (for admin)
+   */
+  async getAllBranchesMonthlyStats(year?: number, month?: number): Promise<AllBranchesMonthlyStats> {
+    try {
+      const response = await apiClient.get<AllBranchesMonthlyStats>(
+        API_ENDPOINTS.AI_STATISTICS.METRICS.ALL_BRANCHES_MONTHLY(year, month)
+      );
+      
+      return (response as any).result || response;
+    } catch (error) {
+      console.error('Error fetching all branches monthly stats:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get yearly statistics aggregated across all branches (for admin)
+   */
+  async getAllBranchesYearlyStats(year?: number): Promise<AllBranchesYearlyStats> {
+    try {
+      const response = await apiClient.get<AllBranchesYearlyStats>(
+        API_ENDPOINTS.AI_STATISTICS.METRICS.ALL_BRANCHES_YEARLY(year)
+      );
+      
+      return (response as any).result || response;
+    } catch (error) {
+      console.error('Error fetching all branches yearly stats:', error);
       throw error;
     }
   },

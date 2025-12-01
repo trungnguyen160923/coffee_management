@@ -47,14 +47,12 @@ import {
   AreaChart,
 } from 'recharts';
 
-// API Base URL
-const AI_API_BASE_URL = import.meta.env.AI_SERVICE_URL || import.meta.env.VITE_AI_SERVICE_URL || 'http://localhost:8005';
-
 // Import service for single branch data
 import { aiStatisticsService } from '../../services';
-import { AIAnalysisResponse } from '../../services/aiStatisticsService';
+import { AIAnalysisResponse, AllBranchesMonthlyStats, AllBranchesYearlyStats, BranchMonthlyStats, BranchYearlyStats } from '../../services/aiStatisticsService';
 import { exportAllBranchesToPDF } from '../../services/pdfExportService';
 import { toast } from 'react-hot-toast';
+import { apiClient } from '../../config/api';
 
 // Types for API response
 interface AllBranchesAIAnalysisResponse {
@@ -117,18 +115,31 @@ interface BranchData {
 
 
 
+type TabType = 'day' | 'month' | 'year';
+
 export default function MultiBranchDashboard() {
+  const [activeTab, setActiveTab] = useState<TabType>('day');
   const [viewMode, setViewMode] = useState<'single' | 'all'>('all');
   const [selectedBranch, setSelectedBranch] = useState<number>(1);
   const [selectedDate, setSelectedDate] = useState<string>(
     new Date().toISOString().split('T')[0]
   );
+  const [selectedMonth, setSelectedMonth] = useState<string>(
+    `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
+  );
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [loading, setLoading] = useState(false);
   const [loadingSingleBranch, setLoadingSingleBranch] = useState(false);
+  const [loadingMonthly, setLoadingMonthly] = useState<boolean>(false);
+  const [loadingYearly, setLoadingYearly] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [aiData, setAiData] = useState<AllBranchesAIAnalysisResponse | null>(null);
   const [branchesData, setBranchesData] = useState<BranchData[]>([]);
   const [singleBranchAiData, setSingleBranchAiData] = useState<AIAnalysisResponse | null>(null);
+  const [monthlyStats, setMonthlyStats] = useState<AllBranchesMonthlyStats | null>(null);
+  const [yearlyStats, setYearlyStats] = useState<AllBranchesYearlyStats | null>(null);
+  const [singleBranchMonthlyStats, setSingleBranchMonthlyStats] = useState<BranchMonthlyStats | null>(null);
+  const [singleBranchYearlyStats, setSingleBranchYearlyStats] = useState<BranchYearlyStats | null>(null);
   const [expandedAnalysisSections, setExpandedAnalysisSections] = useState<Record<string, boolean>>({
     overview: true,
     branchEvaluation: false,
@@ -137,12 +148,34 @@ export default function MultiBranchDashboard() {
     conclusion: false,
   });
 
-  // Fetch AI data for all branches
+  // Fetch AI data for all branches (for day tab)
   useEffect(() => {
-    if (selectedDate) {
+    if (activeTab === 'day' && selectedDate) {
       fetchAllBranchesData();
     }
-  }, [selectedDate]);
+  }, [selectedDate, activeTab]);
+
+  // Fetch monthly stats when month changes
+  useEffect(() => {
+    if (activeTab === 'month' && selectedMonth) {
+      if (viewMode === 'all') {
+        fetchMonthlyStats();
+      } else if (viewMode === 'single' && selectedBranch) {
+        fetchSingleBranchMonthlyStats();
+      }
+    }
+  }, [selectedMonth, activeTab, viewMode, selectedBranch]);
+
+  // Fetch yearly stats when year changes
+  useEffect(() => {
+    if (activeTab === 'year' && selectedYear) {
+      if (viewMode === 'all') {
+        fetchYearlyStats();
+      } else if (viewMode === 'single' && selectedBranch) {
+        fetchSingleBranchYearlyStats();
+      }
+    }
+  }, [selectedYear, activeTab, viewMode, selectedBranch]);
 
   // Fetch single branch AI data when in single branch view (non-blocking, in background)
   useEffect(() => {
@@ -179,6 +212,74 @@ export default function MultiBranchDashboard() {
     }
   };
 
+  const fetchMonthlyStats = async () => {
+    try {
+      setLoadingMonthly(true);
+      setError(null);
+      const [year, month] = selectedMonth.split('-').map(Number);
+      const stats = await aiStatisticsService.getAllBranchesMonthlyStats(year, month);
+      setMonthlyStats(stats);
+    } catch (err: any) {
+      console.error('Error fetching monthly stats:', err);
+      const errorMessage = err?.response?.data?.detail || err?.message || 'Không thể tải dữ liệu thống kê tháng';
+      setError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setLoadingMonthly(false);
+    }
+  };
+
+  const fetchYearlyStats = async () => {
+    try {
+      setLoadingYearly(true);
+      setError(null);
+      const stats = await aiStatisticsService.getAllBranchesYearlyStats(selectedYear);
+      setYearlyStats(stats);
+    } catch (err: any) {
+      console.error('Error fetching yearly stats:', err);
+      const errorMessage = err?.response?.data?.detail || err?.message || 'Không thể tải dữ liệu thống kê năm';
+      setError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setLoadingYearly(false);
+    }
+  };
+
+  const fetchSingleBranchMonthlyStats = async () => {
+    if (!selectedBranch) return;
+    try {
+      setLoadingMonthly(true);
+      setError(null);
+      const [year, month] = selectedMonth.split('-').map(Number);
+      const stats = await aiStatisticsService.getBranchMonthlyStats(selectedBranch, year, month);
+      setSingleBranchMonthlyStats(stats);
+    } catch (err: any) {
+      console.error('Error fetching single branch monthly stats:', err);
+      const errorMessage = err?.response?.data?.detail || err?.message || 'Không thể tải dữ liệu thống kê tháng';
+      setError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setLoadingMonthly(false);
+    }
+  };
+
+  const fetchSingleBranchYearlyStats = async () => {
+    if (!selectedBranch) return;
+    try {
+      setLoadingYearly(true);
+      setError(null);
+      const stats = await aiStatisticsService.getBranchYearlyStats(selectedBranch, selectedYear);
+      setSingleBranchYearlyStats(stats);
+    } catch (err: any) {
+      console.error('Error fetching single branch yearly stats:', err);
+      const errorMessage = err?.response?.data?.detail || err?.message || 'Không thể tải dữ liệu thống kê năm';
+      setError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setLoadingYearly(false);
+    }
+  };
+
   const handleExportPDF = async () => {
     if (!aiData || branchesData.length === 0) {
       toast.error('Không có dữ liệu để xuất PDF');
@@ -203,34 +304,44 @@ export default function MultiBranchDashboard() {
       setLoading(true);
       setError(null);
       
-      // Gọi API với force_refresh parameter
+      // Gọi API qua API Gateway với force_refresh parameter
       // Nếu forceRefresh=false, API sẽ tự động check database trước
-      const url = `${AI_API_BASE_URL}/api/ai/agent/analyze-all?date=${selectedDate}&save_to_db=true&force_refresh=${forceRefresh}`;
-      const response = await fetch(url);
+      const params = new URLSearchParams({
+        date: selectedDate,
+        save_to_db: 'true',
+        force_refresh: forceRefresh.toString(),
+      });
       
-      if (!response.ok) {
+      const endpoint = `/api/ai/agent/analyze-all?${params.toString()}`;
+      
+      try {
+        const data: AllBranchesAIAnalysisResponse = await apiClient.get<AllBranchesAIAnalysisResponse>(endpoint);
+        
+        // Handle API response format (may have result wrapper)
+        const responseData = (data as any).result || data;
+        
+        if (responseData.success) {
+          setAiData(responseData);
+          // Transform API data to branchesData format
+          const transformedBranches = transformAPIDataToBranches(responseData);
+          setBranchesData(transformedBranches);
+        } else {
+          throw new Error(responseData.message || 'Failed to fetch data');
+        }
+      } catch (apiError: any) {
         // Nếu 404, có thể là chưa có report, thử gọi với force_refresh=true
-        if (response.status === 404 && !forceRefresh) {
+        if (apiError?.status === 404 && !forceRefresh) {
           console.log('No existing report found, generating new one...');
           return await fetchAllBranchesData(true);
         }
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const data: AllBranchesAIAnalysisResponse = await response.json();
-      
-      if (data.success) {
-        setAiData(data);
-        // Transform API data to branchesData format
-        const transformedBranches = transformAPIDataToBranches(data);
-        setBranchesData(transformedBranches);
-      } else {
-        throw new Error(data.message || 'Failed to fetch data');
+        throw apiError;
       }
     } catch (err: any) {
       console.error('Error fetching all branches data:', err);
-      setError(err.message || 'Không thể tải dữ liệu. Vui lòng thử lại.');
+      const errorMessage = err?.response?.data?.detail || err?.response?.data?.message || err?.message || 'Không thể tải dữ liệu. Vui lòng thử lại.';
+      setError(errorMessage);
       setBranchesData([]);
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -363,83 +474,279 @@ export default function MultiBranchDashboard() {
         </div>
       </div>
 
-      {/* View Mode Toggle */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-        <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
-          <div className="flex-1">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Chế độ xem
-            </label>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setViewMode('all')}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                  viewMode === 'all'
-                    ? 'bg-amber-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                <Building2 className="h-4 w-4 inline mr-2" />
-                Tất cả chi nhánh
-              </button>
-              <button
-                onClick={() => {
-                  // Nếu chưa có chi nhánh nào được chọn hoặc chi nhánh đã chọn không tồn tại trong danh sách
-                  // thì tự động chọn chi nhánh đầu tiên
-                  if (branchesData.length > 0) {
-                    const currentBranchExists = branchesData.some(b => b.id === selectedBranch);
-                    if (!currentBranchExists) {
-                      setSelectedBranch(branchesData[0].id);
-                    }
-                  }
-                  setViewMode('single');
-                }}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                  viewMode === 'single'
-                    ? 'bg-amber-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                Chi nhánh đơn lẻ
-              </button>
-            </div>
-          </div>
-
-          {viewMode === 'single' && (
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                <Filter className="h-4 w-4 inline mr-1" />
-                Chọn chi nhánh
-              </label>
-              <select
-                value={selectedBranch}
-                onChange={(e) => setSelectedBranch(Number(e.target.value))}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500"
-              >
-                {branchesData.map((branch) => (
-                  <option key={branch.id} value={branch.id}>
-                    {branch.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          <div className="flex-1">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              <Calendar className="h-4 w-4 inline mr-1" />
-              Ngày
-            </label>
-            <input
-              type="date"
-              value={selectedDate}
-              max={new Date().toISOString().split('T')[0]}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500"
-            />
-          </div>
+      {/* Tabs */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+        <div className="flex border-b border-gray-200">
+          <button
+            onClick={() => setActiveTab('day')}
+            className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+              activeTab === 'day'
+                ? 'text-amber-600 border-b-2 border-amber-600 bg-amber-50'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+            }`}
+          >
+            Ngày
+          </button>
+          <button
+            onClick={() => setActiveTab('month')}
+            className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+              activeTab === 'month'
+                ? 'text-amber-600 border-b-2 border-amber-600 bg-amber-50'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+            }`}
+          >
+            Tháng
+          </button>
+          <button
+            onClick={() => setActiveTab('year')}
+            className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+              activeTab === 'year'
+                ? 'text-amber-600 border-b-2 border-amber-600 bg-amber-50'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+            }`}
+          >
+            Năm
+          </button>
         </div>
       </div>
+
+      {/* Filters - Only show in Day tab */}
+      {activeTab === 'day' && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+          <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Chế độ xem
+              </label>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setViewMode('all')}
+                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                    viewMode === 'all'
+                      ? 'bg-amber-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  <Building2 className="h-4 w-4 inline mr-2" />
+                  Tất cả chi nhánh
+                </button>
+                <button
+                  onClick={() => {
+                    if (branchesData.length > 0) {
+                      const currentBranchExists = branchesData.some(b => b.id === selectedBranch);
+                      if (!currentBranchExists) {
+                        setSelectedBranch(branchesData[0].id);
+                      }
+                    }
+                    setViewMode('single');
+                  }}
+                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                    viewMode === 'single'
+                      ? 'bg-amber-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Chi nhánh đơn lẻ
+                </button>
+              </div>
+            </div>
+
+            {viewMode === 'single' && (
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <Filter className="h-4 w-4 inline mr-1" />
+                  Chọn chi nhánh
+                </label>
+                <select
+                  value={selectedBranch}
+                  onChange={(e) => setSelectedBranch(Number(e.target.value))}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                >
+                  {branchesData.map((branch) => (
+                    <option key={branch.id} value={branch.id}>
+                      {branch.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                <Calendar className="h-4 w-4 inline mr-1" />
+                Ngày
+              </label>
+              <input
+                type="date"
+                value={selectedDate}
+                max={new Date().toISOString().split('T')[0]}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                disabled={loading}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Filters for Month tab */}
+      {activeTab === 'month' && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+          <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Chế độ xem
+              </label>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setViewMode('all')}
+                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                    viewMode === 'all'
+                      ? 'bg-amber-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  <Building2 className="h-4 w-4 inline mr-2" />
+                  Tất cả chi nhánh
+                </button>
+                <button
+                  onClick={() => {
+                    if (branchesData.length > 0) {
+                      const currentBranchExists = branchesData.some(b => b.id === selectedBranch);
+                      if (!currentBranchExists) {
+                        setSelectedBranch(branchesData[0].id);
+                      }
+                    }
+                    setViewMode('single');
+                  }}
+                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                    viewMode === 'single'
+                      ? 'bg-amber-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Chi nhánh đơn lẻ
+                </button>
+              </div>
+            </div>
+
+            {viewMode === 'single' && (
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <Filter className="h-4 w-4 inline mr-1" />
+                  Chọn chi nhánh
+                </label>
+                <select
+                  value={selectedBranch}
+                  onChange={(e) => setSelectedBranch(Number(e.target.value))}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                >
+                  {branchesData.map((branch) => (
+                    <option key={branch.id} value={branch.id}>
+                      {branch.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                <Calendar className="h-4 w-4 inline mr-1" />
+                Tháng
+              </label>
+              <input
+                type="month"
+                value={selectedMonth}
+                max={`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                disabled={loadingMonthly}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Filters for Year tab */}
+      {activeTab === 'year' && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+          <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Chế độ xem
+              </label>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setViewMode('all')}
+                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                    viewMode === 'all'
+                      ? 'bg-amber-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  <Building2 className="h-4 w-4 inline mr-2" />
+                  Tất cả chi nhánh
+                </button>
+                <button
+                  onClick={() => {
+                    if (branchesData.length > 0) {
+                      const currentBranchExists = branchesData.some(b => b.id === selectedBranch);
+                      if (!currentBranchExists) {
+                        setSelectedBranch(branchesData[0].id);
+                      }
+                    }
+                    setViewMode('single');
+                  }}
+                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                    viewMode === 'single'
+                      ? 'bg-amber-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Chi nhánh đơn lẻ
+                </button>
+              </div>
+            </div>
+
+            {viewMode === 'single' && (
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <Filter className="h-4 w-4 inline mr-1" />
+                  Chọn chi nhánh
+                </label>
+                <select
+                  value={selectedBranch}
+                  onChange={(e) => setSelectedBranch(Number(e.target.value))}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                >
+                  {branchesData.map((branch) => (
+                    <option key={branch.id} value={branch.id}>
+                      {branch.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                <Calendar className="h-4 w-4 inline mr-1" />
+                Năm
+              </label>
+              <input
+                type="number"
+                value={selectedYear}
+                min="2020"
+                max={new Date().getFullYear()}
+                onChange={(e) => setSelectedYear(Number(e.target.value))}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                disabled={loadingYearly}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Error Message */}
       {error && (
@@ -450,14 +757,27 @@ export default function MultiBranchDashboard() {
       )}
 
       {/* Loading State */}
-      {loading && !aiData && (
+      {(loading && !aiData && activeTab === 'day') && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 flex flex-col items-center justify-center">
           <Loader2 className="h-8 w-8 text-amber-600 animate-spin mb-4" />
           <p className="text-gray-600">Đang tải dữ liệu từ AI...</p>
         </div>
       )}
+      {(loadingMonthly && activeTab === 'month') && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 flex flex-col items-center justify-center">
+          <Loader2 className="h-8 w-8 text-amber-600 animate-spin mb-4" />
+          <p className="text-gray-600">Đang tải dữ liệu thống kê tháng...</p>
+        </div>
+      )}
+      {(loadingYearly && activeTab === 'year') && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 flex flex-col items-center justify-center">
+          <Loader2 className="h-8 w-8 text-amber-600 animate-spin mb-4" />
+          <p className="text-gray-600">Đang tải dữ liệu thống kê năm...</p>
+        </div>
+      )}
 
-      {viewMode === 'all' && !loading ? (
+      {/* Day Tab Content - All Branches View */}
+      {activeTab === 'day' && viewMode === 'all' && !loading ? (
         <>
           {/* Empty State */}
           {branchesData.length === 0 && !error && (
@@ -1019,7 +1339,10 @@ export default function MultiBranchDashboard() {
           </div>
           )}
         </>
-      ) : viewMode === 'single' ? (
+      ) : null}
+
+      {/* Day Tab Content - Single Branch View */}
+      {activeTab === 'day' && viewMode === 'single' ? (
         // Single Branch View - Chỉ hiển thị khi có dữ liệu từ API riêng
         branchesData.length > 0 && branchesData.find(b => b.id === selectedBranch) ? (
           <>
@@ -1053,6 +1376,603 @@ export default function MultiBranchDashboard() {
           </div>
         )
       ) : null}
+
+      {/* Month Tab Content - All Branches */}
+      {activeTab === 'month' && viewMode === 'all' && !loadingMonthly && monthlyStats && (
+        <AdminMonthlyStatsView stats={monthlyStats} />
+      )}
+      {activeTab === 'month' && viewMode === 'all' && !loadingMonthly && !monthlyStats && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 flex flex-col items-center justify-center">
+          <Building2 className="h-12 w-12 text-gray-400 mb-4" />
+          <p className="text-gray-600 text-lg mb-2">Chưa có dữ liệu thống kê cho tháng này</p>
+          <p className="text-gray-500 text-sm">Vui lòng chọn tháng khác hoặc thử lại sau</p>
+        </div>
+      )}
+
+      {/* Month Tab Content - Single Branch */}
+      {activeTab === 'month' && viewMode === 'single' && !loadingMonthly && singleBranchMonthlyStats && (
+        <MonthlyStatsView 
+          stats={singleBranchMonthlyStats} 
+          branchName={branchesData.find(b => b.id === selectedBranch)?.name || `Chi nhánh ${selectedBranch}`} 
+        />
+      )}
+      {activeTab === 'month' && viewMode === 'single' && !loadingMonthly && !singleBranchMonthlyStats && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 flex flex-col items-center justify-center">
+          <Building2 className="h-12 w-12 text-gray-400 mb-4" />
+          <p className="text-gray-600 text-lg mb-2">Chưa có dữ liệu thống kê cho chi nhánh này</p>
+          <p className="text-gray-500 text-sm">Vui lòng chọn chi nhánh khác hoặc thử lại sau</p>
+        </div>
+      )}
+
+      {/* Year Tab Content - All Branches */}
+      {activeTab === 'year' && viewMode === 'all' && !loadingYearly && yearlyStats && (
+        <AdminYearlyStatsView stats={yearlyStats} />
+      )}
+      {activeTab === 'year' && viewMode === 'all' && !loadingYearly && !yearlyStats && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 flex flex-col items-center justify-center">
+          <Building2 className="h-12 w-12 text-gray-400 mb-4" />
+          <p className="text-gray-600 text-lg mb-2">Chưa có dữ liệu thống kê cho năm này</p>
+          <p className="text-gray-500 text-sm">Vui lòng chọn năm khác hoặc thử lại sau</p>
+        </div>
+      )}
+
+      {/* Year Tab Content - Single Branch */}
+      {activeTab === 'year' && viewMode === 'single' && !loadingYearly && singleBranchYearlyStats && (
+        <YearlyStatsView 
+          stats={singleBranchYearlyStats} 
+          branchName={branchesData.find(b => b.id === selectedBranch)?.name || `Chi nhánh ${selectedBranch}`} 
+        />
+      )}
+      {activeTab === 'year' && viewMode === 'single' && !loadingYearly && !singleBranchYearlyStats && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 flex flex-col items-center justify-center">
+          <Building2 className="h-12 w-12 text-gray-400 mb-4" />
+          <p className="text-gray-600 text-lg mb-2">Chưa có dữ liệu thống kê cho chi nhánh này</p>
+          <p className="text-gray-500 text-sm">Vui lòng chọn chi nhánh khác hoặc thử lại sau</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Admin Monthly Stats View Component
+function AdminMonthlyStatsView({ stats }: { stats: AllBranchesMonthlyStats }) {
+  const formatCurrency = (value: number) => {
+    if (value >= 1000000) {
+      return `${(value / 1000000).toFixed(1)}tr`;
+    } else if (value >= 1000) {
+      return `${(value / 1000).toFixed(0)}k`;
+    }
+    return value.toFixed(0);
+  };
+
+  const monthNames = ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6', 
+                      'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'];
+
+  return (
+    <div className="space-y-6">
+      {/* Key Metrics */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <SystemMetricCard
+          title="Tổng doanh thu"
+          value={formatCurrency(stats.total_revenue)}
+          subtitle={`${stats.total_orders} đơn hàng`}
+          icon={DollarSign}
+          color="text-green-600"
+          bgColor="bg-green-50"
+          trend="up"
+          trendValue={formatCurrency(stats.avg_revenue_per_branch)}
+        />
+        <SystemMetricCard
+          title="Thực lời (Lợi nhuận)"
+          value={formatCurrency(stats.total_profit || 0)}
+          subtitle={`Tỷ suất: ${(stats.profit_margin || 0).toFixed(1)}%`}
+          icon={TrendingUp}
+          color="text-emerald-600"
+          bgColor="bg-emerald-50"
+          trend="up"
+          trendValue={formatCurrency(stats.avg_profit_per_day || 0)}
+        />
+        <SystemMetricCard
+          title="Chi phí nguyên liệu"
+          value={formatCurrency(stats.total_material_cost || 0)}
+          subtitle={`${stats.branch_count} chi nhánh`}
+          icon={Package}
+          color="text-red-600"
+          bgColor="bg-red-50"
+          trend="stable"
+          trendValue={formatCurrency((stats.total_material_cost || 0) / stats.branch_count)}
+        />
+        <SystemMetricCard
+          title="Số chi nhánh"
+          value={stats.branch_count.toString()}
+          subtitle={`${stats.days_with_data} ngày có dữ liệu`}
+          icon={Building2}
+          color="text-blue-600"
+          bgColor="bg-blue-50"
+          trend="stable"
+          trendValue={`${stats.total_customer_count} khách hàng`}
+        />
+      </div>
+
+      {/* Additional Metrics */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <SystemMetricCard
+          title="TB doanh thu/ngày"
+          value={formatCurrency(stats.avg_revenue_per_day)}
+          subtitle={`TB đơn hàng: ${stats.avg_orders_per_day.toFixed(1)}`}
+          icon={Activity}
+          color="text-purple-600"
+          bgColor="bg-purple-50"
+          trend="up"
+          trendValue={formatCurrency(stats.avg_order_value)}
+        />
+        <SystemMetricCard
+          title="TB lợi nhuận/ngày"
+          value={formatCurrency(stats.avg_profit_per_day || 0)}
+          subtitle={`TB doanh thu/chi nhánh: ${formatCurrency(stats.avg_revenue_per_branch)}`}
+          icon={TrendingUp}
+          color="text-emerald-600"
+          bgColor="bg-emerald-50"
+          trend="up"
+          trendValue={`${monthNames[stats.month - 1]} ${stats.year}`}
+        />
+        <SystemMetricCard
+          title="Giá trị đơn TB"
+          value={formatCurrency(stats.avg_order_value)}
+          subtitle={`Tổng khách hàng: ${stats.total_customer_count}`}
+          icon={ShoppingCart}
+          color="text-amber-600"
+          bgColor="bg-amber-50"
+          trend="stable"
+          trendValue={`${stats.days_with_data} ngày`}
+        />
+        <SystemMetricCard
+          title="Tổng đơn hàng"
+          value={stats.total_orders.toString()}
+          subtitle={`TB ${stats.avg_orders_per_day.toFixed(1)} đơn/ngày`}
+          icon={ShoppingCart}
+          color="text-blue-600"
+          bgColor="bg-blue-50"
+          trend="up"
+          trendValue={formatCurrency(stats.total_revenue)}
+        />
+      </div>
+
+      {/* Summary Card */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <h3 className="text-lg font-bold text-gray-900 mb-4">
+          Tổng hợp tháng {monthNames[stats.month - 1]} năm {stats.year} - Tất cả chi nhánh
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-gray-50 rounded-lg p-4">
+            <p className="text-sm text-gray-600 mb-1">Tổng doanh thu</p>
+            <p className="text-2xl font-bold text-gray-900">{formatCurrency(stats.total_revenue)} VNĐ</p>
+          </div>
+          <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+            <p className="text-sm text-gray-600 mb-1">Thực lời (Lợi nhuận)</p>
+            <p className="text-2xl font-bold text-green-700">{formatCurrency(stats.total_profit || 0)} VNĐ</p>
+            <p className="text-xs text-gray-500 mt-1">Tỷ suất: {(stats.profit_margin || 0).toFixed(1)}%</p>
+          </div>
+          <div className="bg-red-50 rounded-lg p-4 border border-red-200">
+            <p className="text-sm text-gray-600 mb-1">Chi phí nguyên liệu</p>
+            <p className="text-xl font-bold text-red-700">{formatCurrency(stats.total_material_cost || 0)} VNĐ</p>
+          </div>
+          <div className="bg-gray-50 rounded-lg p-4">
+            <p className="text-sm text-gray-600 mb-1">Tổng số đơn hàng</p>
+            <p className="text-2xl font-bold text-gray-900">{stats.total_orders} đơn</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Monthly Stats View Component (reuse from manager)
+function MonthlyStatsView({ stats, branchName }: { stats: BranchMonthlyStats; branchName: string }) {
+  const formatCurrency = (value: number) => {
+    if (value >= 1000000) {
+      return `${(value / 1000000).toFixed(1)}tr`;
+    } else if (value >= 1000) {
+      return `${(value / 1000).toFixed(0)}k`;
+    }
+    return value.toFixed(0);
+  };
+
+  const monthNames = ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6', 
+                      'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'];
+
+  return (
+    <div className="space-y-6">
+      {/* Key Metrics */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-medium text-gray-600">Tổng doanh thu</p>
+            <div className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600">
+              <DollarSign className="h-4 w-4" />
+            </div>
+          </div>
+          <p className="text-xl font-bold text-gray-900">{formatCurrency(stats.total_revenue)}</p>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-medium text-gray-600">Tổng đơn hàng</p>
+            <div className="p-1.5 rounded-lg bg-blue-50 text-blue-600">
+              <ShoppingCart className="h-4 w-4" />
+            </div>
+          </div>
+          <p className="text-xl font-bold text-gray-900">{stats.total_orders}</p>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-medium text-gray-600">Thực lời</p>
+            <div className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600">
+              <TrendingUp className="h-4 w-4" />
+            </div>
+          </div>
+          <p className="text-xl font-bold text-gray-900">{formatCurrency(stats.total_profit || 0)}</p>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-medium text-gray-600">Tỷ suất lợi nhuận</p>
+            <div className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600">
+              <Activity className="h-4 w-4" />
+            </div>
+          </div>
+          <p className="text-xl font-bold text-gray-900">{(stats.profit_margin || 0).toFixed(1)}%</p>
+        </div>
+      </div>
+
+      {/* Summary Card */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <h3 className="text-lg font-bold text-gray-900 mb-4">
+          {branchName} - Tổng hợp tháng {monthNames[stats.month - 1]} năm {stats.year}
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-gray-50 rounded-lg p-4">
+            <p className="text-sm text-gray-600 mb-1">Tổng doanh thu</p>
+            <p className="text-2xl font-bold text-gray-900">{formatCurrency(stats.total_revenue)} VNĐ</p>
+          </div>
+          <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+            <p className="text-sm text-gray-600 mb-1">Thực lời (Lợi nhuận)</p>
+            <p className="text-2xl font-bold text-green-700">{formatCurrency(stats.total_profit || 0)} VNĐ</p>
+            <p className="text-xs text-gray-500 mt-1">Tỷ suất: {(stats.profit_margin || 0).toFixed(1)}%</p>
+          </div>
+          <div className="bg-red-50 rounded-lg p-4 border border-red-200">
+            <p className="text-sm text-gray-600 mb-1">Chi phí nguyên liệu</p>
+            <p className="text-xl font-bold text-red-700">{formatCurrency(stats.total_material_cost || 0)} VNĐ</p>
+          </div>
+          <div className="bg-gray-50 rounded-lg p-4">
+            <p className="text-sm text-gray-600 mb-1">Tổng số đơn hàng</p>
+            <p className="text-2xl font-bold text-gray-900">{stats.total_orders} đơn</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Yearly Stats View Component (reuse from manager)
+function YearlyStatsView({ stats, branchName }: { stats: BranchYearlyStats; branchName: string }) {
+  const formatCurrency = (value: number) => {
+    if (value >= 1000000) {
+      return `${(value / 1000000).toFixed(1)}tr`;
+    } else if (value >= 1000) {
+      return `${(value / 1000).toFixed(0)}k`;
+    }
+    return value.toFixed(0);
+  };
+
+  const monthNames = ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8', 'T9', 'T10', 'T11', 'T12'];
+
+  // Prepare chart data
+  const chartData = stats.monthly_data.map(month => ({
+    month: monthNames[month.month - 1],
+    revenue: month.total_revenue,
+    orders: month.total_orders,
+  }));
+
+  return (
+    <div className="space-y-6">
+      {/* Key Metrics */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <SystemMetricCard
+          title="Tổng doanh thu năm"
+          value={formatCurrency(stats.total_revenue)}
+          subtitle={`${stats.total_orders} đơn hàng`}
+          icon={DollarSign}
+          color="text-green-600"
+          bgColor="bg-green-50"
+          trend="up"
+          trendValue={formatCurrency(stats.avg_revenue_per_month)}
+        />
+        <SystemMetricCard
+          title="Thực lời (Lợi nhuận)"
+          value={formatCurrency(stats.total_profit || 0)}
+          subtitle={`Tỷ suất: ${(stats.profit_margin || 0).toFixed(1)}%`}
+          icon={TrendingUp}
+          color="text-emerald-600"
+          bgColor="bg-emerald-50"
+          trend="up"
+          trendValue={formatCurrency(stats.avg_profit_per_month || 0)}
+        />
+        <SystemMetricCard
+          title="Chi phí nguyên liệu"
+          value={formatCurrency(stats.total_material_cost || 0)}
+          subtitle={`${stats.months_with_data} tháng có dữ liệu`}
+          icon={Package}
+          color="text-red-600"
+          bgColor="bg-red-50"
+          trend="stable"
+          trendValue={formatCurrency((stats.total_material_cost || 0) / stats.months_with_data)}
+        />
+        <SystemMetricCard
+          title="TB doanh thu/tháng"
+          value={formatCurrency(stats.avg_revenue_per_month)}
+          subtitle={`TB ${stats.avg_orders_per_month.toFixed(1)} đơn/tháng`}
+          icon={Activity}
+          color="text-blue-600"
+          bgColor="bg-blue-50"
+          trend="up"
+          trendValue={formatCurrency(stats.avg_order_value)}
+        />
+      </div>
+
+      {/* Revenue Chart */}
+      {chartData.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <h3 className="text-lg font-bold text-gray-900 mb-4">
+            {branchName} - Doanh thu theo tháng năm {stats.year}
+          </h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <AreaChart data={chartData}>
+              <defs>
+                <linearGradient id="colorRevenueYearBranch" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis dataKey="month" stroke="#666" tick={{ fontSize: 12 }} />
+              <YAxis stroke="#666" tick={{ fontSize: 12 }} />
+              <Tooltip
+                formatter={(value: any) => `${formatCurrency(value)} VNĐ`}
+                contentStyle={{
+                  backgroundColor: '#fff',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                }}
+              />
+              <Area
+                type="monotone"
+                dataKey="revenue"
+                stroke="#f59e0b"
+                fillOpacity={1}
+                fill="url(#colorRevenueYearBranch)"
+                name="Doanh thu"
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* Profit Summary */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <h3 className="text-lg font-bold text-gray-900 mb-4">Tổng hợp lợi nhuận năm {stats.year} - {branchName}</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+            <p className="text-sm text-gray-600 mb-1">Tổng thực lời</p>
+            <p className="text-2xl font-bold text-green-700">{formatCurrency(stats.total_profit || 0)} VNĐ</p>
+            <p className="text-xs text-gray-500 mt-1">Tỷ suất: {(stats.profit_margin || 0).toFixed(1)}%</p>
+          </div>
+          <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+            <p className="text-sm text-gray-600 mb-1">Trung bình/tháng</p>
+            <p className="text-xl font-bold text-blue-700">{formatCurrency(stats.avg_profit_per_month || 0)} VNĐ</p>
+          </div>
+          <div className="bg-red-50 rounded-lg p-4 border border-red-200">
+            <p className="text-sm text-gray-600 mb-1">Tổng chi phí nguyên liệu</p>
+            <p className="text-xl font-bold text-red-700">{formatCurrency(stats.total_material_cost || 0)} VNĐ</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Monthly Breakdown */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <h3 className="text-lg font-bold text-gray-900 mb-4">Chi tiết theo tháng</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-200">
+                <th className="text-left py-3 px-4 font-semibold text-gray-700">Tháng</th>
+                <th className="text-right py-3 px-4 font-semibold text-gray-700">Doanh thu</th>
+                <th className="text-right py-3 px-4 font-semibold text-gray-700">Số đơn</th>
+                <th className="text-right py-3 px-4 font-semibold text-gray-700">TB/ngày</th>
+              </tr>
+            </thead>
+            <tbody>
+              {stats.monthly_data.map((month, idx) => (
+                <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50">
+                  <td className="py-3 px-4 text-gray-900">{monthNames[month.month - 1]}</td>
+                  <td className="py-3 px-4 text-right font-semibold text-gray-900">
+                    {formatCurrency(month.total_revenue)} VNĐ
+                  </td>
+                  <td className="py-3 px-4 text-right text-gray-700">{month.total_orders}</td>
+                  <td className="py-3 px-4 text-right text-gray-600">
+                    {formatCurrency(month.avg_revenue_per_day)} / {month.avg_orders_per_day.toFixed(1)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Admin Yearly Stats View Component
+function AdminYearlyStatsView({ stats }: { stats: AllBranchesYearlyStats }) {
+  const formatCurrency = (value: number) => {
+    if (value >= 1000000) {
+      return `${(value / 1000000).toFixed(1)}tr`;
+    } else if (value >= 1000) {
+      return `${(value / 1000).toFixed(0)}k`;
+    }
+    return value.toFixed(0);
+  };
+
+  const monthNames = ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8', 'T9', 'T10', 'T11', 'T12'];
+
+  // Prepare chart data
+  const chartData = stats.monthly_data.map(month => ({
+    month: monthNames[month.month - 1],
+    revenue: month.total_revenue,
+    orders: month.total_orders,
+    profit: month.total_profit || 0,
+  }));
+
+  return (
+    <div className="space-y-6">
+      {/* Key Metrics */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <SystemMetricCard
+          title="Tổng doanh thu năm"
+          value={formatCurrency(stats.total_revenue)}
+          subtitle={`${stats.total_orders} đơn hàng`}
+          icon={DollarSign}
+          color="text-green-600"
+          bgColor="bg-green-50"
+          trend="up"
+          trendValue={formatCurrency(stats.avg_revenue_per_month)}
+        />
+        <SystemMetricCard
+          title="Thực lời (Lợi nhuận)"
+          value={formatCurrency(stats.total_profit || 0)}
+          subtitle={`Tỷ suất: ${(stats.profit_margin || 0).toFixed(1)}%`}
+          icon={TrendingUp}
+          color="text-emerald-600"
+          bgColor="bg-emerald-50"
+          trend="up"
+          trendValue={formatCurrency(stats.avg_profit_per_month || 0)}
+        />
+        <SystemMetricCard
+          title="Chi phí nguyên liệu"
+          value={formatCurrency(stats.total_material_cost || 0)}
+          subtitle={`TB ${stats.avg_branch_count} chi nhánh`}
+          icon={Package}
+          color="text-red-600"
+          bgColor="bg-red-50"
+          trend="stable"
+          trendValue={formatCurrency((stats.total_material_cost || 0) / stats.months_with_data)}
+        />
+        <SystemMetricCard
+          title="TB doanh thu/tháng"
+          value={formatCurrency(stats.avg_revenue_per_month)}
+          subtitle={`${stats.months_with_data} tháng có dữ liệu`}
+          icon={Activity}
+          color="text-blue-600"
+          bgColor="bg-blue-50"
+          trend="up"
+          trendValue={`${stats.avg_orders_per_month.toFixed(1)} đơn/tháng`}
+        />
+      </div>
+
+      {/* Revenue Chart */}
+      {chartData.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <h3 className="text-lg font-bold text-gray-900 mb-4">
+            Doanh thu theo tháng năm {stats.year} - Tất cả chi nhánh
+          </h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <AreaChart data={chartData}>
+              <defs>
+                <linearGradient id="colorRevenueYearAdmin" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis dataKey="month" stroke="#666" tick={{ fontSize: 12 }} />
+              <YAxis stroke="#666" tick={{ fontSize: 12 }} />
+              <Tooltip
+                formatter={(value: any) => `${formatCurrency(value)} VNĐ`}
+                contentStyle={{
+                  backgroundColor: '#fff',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                }}
+              />
+              <Area
+                type="monotone"
+                dataKey="revenue"
+                stroke="#f59e0b"
+                fillOpacity={1}
+                fill="url(#colorRevenueYearAdmin)"
+                name="Doanh thu"
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* Profit Summary */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <h3 className="text-lg font-bold text-gray-900 mb-4">Tổng hợp lợi nhuận năm {stats.year} - Tất cả chi nhánh</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+            <p className="text-sm text-gray-600 mb-1">Tổng thực lời</p>
+            <p className="text-2xl font-bold text-green-700">{formatCurrency(stats.total_profit || 0)} VNĐ</p>
+            <p className="text-xs text-gray-500 mt-1">Tỷ suất: {(stats.profit_margin || 0).toFixed(1)}%</p>
+          </div>
+          <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+            <p className="text-sm text-gray-600 mb-1">Trung bình/tháng</p>
+            <p className="text-xl font-bold text-blue-700">{formatCurrency(stats.avg_profit_per_month || 0)} VNĐ</p>
+          </div>
+          <div className="bg-red-50 rounded-lg p-4 border border-red-200">
+            <p className="text-sm text-gray-600 mb-1">Tổng chi phí nguyên liệu</p>
+            <p className="text-xl font-bold text-red-700">{formatCurrency(stats.total_material_cost || 0)} VNĐ</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Monthly Breakdown */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <h3 className="text-lg font-bold text-gray-900 mb-4">Chi tiết theo tháng</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-200">
+                <th className="text-left py-3 px-4 font-semibold text-gray-700">Tháng</th>
+                <th className="text-right py-3 px-4 font-semibold text-gray-700">Doanh thu</th>
+                <th className="text-right py-3 px-4 font-semibold text-gray-700">Lợi nhuận</th>
+                <th className="text-right py-3 px-4 font-semibold text-gray-700">Số đơn</th>
+                <th className="text-right py-3 px-4 font-semibold text-gray-700">Chi nhánh</th>
+                <th className="text-right py-3 px-4 font-semibold text-gray-700">TB/ngày</th>
+              </tr>
+            </thead>
+            <tbody>
+              {stats.monthly_data.map((month, idx) => (
+                <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50">
+                  <td className="py-3 px-4 text-gray-900">{monthNames[month.month - 1]}</td>
+                  <td className="py-3 px-4 text-right font-semibold text-gray-900">
+                    {formatCurrency(month.total_revenue)} VNĐ
+                  </td>
+                  <td className="py-3 px-4 text-right font-semibold text-green-700">
+                    {formatCurrency(month.total_profit || 0)} VNĐ
+                  </td>
+                  <td className="py-3 px-4 text-right text-gray-700">{month.total_orders}</td>
+                  <td className="py-3 px-4 text-right text-gray-600">{month.branch_count}</td>
+                  <td className="py-3 px-4 text-right text-gray-600">
+                    {formatCurrency(month.avg_revenue_per_day)} / {month.avg_orders_per_day.toFixed(1)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }
