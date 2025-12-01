@@ -22,6 +22,7 @@ public class PurchaseOrderResponse {
     LocalDateTime expectedDeliveryAt;
     LocalDateTime sentAt;
     LocalDateTime confirmedAt;
+    String supplierResponse;
     List<PurchaseOrderDetailResponse> details;
     LocalDateTime createAt;
     LocalDateTime updateAt;

@@ -104,7 +104,25 @@ export default function PurchaseOrderDetailModal({ open, onClose, po, onRefresh 
               <div className="bg-gray-50 rounded-lg p-4">
                 <div className="text-sm text-gray-600">Status / Total</div>
                 <div className="mt-1 flex items-center gap-2">
-                  <span className={`px-2 py-1 rounded text-xs ${localPo.status === 'DRAFT' ? 'bg-gray-100 text-gray-700' : localPo.status === 'APPROVED' ? 'bg-blue-100 text-blue-700' : localPo.status === 'RECEIVED' ? 'bg-green-100 text-green-700' : localPo.status === 'CANCELLED' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'}`}>{localPo.status}</span>
+                  <span
+                    className={`px-2 py-1 rounded text-xs ${
+                      localPo.status === 'DRAFT'
+                        ? 'bg-gray-100 text-gray-700'
+                        : localPo.status === 'APPROVED'
+                        ? 'bg-blue-100 text-blue-700'
+                        : localPo.status === 'RECEIVED'
+                        ? 'bg-green-100 text-green-700'
+                        : localPo.status === 'CANCELLED'
+                        ? 'bg-red-100 text-red-700'
+                        : localPo.status === 'SUPPLIER_CONFIRMED'
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : localPo.status === 'SUPPLIER_CANCELLED'
+                        ? 'bg-rose-100 text-rose-700'
+                        : 'bg-gray-100 text-gray-700'
+                    }`}
+                  >
+                    {localPo.status}
+                  </span>
                   <span className="text-gray-900 font-semibold">{formatCurrency(Number(localPo.totalAmount))}</span>
                 </div>
                 <div className="text-xs text-gray-500 mt-1">Branch #{localPo.branchId}</div>
@@ -116,6 +134,20 @@ export default function PurchaseOrderDetailModal({ open, onClose, po, onRefresh 
                   {localPo.sentAt && (<span>Sent: {new Date(localPo.sentAt).toLocaleString()}</span>)}
                   {localPo.confirmedAt && (<span>Confirmed: {new Date(localPo.confirmedAt).toLocaleString()}</span>)}
                 </div>
+                {localPo.supplierResponse && (
+                  <div className="mt-2 text-xs text-amber-900 bg-amber-50 border border-amber-100 rounded px-2 py-1">
+                    <span className="font-semibold mr-1">
+                      {localPo.status === 'SUPPLIER_CONFIRMED'
+                        ? 'Supplier confirmation note:'
+                        : localPo.status === 'SUPPLIER_CANCELLED'
+                        ? 'Supplier cancellation note:'
+                        : 'Supplier note:'}
+                    </span>
+                    <span className="whitespace-pre-line break-words">
+                      {localPo.supplierResponse}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
 

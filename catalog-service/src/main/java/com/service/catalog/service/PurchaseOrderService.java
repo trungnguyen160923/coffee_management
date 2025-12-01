@@ -37,6 +37,8 @@ import com.service.catalog.repository.PurchaseOrderDetailRepository;
 import com.service.catalog.repository.SupplierRepository;
 import com.service.catalog.repository.IngredientRepository;
 import com.service.catalog.repository.UnitRepository;
+import com.service.catalog.events.PurchaseOrderSupplierResponseEvent;
+import com.service.catalog.messaging.PurchaseOrderEventProducer;
 
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -59,6 +61,7 @@ public class PurchaseOrderService {
     PDFService pdfService;
     BranchClient branchClient;
     UserClient userClient;
+    PurchaseOrderEventProducer purchaseOrderEventProducer;
 
     @PreAuthorize("hasRole('MANAGER')")
     public List<PurchaseOrderResponse> getPurchaseOrders(Integer branchId) {
@@ -89,10 +92,10 @@ public class PurchaseOrderService {
             po.setPoNumber("PO-" + System.currentTimeMillis());
             po.setSupplier(supplier);
             po.setBranchId(request.getBranchId());
-            // Temporary: set status to SUPPLIER_CONFIRMED to allow immediate goods receipt testing
-            po.setStatus("SUPPLIER_CONFIRMED");
-            po.setSentAt(LocalDateTime.now());
-            po.setConfirmedAt(LocalDateTime.now());
+            // Default initial status when manager creates a new purchase order
+            po.setStatus("DRAFT");
+            // For a newly created PO, we haven't actually sent it to supplier yet
+            po.setCreateAt(LocalDateTime.now());
             po.setCreateAt(LocalDateTime.now());
             po.setUpdateAt(LocalDateTime.now());
             // Ensure NOT NULL DB columns have defaults
@@ -451,6 +454,35 @@ public class PurchaseOrderService {
 
         purchaseOrderRepository.save(po);
 
+        // Publish event for notification-service when supplier responds
+        try {
+            com.service.catalog.dto.response.BranchResponse branchInfo = null;
+            try {
+                var branchResponse = branchClient.getBranchById(po.getBranchId());
+                if (branchResponse != null && branchResponse.getResult() != null) {
+                    branchInfo = branchResponse.getResult();
+                }
+            } catch (Exception e) {
+                log.warn("[PurchaseOrderService] Failed to fetch branch info for notification: {}", e.getMessage());
+            }
+
+            PurchaseOrderSupplierResponseEvent event = PurchaseOrderSupplierResponseEvent.builder()
+                    .poId(po.getPoId())
+                    .poNumber(po.getPoNumber())
+                    .branchId(po.getBranchId())
+                    .branchName(branchInfo != null ? branchInfo.getName() : null)
+                    .supplierName(po.getSupplier() != null ? po.getSupplier().getName() : null)
+                    .status(request.getStatus())
+                    .totalAmount(po.getTotalAmount())
+                    .expectedDeliveryAt(po.getExpectedDeliveryAt())
+                    .supplierResponse(po.getSupplierResponse())
+                    .confirmedAt(po.getConfirmedAt())
+                    .build();
+            purchaseOrderEventProducer.publishSupplierResponse(event);
+        } catch (Exception e) {
+            log.error("[PurchaseOrderService] Failed to publish supplier response event for poId {}", poId, e);
+        }
+
         String note = "SUPPLIER_CONFIRMED".equals(request.getStatus()) ? 
             "Supplier confirmed order" : "Supplier cancelled order";
         if (request.getSupplierResponse() != null && !request.getSupplierResponse().trim().isEmpty()) {
@@ -491,6 +523,35 @@ public class PurchaseOrderService {
             note += ": " + reason;
         }
         recordStatusHistory(po, fromStatus, "SUPPLIER_CANCELLED", note);
+
+        // Publish event for notification-service when supplier cancels
+        try {
+            com.service.catalog.dto.response.BranchResponse branchInfo = null;
+            try {
+                var branchResponse = branchClient.getBranchById(po.getBranchId());
+                if (branchResponse != null && branchResponse.getResult() != null) {
+                    branchInfo = branchResponse.getResult();
+                }
+            } catch (Exception e) {
+                log.warn("[PurchaseOrderService] Failed to fetch branch info for notification: {}", e.getMessage());
+            }
+
+            PurchaseOrderSupplierResponseEvent event = PurchaseOrderSupplierResponseEvent.builder()
+                    .poId(po.getPoId())
+                    .poNumber(po.getPoNumber())
+                    .branchId(po.getBranchId())
+                    .branchName(branchInfo != null ? branchInfo.getName() : null)
+                    .supplierName(po.getSupplier() != null ? po.getSupplier().getName() : null)
+                    .status("SUPPLIER_CANCELLED")
+                    .totalAmount(po.getTotalAmount())
+                    .expectedDeliveryAt(po.getExpectedDeliveryAt())
+                    .supplierResponse(po.getSupplierResponse())
+                    .confirmedAt(po.getConfirmedAt())
+                    .build();
+            purchaseOrderEventProducer.publishSupplierResponse(event);
+        } catch (Exception e) {
+            log.error("[PurchaseOrderService] Failed to publish supplier cancelled event for poId {}", poId, e);
+        }
     }
 
     private void recordStatusHistory(PurchaseOrder po, String fromStatus, String toStatus, String note) {

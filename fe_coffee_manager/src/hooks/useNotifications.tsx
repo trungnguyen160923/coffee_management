@@ -19,8 +19,8 @@ export function useNotifications({ branchId, userId, enabled = true, role }: Use
   const [notifications, setNotifications] = useState<NotificationState[]>([]);
   const unreadCount = useMemo(() => notifications.filter((n) => !n.isRead).length, [notifications]);
   const normalizedRole = role?.toLowerCase();
-  const subscribeBranchFeed = Boolean(branchId && normalizedRole !== 'manager');
-  const subscribeUserFeed = Boolean(userId && (!subscribeBranchFeed || normalizedRole === 'manager'));
+  const subscribeBranchFeed = Boolean(branchId); // cả staff và manager đều nhận branch feed
+  const subscribeUserFeed = Boolean(userId);     // và cả user queue nếu có userId
 
   const markAsRead = useCallback(async (notificationId: string) => {
     // Optimistic update
@@ -146,6 +146,7 @@ export function useNotifications({ branchId, userId, enabled = true, role }: Use
     enabled,
     subscribeBranch: subscribeBranchFeed,
     subscribeUserQueue: subscribeUserFeed,
+    role,
     onMessage: handleIncomingMessage,
   });
 

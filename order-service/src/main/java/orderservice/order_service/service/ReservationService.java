@@ -174,11 +174,13 @@ public class ReservationService {
             log.info("No email provided, skipping email notification for reservationId={}", savedReservation.getReservationId());
         }
 
-        // Publish reservation created event to Kafka for staff notification
+        // Publish reservation created event to Kafka for staff + notification service
         try {
+            String branchName = branch.getName();
             ReservationCreatedEvent event = ReservationCreatedEvent.builder()
                     .reservationId(savedReservation.getReservationId())
                     .branchId(savedReservation.getBranchId())
+                    .branchName(branchName)
                     .customerId(savedReservation.getCustomerId())
                     .customerName(savedReservation.getCustomerName())
                     .phone(savedReservation.getPhone())
@@ -229,9 +231,12 @@ public class ReservationService {
         // Publish event when reservation is confirmed or cancelled
         if (("CONFIRMED".equals(status) || "confirmed".equalsIgnoreCase(status)) && updatedReservation.getCustomerId() != null) {
             try {
+                Branch branch = branchRepository.findById(updatedReservation.getBranchId()).orElse(null);
+                String branchName = branch != null ? branch.getName() : null;
                 ReservationCreatedEvent event = ReservationCreatedEvent.builder()
                         .reservationId(updatedReservation.getReservationId())
                         .branchId(updatedReservation.getBranchId())
+                        .branchName(branchName)
                         .customerId(updatedReservation.getCustomerId())
                         .customerName(updatedReservation.getCustomerName())
                         .phone(updatedReservation.getPhone())
@@ -253,9 +258,12 @@ public class ReservationService {
 
         if (("CANCELLED".equals(status) || "cancelled".equalsIgnoreCase(status)) && updatedReservation.getCustomerId() != null) {
             try {
+                Branch branch = branchRepository.findById(updatedReservation.getBranchId()).orElse(null);
+                String branchName = branch != null ? branch.getName() : null;
                 ReservationCreatedEvent event = ReservationCreatedEvent.builder()
                         .reservationId(updatedReservation.getReservationId())
                         .branchId(updatedReservation.getBranchId())
+                        .branchName(branchName)
                         .customerId(updatedReservation.getCustomerId())
                         .customerName(updatedReservation.getCustomerName())
                         .phone(updatedReservation.getPhone())
@@ -289,9 +297,12 @@ public class ReservationService {
             // Publish event when reservation is cancelled
             if (updatedReservation.getCustomerId() != null) {
                 try {
+                    Branch branch = branchRepository.findById(updatedReservation.getBranchId()).orElse(null);
+                    String branchName = branch != null ? branch.getName() : null;
                     ReservationCreatedEvent event = ReservationCreatedEvent.builder()
                             .reservationId(updatedReservation.getReservationId())
                             .branchId(updatedReservation.getBranchId())
+                            .branchName(branchName)
                             .customerId(updatedReservation.getCustomerId())
                             .customerName(updatedReservation.getCustomerName())
                             .phone(updatedReservation.getPhone())

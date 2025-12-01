@@ -27,7 +27,11 @@ public class OrderEventListener {
     private static final String RESERVATION_CANCELLED_TOPIC = "${app.kafka.topics.reservation-cancelled:reservation.cancelled}";
     private static final String GROUP_ID = "${spring.kafka.consumer.group-id:notification-service}";
 
-    @KafkaListener(topics = ORDER_CREATED_TOPIC, groupId = GROUP_ID)
+    @KafkaListener(
+        topics = ORDER_CREATED_TOPIC,
+        groupId = GROUP_ID,
+        containerFactory = "orderCreatedKafkaListenerContainerFactory"
+    )
     public void onOrderCreated(@Payload OrderCreatedEvent event) {
         try {
             orderNotificationService.notifyOrderCreated(event);

@@ -17,6 +17,7 @@ public class NotificationWebSocketService {
     private final SimpMessagingTemplate messagingTemplate;
 
     private static final String STAFF_TOPIC_TEMPLATE = "/topic/staff.%s";
+    private static final String MANAGER_TOPIC_TEMPLATE = "/topic/manager.%s";
     private static final String USER_QUEUE_TEMPLATE = "/queue/user.%s";
     private static final String BROADCAST_TOPIC = "/topic/broadcast";
 
@@ -28,6 +29,19 @@ public class NotificationWebSocketService {
         log.info("[NotificationWebSocketService] 📤 Sending WebSocket message to branch staff");
         log.info("  Destination: {}", destination);
         log.info("  MessageId: {}, Type: {}, Title: {}", 
+                message.getId(), message.getType(), message.getTitle());
+        messagingTemplate.convertAndSend(destination, message);
+        log.info("[NotificationWebSocketService] ✅ WebSocket message sent to {}", destination);
+    }
+
+    public void sendToBranchManagers(Integer branchId, NotificationMessage message) {
+        if (branchId == null) {
+            throw new IllegalArgumentException("branchId is required to send manager notification");
+        }
+        String destination = MANAGER_TOPIC_TEMPLATE.formatted(branchId);
+        log.info("[NotificationWebSocketService] 📤 Sending WebSocket message to branch managers");
+        log.info("  Destination: {}", destination);
+        log.info("  MessageId: {}, Type: {}, Title: {}",
                 message.getId(), message.getType(), message.getTitle());
         messagingTemplate.convertAndSend(destination, message);
         log.info("[NotificationWebSocketService] ✅ WebSocket message sent to {}", destination);

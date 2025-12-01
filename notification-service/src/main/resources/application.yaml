@@ -29,9 +29,8 @@ spring:
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
-        spring.json.trusted.packages: "${KAFKA_JSON_TRUSTED_PACKAGES:*}"
-        spring.json.use.type.headers: ${KAFKA_USE_TYPE_HEADERS:false}
-        spring.json.value.default.type: "${KAFKA_VALUE_DEFAULT_TYPE:com.service.notification_service.events.OrderCreatedEvent}"
+        spring.json.trusted.packages: "com.service.notification_service.events"
+        spring.json.use.type.headers: true
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
@@ -92,3 +91,4 @@ app:
       reservation-created: ${TOPIC_RESERVATION_CREATED:reservation.created}
       reservation-confirmed: ${TOPIC_RESERVATION_CONFIRMED:reservation.confirmed}
       reservation-cancelled: ${TOPIC_RESERVATION_CANCELLED:reservation.cancelled}
+      po-supplier-response: ${TOPIC_PO_SUPPLIER_RESPONSE:po.supplier.response}

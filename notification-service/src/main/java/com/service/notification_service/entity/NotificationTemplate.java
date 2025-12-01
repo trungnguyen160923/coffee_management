@@ -49,6 +49,15 @@ public class NotificationTemplate {
     @Column(columnDefinition = "JSON")
     private String variables;
 
+    @Column(name = "default_target_role", length = 20)
+    private String defaultTargetRole;
+
+    @Column(name = "scope", length = 20)
+    private String scope; // USER, BRANCH, SYSTEM
+
+    @Column(name = "frontend_type", length = 50)
+    private String frontendType; // Map sang NotificationType ở frontend/WebSocket
+
     @Column(name = "is_active")
     private Boolean active = Boolean.TRUE;
 
