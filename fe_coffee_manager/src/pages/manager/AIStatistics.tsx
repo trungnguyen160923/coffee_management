@@ -33,16 +33,27 @@ import {
   Legend,
 } from 'recharts';
 import { aiStatisticsService } from '../../services';
-import { AIAnalysisResponse } from '../../services/aiStatisticsService';
+import { AIAnalysisResponse, BranchMonthlyStats, BranchYearlyStats } from '../../services/aiStatisticsService';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-hot-toast';
 import { exportAIStatisticsToPDF } from '../../services/pdfExportService';
 
+type TabType = 'day' | 'month' | 'year';
+
 export default function AIStatistics() {
   const { managerBranch } = useAuth();
+  const [activeTab, setActiveTab] = useState<TabType>('day');
   const [selectedDate, setSelectedDate] = useState<string>(
     new Date().toISOString().split('T')[0]
   );
+  const [selectedMonth, setSelectedMonth] = useState<string>(
+    `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
+  );
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+  const [monthlyStats, setMonthlyStats] = useState<BranchMonthlyStats | null>(null);
+  const [yearlyStats, setYearlyStats] = useState<BranchYearlyStats | null>(null);
+  const [loadingMonthly, setLoadingMonthly] = useState<boolean>(false);
+  const [loadingYearly, setLoadingYearly] = useState<boolean>(false);
   const [expandedSections, setExpandedSections] = useState({
     overview: true,
     analysis: true,
@@ -59,12 +70,26 @@ export default function AIStatistics() {
   const [aiData, setAiData] = useState<AIAnalysisResponse | null>(null);
   const [dataSource, setDataSource] = useState<'cached' | 'new' | null>(null); // Track data source
 
-  // Fetch AI data when branch or date changes
+  // Fetch AI data when branch or date changes (for day tab)
   useEffect(() => {
-    if (managerBranch?.branchId && selectedDate) {
+    if (activeTab === 'day' && managerBranch?.branchId && selectedDate) {
       fetchAIData();
     }
-  }, [managerBranch?.branchId, selectedDate]);
+  }, [managerBranch?.branchId, selectedDate, activeTab]);
+
+  // Fetch monthly stats when branch or month changes
+  useEffect(() => {
+    if (activeTab === 'month' && managerBranch?.branchId && selectedMonth) {
+      fetchMonthlyStats();
+    }
+  }, [managerBranch?.branchId, selectedMonth, activeTab]);
+
+  // Fetch yearly stats when branch or year changes
+  useEffect(() => {
+    if (activeTab === 'year' && managerBranch?.branchId && selectedYear) {
+      fetchYearlyStats();
+    }
+  }, [managerBranch?.branchId, selectedYear, activeTab]);
 
   const fetchAIData = async () => {
     if (!managerBranch?.branchId) {
@@ -153,6 +178,56 @@ export default function AIStatistics() {
       toast.error(errorMessage);
     } finally {
       setRefreshing(false);
+    }
+  };
+
+  const fetchMonthlyStats = async () => {
+    if (!managerBranch?.branchId) {
+      setError('Không tìm thấy thông tin chi nhánh');
+      return;
+    }
+
+    try {
+      setLoadingMonthly(true);
+      setError(null);
+      const [year, month] = selectedMonth.split('-').map(Number);
+      const stats = await aiStatisticsService.getBranchMonthlyStats(
+        managerBranch.branchId,
+        year,
+        month
+      );
+      setMonthlyStats(stats);
+    } catch (err: any) {
+      console.error('Error fetching monthly stats:', err);
+      const errorMessage = err?.response?.data?.detail || err?.message || 'Không thể tải dữ liệu thống kê tháng';
+      setError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setLoadingMonthly(false);
+    }
+  };
+
+  const fetchYearlyStats = async () => {
+    if (!managerBranch?.branchId) {
+      setError('Không tìm thấy thông tin chi nhánh');
+      return;
+    }
+
+    try {
+      setLoadingYearly(true);
+      setError(null);
+      const stats = await aiStatisticsService.getBranchYearlyStats(
+        managerBranch.branchId,
+        selectedYear
+      );
+      setYearlyStats(stats);
+    } catch (err: any) {
+      console.error('Error fetching yearly stats:', err);
+      const errorMessage = err?.response?.data?.detail || err?.message || 'Không thể tải dữ liệu thống kê năm';
+      setError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setLoadingYearly(false);
     }
   };
 
@@ -548,52 +623,94 @@ export default function AIStatistics() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-6">
-      {/* Header - Compact */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-gradient-to-br from-amber-500 to-orange-600 rounded-lg">
-              <Brain className="h-6 w-6 text-white" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Thống kê AI</h1>
+    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50">
+      <div className="max-w-7xl mx-auto px-2 py-4 sm:px-6 lg:px-8">
+        <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+          {/* Header */}
+          <div className="bg-gradient-to-r from-amber-600 to-orange-600 px-8 py-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="bg-white p-2 rounded-lg">
+                  <Brain className="w-8 h-8 text-amber-600" />
+                </div>
+                <div>
+                  <h1 className="text-3xl font-bold text-white">Thống kê AI</h1>
+                  <div className="flex items-center gap-2 mt-1">
+                    <p className="text-amber-100">Phân tích & dự báo tự động</p>
+                    {dataSource && (
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${
+                        dataSource === 'cached' 
+                          ? 'bg-white/20 text-white' 
+                          : 'bg-white/30 text-white'
+                      }`}>
+                        {dataSource === 'cached' ? '📦 Dữ liệu đã lưu' : '🆕 Dữ liệu mới'}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
               <div className="flex items-center gap-2">
-                <p className="text-sm text-gray-500">Phân tích & dự báo tự động</p>
-                {dataSource && (
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${
-                    dataSource === 'cached' 
-                      ? 'bg-blue-100 text-blue-700' 
-                      : 'bg-green-100 text-green-700'
-                  }`}>
-                    {dataSource === 'cached' ? '📦 Dữ liệu đã lưu' : '🆕 Dữ liệu mới'}
-                  </span>
-                )}
+                <button 
+                  onClick={handleRefresh}
+                  disabled={loading || refreshing}
+                  className="flex items-center space-x-2 bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <RefreshCw className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`} />
+                  <span className="font-medium">Làm mới</span>
+                </button>
+                <button 
+                  onClick={handleExportPDF}
+                  disabled={loading || !aiData}
+                  className="flex items-center space-x-2 bg-white hover:bg-white/90 text-amber-600 px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                >
+                  <Download className="w-5 h-5" />
+                  <span>Xuất PDF</span>
+                </button>
               </div>
             </div>
           </div>
-          <div className="flex gap-2">
-            <button 
-              onClick={handleRefresh}
-              disabled={loading || refreshing}
-              className="px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 flex items-center gap-2 text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+
+          {/* Content */}
+          <div className="p-8">
+
+            {/* Tabs */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+          <div className="flex border-b border-gray-200">
+            <button
+              onClick={() => setActiveTab('day')}
+              className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+                activeTab === 'day'
+                  ? 'text-amber-600 border-b-2 border-amber-600 bg-amber-50'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              }`}
             >
-              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-              <span className="hidden sm:inline">Làm mới</span>
+              Ngày
             </button>
-            <button 
-              onClick={handleExportPDF}
-              disabled={loading || !aiData}
-              className="px-3 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 flex items-center gap-2 text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            <button
+              onClick={() => setActiveTab('month')}
+              className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+                activeTab === 'month'
+                  ? 'text-amber-600 border-b-2 border-amber-600 bg-amber-50'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              }`}
             >
-              <Download className="h-4 w-4" />
-              <span className="hidden sm:inline">Xuất PDF</span>
+              Tháng
+            </button>
+            <button
+              onClick={() => setActiveTab('year')}
+              className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+                activeTab === 'year'
+                  ? 'text-amber-600 border-b-2 border-amber-600 bg-amber-50'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              }`}
+            >
+              Năm
             </button>
           </div>
         </div>
 
-        {/* Filters - Inline */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3">
+            {/* Filters - Inline */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 mb-6">
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="flex-1">
               <label className="block text-xs font-medium text-gray-700 mb-1">Chi nhánh</label>
@@ -601,51 +718,91 @@ export default function AIStatistics() {
                 {managerBranch?.name || 'Chưa có thông tin chi nhánh'}
               </div>
             </div>
-            <div className="flex-1">
-              <label className="block text-xs font-medium text-gray-700 mb-1">Ngày</label>
-              <input
-                type="date"
-                value={selectedDate}
-                max={new Date().toISOString().split('T')[0]}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                disabled={loading}
-              />
-            </div>
+            {activeTab === 'day' && (
+              <div className="flex-1">
+                <label className="block text-xs font-medium text-gray-700 mb-1">Ngày</label>
+                <input
+                  type="date"
+                  value={selectedDate}
+                  max={new Date().toISOString().split('T')[0]}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                  disabled={loading}
+                />
+              </div>
+            )}
+            {activeTab === 'month' && (
+              <div className="flex-1">
+                <label className="block text-xs font-medium text-gray-700 mb-1">Tháng</label>
+                <input
+                  type="month"
+                  value={selectedMonth}
+                  max={`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                  disabled={loadingMonthly}
+                />
+              </div>
+            )}
+            {activeTab === 'year' && (
+              <div className="flex-1">
+                <label className="block text-xs font-medium text-gray-700 mb-1">Năm</label>
+                <input
+                  type="number"
+                  value={selectedYear}
+                  min="2020"
+                  max={new Date().getFullYear()}
+                  onChange={(e) => setSelectedYear(Number(e.target.value))}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                  disabled={loadingYearly}
+                />
+              </div>
+            )}
           </div>
         </div>
-      </div>
 
-      {/* Error Message */}
-      {error && (
-        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+            {/* Error Message */}
+            {error && (
+              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
           <div className="flex items-center gap-2 text-red-800">
             <AlertTriangle className="h-5 w-5" />
             <p className="text-sm font-medium">{error}</p>
-          </div>
-        </div>
-      )}
+                </div>
+              </div>
+            )}
 
-      {/* No Branch Warning */}
-      {!managerBranch && (
-        <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+            {/* No Branch Warning */}
+            {!managerBranch && (
+              <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
           <div className="flex items-center gap-2 text-yellow-800">
             <AlertTriangle className="h-5 w-5" />
             <p className="text-sm font-medium">Không tìm thấy thông tin chi nhánh. Vui lòng đăng nhập lại.</p>
-          </div>
-        </div>
-      )}
+                </div>
+              </div>
+            )}
 
-      {/* Loading State */}
-      {loading && !aiData && (
-        <div className="flex items-center justify-center py-12">
+            {/* Loading State */}
+            {(loading && !aiData && activeTab === 'day') && (
+              <div className="flex items-center justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-amber-600" />
           <span className="ml-3 text-gray-600">Đang tải dữ liệu AI...</span>
         </div>
       )}
+      {(loadingMonthly && activeTab === 'month') && (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-amber-600" />
+          <span className="ml-3 text-gray-600">Đang tải dữ liệu thống kê tháng...</span>
+        </div>
+      )}
+      {(loadingYearly && activeTab === 'year') && (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-amber-600" />
+                <span className="ml-3 text-gray-600">Đang tải dữ liệu thống kê năm...</span>
+              </div>
+            )}
 
-      {/* Alerts - Compact */}
-      {!loading && displayData.alerts.length > 0 && (
+            {/* Alerts - Compact - Only show in Day tab */}
+            {activeTab === 'day' && !loading && displayData.alerts.length > 0 && (
         <div className="mb-6 space-y-2">
           {displayData.alerts.map((alert, idx) => (
             <div
@@ -671,12 +828,12 @@ export default function AIStatistics() {
                 </span>
               )}
             </div>
-          ))}
-        </div>
-      )}
+                ))}
+              </div>
+            )}
 
-      {/* Key Metrics - Compact Grid */}
-      {!loading && aiData && (
+            {/* Key Metrics - Compact Grid - Only show in Day tab */}
+            {activeTab === 'day' && !loading && aiData && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
           <MetricCard
             title="Doanh thu"
@@ -709,8 +866,8 @@ export default function AIStatistics() {
         </div>
       )}
 
-      {/* Additional Metrics Row */}
-      {!loading && aiData && (
+      {/* Additional Metrics Row - Only show in Day tab */}
+      {activeTab === 'day' && !loading && aiData && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
           <MetricCard
             title="Khách hàng"
@@ -740,11 +897,11 @@ export default function AIStatistics() {
             icon={Package}
             color="amber"
           />
-        </div>
-      )}
+              </div>
+            )}
 
-      {/* Main Content - Collapsible Sections */}
-      {!loading && aiData && (
+            {/* Day Tab Content */}
+            {activeTab === 'day' && !loading && aiData && (
         <div className="space-y-4">
           {/* 1. TỔNG QUAN & DỰ BÁO */}
           <CollapsibleSection
@@ -1631,9 +1788,394 @@ export default function AIStatistics() {
               </div>
             )}
           </div>
-        </CollapsibleSection>
+              </CollapsibleSection>
+              </div>
+            )}
+
+            {/* Month Tab Content */}
+            {activeTab === 'month' && !loadingMonthly && monthlyStats && (
+              <MonthlyStatsView stats={monthlyStats} branchName={managerBranch?.name || ''} />
+            )}
+            {activeTab === 'month' && !loadingMonthly && !monthlyStats && (
+              <div className="text-center py-12 text-gray-500">
+                <p>Chưa có dữ liệu thống kê cho tháng này</p>
+              </div>
+            )}
+
+            {/* Year Tab Content */}
+            {activeTab === 'year' && !loadingYearly && yearlyStats && (
+              <YearlyStatsView stats={yearlyStats} branchName={managerBranch?.name || ''} />
+            )}
+            {activeTab === 'year' && !loadingYearly && !yearlyStats && (
+              <div className="text-center py-12 text-gray-500">
+                <p>Chưa có dữ liệu thống kê cho năm này</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Monthly Stats View Component
+function MonthlyStatsView({ stats, branchName }: { stats: BranchMonthlyStats; branchName: string }) {
+  const formatCurrency = (value: number) => {
+    if (value >= 1000000) {
+      return `${(value / 1000000).toFixed(1)}tr`;
+    } else if (value >= 1000) {
+      return `${(value / 1000).toFixed(0)}k`;
+    }
+    return value.toFixed(0);
+  };
+
+  const monthNames = ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6', 
+                      'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'];
+
+  return (
+    <div className="space-y-6">
+      {/* Key Metrics */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <MetricCard
+          title="Tổng doanh thu"
+          value={formatCurrency(stats.total_revenue)}
+          change={0}
+          icon={DollarSign}
+          color="emerald"
+        />
+        <MetricCard
+          title="Tổng đơn hàng"
+          value={stats.total_orders.toString()}
+          change={0}
+          icon={ShoppingCart}
+          color="blue"
+        />
+        <MetricCard
+          title="TB doanh thu/ngày"
+          value={formatCurrency(stats.avg_revenue_per_day)}
+          change={0}
+          icon={Activity}
+          color="purple"
+        />
+        <MetricCard
+          title="TB đơn hàng/ngày"
+          value={stats.avg_orders_per_day.toFixed(1)}
+          change={0}
+          icon={Activity}
+          color="amber"
+        />
+      </div>
+
+      {/* Additional Metrics */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <MetricCard
+          title="Thực lời (Lợi nhuận)"
+          value={formatCurrency(stats.total_profit || 0)}
+          change={0}
+          icon={DollarSign}
+          color="emerald"
+        />
+        <MetricCard
+          title="Tỷ suất lợi nhuận"
+          value={`${(stats.profit_margin || 0).toFixed(1)}%`}
+          change={0}
+          icon={TrendingUp}
+          color="emerald"
+        />
+        <MetricCard
+          title="Chi phí nguyên liệu"
+          value={formatCurrency(stats.total_material_cost || 0)}
+          change={0}
+          icon={Package}
+          color="amber"
+        />
+        <MetricCard
+          title="TB lợi nhuận/ngày"
+          value={formatCurrency(stats.avg_profit_per_day || 0)}
+          change={0}
+          icon={Activity}
+          color="emerald"
+        />
+      </div>
+
+      {/* Additional Metrics Row 2 */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <MetricCard
+          title="Giá trị đơn TB"
+          value={formatCurrency(stats.avg_order_value)}
+          change={0}
+          icon={DollarSign}
+          color="blue"
+        />
+        <MetricCard
+          title="Số ngày có dữ liệu"
+          value={stats.days_with_data.toString()}
+          change={0}
+          icon={Activity}
+          color="purple"
+        />
+        <MetricCard
+          title="Số khách hàng"
+          value={stats.customer_count.toString()}
+          change={0}
+          icon={Users}
+          color="blue"
+        />
+        <MetricCard
+          title="Tháng"
+          value={monthNames[stats.month - 1]}
+          change={0}
+          icon={BarChart3}
+          color="amber"
+        />
+      </div>
+
+      {/* Summary Card */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <h3 className="text-lg font-bold text-gray-900 mb-4">
+          {branchName} - Tổng hợp tháng {monthNames[stats.month - 1]} năm {stats.year}
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="bg-gray-50 rounded-lg p-4">
+            <p className="text-sm text-gray-600 mb-1">Tổng doanh thu</p>
+            <p className="text-2xl font-bold text-gray-900">{formatCurrency(stats.total_revenue)} VNĐ</p>
+          </div>
+          <div className="bg-gray-50 rounded-lg p-4">
+            <p className="text-sm text-gray-600 mb-1">Tổng số đơn hàng</p>
+            <p className="text-2xl font-bold text-gray-900">{stats.total_orders} đơn</p>
+          </div>
+          <div className="bg-gray-50 rounded-lg p-4">
+            <p className="text-sm text-gray-600 mb-1">Trung bình mỗi ngày</p>
+            <p className="text-xl font-bold text-gray-900">
+              {formatCurrency(stats.avg_revenue_per_day)} VNĐ / {stats.avg_orders_per_day.toFixed(1)} đơn
+            </p>
+          </div>
+          <div className="bg-gray-50 rounded-lg p-4">
+            <p className="text-sm text-gray-600 mb-1">Giá trị đơn trung bình</p>
+            <p className="text-xl font-bold text-gray-900">{formatCurrency(stats.avg_order_value)} VNĐ</p>
+          </div>
+          <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+            <p className="text-sm text-gray-600 mb-1">Thực lời (Lợi nhuận)</p>
+            <p className="text-2xl font-bold text-green-700">{formatCurrency(stats.total_profit || 0)} VNĐ</p>
+            <p className="text-xs text-gray-500 mt-1">Tỷ suất: {(stats.profit_margin || 0).toFixed(1)}%</p>
+          </div>
+          <div className="bg-red-50 rounded-lg p-4 border border-red-200">
+            <p className="text-sm text-gray-600 mb-1">Chi phí nguyên liệu</p>
+            <p className="text-xl font-bold text-red-700">{formatCurrency(stats.total_material_cost || 0)} VNĐ</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Yearly Stats View Component
+function YearlyStatsView({ stats, branchName }: { stats: BranchYearlyStats; branchName: string }) {
+  const formatCurrency = (value: number) => {
+    if (value >= 1000000) {
+      return `${(value / 1000000).toFixed(1)}tr`;
+    } else if (value >= 1000) {
+      return `${(value / 1000).toFixed(0)}k`;
+    }
+    return value.toFixed(0);
+  };
+
+  const monthNames = ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8', 'T9', 'T10', 'T11', 'T12'];
+
+  // Prepare chart data
+  const chartData = stats.monthly_data.map(month => ({
+    month: monthNames[month.month - 1],
+    revenue: month.total_revenue,
+    orders: month.total_orders,
+  }));
+
+  return (
+    <div className="space-y-6">
+      {/* Key Metrics */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <MetricCard
+          title="Tổng doanh thu năm"
+          value={formatCurrency(stats.total_revenue)}
+          change={0}
+          icon={DollarSign}
+          color="emerald"
+        />
+        <MetricCard
+          title="Tổng đơn hàng năm"
+          value={stats.total_orders.toString()}
+          change={0}
+          icon={ShoppingCart}
+          color="blue"
+        />
+        <MetricCard
+          title="TB doanh thu/tháng"
+          value={formatCurrency(stats.avg_revenue_per_month)}
+          change={0}
+          icon={Activity}
+          color="purple"
+        />
+        <MetricCard
+          title="TB đơn hàng/tháng"
+          value={stats.avg_orders_per_month.toFixed(1)}
+          change={0}
+          icon={Activity}
+          color="amber"
+        />
+      </div>
+
+      {/* Additional Metrics */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <MetricCard
+          title="Thực lời (Lợi nhuận)"
+          value={formatCurrency(stats.total_profit || 0)}
+          change={0}
+          icon={DollarSign}
+          color="emerald"
+        />
+        <MetricCard
+          title="Tỷ suất lợi nhuận"
+          value={`${(stats.profit_margin || 0).toFixed(1)}%`}
+          change={0}
+          icon={TrendingUp}
+          color="emerald"
+        />
+        <MetricCard
+          title="Chi phí nguyên liệu"
+          value={formatCurrency(stats.total_material_cost || 0)}
+          change={0}
+          icon={Package}
+          color="amber"
+        />
+        <MetricCard
+          title="TB lợi nhuận/tháng"
+          value={formatCurrency(stats.avg_profit_per_month || 0)}
+          change={0}
+          icon={Activity}
+          color="emerald"
+        />
+      </div>
+
+      {/* Additional Metrics Row 2 */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <MetricCard
+          title="Giá trị đơn TB"
+          value={formatCurrency(stats.avg_order_value)}
+          change={0}
+          icon={DollarSign}
+          color="blue"
+        />
+        <MetricCard
+          title="Số tháng có dữ liệu"
+          value={stats.months_with_data.toString()}
+          change={0}
+          icon={Activity}
+          color="purple"
+        />
+        <MetricCard
+          title="Năm"
+          value={stats.year.toString()}
+          change={0}
+          icon={BarChart3}
+          color="amber"
+        />
+        <MetricCard
+          title="Chi nhánh"
+          value={branchName}
+          change={0}
+          icon={Users}
+          color="blue"
+        />
+      </div>
+
+      {/* Revenue Chart */}
+      {chartData.length > 0 && (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <h3 className="text-lg font-bold text-gray-900 mb-4">
+            Doanh thu theo tháng năm {stats.year}
+          </h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <AreaChart data={chartData}>
+              <defs>
+                <linearGradient id="colorRevenueYear" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis dataKey="month" stroke="#666" tick={{ fontSize: 12 }} />
+              <YAxis stroke="#666" tick={{ fontSize: 12 }} />
+              <Tooltip
+                formatter={(value: any) => `${formatCurrency(value)} VNĐ`}
+                contentStyle={{
+                  backgroundColor: '#fff',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                }}
+              />
+              <Area
+                type="monotone"
+                dataKey="revenue"
+                stroke="#f59e0b"
+                fillOpacity={1}
+                fill="url(#colorRevenueYear)"
+                name="Doanh thu"
+              />
+            </AreaChart>
+          </ResponsiveContainer>
         </div>
       )}
+
+      {/* Profit Summary */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <h3 className="text-lg font-bold text-gray-900 mb-4">Tổng hợp lợi nhuận năm {stats.year}</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+            <p className="text-sm text-gray-600 mb-1">Tổng thực lời</p>
+            <p className="text-2xl font-bold text-green-700">{formatCurrency(stats.total_profit || 0)} VNĐ</p>
+            <p className="text-xs text-gray-500 mt-1">Tỷ suất: {(stats.profit_margin || 0).toFixed(1)}%</p>
+          </div>
+          <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+            <p className="text-sm text-gray-600 mb-1">Trung bình/tháng</p>
+            <p className="text-xl font-bold text-blue-700">{formatCurrency(stats.avg_profit_per_month || 0)} VNĐ</p>
+          </div>
+          <div className="bg-red-50 rounded-lg p-4 border border-red-200">
+            <p className="text-sm text-gray-600 mb-1">Tổng chi phí nguyên liệu</p>
+            <p className="text-xl font-bold text-red-700">{formatCurrency(stats.total_material_cost || 0)} VNĐ</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Monthly Breakdown */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <h3 className="text-lg font-bold text-gray-900 mb-4">Chi tiết theo tháng</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-200">
+                <th className="text-left py-3 px-4 font-semibold text-gray-700">Tháng</th>
+                <th className="text-right py-3 px-4 font-semibold text-gray-700">Doanh thu</th>
+                <th className="text-right py-3 px-4 font-semibold text-gray-700">Số đơn</th>
+                <th className="text-right py-3 px-4 font-semibold text-gray-700">TB/ngày</th>
+              </tr>
+            </thead>
+            <tbody>
+              {stats.monthly_data.map((month, idx) => (
+                <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50">
+                  <td className="py-3 px-4 text-gray-900">{monthNames[month.month - 1]}</td>
+                  <td className="py-3 px-4 text-right font-semibold text-gray-900">
+                    {formatCurrency(month.total_revenue)} VNĐ
+                  </td>
+                  <td className="py-3 px-4 text-right text-gray-700">{month.total_orders}</td>
+                  <td className="py-3 px-4 text-right text-gray-600">
+                    {formatCurrency(month.avg_revenue_per_day)} / {month.avg_orders_per_day.toFixed(1)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }

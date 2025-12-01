@@ -202,8 +202,8 @@ export function Layout({ children }: LayoutProps) {
               </div>
             )}
 
-            {/* Branch Not Loaded State - Compact */}
-            {user && !managerBranch && !user.branch && (
+            {/* Branch Not Loaded State - Compact (Only for Manager and Staff, not Admin) */}
+            {user && user.role !== 'admin' && !managerBranch && !user.branch && (
               <div className="mt-2 p-2 bg-gradient-to-r from-red-700/80 to-red-600/80 rounded-lg border border-red-500/50 shadow-lg backdrop-blur-sm">
                 <div className="flex items-center space-x-2">
                   <Store className="h-3.5 w-3.5 text-white" />

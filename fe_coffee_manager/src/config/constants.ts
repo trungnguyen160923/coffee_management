@@ -77,6 +77,32 @@ export const API_ENDPOINTS = {
     AGENT: '/api/ai/agent',
     // AI Service endpoints (port 8005)
     AI_ANALYSIS: '/api/ai/agent/analyze',
+    METRICS: {
+      BRANCH_MONTHLY: (branchId: number, year?: number, month?: number) => {
+        const params = new URLSearchParams();
+        params.append('branch_id', branchId.toString());
+        if (year) params.append('year', year.toString());
+        if (month) params.append('month', month.toString());
+        return `/api/ai/metrics/branch/monthly?${params.toString()}`;
+      },
+      BRANCH_YEARLY: (branchId: number, year?: number) => {
+        const params = new URLSearchParams();
+        params.append('branch_id', branchId.toString());
+        if (year) params.append('year', year.toString());
+        return `/api/ai/metrics/branch/yearly?${params.toString()}`;
+      },
+      ALL_BRANCHES_MONTHLY: (year?: number, month?: number) => {
+        const params = new URLSearchParams();
+        if (year) params.append('year', year.toString());
+        if (month) params.append('month', month.toString());
+        return `/api/ai/metrics/all-branches/monthly${params.toString() ? `?${params.toString()}` : ''}`;
+      },
+      ALL_BRANCHES_YEARLY: (year?: number) => {
+        const params = new URLSearchParams();
+        if (year) params.append('year', year.toString());
+        return `/api/ai/metrics/all-branches/yearly${params.toString() ? `?${params.toString()}` : ''}`;
+      },
+    },
     REPORTS: {
       BASE: '/api/ai/reports',
       BY_ID: (id: number) => `/api/ai/reports/${id}`,
