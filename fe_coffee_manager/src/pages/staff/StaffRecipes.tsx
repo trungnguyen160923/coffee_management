@@ -76,9 +76,13 @@ export default function StaffRecipes() {
 
     return (
         <div className="p-8">
-            <div className="mb-6">
-                <h1 className="text-2xl font-bold text-gray-800">Recipe List</h1>
-            </div>
+            <div className="max-w-7xl mx-auto">
+                <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+                    <div className="bg-gradient-to-r from-amber-600 to-orange-600 px-8 py-5">
+                        <h1 className="text-2xl font-bold text-white">Recipe List</h1>
+                        <p className="text-amber-100 text-sm mt-1">Danh sách công thức pha chế dành cho nhân viên</p>
+                    </div>
+                    <div className="p-6 lg:p-8">
             <div className="mb-4 flex flex-wrap items-center gap-3">
                 <div className="flex items-center gap-2">
                     <label className="text-sm text-gray-600">Category</label>
@@ -244,6 +248,9 @@ export default function StaffRecipes() {
                     </div>
                 </div>
             )}
+                    </div>
+                </div>
+            </div>
         </div>
     );
 }
