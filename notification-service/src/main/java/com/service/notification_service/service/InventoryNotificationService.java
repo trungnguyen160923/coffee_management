@@ -2,6 +2,7 @@ package com.service.notification_service.service;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -16,6 +17,7 @@ import com.service.notification_service.entity.enums.NotificationStatus;
 import com.service.notification_service.events.LowStockEvent;
 import com.service.notification_service.events.OutOfStockEvent;
 import com.service.notification_service.repository.NotificationRepository;
+import com.service.notification_service.service.NotificationDispatchService;
 import com.service.notification_service.websocket.dto.NotificationMessage;
 import com.service.notification_service.websocket.dto.NotificationType;
 import com.service.notification_service.websocket.service.NotificationWebSocketService;
@@ -29,13 +31,14 @@ import lombok.extern.slf4j.Slf4j;
 public class InventoryNotificationService {
 
     private static final String TARGET_ROLE_MANAGER = "MANAGER";
-    private static final String LOW_STOCK_TEMPLATE_CODE = "LOW_STOCK_ALERT_EMAIL";
-    private static final String OUT_OF_STOCK_TEMPLATE_CODE = "OUT_OF_STOCK_ALERT_EMAIL";
+    private static final String LOW_STOCK_TEMPLATE_CODE = "LOW_STOCK_ALERT_WS";
+    private static final String OUT_OF_STOCK_TEMPLATE_CODE = "OUT_OF_STOCK_ALERT_WS";
 
     private final ObjectMapper objectMapper;
     private final NotificationRepository notificationRepository;
     private final NotificationWebSocketService notificationWebSocketService;
     private final StaffDirectoryService staffDirectoryService;
+    private final NotificationDispatchService notificationDispatchService;
 
     public void notifyLowStock(LowStockEvent event) {
         if (event == null || event.getBranchId() == null || event.getIngredientId() == null) {
@@ -106,21 +109,49 @@ public class InventoryNotificationService {
             String title,
             String content) {
 
-        Map<String, Object> metadata = Map.of(
-                "branchId", payload.branchId(),
-                "branchName", payload.branchName(),
-                "ingredientId", payload.ingredientId(),
-                "ingredientName", payload.ingredientName(),
-                "unitCode", payload.unitCode(),
-                "unitName", payload.unitName(),
-                "availableQuantity", payload.availableQuantity(),
-                "threshold", payload.threshold(),
-                "severity", payload.severity(),
-                "detectedAt", payload.detectedAt()
-        );
+        Map<String, Object> metadata = new HashMap<>();
+        metadata.put("branchId", payload.branchId());
+        if (payload.branchName() != null) {
+            metadata.put("branchName", payload.branchName());
+        }
+        metadata.put("ingredientId", payload.ingredientId());
+        if (payload.ingredientName() != null) {
+            metadata.put("ingredientName", payload.ingredientName());
+        }
+        if (payload.unitCode() != null) {
+            metadata.put("unitCode", payload.unitCode());
+        }
+        if (payload.unitName() != null) {
+            metadata.put("unitName", payload.unitName());
+        }
+        if (payload.availableQuantity() != null) {
+            metadata.put("availableQuantity", payload.availableQuantity());
+        }
+        if (payload.threshold() != null) {
+            metadata.put("threshold", payload.threshold());
+        }
+        if (payload.severity() != null) {
+            metadata.put("severity", payload.severity());
+        }
+        if (payload.detectedAt() != null) {
+            metadata.put("detectedAt", payload.detectedAt());
+        }
 
+        // Lưu 1 bản ghi branch-level cho manager
         saveBranchNotification(payload, templateCode, title, content, metadata);
-        dispatchWebSocket(payload, type, title, content, metadata);
+
+        // Gửi WebSocket cho manager theo branch (topic /topic/manager.{branchId})
+        notificationDispatchService.sendUserNotification(
+                null,
+                payload.branchId(),
+                TARGET_ROLE_MANAGER,
+                NotificationChannel.WEBSOCKET,
+                templateCode,
+                type,
+                metadata,
+                title,
+                content
+        );
     }
 
     private void saveBranchNotification(
@@ -150,45 +181,6 @@ public class InventoryNotificationService {
             log.error("[InventoryNotificationService] ❌ Failed to save inventory notification for branch {}", 
                     payload.branchId(), e);
         }
-    }
-
-    private void dispatchWebSocket(
-            InventoryAlertPayload payload,
-            NotificationType type,
-            String title,
-            String content,
-            Map<String, Object> metadata) {
-
-        List<Integer> managerIds = staffDirectoryService.getManagerIdsByBranch(payload.branchId());
-        if (CollectionUtils.isEmpty(managerIds)) {
-            log.warn("[InventoryNotificationService] ⚠️ No managers found for branch {}. Broadcasting to branch staff instead.",
-                    payload.branchId());
-            NotificationMessage fallbackMessage = NotificationMessage.builder()
-                    .id(UUID.randomUUID().toString())
-                    .type(type)
-                    .title(title)
-                    .content(content)
-                    .branchId(payload.branchId())
-                    .metadata(metadata)
-                    .createdAt(java.time.Instant.now())
-                    .build();
-            notificationWebSocketService.sendToBranchStaff(payload.branchId(), fallbackMessage);
-            return;
-        }
-
-        managerIds.forEach(managerId -> {
-            NotificationMessage message = NotificationMessage.builder()
-                    .id(UUID.randomUUID().toString())
-                    .type(type)
-                    .title(title)
-                    .content(content)
-                    .branchId(payload.branchId())
-                    .userId(managerId)
-                    .metadata(metadata)
-                    .createdAt(java.time.Instant.now())
-                    .build();
-            notificationWebSocketService.sendToUser(managerId, message);
-        });
     }
 
     private String buildLowStockContent(InventoryAlertPayload payload) {

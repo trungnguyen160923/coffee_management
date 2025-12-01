@@ -40,8 +40,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const currentUser = await authService.getCurrentUser();
             setUser(currentUser);
             
-            // If user is a manager, set branch info directly from user data
-            if (currentUser.role === 'manager' && currentUser.branch) {
+            // If user is a manager or staff, set branch info directly from user data
+            if ((currentUser.role === 'manager' || currentUser.role === 'staff') && currentUser.branch) {
               setManagerBranch(currentUser.branch);
             } else {
             }
@@ -92,8 +92,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const response = await authService.login({ email, password });
       setUser(response.user);
       
-      // If user is a manager, set branch info directly from user data
-      if (response.user.role === 'manager' && response.user.branch) {
+      // If user is a manager or staff, set branch info directly from user data
+      if ((response.user.role === 'manager' || response.user.role === 'staff') && response.user.branch) {
         setManagerBranch(response.user.branch);
       }
       

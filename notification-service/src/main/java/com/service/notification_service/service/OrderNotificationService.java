@@ -29,8 +29,9 @@ public class OrderNotificationService {
 
     private final ObjectMapper objectMapper;
     private final NotificationRepository notificationRepository;
+    private final NotificationRenderingService notificationRenderingService;
+    private final NotificationDispatchService notificationDispatchService;
     private final NotificationWebSocketService notificationWebSocketService;
-    private final StaffDirectoryService staffDirectoryService;
 
     public void notifyOrderCreated(OrderCreatedEvent event) throws Exception {
         Map<String, Object> metadata = Map.of(
@@ -38,39 +39,33 @@ public class OrderNotificationService {
                 "branchId", event.getBranchId(),
                 "customerName", event.getCustomerName(),
                 "totalAmount", event.getTotalAmount());
+        String templateCode = "ORDER_CREATED_WS";
+
+        NotificationRenderingService.RenderedNotification rendered =
+                notificationRenderingService.render(templateCode, metadata);
+        String title = rendered.subject() != null
+                ? rendered.subject()
+                : "Đơn hàng mới #" + event.getOrderId();
+        String content = rendered.content() != null
+                ? rendered.content()
+                : buildOrderCreatedContent(event);
 
         // Save 1 notification for branch (not per staff) to reduce DB records
-        saveBranchNotification(event, metadata);
+        saveBranchNotification(event, metadata, templateCode, title, content);
 
-        // Get staff list to send WebSocket notifications
-        List<Integer> staffIds = staffDirectoryService.getStaffIdsByBranch(event.getBranchId());
-        
-        // Send WebSocket to each staff member (but only 1 record in DB)
-        for (Integer staffId : staffIds) {
-            String notificationId = UUID.randomUUID().toString();
-            NotificationMessage message = NotificationMessage.builder()
-                    .id(notificationId)
-                    .type(NotificationType.ORDER_CREATED)
-                    .title("Đơn hàng mới #" + event.getOrderId())
-                    .content(buildOrderCreatedContent(event))
-                    .branchId(event.getBranchId())
-                    .userId(staffId)
-                    .metadata(metadata)
-                    .createdAt(java.time.Instant.now())
-                    .build();
-
-            notificationWebSocketService.sendToUser(staffId, message);
-        }
-
-        // Also broadcast to branch topic
-        broadcastToBranch(event, metadata);
+        // Broadcast to branch topic so all staff in branch receive the same message once
+        broadcastToBranch(event, metadata, title, content);
     }
 
     /**
      * Save 1 notification for branch (not per staff) to reduce DB records
      * userId = null means it's a branch-level notification, not assigned to specific user
      */
-    private void saveBranchNotification(OrderCreatedEvent event, Map<String, Object> metadata) {
+    private void saveBranchNotification(OrderCreatedEvent event,
+            Map<String, Object> metadata,
+            String templateCode,
+            String title,
+            String content) {
         try {
             String notificationId = UUID.randomUUID().toString();
             Notification notification = Notification.builder()
@@ -79,8 +74,9 @@ public class OrderNotificationService {
                     .branchId(event.getBranchId())
                     .targetRole("STAFF") // Order notifications are for staff only
                     .channel(NotificationChannel.WEBSOCKET)
-                    .title("Đơn hàng mới #" + event.getOrderId())
-                    .content(buildOrderCreatedContent(event))
+                    .templateCode(templateCode)
+                    .title(title)
+                    .content(content)
                     .metadata(objectMapper.writeValueAsString(metadata))
                     .status(NotificationStatus.SENT)
                     .sentAt(LocalDateTime.now())
@@ -93,13 +89,16 @@ public class OrderNotificationService {
         }
     }
 
-    private void broadcastToBranch(OrderCreatedEvent event, Map<String, Object> metadata) {
+    private void broadcastToBranch(OrderCreatedEvent event,
+            Map<String, Object> metadata,
+            String title,
+            String content) {
         String notificationId = UUID.randomUUID().toString();
         NotificationMessage message = NotificationMessage.builder()
                 .id(notificationId)
                 .type(NotificationType.ORDER_CREATED)
-                .title("Đơn hàng mới #" + event.getOrderId())
-                .content(buildOrderCreatedContent(event))
+                .title(title)
+                .content(content)
                 .branchId(event.getBranchId())
                 .metadata(metadata)
                 .createdAt(java.time.Instant.now())
@@ -117,37 +116,18 @@ public class OrderNotificationService {
                 "orderId", event.getOrderId(),
                 "branchId", event.getBranchId(),
                 "totalAmount", event.getTotalAmount());
+        String templateCode = "ORDER_COMPLETED_WS";
 
-        // Save notification for user (branchId = null because this is user-specific notification)
-        String notificationId = UUID.randomUUID().toString();
-        Notification notification = Notification.builder()
-                .id(notificationId)
-                .userId(event.getCustomerId().longValue())
-                .branchId(null) // NULL for user-specific notifications
-                .targetRole("CUSTOMER") // Customer-specific notifications
-                .channel(NotificationChannel.WEBSOCKET)
-                .title("Đơn hàng #" + event.getOrderId() + " đã hoàn thành")
-                .content(buildOrderCompletedContent(event))
-                .metadata(objectMapper.writeValueAsString(metadata))
-                .status(NotificationStatus.SENT)
-                .sentAt(LocalDateTime.now())
-                .createdAt(LocalDateTime.now())
-                .build();
-        notificationRepository.save(notification);
-
-        // Send WebSocket notification to user
-        NotificationMessage message = NotificationMessage.builder()
-                .id(notificationId)
-                .type(NotificationType.ORDER_STATUS_UPDATED)
-                .title("Đơn hàng #" + event.getOrderId() + " đã hoàn thành")
-                .content(buildOrderCompletedContent(event))
-                .branchId(event.getBranchId())
-                .userId(event.getCustomerId())
-                .metadata(metadata)
-                .createdAt(java.time.Instant.now())
-                .build();
-
-        notificationWebSocketService.sendToUser(event.getCustomerId(), message);
+        notificationDispatchService.sendUserNotification(
+                event.getCustomerId(),
+                event.getBranchId(),
+                "CUSTOMER",
+                NotificationChannel.WEBSOCKET,
+                templateCode,
+                NotificationType.ORDER_STATUS_UPDATED,
+                metadata,
+                "Đơn hàng #" + event.getOrderId() + " đã hoàn thành",
+                buildOrderCompletedContent(event));
     }
 
     private String buildOrderCreatedContent(OrderCreatedEvent event) {
@@ -170,37 +150,18 @@ public class OrderNotificationService {
                 "orderId", event.getOrderId(),
                 "branchId", event.getBranchId(),
                 "totalAmount", event.getTotalAmount());
+        String templateCode = "ORDER_CANCELLED_WS";
 
-        // Save notification for user (branchId = null because this is user-specific notification)
-        String notificationId = UUID.randomUUID().toString();
-        Notification notification = Notification.builder()
-                .id(notificationId)
-                .userId(event.getCustomerId().longValue())
-                .branchId(null) // NULL for user-specific notifications
-                .targetRole("CUSTOMER") // Customer-specific notifications
-                .channel(NotificationChannel.WEBSOCKET)
-                .title("Đơn hàng #" + event.getOrderId() + " đã bị hủy")
-                .content(buildOrderCancelledContent(event))
-                .metadata(objectMapper.writeValueAsString(metadata))
-                .status(NotificationStatus.SENT)
-                .sentAt(LocalDateTime.now())
-                .createdAt(LocalDateTime.now())
-                .build();
-        notificationRepository.save(notification);
-
-        // Send WebSocket notification to user
-        NotificationMessage message = NotificationMessage.builder()
-                .id(notificationId)
-                .type(NotificationType.ORDER_STATUS_UPDATED)
-                .title("Đơn hàng #" + event.getOrderId() + " đã bị hủy")
-                .content(buildOrderCancelledContent(event))
-                .branchId(event.getBranchId())
-                .userId(event.getCustomerId())
-                .metadata(metadata)
-                .createdAt(java.time.Instant.now())
-                .build();
-
-        notificationWebSocketService.sendToUser(event.getCustomerId(), message);
+        notificationDispatchService.sendUserNotification(
+                event.getCustomerId(),
+                event.getBranchId(),
+                "CUSTOMER",
+                NotificationChannel.WEBSOCKET,
+                templateCode,
+                NotificationType.ORDER_STATUS_UPDATED,
+                metadata,
+                "Đơn hàng #" + event.getOrderId() + " đã bị hủy",
+                buildOrderCancelledContent(event));
     }
 
     private String buildOrderCompletedContent(OrderCompletedEvent event) {
@@ -221,6 +182,7 @@ public class OrderNotificationService {
         Map<String, Object> metadata = Map.of(
                 "reservationId", event.getReservationId(),
                 "branchId", event.getBranchId(),
+                "branchName", event.getBranchName(),
                 "customerName", event.getCustomerName() != null ? event.getCustomerName() : "Khách lẻ",
                 "partySize", event.getPartySize() != null ? event.getPartySize() : 1,
                 "reservedAt", event.getReservedAt() != null ? event.getReservedAt().toString() : "");
@@ -228,27 +190,7 @@ public class OrderNotificationService {
         // Save 1 notification for branch (not per staff) to reduce DB records
         saveBranchReservationNotification(event, metadata);
 
-        // Get staff list to send WebSocket notifications
-        List<Integer> staffIds = staffDirectoryService.getStaffIdsByBranch(event.getBranchId());
-        
-        // Send WebSocket to each staff member (but only 1 record in DB)
-        for (Integer staffId : staffIds) {
-            String notificationId = UUID.randomUUID().toString();
-            NotificationMessage message = NotificationMessage.builder()
-                    .id(notificationId)
-                    .type(NotificationType.RESERVATION_CREATED)
-                    .title("Đặt bàn mới #" + event.getReservationId())
-                    .content(buildReservationCreatedContent(event))
-                    .branchId(event.getBranchId())
-                    .userId(staffId)
-                    .metadata(metadata)
-                    .createdAt(java.time.Instant.now())
-                    .build();
-
-            notificationWebSocketService.sendToUser(staffId, message);
-        }
-
-        // Also broadcast to branch topic
+        // Broadcast to branch topic so all staff in branch receive the same message once
         broadcastReservationToBranch(event, metadata);
     }
 
@@ -320,39 +262,21 @@ public class OrderNotificationService {
         Map<String, Object> metadata = Map.of(
                 "reservationId", event.getReservationId(),
                 "branchId", event.getBranchId(),
+                "branchName", event.getBranchName(),
                 "partySize", event.getPartySize() != null ? event.getPartySize() : 1,
                 "reservedAt", event.getReservedAt() != null ? event.getReservedAt().toString() : "");
+        String templateCode = "RESERVATION_CONFIRMED_WS";
 
-        // Save notification for user (branchId = null because this is user-specific notification)
-        String notificationId = UUID.randomUUID().toString();
-        Notification notification = Notification.builder()
-                .id(notificationId)
-                .userId(event.getCustomerId().longValue())
-                .branchId(null) // NULL for user-specific notifications
-                .targetRole("CUSTOMER") // Customer-specific notifications
-                .channel(NotificationChannel.WEBSOCKET)
-                .title("Đặt bàn #" + event.getReservationId() + " đã được xác nhận")
-                .content(buildReservationConfirmedContent(event))
-                .metadata(objectMapper.writeValueAsString(metadata))
-                .status(NotificationStatus.SENT)
-                .sentAt(LocalDateTime.now())
-                .createdAt(LocalDateTime.now())
-                .build();
-        notificationRepository.save(notification);
-
-        // Send WebSocket notification to user
-        NotificationMessage message = NotificationMessage.builder()
-                .id(notificationId)
-                .type(NotificationType.RESERVATION_CREATED)
-                .title("Đặt bàn #" + event.getReservationId() + " đã được xác nhận")
-                .content(buildReservationConfirmedContent(event))
-                .branchId(event.getBranchId())
-                .userId(event.getCustomerId())
-                .metadata(metadata)
-                .createdAt(java.time.Instant.now())
-                .build();
-
-        notificationWebSocketService.sendToUser(event.getCustomerId(), message);
+        notificationDispatchService.sendUserNotification(
+                event.getCustomerId(),
+                event.getBranchId(),
+                "CUSTOMER",
+                NotificationChannel.WEBSOCKET,
+                templateCode,
+                NotificationType.RESERVATION_CREATED,
+                metadata,
+                "Đặt bàn #" + event.getReservationId() + " đã được xác nhận",
+                buildReservationConfirmedContent(event));
     }
 
     public void notifyReservationCancelled(ReservationCreatedEvent event) throws Exception {
@@ -364,39 +288,21 @@ public class OrderNotificationService {
         Map<String, Object> metadata = Map.of(
                 "reservationId", event.getReservationId(),
                 "branchId", event.getBranchId(),
+                "branchName", event.getBranchName(),
                 "partySize", event.getPartySize() != null ? event.getPartySize() : 1,
                 "reservedAt", event.getReservedAt() != null ? event.getReservedAt().toString() : "");
+        String templateCode = "RESERVATION_CANCELLED_WS";
 
-        // Save notification for user (branchId = null because this is user-specific notification)
-        String notificationId = UUID.randomUUID().toString();
-        Notification notification = Notification.builder()
-                .id(notificationId)
-                .userId(event.getCustomerId().longValue())
-                .branchId(null) // NULL for user-specific notifications
-                .targetRole("CUSTOMER") // Customer-specific notifications
-                .channel(NotificationChannel.WEBSOCKET)
-                .title("Đặt bàn #" + event.getReservationId() + " đã bị hủy")
-                .content(buildReservationCancelledContent(event))
-                .metadata(objectMapper.writeValueAsString(metadata))
-                .status(NotificationStatus.SENT)
-                .sentAt(LocalDateTime.now())
-                .createdAt(LocalDateTime.now())
-                .build();
-        notificationRepository.save(notification);
-
-        // Send WebSocket notification to user
-        NotificationMessage message = NotificationMessage.builder()
-                .id(notificationId)
-                .type(NotificationType.RESERVATION_CREATED)
-                .title("Đặt bàn #" + event.getReservationId() + " đã bị hủy")
-                .content(buildReservationCancelledContent(event))
-                .branchId(event.getBranchId())
-                .userId(event.getCustomerId())
-                .metadata(metadata)
-                .createdAt(java.time.Instant.now())
-                .build();
-
-        notificationWebSocketService.sendToUser(event.getCustomerId(), message);
+        notificationDispatchService.sendUserNotification(
+                event.getCustomerId(),
+                event.getBranchId(),
+                "CUSTOMER",
+                NotificationChannel.WEBSOCKET,
+                templateCode,
+                NotificationType.RESERVATION_CREATED,
+                metadata,
+                "Đặt bàn #" + event.getReservationId() + " đã bị hủy",
+                buildReservationCancelledContent(event));
     }
 
     private String buildReservationConfirmedContent(ReservationCreatedEvent event) {

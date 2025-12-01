@@ -158,9 +158,12 @@ public class TableManagementService {
             // Publish event when reservation is confirmed (if customerId exists)
             if (updatedReservation.getCustomerId() != null) {
                 try {
+                    Branch branch = branchRepository.findById(updatedReservation.getBranchId()).orElse(null);
+                    String branchName = branch != null ? branch.getName() : null;
                     ReservationCreatedEvent event = ReservationCreatedEvent.builder()
                             .reservationId(updatedReservation.getReservationId())
                             .branchId(updatedReservation.getBranchId())
+                            .branchName(branchName)
                             .customerId(updatedReservation.getCustomerId())
                             .customerName(updatedReservation.getCustomerName())
                             .phone(updatedReservation.getPhone())

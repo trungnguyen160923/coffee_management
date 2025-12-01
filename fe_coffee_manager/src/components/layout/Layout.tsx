@@ -177,29 +177,39 @@ export function Layout({ children }: LayoutProps) {
               </div>
             </div>
 
-            {/* Branch Information Card - Compact */}
-            {user?.role === 'manager' && managerBranch && (
+            {/* Branch Information Card - Compact (for manager & staff) */}
+            {(managerBranch || user?.branch) && (
               <div className="mt-2 p-2 bg-gradient-to-r from-amber-700/80 to-amber-600/80 rounded-lg border border-amber-500/50 shadow-lg backdrop-blur-sm group relative">
-                <div className="flex items-center space-x-2">
-                  <Store className="h-3.5 w-3.5 text-white flex-shrink-0" />
-                  <h3 className="text-white text-xs font-semibold truncate">{managerBranch.name}</h3>
-                </div>
-                {/* Hover tooltip with full info */}
-                <div className="absolute left-0 right-0 top-full mt-1 p-2 bg-amber-900/95 backdrop-blur-sm rounded-lg shadow-xl border border-amber-600/30 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50">
-                  <div className="text-amber-100 text-xs">
-                    <div className="font-semibold mb-1">{managerBranch.name}</div>
-                    <div className="text-amber-300 leading-relaxed">{managerBranch.address}</div>
-                  </div>
-                </div>
+                {(() => {
+                  const branch = managerBranch || user?.branch;
+                  if (!branch) return null;
+                  return (
+                    <>
+                      <div className="flex items-center space-x-2">
+                        <Store className="h-3.5 w-3.5 text-white flex-shrink-0" />
+                        <h3 className="text-white text-xs font-semibold truncate">{branch.name}</h3>
+                      </div>
+                      {/* Hover tooltip with full info */}
+                      <div className="absolute left-0 right-0 top-full mt-1 p-2 bg-amber-900/95 backdrop-blur-sm rounded-lg shadow-xl border border-amber-600/30 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50">
+                        <div className="text-amber-100 text-xs">
+                          <div className="font-semibold mb-1">{branch.name}</div>
+                          <div className="text-amber-300 leading-relaxed">{branch.address}</div>
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
             )}
 
             {/* Branch Not Loaded State - Compact */}
-            {user?.role === 'manager' && !managerBranch && (
+            {user && !managerBranch && !user.branch && (
               <div className="mt-2 p-2 bg-gradient-to-r from-red-700/80 to-red-600/80 rounded-lg border border-red-500/50 shadow-lg backdrop-blur-sm">
                 <div className="flex items-center space-x-2">
                   <Store className="h-3.5 w-3.5 text-white" />
-                  <h3 className="text-white text-xs font-semibold">Branch not loaded</h3>
+                  <h3 className="text-white text-xs font-semibold">
+                    Branch not loaded
+                  </h3>
                 </div>
               </div>
             )}

@@ -15,6 +15,7 @@ import java.time.LocalDateTime;
 public class ReservationCreatedEvent {
     private Integer reservationId;
     private Integer branchId;
+    private String branchName;
     private Integer customerId;
     private String customerName;
     private String phone;

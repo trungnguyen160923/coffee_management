@@ -11,6 +11,7 @@ import com.service.catalog.entity.Unit;
 import com.service.catalog.events.LowStockEvent;
 import com.service.catalog.events.OutOfStockEvent;
 import com.service.catalog.messaging.InventoryEventProducer;
+import com.service.catalog.repository.http_client.BranchClient;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,6 +22,7 @@ import lombok.extern.slf4j.Slf4j;
 public class InventoryAlertService {
 
     private final InventoryEventProducer eventProducer;
+    private final BranchClient branchClient;
 
     public void evaluateAndPublish(Stock stock) {
         if (stock == null) {
@@ -32,13 +34,15 @@ public class InventoryAlertService {
         BigDecimal quantity = safeValue(stock.getQuantity());
         BigDecimal reserved = safeValue(stock.getReservedQuantity());
 
+        String branchName = fetchBranchName(stock.getBranchId());
+
         if (available.compareTo(BigDecimal.ZERO) <= 0) {
-            eventProducer.publishOutOfStock(buildOutOfStockEvent(stock, quantity, reserved, available, threshold));
+            eventProducer.publishOutOfStock(buildOutOfStockEvent(stock, quantity, reserved, available, threshold, branchName));
             return;
         }
 
         if (threshold.compareTo(BigDecimal.ZERO) > 0 && available.compareTo(threshold) <= 0) {
-            eventProducer.publishLowStock(buildLowStockEvent(stock, quantity, reserved, available, threshold));
+            eventProducer.publishLowStock(buildLowStockEvent(stock, quantity, reserved, available, threshold, branchName));
         }
     }
 
@@ -46,10 +50,11 @@ public class InventoryAlertService {
             BigDecimal quantity,
             BigDecimal reserved,
             BigDecimal available,
-            BigDecimal threshold) {
+            BigDecimal threshold,
+            String branchName) {
         return LowStockEvent.builder()
                 .branchId(stock.getBranchId())
-                .branchName(null) // Optional: populate via BranchClient when available
+                .branchName(branchName)
                 .ingredientId(getIngredientId(stock))
                 .ingredientName(getIngredientName(stock))
                 .ingredientSku(null)
@@ -68,10 +73,11 @@ public class InventoryAlertService {
             BigDecimal quantity,
             BigDecimal reserved,
             BigDecimal available,
-            BigDecimal threshold) {
+            BigDecimal threshold,
+            String branchName) {
         return OutOfStockEvent.builder()
                 .branchId(stock.getBranchId())
-                .branchName(null)
+                .branchName(branchName)
                 .ingredientId(getIngredientId(stock))
                 .ingredientName(getIngredientName(stock))
                 .ingredientSku(null)
@@ -128,6 +134,21 @@ public class InventoryAlertService {
 
     private BigDecimal safeValue(BigDecimal value) {
         return value != null ? value : BigDecimal.ZERO;
+    }
+
+    private String fetchBranchName(Integer branchId) {
+        if (branchId == null) {
+            return null;
+        }
+        try {
+            var response = branchClient.getBranchById(branchId);
+            if (response != null && response.getResult() != null) {
+                return response.getResult().getName();
+            }
+        } catch (Exception e) {
+            log.warn("[InventoryAlertService] Failed to fetch branch name for branchId {}: {}", branchId, e.getMessage());
+        }
+        return null;
     }
 }
 

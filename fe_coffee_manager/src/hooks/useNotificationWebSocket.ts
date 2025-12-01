@@ -20,6 +20,7 @@ interface UseNotificationWebSocketOptions {
   enabled?: boolean;
   subscribeBranch?: boolean;
   subscribeUserQueue?: boolean;
+  role?: string; // 'staff' | 'manager' | ...
   onMessage?: (message: NotificationPayload) => void;
 }
 
@@ -47,12 +48,14 @@ export function useNotificationWebSocket({
   enabled = true,
   subscribeBranch,
   subscribeUserQueue,
+  role,
   onMessage,
 }: UseNotificationWebSocketOptions) {
   const clientRef = useRef<Client | null>(null);
   const subscriptionRef = useRef<StompSubscription[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const [lastMessage, setLastMessage] = useState<NotificationPayload | null>(null);
+  const normalizedRole = role?.toLowerCase();
 
   const shouldSubscribeBranch = Boolean(subscribeBranch ?? branchId);
   const shouldSubscribeUserQueue = Boolean(subscribeUserQueue ?? userId);
@@ -104,7 +107,11 @@ export function useNotificationWebSocket({
       setIsConnected(true);
       const subs: StompSubscription[] = [];
       if (shouldSubscribeBranch && branchId) {
-        subs.push(client.subscribe(`/topic/staff.${branchId}`, handleMessage));
+        const destination =
+          normalizedRole === 'manager'
+            ? `/topic/manager.${branchId}`
+            : `/topic/staff.${branchId}`;
+        subs.push(client.subscribe(destination, handleMessage));
       }
       if (shouldSubscribeUserQueue && userId) {
         subs.push(client.subscribe(`/queue/user.${userId}`, handleMessage));

@@ -853,6 +853,7 @@ public class StockReservationService {
      * @param guestId - Guest ID của guest user (có thể null)
      * @return Số lượng reservations đã xóa
      */
+    @Transactional
     public int clearReservationsByCartOrGuest(Integer cartId, String guestId) {
         log.info("Clearing reservations - cartId: {}, guestId: {}", cartId, guestId);
         
