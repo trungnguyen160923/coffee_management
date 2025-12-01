@@ -79,4 +79,10 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
     @Query("SELECT COUNT(o) FROM Order o WHERE o.branchId = :branchId AND o.createAt >= :startDate AND o.createAt < :endDate")
     Long countOrdersByBranchAndDateRange(@Param("branchId") Integer branchId,
             @Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate);
+
+    /**
+     * Tìm các đơn hàng đang ở trạng thái PENDING và đã tạo trước một thời điểm cho trước
+     * dùng cho auto-cancel các đơn quá hạn.
+     */
+    List<Order> findByStatusAndCreateAtBefore(String status, LocalDateTime cutoffTime);
 }

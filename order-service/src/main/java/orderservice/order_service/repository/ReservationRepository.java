@@ -31,4 +31,10 @@ public interface ReservationRepository extends JpaRepository<Reservation, Intege
     Long countActiveReservationsByBranchAndTimeRange(@Param("branchId") Integer branchId,
             @Param("startTime") LocalDateTime startTime,
             @Param("endTime") LocalDateTime endTime);
+
+    /**
+     * Tìm các đặt bàn đang ở trạng thái PENDING và có thời gian đặt trước một thời điểm cho trước
+     * dùng cho auto-cancel các reservation quá hạn.
+     */
+    List<Reservation> findByStatusAndReservedAtBefore(String status, LocalDateTime cutoffTime);
 }

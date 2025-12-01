@@ -235,7 +235,15 @@ export const StaffStockUsage = () => {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6">
+      <div className="max-w-7xl mx-auto space-y-6">
+        <div className="bg-gradient-to-r from-amber-600 to-orange-600 px-8 py-5 rounded-2xl shadow-sm">
+          <h1 className="text-2xl font-bold text-white">Daily Stock Usage</h1>
+          <p className="text-amber-100 text-sm mt-1">
+            Ghi nhận và đối soát lượng sử dụng nguyên liệu trong ca làm việc
+          </p>
+        </div>
+
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="rounded-2xl bg-white shadow-sm border border-amber-100 p-5">
           <div className="flex items-center justify-between mb-4">
@@ -700,6 +708,7 @@ export const StaffStockUsage = () => {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 };

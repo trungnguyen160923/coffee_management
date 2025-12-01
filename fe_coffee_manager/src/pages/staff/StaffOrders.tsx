@@ -36,6 +36,13 @@ export default function StaffOrders() {
     const [search, setSearch] = useState<string>('');
     const [debouncedSearch, setDebouncedSearch] = useState<string>('');
     const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'preparing' | 'ready' | 'completed' | 'cancelled'>('all');
+    const [selectedDate, setSelectedDate] = useState<string>(() => {
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    });
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
     const [detailOpen, setDetailOpen] = useState<boolean>(false);
@@ -159,6 +166,19 @@ export default function StaffOrders() {
             const text = `${o.orderId ?? ''} ${o.customerName ?? ''} ${o.phone ?? ''} ${o.deliveryAddress ?? ''}`.toLowerCase();
             return text.includes(debouncedSearch);
         };
+        const byDate = (o: SimpleOrder) => {
+            if (!selectedDate || !o.orderDate) return true;
+            try {
+                const d = new Date(o.orderDate);
+                const year = d.getFullYear();
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                const dateStr = `${year}-${month}-${day}`;
+                return dateStr === selectedDate;
+            } catch {
+                return true;
+            }
+        };
 
         // Filter orders based on tab type
         const isCorrectOrderType = (o: SimpleOrder) => {
@@ -171,8 +191,8 @@ export default function StaffOrders() {
             }
         };
 
-        return currentOrders.filter(o => byStatus(o) && bySearch(o) && isCorrectOrderType(o));
-    }, [currentOrders, statusFilter, debouncedSearch, activeTab]);
+        return currentOrders.filter(o => byStatus(o) && bySearch(o) && byDate(o) && isCorrectOrderType(o));
+    }, [currentOrders, statusFilter, debouncedSearch, activeTab, selectedDate]);
 
     const statusClass = (status?: string) => {
         switch ((status || '').toLowerCase()) {
@@ -468,81 +488,83 @@ export default function StaffOrders() {
 
     return (
         <div className="p-8">
-            <div className="mb-6 flex items-center justify-between">
-                <h1 className="text-2xl font-bold text-gray-800">Branch Orders</h1>
-                
-                <div className="flex items-center gap-4"> 
-                    {/* 1. Thanh điều hướng Tab (Từ pos_order) */}
-                    <div className="mt-4 flex space-x-1 bg-gray-100 p-1 rounded-lg w-fit">
-                        <button
-                            onClick={() => setActiveTab('regular')}
-                            className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${activeTab === 'regular'
-                                ? 'bg-white text-gray-900 shadow-sm'
-                                : 'text-gray-600 hover:text-gray-900'
-                                }`}
-                        >
-                            Regular Orders
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('pos')}
-                            className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${activeTab === 'pos'
-                                ? 'bg-white text-gray-900 shadow-sm'
-                                : 'text-gray-600 hover:text-gray-900'
-                                }`}
-                        >
-                            POS Orders
-                        </button>
-                    </div>
-                    
-                    {/* 2. Auto/Manual Refresh (Từ HEAD) */}
-                    {/* Chỉ hiển thị Refresh cho Regular Orders nếu cần */}
-                    {activeTab === 'regular' && (
-                        <div className="flex items-center gap-3">
-                            {/* Auto refresh toggle */}
-                            <label className="flex items-center gap-2 text-sm text-gray-600">
-                                <input
-                                    type="checkbox"
-                                    checked={autoRefresh}
-                                    onChange={(e) => setAutoRefresh(e.target.checked)}
-                                    className="w-4 h-4 text-amber-600 bg-gray-100 border-gray-300 rounded focus:ring-amber-500 focus:ring-2"
-                                />
-                                <span className="flex items-center gap-1">
-                                    Auto Refresh (10s)
-                                    {autoRefresh && (
-                                        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" title="Auto refresh is active"></div>
-                                    )}
-                                </span>
-                            </label>
+            <div className="max-w-7xl mx-auto">
+                <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+                    <div className="bg-gradient-to-r from-amber-600 to-orange-600 px-8 py-5 flex items-center justify-between">
+                        <h1 className="text-2xl font-bold text-white">Branch Orders</h1>
+                        <div className="flex items-center gap-4 text-amber-50"> 
+                            {/* 1. Thanh điều hướng Tab (Từ pos_order) */}
+                            <div className="mt-4 flex space-x-1 bg-gray-100 p-1 rounded-lg w-fit">
+                                <button
+                                    onClick={() => setActiveTab('regular')}
+                                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${activeTab === 'regular'
+                                        ? 'bg-white text-gray-900 shadow-sm'
+                                        : 'text-gray-600 hover:text-gray-900'
+                                        }`}
+                                >
+                                    Regular Orders
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('pos')}
+                                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${activeTab === 'pos'
+                                        ? 'bg-white text-gray-900 shadow-sm'
+                                        : 'text-gray-600 hover:text-gray-900'
+                                        }`}
+                                >
+                                    POS Orders
+                                </button>
+                            </div>
                             
-                            {/* Manual refresh button */}
-                            <button
-                                onClick={async () => {
-                                    await loadOrders(true);
-                                    toast.success('Orders refreshed manually', {
-                                        duration: 2000,
-                                        position: 'top-right',
-                                    });
-                                }}
-                                disabled={refreshing}
-                                className="flex items-center gap-2 px-3 py-2 text-sm bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                            >
-                                {refreshing ? (
-                                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                    </svg>
-                                ) : (
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                    </svg>
-                                )}
-                                {refreshing ? 'Refreshing...' : 'Refresh'}
-                            </button>
+                            {/* 2. Auto/Manual Refresh (Từ HEAD) */}
+                            {/* Chỉ hiển thị Refresh cho Regular Orders nếu cần */}
+                            {activeTab === 'regular' && (
+                                <div className="flex items-center gap-3">
+                                    {/* Auto refresh toggle */}
+                                    <label className="flex items-center gap-2 text-sm text-amber-50">
+                                        <input
+                                            type="checkbox"
+                                            checked={autoRefresh}
+                                            onChange={(e) => setAutoRefresh(e.target.checked)}
+                                            className="w-4 h-4 text-amber-600 bg-gray-100 border-gray-300 rounded focus:ring-amber-500 focus:ring-2"
+                                        />
+                                        <span className="flex items-center gap-1">
+                                            Auto Refresh (10s)
+                                            {autoRefresh && (
+                                                <div className="w-2 h-2 bg-green-300 rounded-full animate-pulse" title="Auto refresh is active"></div>
+                                            )}
+                                        </span>
+                                    </label>
+                                    
+                                    {/* Manual refresh button */}
+                                    <button
+                                        onClick={async () => {
+                                            await loadOrders(true);
+                                            toast.success('Orders refreshed manually', {
+                                                duration: 2000,
+                                                position: 'top-right',
+                                            });
+                                        }}
+                                        disabled={refreshing}
+                                        className="flex items-center gap-2 px-3 py-2 text-sm bg-amber-100 text-amber-800 rounded-lg hover:bg-amber-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                        {refreshing ? (
+                                            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                            </svg>
+                                        ) : (
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                            </svg>
+                                        )}
+                                        {refreshing ? 'Refreshing...' : 'Refresh'}
+                                    </button>
+                                </div>
+                            )}
                         </div>
-                    )}
-                </div>
-            </div>
-    
+                    </div>
+
+                    <div className="p-6 lg:p-8">
             {loading && (
                 <div className="bg-white rounded-2xl shadow p-6">Loading...</div>
             )}
@@ -555,21 +577,32 @@ export default function StaffOrders() {
                     <div className="px-6 py-4 border-b border-gray-100">
                         <div className="flex flex-wrap items-center gap-3">
                             {activeTab === 'regular' && (
-                                <div className="flex items-center gap-2">
-                                    <label className="text-sm text-gray-600">Status</label>
-                                    <select
-                                        className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
-                                        value={statusFilter}
-                                        onChange={(e) => setStatusFilter(e.target.value as any)}
-                                    >
-                                        <option value="all">All</option>
-                                        <option value="pending">Pending</option>
-                                        <option value="preparing">Preparing</option>
-                                        <option value="ready">Ready</option>
-                                        <option value="completed">Completed</option>
-                                        <option value="cancelled">Cancelled</option>
-                                    </select>
-                                </div>
+                                <>
+                                    <div className="flex items-center gap-2">
+                                        <label className="text-sm text-gray-600">Status</label>
+                                        <select
+                                            className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
+                                            value={statusFilter}
+                                            onChange={(e) => setStatusFilter(e.target.value as any)}
+                                        >
+                                            <option value="all">All</option>
+                                            <option value="pending">Pending</option>
+                                            <option value="preparing">Preparing</option>
+                                            <option value="ready">Ready</option>
+                                            <option value="completed">Completed</option>
+                                            <option value="cancelled">Cancelled</option>
+                                        </select>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <label className="text-sm text-gray-600">Date</label>
+                                        <input
+                                            type="date"
+                                            className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
+                                            value={selectedDate}
+                                            onChange={(e) => setSelectedDate(e.target.value)}
+                                        />
+                                    </div>
+                                </>
                             )}
                             <div className="flex-1 min-w-[220px]">
                                 <input
@@ -592,15 +625,12 @@ export default function StaffOrders() {
                                         <th className="px-6 py-3 font-medium">Order ID</th>
                                         <th className="px-6 py-3 font-medium">Customer Name</th>
                                         {activeTab === 'regular' && <th className="px-6 py-3 font-medium">Phone</th>}
-                                        {activeTab === 'regular' ? (
-                                            <th className="px-6 py-3 font-medium">Address</th>
-                                        ) : (
+                                        {activeTab !== 'regular' && (
                                             <>
                                                 <th className="px-6 py-3 font-medium">Tables</th>
                                                 <th className="px-6 py-3 font-medium">Staff</th>
                                             </>
                                         )}
-                                        <th className="px-6 py-3 font-medium">Order Date</th>
                                         <th className="px-6 py-3 font-medium">Total Amount</th>
                                         <th className="px-6 py-3 font-medium">Payment</th>
                                         {activeTab === 'regular' && <th className="px-6 py-3 font-medium">Status</th>}
@@ -613,9 +643,7 @@ export default function StaffOrders() {
                                             <td className="px-6 py-4 font-semibold text-gray-900">{o.orderId}</td>
                                             <td className="px-6 py-4 text-gray-800">{o.customerName || '-'}</td>
                                             {activeTab === 'regular' && <td className="px-6 py-4 text-gray-800">{o.phone || '-'}</td>}
-                                            {activeTab === 'regular' ? (
-                                                <td className="px-6 py-4 text-gray-800 max-w-[320px] truncate" title={o.deliveryAddress || ''}>{o.deliveryAddress || '-'}</td>
-                                            ) : (
+                                            {activeTab !== 'regular' && (
                                                 <>
                                                     <td className="px-6 py-4 text-gray-800">
                                                         {o.tableIds && Array.isArray(o.tableIds) && o.tableIds.length > 0 ? (
@@ -650,7 +678,6 @@ export default function StaffOrders() {
                                                     </td>
                                                 </>
                                             )}
-                                            <td className="px-6 py-4 text-gray-800">{formatDate(o.orderDate)}</td>
                                             <td className="px-6 py-4 text-gray-900 font-semibold">{formatCurrency(o.totalAmount as unknown as number)}</td>
                                             <td className="px-6 py-4 text-gray-800">{o.paymentMethod || '-'}</td>
                                             {activeTab === 'regular' && (
@@ -983,6 +1010,9 @@ export default function StaffOrders() {
                     </div>
                 </div>
             )}
+                    </div>
+                </div>
+            </div>
         </div>
     );
 }

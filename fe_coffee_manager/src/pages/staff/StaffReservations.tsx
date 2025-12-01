@@ -12,6 +12,13 @@ export default function StaffReservations() {
     const [search, setSearch] = useState<string>('');
     const [debouncedSearch, setDebouncedSearch] = useState<string>('');
     const [statusFilter, setStatusFilter] = useState<'all' | 'PENDING' | 'CONFIRMED' | 'SEATED' | 'COMPLETED' | 'CANCELLED'>('all');
+    const [selectedDate, setSelectedDate] = useState<string>(() => {
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    });
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
     const [detailOpen, setDetailOpen] = useState<boolean>(false);
@@ -68,8 +75,22 @@ export default function StaffReservations() {
             const text = `${r.reservationId ?? ''} ${r.customerName ?? ''} ${r.phone ?? ''}`.toLowerCase();
             return text.includes(debouncedSearch);
         };
-        return reservations.filter(r => byStatus(r) && bySearch(r));
-    }, [reservations, statusFilter, debouncedSearch]);
+        // Lọc theo ngày tạo đơn (createAt) thay vì reservedAt
+        const byDate = (r: Reservation) => {
+            if (!selectedDate || !r.createAt) return true;
+            try {
+                const d = new Date(r.createAt);
+                const year = d.getFullYear();
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                const dateStr = `${year}-${month}-${day}`;
+                return dateStr === selectedDate;
+            } catch {
+                return true;
+            }
+        };
+        return reservations.filter(r => byStatus(r) && bySearch(r) && byDate(r));
+    }, [reservations, statusFilter, debouncedSearch, selectedDate]);
 
     // Auto-load assigned tables for visible reservations so the column shows after reload
     useEffect(() => {
@@ -223,9 +244,13 @@ export default function StaffReservations() {
                 </div>
             )}
             <div className="p-8">
-                <div className="mb-6">
-                    <h1 className="text-2xl font-bold text-gray-800">Branch Reservations</h1>
-                </div>
+                <div className="max-w-7xl mx-auto">
+                    <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+                        <div className="bg-gradient-to-r from-amber-600 to-orange-600 px-8 py-5">
+                            <h1 className="text-2xl font-bold text-white">Branch Reservations</h1>
+                            <p className="text-amber-100 text-sm mt-1">Quản lý các đơn đặt bàn trong chi nhánh</p>
+                        </div>
+                        <div className="p-6 lg:p-8">
 
                 {loading && <div className="bg-white rounded-2xl shadow p-6">Loading...</div>}
                 {error && <div className="bg-red-50 text-red-700 border border-red-200 rounded-xl p-4 mb-4">{error}</div>}
@@ -234,20 +259,31 @@ export default function StaffReservations() {
                     <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
                         <div className="px-6 py-4 border-b border-gray-100">
                             <div className="flex flex-wrap items-center gap-3">
-                                <div className="flex items-center gap-2">
-                                    <label className="text-sm text-gray-600">Status</label>
-                                    <select
-                                        className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
-                                        value={statusFilter}
-                                        onChange={(e) => setStatusFilter(e.target.value as any)}
-                                    >
-                                        <option value="all">All</option>
-                                        <option value="PENDING">PENDING</option>
-                                        <option value="CONFIRMED">CONFIRMED</option>
-                                        <option value="SEATED">SEATED</option>
-                                        <option value="CANCELLED">CANCELLED</option>
-                                    </select>
-                                </div>
+                                <>
+                                    <div className="flex items-center gap-2">
+                                        <label className="text-sm text-gray-600">Status</label>
+                                        <select
+                                            className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
+                                            value={statusFilter}
+                                            onChange={(e) => setStatusFilter(e.target.value as any)}
+                                        >
+                                            <option value="all">All</option>
+                                            <option value="PENDING">PENDING</option>
+                                            <option value="CONFIRMED">CONFIRMED</option>
+                                            <option value="SEATED">SEATED</option>
+                                            <option value="CANCELLED">CANCELLED</option>
+                                        </select>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <label className="text-sm text-gray-600">Date</label>
+                                        <input
+                                            type="date"
+                                            className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
+                                            value={selectedDate}
+                                            onChange={(e) => setSelectedDate(e.target.value)}
+                                        />
+                                    </div>
+                                </>
                                 <div className="flex-1 min-w-[220px]">
                                     <input
                                         type="text"
@@ -358,6 +394,9 @@ export default function StaffReservations() {
                         )}
                     </div>
                 )}
+                        </div>
+                    </div>
+                </div>
             </div>
             {detailOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">

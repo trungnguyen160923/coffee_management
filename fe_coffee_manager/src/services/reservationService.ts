@@ -11,6 +11,8 @@ export interface Reservation {
     partySize?: number;
     status: string;
     notes?: string;
+    // Thời gian tạo đơn đặt bàn (create_at từ backend) - dùng để lọc theo ngày tạo
+    createAt?: string;
 }
 
 export const reservationService = {
