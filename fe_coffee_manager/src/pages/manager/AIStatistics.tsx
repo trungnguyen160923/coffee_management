@@ -633,91 +633,75 @@ export default function AIStatistics() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50">
-      <div className="max-w-7xl mx-auto px-2 py-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-slate-50">
+      <div className="max-w-7xl mx-auto px-2 py-4 sm:px-4 lg:px-4">
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-          {/* Header */}
-          <div className="bg-gradient-to-r from-amber-600 to-orange-600 px-8 py-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="bg-white p-2 rounded-lg">
-                  <Brain className="w-8 h-8 text-amber-600" />
-                </div>
-                <div>
-                  <h1 className="text-3xl font-bold text-white">Thống kê AI</h1>
-                  <div className="flex items-center gap-2 mt-1">
-                    <p className="text-amber-100">Phân tích & dự báo tự động</p>
-                    {dataSource && (
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${
-                        dataSource === 'cached' 
-                          ? 'bg-white/20 text-white' 
-                          : 'bg-white/30 text-white'
-                      }`}>
-                        {dataSource === 'cached' ? '📦 Dữ liệu đã lưu' : '🆕 Dữ liệu mới'}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button 
-                  onClick={handleRefresh}
-                  disabled={loading || refreshing}
-                  className="flex items-center space-x-2 bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <RefreshCw className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`} />
-                  <span className="font-medium">Làm mới</span>
-                </button>
-                <button 
-                  onClick={handleExportPDF}
-                  disabled={loading || !aiData}
-                  className="flex items-center space-x-2 bg-white hover:bg-white/90 text-amber-600 px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-                >
-                  <Download className="w-5 h-5" />
-                  <span>Xuất PDF</span>
-                </button>
-              </div>
+          {/* Header actions */}
+          <div className="flex items-center justify-between px-8 pt-6 pb-3">
+            <div>
+              <h1 className="text-xl font-semibold text-slate-900">AI Statistics</h1>
+              <p className="text-sm text-slate-500">
+                Phân tích & dự báo tự động cho chi nhánh của bạn
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={handleRefresh}
+                disabled={loading || refreshing}
+                className="flex items-center space-x-2 rounded-lg bg-slate-100 text-slate-700 px-4 py-2 text-sm font-medium hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+                <span>Làm mới</span>
+              </button>
+              <button 
+                onClick={handleExportPDF}
+                disabled={loading || !aiData}
+                className="flex items-center space-x-2 rounded-lg bg-sky-500 text-white px-4 py-2 text-sm font-medium hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Download className="w-4 h-4" />
+                <span>Xuất PDF</span>
+              </button>
             </div>
           </div>
 
           {/* Content */}
-          <div className="p-8">
+          <div className="p-8 pt-4">
 
             {/* Tabs */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
-          <div className="flex border-b border-gray-200">
-            <button
-              onClick={() => setActiveTab('day')}
-              className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
-                activeTab === 'day'
-                  ? 'text-amber-600 border-b-2 border-amber-600 bg-amber-50'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-              }`}
-            >
-              Ngày
-            </button>
-            <button
-              onClick={() => setActiveTab('month')}
-              className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
-                activeTab === 'month'
-                  ? 'text-amber-600 border-b-2 border-amber-600 bg-amber-50'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-              }`}
-            >
-              Tháng
-            </button>
-            <button
-              onClick={() => setActiveTab('year')}
-              className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
-                activeTab === 'year'
-                  ? 'text-amber-600 border-b-2 border-amber-600 bg-amber-50'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-              }`}
-            >
-              Năm
-            </button>
-          </div>
-        </div>
+              <div className="flex border-b border-gray-200">
+                <button
+                  onClick={() => setActiveTab('day')}
+                  className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+                    activeTab === 'day'
+                      ? 'text-sky-600 border-b-2 border-sky-600 bg-sky-50'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  }`}
+                >
+                  Ngày
+                </button>
+                <button
+                  onClick={() => setActiveTab('month')}
+                  className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+                    activeTab === 'month'
+                      ? 'text-sky-600 border-b-2 border-sky-600 bg-sky-50'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  }`}
+                >
+                  Tháng
+                </button>
+                <button
+                  onClick={() => setActiveTab('year')}
+                  className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+                    activeTab === 'year'
+                      ? 'text-sky-600 border-b-2 border-sky-600 bg-sky-50'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  }`}
+                >
+                  Năm
+                </button>
+              </div>
+            </div>
 
             {/* Filters - Inline */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 mb-6">
@@ -736,7 +720,7 @@ export default function AIStatistics() {
                   value={selectedDate}
                   max={new Date().toISOString().split('T')[0]}
                   onChange={(e) => setSelectedDate(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-transparent"
                   disabled={loading}
                 />
               </div>
@@ -749,7 +733,7 @@ export default function AIStatistics() {
                   value={selectedMonth}
                   max={`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`}
                   onChange={(e) => setSelectedMonth(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-transparent"
                   disabled={loadingMonthly}
                 />
               </div>

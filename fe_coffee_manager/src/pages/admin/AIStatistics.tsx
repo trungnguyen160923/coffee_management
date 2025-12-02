@@ -456,44 +456,43 @@ export default function MultiBranchDashboard() {
   }));
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 space-y-6">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-800 mb-2 flex items-center gap-2">
-            <Brain className="h-8 w-8 text-amber-600" />
-            Dashboard Tổng Quan AI
-          </h1>
-          <p className="text-gray-600">Giám sát và phân tích tất cả chi nhánh</p>
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => fetchAllBranchesData(false)}
-            disabled={loading}
-            className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            {loading ? 'Đang tải...' : 'Làm mới'}
-          </button>
-          <button 
-            onClick={handleExportPDF}
-            disabled={loading || !aiData}
-            className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Download className="h-4 w-4" />
-            Xuất báo cáo
-          </button>
-        </div>
-      </div>
+    <div className="min-h-screen bg-slate-50">
+      <div className="max-w-7xl mx-auto px-2 py-4 sm:px-4 lg:px-4">
+        <div className="bg-white rounded-2xl shadow-xl overflow-hidden p-6 space-y-6">
+          {/* Header actions */}
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <h1 className="text-xl font-semibold text-slate-800">AI Overview Dashboard</h1>
+              <p className="text-sm text-slate-500">Giám sát và phân tích tất cả chi nhánh</p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => fetchAllBranchesData(false)}
+                disabled={loading}
+                className="px-4 py-2 rounded-lg border border-slate-200 bg-white text-sm font-medium text-slate-700 hover:border-sky-300 hover:text-sky-700 hover:bg-sky-50 flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                {loading ? 'Đang tải...' : 'Làm mới'}
+              </button>
+              <button 
+                onClick={handleExportPDF}
+                disabled={loading || !aiData}
+                className="px-4 py-2 rounded-lg bg-sky-500 text-white text-sm font-medium hover:bg-sky-600 flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Download className="h-4 w-4" />
+                Xuất báo cáo
+              </button>
+            </div>
+          </div>
 
-      {/* Tabs */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+          {/* Tabs */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200">
         <div className="flex border-b border-gray-200">
           <button
             onClick={() => setActiveTab('day')}
             className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
               activeTab === 'day'
-                ? 'text-amber-600 border-b-2 border-amber-600 bg-amber-50'
+                ? 'text-sky-600 border-b-2 border-sky-600 bg-sky-50'
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
             }`}
           >
@@ -503,7 +502,7 @@ export default function MultiBranchDashboard() {
             onClick={() => setActiveTab('month')}
             className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
               activeTab === 'month'
-                ? 'text-amber-600 border-b-2 border-amber-600 bg-amber-50'
+                ? 'text-sky-600 border-b-2 border-sky-600 bg-sky-50'
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
             }`}
           >
@@ -513,7 +512,7 @@ export default function MultiBranchDashboard() {
             onClick={() => setActiveTab('year')}
             className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
               activeTab === 'year'
-                ? 'text-amber-600 border-b-2 border-amber-600 bg-amber-50'
+                ? 'text-sky-600 border-b-2 border-sky-600 bg-sky-50'
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
             }`}
           >
@@ -535,7 +534,7 @@ export default function MultiBranchDashboard() {
                   onClick={() => setViewMode('all')}
                   className={`px-4 py-2 rounded-lg font-medium transition-colors ${
                     viewMode === 'all'
-                      ? 'bg-amber-600 text-white'
+                      ? 'bg-sky-500 text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 >
@@ -554,7 +553,7 @@ export default function MultiBranchDashboard() {
                   }}
                   className={`px-4 py-2 rounded-lg font-medium transition-colors ${
                     viewMode === 'single'
-                      ? 'bg-amber-600 text-white'
+                      ? 'bg-sky-500 text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 >
@@ -572,7 +571,7 @@ export default function MultiBranchDashboard() {
                 <select
                   value={selectedBranch}
                   onChange={(e) => setSelectedBranch(Number(e.target.value))}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500"
                 >
                   {branchesData.map((branch) => (
                     <option key={branch.id} value={branch.id}>
@@ -593,7 +592,7 @@ export default function MultiBranchDashboard() {
                 value={selectedDate}
                 max={new Date().toISOString().split('T')[0]}
                 onChange={(e) => setSelectedDate(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500"
                 disabled={loading}
               />
             </div>
@@ -614,7 +613,7 @@ export default function MultiBranchDashboard() {
                   onClick={() => setViewMode('all')}
                   className={`px-4 py-2 rounded-lg font-medium transition-colors ${
                     viewMode === 'all'
-                      ? 'bg-amber-600 text-white'
+                      ? 'bg-sky-500 text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 >
@@ -633,7 +632,7 @@ export default function MultiBranchDashboard() {
                   }}
                   className={`px-4 py-2 rounded-lg font-medium transition-colors ${
                     viewMode === 'single'
-                      ? 'bg-amber-600 text-white'
+                      ? 'bg-sky-500 text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 >
@@ -651,7 +650,7 @@ export default function MultiBranchDashboard() {
                 <select
                   value={selectedBranch}
                   onChange={(e) => setSelectedBranch(Number(e.target.value))}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500"
                 >
                   {branchesData.map((branch) => (
                     <option key={branch.id} value={branch.id}>
@@ -672,7 +671,7 @@ export default function MultiBranchDashboard() {
                 value={selectedMonth}
                 max={`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`}
                 onChange={(e) => setSelectedMonth(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500"
                 disabled={loadingMonthly}
               />
             </div>
@@ -693,7 +692,7 @@ export default function MultiBranchDashboard() {
                   onClick={() => setViewMode('all')}
                   className={`px-4 py-2 rounded-lg font-medium transition-colors ${
                     viewMode === 'all'
-                      ? 'bg-amber-600 text-white'
+                      ? 'bg-sky-500 text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 >
@@ -712,7 +711,7 @@ export default function MultiBranchDashboard() {
                   }}
                   className={`px-4 py-2 rounded-lg font-medium transition-colors ${
                     viewMode === 'single'
-                      ? 'bg-amber-600 text-white'
+                      ? 'bg-sky-500 text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 >
@@ -1441,6 +1440,8 @@ export default function MultiBranchDashboard() {
           <p className="text-gray-500 text-sm">Vui lòng chọn chi nhánh khác hoặc thử lại sau</p>
         </div>
       )}
+        </div>
+      </div>
     </div>
   );
 }

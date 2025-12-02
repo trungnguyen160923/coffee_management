@@ -5,7 +5,7 @@ export default {
       extend: {
         fontFamily: {
           sans: [
-            'Inter',
+            '"Be Vietnam Pro"',
             'system-ui',
             'Segoe UI',
             'Roboto',
@@ -13,6 +13,15 @@ export default {
             'Arial',
             'Apple Color Emoji',
             'Segoe UI Emoji'
+          ],
+          heading: [
+            '"Montserrat Alternates"',
+            '"Be Vietnam Pro"',
+            'system-ui',
+            'Segoe UI',
+            'Roboto',
+            'Helvetica',
+            'Arial',
           ]
         }
       },

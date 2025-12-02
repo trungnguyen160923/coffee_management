@@ -61,35 +61,26 @@ export default function ProductManagement() {
   const inactiveProducts = (data?.content || []).filter(p => !p.active).length;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50">
-      <div className="max-w-7xl mx-auto px-2 py-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-slate-50">
+      <div className="max-w-7xl mx-auto px-2 py-4 sm:px-4 lg:px-4">
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-          <div className="bg-gradient-to-r from-amber-600 to-orange-600 px-8 py-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="bg-white p-2 rounded-lg">
-                  <Coffee className="w-8 h-8 text-amber-600" />
-                </div>
-                <div>
-                  <h1 className="text-3xl font-bold text-white">Product Management</h1>
-                  <p className="text-amber-100 mt-1">Coffee Shop Management System</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={load}
-                  disabled={loading}
-                  className="flex items-center space-x-2 bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Refresh data"
-                >
-                  <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
-                  <span className="font-medium">Refresh</span>
-                </button>
-              </div>
+          <div className="flex items-center justify-between px-8 pt-6 pb-3">
+            <div>
+              <h1 className="text-xl font-semibold text-slate-900">Product Management</h1>
+              <p className="text-sm text-slate-500">Coffee Shop Management System</p>
             </div>
+            <button
+              onClick={load}
+              disabled={loading}
+              className="flex items-center space-x-2 rounded-lg bg-slate-100 text-slate-700 px-4 py-2 text-sm font-medium hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Refresh data"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              <span>Refresh</span>
+            </button>
           </div>
 
-          <div className="p-8">
+          <div className="p-8 pt-4">
             {/* Search */}
             <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="relative">
@@ -98,7 +89,7 @@ export default function ProductManagement() {
                   placeholder="Search products..."
                   value={keyword}
                   onChange={(e) => { setKeyword(e.target.value); setPage(0); }}
-                  className="w-full px-4 py-3 pl-10 pr-4 text-gray-700 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                  className="w-full px-4 py-3 pl-10 pr-4 text-gray-700 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
                 />
                 <div className="absolute inset-y-0 left-0 flex items-center pl-3">
                   {loading ? (
@@ -112,7 +103,7 @@ export default function ProductManagement() {
                 <select
                   value={categoryId ?? ''}
                   onChange={(e) => { const v = e.target.value; setCategoryId(v ? Number(v) : undefined); setPage(0); }}
-                  className="w-full px-4 py-3 text-gray-700 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                  className="w-full px-4 py-3 text-gray-700 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
                 >
                   <option value="">All categories</option>
                   {categories.map(c => (
@@ -175,8 +166,8 @@ export default function ProductManagement() {
                                   decoding="async"
                                 />
                               ) : (
-                                <div className="w-12 h-12 rounded-lg bg-amber-100 flex items-center justify-center">
-                                  <Coffee className="w-6 h-6 text-amber-600" />
+                                <div className="w-12 h-12 rounded-lg bg-sky-50 flex items-center justify-center border border-sky-100">
+                                  <Coffee className="w-6 h-6 text-sky-600" />
                                 </div>
                               )}
                               <span className="font-medium text-gray-900">{product.name}</span>
@@ -186,7 +177,7 @@ export default function ProductManagement() {
                             <p className="text-gray-600 text-sm line-clamp-2">{product.description || 'No description'}</p>
                           </td>
                           <td className="px-4 py-2">
-                            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-amber-100 text-amber-800">
+                            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-sky-50 text-sky-700 border border-sky-100">
                               {product.category?.name || 'N/A'}
                             </span>
                           </td>
@@ -224,7 +215,7 @@ export default function ProductManagement() {
                 <button className="px-3 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50" disabled={page === 0} onClick={() => setPage(0)}>First</button>
                 <button className="px-3 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50" disabled={page === 0} onClick={() => setPage(p => Math.max(0, p - 1))}>Prev</button>
                 <div className="flex items-center gap-1">
-                  {Array.from({ length: Math.min(5, Math.max(1, totalPages)) }).map((_, idx) => {
+                    {Array.from({ length: Math.min(5, Math.max(1, totalPages)) }).map((_, idx) => {
                     const half = 2;
                     let start = Math.max(0, Math.min(page - half, (totalPages - 1) - (5 - 1)));
                     if (totalPages <= 5) start = 0;
@@ -232,7 +223,7 @@ export default function ProductManagement() {
                     if (pageNum >= totalPages) return null;
                     const active = pageNum === page;
                     return (
-                      <button key={pageNum} className={`px-3 py-1 text-sm border rounded-lg ${active ? 'bg-amber-600 text-white border-amber-600' : 'border-gray-300 hover:bg-gray-50'}`} onClick={() => setPage(pageNum)}>
+                      <button key={pageNum} className={`px-3 py-1 text-sm border rounded-lg ${active ? 'bg-sky-500 text-white border-sky-500' : 'border-gray-300 hover:bg-gray-50'}`} onClick={() => setPage(pageNum)}>
                         {pageNum + 1}
                       </button>
                     );

@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Link, NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import {
   Coffee,
@@ -21,7 +21,11 @@ import {
   Tag,
   Terminal,
   Eye,
-  Droplet
+  Droplet,
+  ChevronRight,
+  ChevronDown,
+  Menu,
+  X,
 } from 'lucide-react';
 
 import { NotificationBell } from '../notifications/NotificationBell';
@@ -37,12 +41,14 @@ export function Layout({ children }: LayoutProps) {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [showMoreNav, setShowMoreNav] = useState(false);
   const [maxVisibleItems, setMaxVisibleItems] = useState(6);
+  const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const navRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
   const footerRef = useRef<HTMLDivElement>(null);
+  const avatarMenuRef = useRef<HTMLDivElement>(null);
 
-
-  const getNavigationItems = () => {
+  const navigationItems = useMemo(() => {
     if (user?.role === 'admin') {
       return [
         { icon: Home, label: 'Overview', path: '/admin' },
@@ -83,9 +89,143 @@ export function Layout({ children }: LayoutProps) {
         { icon: Droplet, label: 'Stock Usage', path: '/staff/stock-usage' },
       ];
     }
+  }, [user?.role]);
+
+  // Grouped navigation (tree-style menu) per role
+  const navGroups = useMemo(() => {
+    const byPath = new Map(navigationItems.map((item) => [item.path, item]));
+
+    const pick = (paths: string[]) =>
+      paths
+        .map((path) => byPath.get(path))
+        .filter((x): x is typeof navigationItems[number] => Boolean(x));
+
+    if (user?.role === 'manager') {
+      return [
+        { title: 'Overview', items: pick(['/manager']) },
+        { title: 'Store & Staff', items: pick(['/manager/staff', '/manager/tables']) },
+        {
+          title: 'Menu & Promotions',
+          items: pick(['/manager/products', '/manager/ingredients', '/manager/discounts']),
+        },
+        {
+          title: 'Inventory & Purchasing',
+          items: pick([
+            '/manager/inventory',
+            '/manager/procurement',
+            '/manager/purchase-orders',
+            '/manager/suppliers',
+            '/manager/goods-receipts',
+            '/manager/return-goods',
+          ]),
+        },
+        { title: 'Analytics', items: pick(['/manager/statistics']) },
+      ].filter((group) => group.items.length > 0);
+    }
+
+    if (user?.role === 'admin') {
+      return [
+        { title: 'Overview', items: pick(['/admin']) },
+        {
+          title: 'Catalog',
+          items: pick(['/admin/products', '/admin/ingredients', '/admin/recipes', '/admin/discounts']),
+        },
+        {
+          title: 'Organization',
+          items: pick([
+            '/admin/branches',
+            '/admin/managers',
+            '/admin/branch-activities',
+            '/admin/suppliers',
+          ]),
+        },
+        { title: 'Analytics', items: pick(['/admin/statistics']) },
+      ].filter((group) => group.items.length > 0);
+    }
+
+    if (user?.role === 'staff') {
+      return [
+        { title: 'Overview', items: pick(['/staff']) },
+        {
+          title: 'Operations',
+          items: pick(['/staff/pos', '/staff/orders', '/staff/reservations', '/staff/tables']),
+        },
+        { title: 'Knowledge', items: pick(['/staff/recipes']) },
+        { title: 'Inventory', items: pick(['/staff/stock-usage']) },
+      ].filter((group) => group.items.length > 0);
+    }
+
+    return null;
+  }, [user?.role, navigationItems]);
+
+  // Open/close state for nav groups
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    if (!navGroups) return;
+    setOpenGroups((prev) => {
+      const next: Record<string, boolean> = {};
+      navGroups.forEach((group, index) => {
+        next[group.title] = prev[group.title] ?? index === 0; // open first group by default
+      });
+      return next;
+    });
+  }, [navGroups]);
+
+  const toggleGroup = (title: string) => {
+    setOpenGroups((prev) => ({ ...prev, [title]: !prev[title] }));
   };
 
-  const navigationItems = getNavigationItems();
+  const getBasePath = () => {
+    if (user?.role === 'admin') return '/admin';
+    if (user?.role === 'manager') return '/manager';
+    return '/staff';
+  };
+
+  const getCurrentPageLabel = () => {
+    const path = location.pathname;
+
+    // Exact match first
+    const exact = navigationItems.find((item) => item.path === path);
+    if (exact) return exact.label;
+
+    // Longest prefix match (so /admin/products chọn "Products" chứ không phải "Overview")
+    const prefixMatch = navigationItems
+      .filter((item) => path.startsWith(item.path))
+      .sort((a, b) => b.path.length - a.path.length)[0];
+    if (prefixMatch) return prefixMatch.label;
+
+    // Fallback to first nav item (e.g. Overview)
+    return navigationItems[0]?.label || 'Overview';
+  };
+
+  const getRoleLabel = () => {
+    if (user?.role === 'manager') return 'Quản lý';
+    if (user?.role === 'admin') return 'Admin';
+    if (user?.role === 'staff') return 'Nhân viên';
+    return user?.role || 'Người dùng';
+  };
+
+  const getUserInitials = () => {
+    if (!user?.name) return 'U';
+    const parts = user.name.trim().split(/\s+/);
+    if (parts.length === 1) return parts[0][0]?.toUpperCase() || 'U';
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  };
+
+  // Close avatar dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        avatarMenuRef.current &&
+        !avatarMenuRef.current.contains(event.target as Node)
+      ) {
+        setAvatarMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Calculate maximum visible items based on available space
   useEffect(() => {
@@ -161,39 +301,60 @@ export function Layout({ children }: LayoutProps) {
   };
 
   return (
-    <div className="h-screen overflow-hidden bg-gradient-to-br from-amber-50 to-orange-50">
+    <div className="h-screen overflow-hidden bg-slate-50">
       <div className="flex h-full">
         {/* Sidebar */}
-        <div className="w-48 lg:w-52 xl:w-56 bg-gradient-to-b from-amber-800 to-amber-700 text-white h-screen shadow-2xl sticky top-0 relative flex flex-col">
+        <div
+          className={`bg-white text-slate-700 h-screen shadow-md border-r border-slate-100 flex flex-col transform transition-transform duration-200 ease-out
+          fixed inset-y-0 left-0 z-40 w-60 md:w-48 lg:w-52 xl:w-56 md:relative md:sticky md:top-0
+          ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}
+        >
           {/* Header Section */}
-          <div ref={headerRef} className="p-3 pl-4 border-b border-amber-600/30 flex-shrink-0">
-            <div className="flex items-center space-x-2 mb-3">
-              <div className="p-2 bg-gradient-to-br from-amber-500 to-amber-600 rounded-lg shadow-lg">
+          <div ref={headerRef} className="px-3 py-3 border-b border-slate-100 flex-shrink-0 relative">
+            {/* Mobile close button - floating on top-right corner (only when sidebar is open) */}
+            {isSidebarOpen && (
+              <div className="md:hidden absolute top-1 -right-3">
+                <button
+                  type="button"
+                  onClick={() => setIsSidebarOpen(false)}
+                  className="inline-flex items-center justify-center h-8 w-8 rounded-full bg-white shadow-lg border border-slate-200 text-slate-500 hover:text-slate-700 hover:border-sky-300 hover:bg-sky-50 focus:outline-none focus:ring-2 focus:ring-sky-400"
+                  aria-label="Close navigation"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+            <div className="flex items-center justify-center space-x-2 mb-3">
+              <div className="p-2 bg-blue-500 rounded-lg shadow-sm">
                 <Coffee className="h-4 w-4 text-white" />
               </div>
-              <div className="flex-1 min-w-0">
-                <h1 className="text-sm font-bold text-white tracking-wide truncate">CoffeeChain</h1>
-                <p className="text-amber-200 text-xs capitalize font-medium truncate">{user?.role} Panel</p>
+              <div className="min-w-0 text-center">
+                <h1 className="text-sm font-bold text-slate-900 tracking-wide truncate">CoffeeChain</h1>
+                <p className="text-xs font-medium text-slate-400 truncate">
+                  {getRoleLabel()} Panel
+                </p>
               </div>
             </div>
 
             {/* Branch Information Card - Compact (for manager & staff) */}
             {(managerBranch || user?.branch) && (
-              <div className="mt-2 p-2 bg-gradient-to-r from-amber-700/80 to-amber-600/80 rounded-lg border border-amber-500/50 shadow-lg backdrop-blur-sm group relative">
+              <div className="mt-2 p-2 bg-sky-50 rounded-lg border border-sky-100 shadow-sm group relative">
                 {(() => {
                   const branch = managerBranch || user?.branch;
                   if (!branch) return null;
                   return (
                     <>
                       <div className="flex items-center space-x-2">
-                        <Store className="h-3.5 w-3.5 text-white flex-shrink-0" />
-                        <h3 className="text-white text-xs font-semibold truncate">{branch.name}</h3>
+                        <Store className="h-3.5 w-3.5 text-sky-600 flex-shrink-0" />
+                        <h3 className="text-slate-800 text-xs font-semibold truncate">
+                          {branch.name}
+                        </h3>
                       </div>
                       {/* Hover tooltip with full info */}
-                      <div className="absolute left-0 right-0 top-full mt-1 p-2 bg-amber-900/95 backdrop-blur-sm rounded-lg shadow-xl border border-amber-600/30 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50">
-                        <div className="text-amber-100 text-xs">
+                      <div className="absolute left-0 right-0 top-full mt-1 p-2 bg-slate-900/95 backdrop-blur-sm rounded-lg shadow-xl border border-slate-700/60 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50">
+                        <div className="text-slate-100 text-xs">
                           <div className="font-semibold mb-1">{branch.name}</div>
-                          <div className="text-amber-300 leading-relaxed">{branch.address}</div>
+                          <div className="text-slate-300 leading-relaxed">{branch.address}</div>
                         </div>
                       </div>
                     </>
@@ -204,10 +365,10 @@ export function Layout({ children }: LayoutProps) {
 
             {/* Branch Not Loaded State - Compact (Only for Manager and Staff, not Admin) */}
             {user && user.role !== 'admin' && !managerBranch && !user.branch && (
-              <div className="mt-2 p-2 bg-gradient-to-r from-red-700/80 to-red-600/80 rounded-lg border border-red-500/50 shadow-lg backdrop-blur-sm">
+              <div className="mt-2 p-2 bg-red-50 rounded-lg border border-red-200 shadow-sm">
                 <div className="flex items-center space-x-2">
-                  <Store className="h-3.5 w-3.5 text-white" />
-                  <h3 className="text-white text-xs font-semibold">
+                  <Store className="h-3.5 w-3.5 text-red-500" />
+                  <h3 className="text-xs font-semibold text-red-700">
                     Branch not loaded
                   </h3>
                 </div>
@@ -217,90 +378,262 @@ export function Layout({ children }: LayoutProps) {
 
           {/* Navigation Section - Scrollable */}
           <nav ref={navRef} className="flex-1 overflow-y-auto scrollbar-hide px-2 py-2 pl-4 min-h-0">
-            {(() => {
-              const primary = navigationItems.slice(0, maxVisibleItems);
-              const secondary = navigationItems.slice(maxVisibleItems);
-              const itemsToRender = showMoreNav ? secondary : primary;
-              return (
-                <>
-                  {itemsToRender.map((item) => {
-                    const isActive = location.pathname === item.path;
+            {navGroups ? (
+              <div className="space-y-3">
+                {navGroups.map((group) => {
+                  // If a group has only one item, render it as a normal flat item (no collapsible parent)
+                  if (group.items.length === 1) {
+                    const item = group.items[0];
                     return (
-                      <Link
+                      <NavLink
                         key={item.path}
                         to={item.path}
-                        className={`flex items-center space-x-2 px-3 py-2.5 mx-1 rounded-lg transition-all duration-200 group mb-1 ${isActive
-                          ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-lg border-l-4 border-amber-300'
-                          : 'text-amber-200 hover:bg-amber-800/50 hover:text-white hover:shadow-md'
-                          }`}
+                        end
+                        className={({ isActive }) =>
+                          `relative flex items-center space-x-2 px-3 py-2.5 mx-1 rounded-lg transition-all duration-200 group ${
+                            isActive
+                              ? 'bg-sky-50 text-sky-700 shadow-sm border border-sky-200'
+                              : 'text-slate-600 hover:bg-slate-50 hover:text-sky-700'
+                          }`
+                        }
                       >
-                        <item.icon className={`h-4 w-4 transition-colors duration-200 flex-shrink-0 ${isActive ? 'text-white' : 'text-amber-300 group-hover:text-white'
-                          }`} />
-                        <span className="font-medium text-sm truncate">{item.label}</span>
-                      </Link>
+                        {({ isActive }) => (
+                          <>
+                            {isActive && (
+                              <span className="absolute left-0 top-1 bottom-1 w-1 rounded-r-full bg-sky-500" />
+                            )}
+                            <item.icon
+                              className={`h-4 w-4 transition-colors duration-200 flex-shrink-0 ${
+                                isActive ? 'text-sky-600' : 'text-slate-400 group-hover:text-sky-600'
+                              }`}
+                            />
+                            <span className="font-medium text-sm truncate">{item.label}</span>
+                          </>
+                        )}
+                      </NavLink>
                     );
-                  })}
-                  {navigationItems.length > maxVisibleItems && (
-                    <button
-                      onClick={() => setShowMoreNav(v => !v)}
-                      className={`w-full flex items-center justify-between px-3 py-2.5 mx-1 mt-1 rounded-lg transition-all duration-200 ${showMoreNav ? 'bg-amber-800/50 text-white' : 'text-amber-200 hover:bg-amber-800/50 hover:text-white'
+                  }
+
+                  const isOpen = openGroups[group.title];
+                  const GroupIcon = group.items[0]?.icon ?? Square;
+                  return (
+                    <div key={group.title}>
+                      <button
+                        type="button"
+                        onClick={() => toggleGroup(group.title)}
+                        className="flex w-full items-center justify-between px-3 py-2 mx-1 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+                      >
+                        <span className="inline-flex items-center gap-2">
+                          <GroupIcon className="h-4 w-4 text-slate-400" />
+                          <span className="tracking-wide">{group.title}</span>
+                        </span>
+                        <ChevronRight
+                          className={`h-3.5 w-3.5 text-slate-400 transition-transform ${
+                            isOpen ? 'rotate-90' : ''
+                          }`}
+                        />
+                      </button>
+                      {isOpen && (
+                        <div className="mt-1 space-y-0.5">
+                          {group.items.map((item) => (
+                            <NavLink
+                              key={item.path}
+                              to={item.path}
+                              className={({ isActive }) =>
+                                `relative flex items-center space-x-2 pl-9 pr-3 py-2 mx-1 rounded-lg transition-all duration-200 group ${
+                                  isActive
+                                    ? 'bg-sky-50 text-sky-700 shadow-sm border border-sky-200'
+                                    : 'text-slate-600 hover:bg-slate-50 hover:text-sky-700'
+                                }`
+                              }
+                            >
+                              {({ isActive }) => (
+                                <>
+                                  {isActive && (
+                                    <span className="absolute left-0 top-1 bottom-1 w-1 rounded-r-full bg-sky-500" />
+                                  )}
+                                  <item.icon
+                                    className={`h-3.5 w-3.5 transition-colors duration-200 flex-shrink-0 ${
+                                      isActive
+                                        ? 'text-sky-600'
+                                        : 'text-slate-400 group-hover:text-sky-600'
+                                    }`}
+                                  />
+                                  <span className="font-medium text-[13px] truncate">{item.label}</span>
+                                </>
+                              )}
+                            </NavLink>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              (() => {
+                const primary = navigationItems.slice(0, maxVisibleItems);
+                const secondary = navigationItems.slice(maxVisibleItems);
+                const itemsToRender = showMoreNav ? secondary : primary;
+                return (
+                  <>
+                    {itemsToRender.map((item) => (
+                      <NavLink
+                        key={item.path}
+                        to={item.path}
+                        end={item.path === '/admin' || item.path === '/staff'}
+                        className={({ isActive }) =>
+                          `relative flex items-center space-x-2 px-3 py-2.5 mx-1 rounded-lg transition-all duration-200 group mb-1 ${
+                            isActive
+                              ? 'bg-sky-50 text-sky-700 shadow-sm border border-sky-200'
+                              : 'text-slate-600 hover:bg-slate-50 hover:text-sky-700'
+                          }`
+                        }
+                      >
+                        {({ isActive }) => (
+                          <>
+                            {isActive && (
+                              <span className="absolute left-0 top-1 bottom-1 w-1 rounded-r-full bg-sky-500" />
+                            )}
+                            <item.icon
+                              className={`h-4 w-4 transition-colors duration-200 flex-shrink-0 ${
+                                isActive ? 'text-sky-600' : 'text-slate-400 group-hover:text-sky-600'
+                              }`}
+                            />
+                            <span className="font-medium text-sm truncate">{item.label}</span>
+                          </>
+                        )}
+                      </NavLink>
+                    ))}
+                    {navigationItems.length > maxVisibleItems && (
+                      <button
+                        onClick={() => setShowMoreNav(v => !v)}
+                        className={`w-full flex items-center justify-between px-3 py-2.5 mx-1 mt-1 rounded-lg transition-all duration-200 ${
+                          showMoreNav
+                            ? 'bg-slate-100 text-slate-800'
+                            : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
                         }`}
-                      title={showMoreNav ? 'Back' : 'More'}
-                    >
-                      <span className="flex items-center gap-2">
-                        {showMoreNav ? <ArrowLeft className="h-4 w-4 text-amber-300" /> : <Archive className="h-4 w-4 text-amber-300" />}
-                        <span className="font-medium text-sm">{showMoreNav ? 'Back' : 'More'}</span>
-                      </span>
-                      <span className="text-xs text-amber-300">{showMoreNav ? 'Show primary' : `+${secondary.length}`}</span>
-                    </button>
-                  )}
-                </>
-              );
-            })()}
+                        title={showMoreNav ? 'Back' : 'More'}
+                      >
+                        <span className="flex items-center gap-2">
+                          {showMoreNav ? (
+                            <ArrowLeft className="h-4 w-4 text-slate-400" />
+                          ) : (
+                            <Archive className="h-4 w-4 text-slate-400" />
+                          )}
+                          <span className="font-medium text-sm">{showMoreNav ? 'Back' : 'More'}</span>
+                        </span>
+                        <span className="text-xs text-amber-300">
+                          {showMoreNav ? 'Show primary' : `+${secondary.length}`}
+                        </span>
+                      </button>
+                    )}
+                  </>
+                );
+              })()
+            )}
           </nav>
 
-          {/* User Profile Section - Fixed at bottom */}
-          <div ref={footerRef} className="p-3 pl-4 border-t border-amber-600/30 bg-gradient-to-t from-amber-900/80 to-transparent backdrop-blur-sm flex-shrink-0">
-            <div className="flex items-center space-x-2 mb-2">
-              <div className="relative flex-shrink-0">
-                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shadow-md border-2 border-amber-500/60">
-                  <span className="text-white text-xs font-bold">
-                    {user?.name?.charAt(0).toUpperCase() || 'U'}
-                  </span>
-                </div>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-white truncate">{user?.name}</p>
-                <p className="text-xs text-amber-300/80 truncate">{user?.email}</p>
-                <span className="inline-block px-1.5 py-0.5 rounded-full text-xs font-medium bg-gradient-to-r from-amber-500/80 to-amber-600/80 text-white mt-0.5 shadow-sm">
-                  {user?.role === 'admin' ? 'Admin' :
-                    user?.role === 'manager' ? 'Manager' :
-                      user?.role === 'staff' ? 'Staff' : user?.role}
-                </span>
-              </div>
-            </div>
-            <button
-              onClick={handleLogout}
-              disabled={isLoggingOut}
-              className={`group flex items-center justify-center space-x-1.5 transition-all duration-200 w-full p-2 rounded-lg font-medium border ${isLoggingOut
-                ? 'text-amber-400 cursor-not-allowed bg-amber-800/20 border-amber-600/20'
-                : 'text-amber-200 hover:text-white hover:bg-gradient-to-r hover:from-red-500/10 hover:to-red-600/10 hover:border-red-400/30 hover:shadow-sm border-amber-600/20'
-                }`}
-            >
-              <LogOut className={`h-3.5 w-3.5 transition-colors duration-200 ${isLoggingOut ? 'text-amber-400' : 'text-amber-300 group-hover:text-red-200'
-                }`} />
-              <span className="text-xs font-medium">{isLoggingOut ? 'Signing out...' : 'Sign Out'}</span>
-            </button>
-          </div>
+          {/* Spacer anchored for scroll calculations (no user card anymore) */}
+          <div ref={footerRef} className="h-4 flex-shrink-0" />
         </div>
+
+        {/* Mobile sidebar backdrop */}
+        {isSidebarOpen && (
+          <div
+            className="fixed inset-0 z-30 bg-slate-900/30 md:hidden"
+            onClick={() => setIsSidebarOpen(false)}
+          />
+        )}
 
         {/* Main Content */}
         <div className="relative flex-1 h-screen overflow-y-auto">
-          <div className="pointer-events-none sticky top-4 z-30 flex justify-end pr-6">
-            <div className="pointer-events-auto">
-              <NotificationBell />
+          {/* Top page header: breadcrumb + greeting */}
+          <div className="sticky top-0 z-30 bg-white/80 backdrop-blur border-b border-slate-100">
+            <div className="flex items-center justify-between px-6 pt-5 pb-4">
+              {/* Breadcrumb */}
+              <div className="flex items-center gap-2.5 text-sm text-slate-500">
+                {/* Mobile sidebar toggle (only when sidebar is closed) */}
+                {!isSidebarOpen && (
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center rounded-md p-2 text-slate-500 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-400 md:hidden"
+                    onClick={() => setIsSidebarOpen(true)}
+                    aria-label="Open navigation"
+                  >
+                    <Menu className="h-5 w-5" />
+                  </button>
+                )}
+                <Link
+                  to={getBasePath()}
+                  className="flex items-center gap-1.5 text-slate-500 hover:text-sky-600 transition-colors"
+                >
+                  <Home className="h-4.5 w-4.5" />
+                  <span className="sr-only">
+                    {navigationItems[0]?.label || 'Home'}
+                  </span>
+                </Link>
+                <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
+                <span className="text-base text-slate-700">
+                  {getCurrentPageLabel()}
+                  </span>
+                </div>
+
+              {/* Right side: actions + greeting */}
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <NotificationBell />
+                </div>
+                <div className="flex items-center gap-4">
+              <div className="hidden sm:block text-right leading-tight">
+                    <p className="text-sm font-semibold text-slate-600">
+                      Hi, {user?.name && (
+                      <span className="text-sky-700 truncate max-w-[180px] text-md ">
+                        {user.name}!
+                      </span>
+                    )}
+                    </p>
+                    <p className="text-slate-400 text-xs">{getRoleLabel()}</p>
+              </div>
+                  <div className="relative" ref={avatarMenuRef}>
+                    <button
+                      type="button"
+                      onClick={() => setAvatarMenuOpen(prev => !prev)}
+                      className="relative flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-br from-sky-400 to-blue-600 p-[2px] shadow-md focus:outline-none focus:ring-2 focus:ring-sky-300 focus:ring-offset-2 focus:ring-offset-white"
+                    >
+                      <span className="flex h-full w-full items-center justify-center rounded-full bg-white text-sky-700 text-sm font-semibold">
+                        {getUserInitials()}
+                </span>
+                    </button>
+                    <div
+                      className={`absolute -bottom-1 right-0 h-4 w-4 rounded-full bg-white border border-slate-300 shadow-sm flex items-center justify-center transition-transform ${
+                        avatarMenuOpen ? 'rotate-180 border-sky-400' : ''
+                      }`}
+                    >
+                      <ChevronDown
+                        className={`h-2.5 w-2.5 ${
+                          avatarMenuOpen ? 'text-sky-600' : 'text-slate-500'
+                        }`}
+                      />
+                    </div>
+                    {avatarMenuOpen && (
+                      <div className="absolute right-0 mt-2 w-40 rounded-xl bg-white border border-slate-100 shadow-lg z-40 py-1">
+            <button
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+                          <LogOut className="h-4 w-4 text-slate-400" />
+                          <span>{isLoggingOut ? 'Signing out...' : 'Sign Out'}</span>
+            </button>
+                      </div>
+                    )}
+                  </div>
+          </div>
+        </div>
             </div>
           </div>
+
           {children}
           <UsageFloatingWidget />
         </div>

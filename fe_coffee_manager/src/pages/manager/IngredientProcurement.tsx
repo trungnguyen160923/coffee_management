@@ -234,49 +234,42 @@ export default function IngredientProcurement() {
   const totalElements = ingredientsPage?.totalElements || 0;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50">
-      <div className="max-w-7xl mx-auto px-2 py-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-slate-50">
+      <div className="max-w-7xl mx-auto px-2 py-4 sm:px-4 lg:px-4">
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-          <div className="bg-gradient-to-r from-amber-600 to-orange-600 px-8 py-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="bg-white p-2 rounded-lg">
-                  <ShoppingCart className="w-8 h-8 text-amber-600" />
-                </div>
-                <div>
-                  <h1 className="text-3xl font-bold text-white">Procurement</h1>
-                  <p className="text-amber-100 mt-1">Order ingredients from suppliers</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                {/* Low Stock Notification Button */}
-                {lowStockItems.length > 0 && (
-                  <button
-                    onClick={() => setShowLowStockModal(true)}
-                    className="relative flex items-center space-x-2 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors"
-                    title="Low stock alerts"
-                  >
-                    <AlertTriangle className="w-5 h-5" />
-                    <span className="font-medium">Low Stock</span>
-                    <span className="absolute -top-2 -right-2 bg-white text-red-600 text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">
-                      {lowStockItems.length}
-                    </span>
-                  </button>
-                )}
+          <div className="flex items-center justify-between px-8 pt-6 pb-3">
+            <div>
+              <h1 className="text-xl font-semibold text-slate-900">Procurement</h1>
+              <p className="text-sm text-slate-500">Order ingredients from suppliers</p>
+            </div>
+            <div className="flex items-center gap-2">
+              {/* Low Stock Notification Button */}
+              {lowStockItems.length > 0 && (
                 <button
-                  onClick={loadIngredients}
-                  disabled={loading}
-                  className="flex items-center space-x-2 bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Refresh data"
+                  onClick={() => setShowLowStockModal(true)}
+                  className="relative flex items-center space-x-2 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors"
+                  title="Low stock alerts"
                 >
-                  <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
-                  <span className="font-medium">Refresh</span>
+                  <AlertTriangle className="w-5 h-5" />
+                  <span className="font-medium">Low Stock</span>
+                  <span className="absolute -top-2 -right-2 bg-white text-red-600 text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">
+                    {lowStockItems.length}
+                  </span>
                 </button>
-              </div>
+              )}
+              <button
+                onClick={loadIngredients}
+                disabled={loading}
+                className="flex items-center space-x-2 rounded-lg bg-slate-100 text-slate-700 px-4 py-2 text-sm font-medium hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Refresh data"
+              >
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                <span>Refresh</span>
+              </button>
             </div>
           </div>
 
-          <div className="p-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="p-8 pt-4 grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Left: Filters + Ingredient list */}
             <div className="lg:col-span-2">
               <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -286,7 +279,7 @@ export default function IngredientProcurement() {
                     placeholder="Search ingredients..."
                     value={keyword}
                     onChange={(e) => { setKeyword(e.target.value); setPage(0); }}
-                    className="w-full px-4 py-3 pl-10 pr-4 text-gray-700 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                    className="w-full px-4 py-3 pl-10 pr-4 text-gray-700 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
                   />
                   <div className="absolute inset-y-0 left-0 flex items-center pl-3">
                     {loading ? <Loader className="w-5 h-5 text-gray-400 animate-spin" /> : <Search className="w-5 h-5 text-gray-400" />}
@@ -296,7 +289,7 @@ export default function IngredientProcurement() {
                   <select
                     value={selectedSupplierId ?? ''}
                     onChange={(e) => { const v = e.target.value; setSelectedSupplierId(v ? Number(v) : undefined); setPage(0); }}
-                    className="w-full px-4 py-3 text-gray-700 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                    className="w-full px-4 py-3 text-gray-700 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
                   >
                     <option value="">All suppliers</option>
                     {supplierList.map(s => (
@@ -329,7 +322,7 @@ export default function IngredientProcurement() {
                           <td className="px-4 py-2">
                             <div className="flex gap-2 justify-end">
                               <button
-                                className="px-3 py-1 bg-amber-600 text-white rounded-lg hover:bg-amber-700"
+                                className="px-3 py-1 bg-sky-500 text-white rounded-lg hover:bg-sky-600"
                                 onClick={() => addToCart(ing)}
                               >
                                 Add
@@ -355,7 +348,7 @@ export default function IngredientProcurement() {
                   <button className="px-3 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50" disabled={page === 0} onClick={() => setPage(0)}>First</button>
                   <button className="px-3 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50" disabled={page === 0} onClick={() => setPage(p => Math.max(0, p - 1))}>Prev</button>
                   <div className="flex items-center gap-1">
-                    {Array.from({ length: Math.min(5, Math.max(1, totalPages)) }).map((_, idx) => {
+                        {Array.from({ length: Math.min(5, Math.max(1, totalPages)) }).map((_, idx) => {
                       const half = 2;
                       let start = Math.max(0, Math.min(page - half, (totalPages - 1) - (5 - 1)));
                       if (totalPages <= 5) start = 0;
@@ -363,7 +356,7 @@ export default function IngredientProcurement() {
                       if (pageNum >= totalPages) return null;
                       const active = pageNum === page;
                       return (
-                        <button key={pageNum} className={`px-3 py-1 text-sm border rounded-lg ${active ? 'bg-amber-600 text-white border-amber-600' : 'border-gray-300 hover:bg-gray-50'}`} onClick={() => setPage(pageNum)}>
+                        <button key={pageNum} className={`px-3 py-1 text-sm border rounded-lg ${active ? 'bg-sky-500 text-white border-sky-500' : 'border-gray-300 hover:bg-gray-50'}`} onClick={() => setPage(pageNum)}>
                           {pageNum + 1}
                         </button>
                       );
@@ -382,8 +375,8 @@ export default function IngredientProcurement() {
             <div className="lg:col-span-1">
               <div className="bg-white rounded-2xl border shadow-sm p-4">
                 <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <Truck className="w-5 h-5 text-amber-600" />
+                    <div className="flex items-center gap-2">
+                    <Truck className="w-5 h-5 text-sky-600" />
                     <h3 className="text-lg font-semibold text-gray-800">Order Cart</h3>
                   </div>
                   <button className="text-sm text-gray-500 hover:text-gray-700" onClick={clearCart}>Clear</button>
@@ -422,7 +415,7 @@ export default function IngredientProcurement() {
                   </div>
                 </div>
                 <button
-                  className="mt-4 w-full px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50"
+                  className="mt-4 w-full px-4 py-2 bg-sky-500 text-white rounded-lg hover:bg-sky-600 disabled:opacity-50"
                   onClick={placeOrder}
                   disabled={cart.length === 0 || !selectedSupplierId || !managerBranch?.branchId}
                 >
@@ -519,7 +512,8 @@ export default function IngredientProcurement() {
                             }
 
                             if (!ingredient) {
-                              toast.error(`Ingredient "${item.ingredientName || `#${item.ingredientId}`}" not found. Please search and add manually.`);
+                              const ingredientLabel = item.ingredientName || `#${item.ingredientId}`;
+                              toast.error(`Ingredient "${ingredientLabel}" not found. Please search and add manually.`);
                               return;
                             }
 

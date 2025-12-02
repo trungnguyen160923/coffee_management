@@ -35,6 +35,7 @@ export function NotificationBell() {
   }, [user]);
 
   const [open, setOpen] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(10);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const handleNotificationClick = (notification: any) => {
@@ -79,6 +80,12 @@ export function NotificationBell() {
     role: userRole,
   });
 
+  // Badge count on the bell icon (capped at 9+ for compact display)
+  const displayCount = useMemo(() => {
+    if (unreadCount > 9) return '9+';
+    return unreadCount.toString();
+  }, [unreadCount]);
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
@@ -96,70 +103,105 @@ export function NotificationBell() {
   return (
     <div className="relative" ref={containerRef}>
       <button
-        onClick={() => setOpen((prev) => !prev)}
-        className="relative rounded-full border border-amber-200 bg-white/80 p-2 shadow-sm transition hover:border-amber-300 hover:bg-white"
+        onClick={() =>
+          setOpen((prev) => {
+            const next = !prev;
+            if (!next) {
+              // Reset visible list when closing dropdown
+              setVisibleCount(10);
+            }
+            return next;
+          })
+        }
+        className="relative rounded-full border border-slate-200 bg-white p-2 shadow-sm transition hover:border-sky-300 hover:bg-sky-50"
         title="Notifications"
       >
-        <Bell className={`h-5 w-5 ${isConnected ? 'text-amber-600' : 'text-slate-400'}`} />
+        <Bell className={`h-5 w-5 ${isConnected ? 'text-sky-500' : 'text-slate-400'}`} />
         {unreadCount > 0 && (
           <span className="absolute -top-1 -right-1 rounded-full bg-red-500 px-1.5 text-xs font-semibold text-white">
-            {unreadCount > 99 ? '99+' : unreadCount}
+            {displayCount}
           </span>
         )}
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-3 w-80 rounded-xl border border-amber-100 bg-white shadow-2xl ring-1 ring-black/5" style={{ zIndex: 10000 }}>
-          <div className="flex items-center justify-between border-b border-amber-50 px-4 py-3">
+        <div
+          className="absolute right-0 mt-3 w-80 rounded-2xl bg-white shadow-2xl border border-slate-100 overflow-hidden ring-1 ring-black/5"
+          style={{ zIndex: 10000 }}
+        >
+          {/* Header */}
+          <div className="bg-sky-500 px-4 py-3 flex items-center justify-between">
             <div>
-              <p className="text-sm font-semibold text-slate-900">Notifications</p>
-              <p className="text-xs text-slate-500">{unreadCount} unread</p>
+              <p className="text-sm font-semibold text-white">Notifications</p>
+              <p className="text-xs text-sky-100">
+                {unreadCount} unread
+              </p>
             </div>
-            <div className="flex gap-2">
-              {unreadCount > 0 && (
-                <button
-                  onClick={() => markAllAsRead()}
-                  className="rounded-full border border-amber-200 px-2.5 py-1 text-xs text-slate-500 transition hover:border-amber-300 hover:text-amber-600"
-                >
-                  Mark all as read
-                </button>
-              )}
-            </div>
+            {unreadCount > 0 && (
+              <button
+                type="button"
+                onClick={() => markAllAsRead()}
+                className="inline-flex items-center rounded-full bg-sky-100/90 px-3 py-1 text-[11px] font-semibold text-sky-700 hover:bg-sky-50 hover:text-sky-800 transition"
+              >
+                Mark all read
+              </button>
+            )}
           </div>
 
-          <div className="max-h-96 overflow-y-auto">
+          {/* Content */}
+          <div className="max-h-96 overflow-y-auto bg-white">
             {notifications.length === 0 ? (
-                <div className="flex flex-col items-center justify-center px-4 py-10 text-slate-400">
+              <div className="flex flex-col items-center justify-center px-4 py-10 text-slate-400">
                 <Inbox className="h-10 w-10 mb-2" />
-                  <p className="text-sm">No notifications</p>
+                <p className="text-sm">No notifications</p>
               </div>
             ) : (
-              notifications.slice(0, 10).map((notification) => (
+              notifications.slice(0, visibleCount).map((notification) => (
                 <div
                   key={notification.id}
-                  className={`cursor-pointer px-4 py-3 transition hover:bg-amber-50 ${
-                    notification.isRead ? 'bg-white' : 'bg-amber-50/70'
+                  className={`flex items-start gap-3 px-4 py-3 cursor-pointer transition ${
+                    notification.isRead ? 'bg-white hover:bg-slate-50' : 'bg-sky-50 hover:bg-sky-100'
                   }`}
                   onClick={() => handleNotificationClick(notification)}
                 >
-                  <div className="flex justify-between">
-                    <p className="text-sm font-medium text-slate-900">
-                      {notification.title ?? 'New notification'}
-                    </p>
-                    {!notification.isRead && (
-                      <Check className="h-4 w-4 text-amber-500 opacity-70" />
-                    )}
+                  <div className="mt-1 flex items-center justify-center w-9 h-9 rounded-full bg-sky-100 text-sky-600">
+                    <Bell className="h-4 w-4" />
                   </div>
-                  {notification.content && (
-                    <p className="mt-1 text-xs text-slate-500">{notification.content}</p>
-                  )}
-                  <p className="mt-1 text-xs text-slate-400">
-                    {formatTimeAgo(notification.createdAt)}
-                  </p>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="text-sm font-medium text-slate-900 truncate">
+                        {notification.title ?? 'New notification'}
+                      </p>
+                      {!notification.isRead && (
+                        <span className="mt-1 h-2 w-2 rounded-full bg-sky-500 flex-shrink-0" />
+                      )}
+                    </div>
+                    {notification.content && (
+                      <p className="mt-1 text-xs text-slate-500 line-clamp-2">
+                        {notification.content}
+                      </p>
+                    )}
+                    <p className="mt-1 text-xs text-slate-400">
+                      {formatTimeAgo(notification.createdAt)}
+                    </p>
+                  </div>
                 </div>
               ))
             )}
           </div>
+
+          {/* Footer: load more older notifications */}
+          {notifications.length > visibleCount && (
+            <button
+              type="button"
+              onClick={() =>
+                setVisibleCount((prev) => Math.min(prev + 10, notifications.length))
+              }
+              className="w-full text-center text-sm font-medium text-sky-600 py-3 border-t border-slate-100 hover:bg-sky-50"
+            >
+              View more notifications
+            </button>
+          )}
         </div>
       )}
     </div>

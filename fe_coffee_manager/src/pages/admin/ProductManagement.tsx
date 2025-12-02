@@ -343,33 +343,26 @@ const ProductManagement: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50">
-      <div className="max-w-7xl mx-auto px-2 py-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-slate-50">
+      <div className="max-w-7xl mx-auto px-2 py-4 sm:px-4 lg:px-4">
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-          <div className="bg-gradient-to-r from-amber-600 to-orange-600 px-8 py-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="bg-white p-2 rounded-lg">
-                  <Coffee className="w-8 h-8 text-amber-600" />
-                </div>
-                <div>
-                  <h1 className="text-3xl font-bold text-white">Product Management</h1>
-                  <p className="text-amber-100 mt-1">Coffee Shop Management System</p>
-                </div>
-              </div>
-              <button
-                onClick={handleRefresh}
-                disabled={loading}
-                className="flex items-center space-x-2 bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Refresh data"
-              >
-                <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
-                <span className="font-medium">Refresh</span>
-              </button>
+          <div className="flex items-center justify-between px-8 pt-6 pb-2">
+            <div>
+              <h1 className="text-xl font-semibold text-slate-800">Product Management</h1>
+              <p className="text-sm text-slate-500">Coffee shop catalog & pricing</p>
             </div>
+            <button
+              onClick={handleRefresh}
+              disabled={loading}
+              className="flex items-center space-x-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:border-sky-300 hover:text-sky-700 hover:bg-sky-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Refresh data"
+            >
+              <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+              <span>Refresh</span>
+            </button>
           </div>
 
-          <div className="p-8">
+          <div className="p-8 pt-4">
             {/* Additional Info Section - Above search bar */}
             <div className="mb-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Available Sizes - CRUD Table */}
@@ -523,7 +516,7 @@ const ProductManagement: React.FC = () => {
                     <h2 className="text-lg font-medium text-gray-900">Products</h2>
                     <button
                       onClick={handleCreate}
-                      className="flex items-center space-x-1 text-sm bg-amber-600 text-white px-3 py-1.5 rounded-lg hover:bg-amber-700 transition-colors"
+                      className="flex items-center space-x-1 text-sm bg-sky-500 text-white px-3 py-1.5 rounded-lg hover:bg-sky-600 transition-colors"
                     >
                       <Plus className="w-4 h-4" />
                       <span>Add Product</span>
@@ -615,7 +608,7 @@ const ProductManagement: React.FC = () => {
                     )}
                     <button
                       onClick={handleCreate}
-                      className="flex items-center space-x-1 text-sm bg-amber-600 text-white px-3 py-1.5 rounded-lg hover:bg-amber-700 transition-colors"
+                      className="flex items-center space-x-1 text-sm bg-sky-500 text-white px-3 py-1.5 rounded-lg hover:bg-sky-600 transition-colors"
                     >
                       <Plus className="w-4 h-4" />
                       <span>Add Product</span>

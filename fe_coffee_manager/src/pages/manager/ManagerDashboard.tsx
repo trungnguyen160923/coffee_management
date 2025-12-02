@@ -191,8 +191,8 @@ export function ManagerDashboard() {
   }
 
   if (error) {
-  return (
-    <div className="p-8">
+    return (
+      <div className="p-8">
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
           <p className="text-red-800">{error}</p>
         </div>
@@ -201,21 +201,19 @@ export function ManagerDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50">
-      <div className="max-w-7xl mx-auto px-2 py-0 sm:px-4 lg:px-2">
+    <div className="min-h-screen bg-slate-50">
+      <div className="max-w-7xl mx-auto px-2 py-4 sm:px-4 lg:px-4">
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-          {/* Header */}
-          <div className="bg-gradient-to-r from-amber-600 to-orange-600 px-8 py-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-3xl font-bold text-white mb-1">Branch Management</h1>
-                <p className="text-amber-100">{branchName} - Today, {new Date().toLocaleDateString('en-US')}</p>
-              </div>
-            </div>
+          {/* Header info */}
+          <div className="px-8 pt-6 pb-3">
+            <h1 className="text-xl font-semibold text-slate-900 mb-1">Branch Management</h1>
+            <p className="text-sm text-slate-500">
+              {branchName} - Today, {new Date().toLocaleDateString('en-US')}
+            </p>
           </div>
 
           {/* Content */}
-          <div className="p-8">
+          <div className="p-8 pt-4">
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">

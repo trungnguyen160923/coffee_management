@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Edit, Trash2, Eye } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Eye, Tag } from 'lucide-react';
 import { discountService } from '../../services/discountService';
 import { Discount, CreateDiscountRequest, UpdateDiscountRequest } from '../../types/discount';
 import { useAuth } from '../../context/AuthContext';
@@ -156,43 +156,52 @@ const DiscountManagement: React.FC = () => {
     };
 
     return (
-        <div className="p-6">
-            <div className="mb-6">
-                <div className="flex justify-between items-center mb-4">
-                    <h1 className="text-2xl font-bold text-gray-900">Discount Management</h1>
-                    <button
-                        onClick={() => {
-                            setEditingDiscount(null);
-                            setShowForm(true);
-                        }}
-                        className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                    >
-                        <Plus className="w-4 h-4 mr-2" />
-                        Create Discount
-                    </button>
-                </div>
-
-                {/* Search and Filter */}
-                <div className="flex gap-4 mb-4">
-                    <form onSubmit={handleSearch} className="flex-1">
-                        <div className="relative">
-                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                            <input
-                                type="text"
-                                placeholder="Search by name, code or description..."
-                                value={searchKeyword}
-                                onChange={(e) => setSearchKeyword(e.target.value)}
-                                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            />
+        <div className="min-h-screen bg-slate-50">
+            <div className="max-w-7xl mx-auto px-2 py-4 sm:px-4 lg:px-4">
+                <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+                    {/* Header actions */}
+                    <div className="flex items-center justify-between px-8 pt-6 pb-2">
+                        <div>
+                            <h1 className="text-xl font-semibold text-slate-800">Discount Management</h1>
+                            <p className="text-sm text-slate-500">
+                                Quản lý ưu đãi & mã giảm giá cho chi nhánh
+                            </p>
                         </div>
-                    </form>
+                        <button
+                            onClick={() => {
+                                setEditingDiscount(null);
+                                setShowForm(true);
+                            }}
+                            className="flex items-center px-4 py-2 rounded-lg bg-sky-500 text-white text-sm font-medium shadow-sm hover:bg-sky-600"
+                        >
+                            <Plus className="w-4 h-4 mr-2" />
+                            Create Discount
+                        </button>
+                    </div>
 
-                </div>
-            </div>
+                    {/* Content */}
+                    <div className="p-8 pt-4">
+                        <div className="mb-6">
+                            {/* Search */}
+                            <div className="flex gap-4 mb-4">
+                                <form onSubmit={handleSearch} className="flex-1">
+                                    <div className="relative">
+                                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                                        <input
+                                            type="text"
+                                            placeholder="Search by name, code or description..."
+                                            value={searchKeyword}
+                                            onChange={(e) => setSearchKeyword(e.target.value)}
+                                            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+                                        />
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
 
-            {/* Discounts Table */}
-            <div className="bg-white rounded-lg shadow">
-                <div className="overflow-x-auto">
+                        {/* Discounts Table */}
+                        <div className="bg-white rounded-xl shadow border border-gray-200">
+                            <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
                         <thead className="bg-gray-50">
                             <tr>
@@ -305,55 +314,57 @@ const DiscountManagement: React.FC = () => {
                                 ))
                             )}
                         </tbody>
-                    </table>
-                </div>
+                                </table>
+                            </div>
 
-                {/* Pagination */}
-                {totalPages > 1 && (
-                    <div className="px-6 py-3 border-t border-gray-200">
-                        <div className="flex items-center justify-between">
-                            <div className="text-sm text-gray-700">
-                                Showing {currentPage * 10 + 1} to {Math.min((currentPage + 1) * 10, totalElements)} of {totalElements} results
-                            </div>
-                            <div className="flex space-x-2">
-                                <button
-                                    onClick={() => setCurrentPage(0)}
-                                    disabled={currentPage === 0}
-                                    className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    First
-                                </button>
-                                <button
-                                    onClick={() => setCurrentPage(currentPage - 1)}
-                                    disabled={currentPage === 0}
-                                    className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    Previous
-                                </button>
-                                <span className="px-3 py-1 text-sm">
-                                    {currentPage + 1} / {totalPages}
-                                </span>
-                                <button
-                                    onClick={() => setCurrentPage(currentPage + 1)}
-                                    disabled={currentPage >= totalPages - 1}
-                                    className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    Next
-                                </button>
-                                <button
-                                    onClick={() => setCurrentPage(totalPages - 1)}
-                                    disabled={currentPage >= totalPages - 1}
-                                    className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    Last
-                                </button>
-                            </div>
+                            {/* Pagination */}
+                            {totalPages > 1 && (
+                                <div className="px-6 py-3 border-t border-gray-200">
+                                    <div className="flex items-center justify-between">
+                                        <div className="text-sm text-gray-700">
+                                            Showing {currentPage * 10 + 1} to{' '}
+                                            {Math.min((currentPage + 1) * 10, totalElements)} of {totalElements}{' '}
+                                            results
+                                        </div>
+                                        <div className="flex space-x-2">
+                                            <button
+                                                onClick={() => setCurrentPage(0)}
+                                                disabled={currentPage === 0}
+                                                className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                First
+                                            </button>
+                                            <button
+                                                onClick={() => setCurrentPage(currentPage - 1)}
+                                                disabled={currentPage === 0}
+                                                className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                Previous
+                                            </button>
+                                            <span className="px-3 py-1 text-sm">
+                                                {currentPage + 1} / {totalPages}
+                                            </span>
+                                            <button
+                                                onClick={() => setCurrentPage(currentPage + 1)}
+                                                disabled={currentPage >= totalPages - 1}
+                                                className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                Next
+                                            </button>
+                                            <button
+                                                onClick={() => setCurrentPage(totalPages - 1)}
+                                                disabled={currentPage >= totalPages - 1}
+                                                className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                Last
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
-                    </div>
-                )}
-            </div>
 
-            {/* Discount Form Modal */}
+                        {/* Discount Form Modal */}
             {showForm && (
                 <DiscountForm
                     discount={editingDiscount}
@@ -372,7 +383,7 @@ const DiscountManagement: React.FC = () => {
                 />
             )}
 
-            {/* Discount Detail Modal */}
+                        {/* Discount Detail Modal */}
             {showDetail && selectedDiscount && (
                 <DiscountDetailModal
                     discount={selectedDiscount}
@@ -383,19 +394,22 @@ const DiscountManagement: React.FC = () => {
                 />
             )}
 
-            {/* Delete Confirmation Modal */}
-            <ConfirmModal
-                open={showDeleteModal}
-                title="Delete Discount"
-                description={`Are you sure you want to delete the discount "${discountToDelete?.name}" (${discountToDelete?.code})? This action cannot be undone.`}
-                confirmText="Delete"
-                cancelText="Cancel"
-                onConfirm={handleDeleteDiscount}
-                onCancel={() => {
-                    setShowDeleteModal(false);
-                    setDiscountToDelete(null);
-                }}
-            />
+                        {/* Delete Confirmation Modal */}
+                        <ConfirmModal
+                            open={showDeleteModal}
+                            title="Delete Discount"
+                            description={`Are you sure you want to delete the discount "${discountToDelete?.name}" (${discountToDelete?.code})? This action cannot be undone.`}
+                            confirmText="Delete"
+                            cancelText="Cancel"
+                            onConfirm={handleDeleteDiscount}
+                            onCancel={() => {
+                                setShowDeleteModal(false);
+                                setDiscountToDelete(null);
+                            }}
+                        />
+                    </div>
+                </div>
+            </div>
         </div>
     );
 };

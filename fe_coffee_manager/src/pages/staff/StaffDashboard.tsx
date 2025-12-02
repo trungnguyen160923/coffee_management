@@ -139,15 +139,17 @@ export function StaffDashboard() {
   };
 
   return (
-    <div className="p-8">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-slate-50">
+      <div className="max-w-7xl mx-auto px-2 py-4 sm:px-4 lg:px-4">
         <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-          <div className="bg-gradient-to-r from-amber-600 to-orange-600 px-8 py-6">
-            <h1 className="text-3xl font-bold text-white mb-1">Trang nhân viên</h1>
-            <p className="text-amber-100">Quản lý đơn hàng và phục vụ khách hàng</p>
+          <div className="flex items-center justify-between px-8 pt-6 pb-3">
+            <div>
+              <h1 className="text-xl font-semibold text-slate-900">Staff Overview</h1>
+              <p className="text-sm text-slate-500">Quản lý đơn hàng và phục vụ khách hàng</p>
+            </div>
           </div>
 
-          <div className="p-6 lg:p-8">
+          <div className="p-6 lg:p-8 pt-4">
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">

@@ -4,6 +4,40 @@
 
 /* Base typography */
 @layer base {
+  :root {
+    /* Used for positioning global toasts relative to the app header */
+    --app-header-offset: 4.5rem; /* ~72px on default 16px root font-size */
+
+    /* Login page color system */
+    /* Primary Colors */
+    --coffee-brown: #6F4E37;                   /* Main text color */
+    --earthy-orange: #D2906C;                  /* CTA buttons & accents */
+    --light-beige: #F8F4E3;                    /* Card background */
+    --off-white: #FDFDF9;                      /* Page background */
+
+    /* Secondary Colors */
+    --soft-green: #9CAF88;                     /* Focus / success accents */
+    --light-brown: rgba(111, 78, 55, 0.3);     /* Borders / subtle lines */
+    --muted-brown: rgba(111, 78, 55, 0.6);     /* Placeholder text */
+    --medium-brown: rgba(111, 78, 55, 0.7);    /* Secondary text */
+    --darker-orange: #C08060;                  /* Button hover */
+
+    /* Shadow & Overlay */
+    --shadow-light: rgba(111, 78, 55, 0.1);        /* Card shadow */
+    --shadow-button: rgba(210, 144, 108, 0.3);     /* Button shadow */
+    --shadow-button-hover: rgba(210, 144, 108, 0.4);
+    --shadow-button-active: rgba(210, 144, 108, 0.2);
+    --overlay-start: rgba(111, 78, 55, 0.2);
+    --overlay-end: rgba(210, 144, 108, 0.3);
+  }
+
+  @media (max-width: 768px) {
+    :root {
+      /* Slightly smaller header on mobile / tablets */
+      --app-header-offset: 4rem;
+    }
+  }
+
   html {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -11,9 +45,9 @@
   body {
     @apply font-sans text-gray-800 bg-gray-50;
   }
-  h1 { @apply text-3xl font-bold; }
-  h2 { @apply text-2xl font-semibold; }
-  h3 { @apply text-xl font-semibold; }
+  h1 { @apply font-heading text-3xl font-semibold; }
+  h2 { @apply font-heading text-2xl font-semibold; }
+  h3 { @apply font-heading text-xl font-semibold; }
 }
 
 /* Global thin scrollbar styles */

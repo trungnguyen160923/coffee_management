@@ -12,14 +12,16 @@ export default function StaffTables() {
     }, [user]);
 
     return (
-        <div className="p-8">
-            <div className="max-w-7xl mx-auto">
+        <div className="min-h-screen bg-slate-50">
+            <div className="max-w-7xl mx-auto px-2 py-4 sm:px-4 lg:px-4">
                 <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-                    <div className="bg-gradient-to-r from-amber-600 to-orange-600 px-8 py-5">
-                        <h1 className="text-2xl font-bold text-white">Table Management</h1>
-                        <p className="text-amber-100 mt-1 text-sm">Quản lý bàn và trạng thái trong chi nhánh</p>
+                    <div className="flex items-center justify-between px-8 pt-6 pb-3">
+                        <div>
+                            <h1 className="text-xl font-semibold text-slate-900">Table Management</h1>
+                            <p className="text-sm text-slate-500">Quản lý bàn và trạng thái trong chi nhánh</p>
+                        </div>
                     </div>
-                    <div className="p-6 lg:p-8">
+                    <div className="p-6 lg:p-8 pt-4">
                         {/* Table Status Summary */}
                         {branchId && <TableStatusSummary branchId={Number(branchId)} />}
 

@@ -8,7 +8,8 @@ import {
   CheckCircle,
   Store,
   Eye,
-  TrendingUp
+  PhoneCall,
+  Clock,
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { analyticsService } from '../../services/analyticsService';
@@ -236,21 +237,20 @@ export function AdminBranchActivities() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50">
-      <div className="max-w-7xl mx-auto px-2 py-0 sm:px-4 lg:px-2">
+    <div className="min-h-screen bg-slate-50">
+      <div className="max-w-7xl mx-auto px-2 py-4 sm:px-4 lg:px-4">
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-          {/* Header */}
-          <div className="bg-gradient-to-r from-amber-600 to-orange-600 px-8 py-6">
+          {/* Header + branch selector */}
+          <div className="px-8 pt-6 pb-2">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h1 className="text-3xl font-bold text-white mb-1">Branch Activities Monitor</h1>
-                <p className="text-amber-100">View detailed activities of each branch</p>
+                <h1 className="text-xl font-semibold text-slate-800 mb-1">Branch Activities Monitor</h1>
+                <p className="text-sm text-slate-500">View detailed activities of each branch</p>
               </div>
             </div>
-            
-            {/* Branch Selector */}
-            <div className="mt-4">
-              <label className="block text-sm font-medium text-white mb-2">
+
+            <div className="mt-2">
+              <label className="block text-sm font-medium text-slate-700 mb-2">
                 Select Branch to View:
               </label>
               <select
@@ -259,12 +259,12 @@ export function AdminBranchActivities() {
                   const branchId = parseInt(e.target.value);
                   setSelectedBranchId(branchId);
                 }}
-                className="w-full md:w-full lg:w-2/3 xl:w-1/2 px-4 py-2 rounded-lg border border-amber-300 bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent text-base"
+                className="w-auto min-w-[220px] px-4 py-2 rounded-lg border border-slate-200 bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-sky-300 focus:border-transparent text-sm"
               >
                 <option value="">-- Select Branch --</option>
                 {branches.map((branch) => (
                   <option key={branch.branchId} value={branch.branchId}>
-                    {branch.name} {branch.address ? `- ${branch.address}` : ''}
+                    {branch.name || branch.address || "Unknown branch"}
                   </option>
                 ))}
               </select>
@@ -288,26 +288,32 @@ export function AdminBranchActivities() {
               </div>
             </div>
           ) : (
-            <div className="p-8">
+            <div className="p-8 pt-4">
               {/* Branch Info Header */}
               {selectedBranch && (
-                <div className="mb-6 p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-lg border border-amber-200">
+                <div className="mb-6 p-4 bg-gradient-to-r from-sky-50 to-blue-50 rounded-lg border border-sky-200">
                   <div className="flex items-center justify-between">
                     <div>
                       <h2 className="text-2xl font-bold text-gray-800">{selectedBranch.name}</h2>
                       <p className="text-gray-600 mt-1">{selectedBranch.address}</p>
                       {selectedBranch.phone && (
-                        <p className="text-sm text-gray-500 mt-1">📞 {selectedBranch.phone}</p>
+                        <p className="text-sm text-gray-500 mt-1 flex items-center gap-2">
+                          <PhoneCall className="h-4 w-4" />
+                          <span>{selectedBranch.phone}</span>
+                        </p>
                       )}
                       {selectedBranch.openHours && selectedBranch.endHours && (
-                        <p className="text-sm text-gray-500 mt-1">
-                          🕐 {String(selectedBranch.openHours).slice(0, 5)} - {String(selectedBranch.endHours).slice(0, 5)}
+                        <p className="text-sm text-gray-500 mt-1 flex items-center gap-2">
+                          <Clock className="h-4 w-4" />
+                          <span>
+                            {String(selectedBranch.openHours).slice(0, 5)} - {String(selectedBranch.endHours).slice(0, 5)}
+                          </span>
                         </p>
                       )}
                     </div>
                     <button
                       onClick={() => navigate(`/admin/branches`)}
-                      className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors duration-200 flex items-center space-x-2"
+                      className="px-4 py-2 bg-sky-500 text-white rounded-lg hover:bg-sky-600 transition-colors duration-200 flex items-center space-x-2"
                     >
                       <Eye className="h-4 w-4" />
                       <span>Manage Branch</span>

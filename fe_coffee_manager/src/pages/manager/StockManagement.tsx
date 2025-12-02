@@ -243,47 +243,41 @@ const StockManagement: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50">
-      <div className="max-w-7xl mx-auto px-2 py-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-slate-50">
+      <div className="max-w-7xl mx-auto px-2 py-4 sm:px-4 lg:px-4">
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-          <div className="bg-gradient-to-r from-amber-600 to-orange-600 px-8 py-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="bg-white p-2 rounded-lg">
-                  <Package className="w-8 h-8 text-amber-600" />
-                </div>
-                <div>
-                  <h1 className="text-3xl font-bold text-white">Stock Management</h1>
-                  <p className="text-amber-100 mt-1">Track and manage ingredient inventory</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleRefresh}
-                  disabled={loading}
-                  className="flex items-center space-x-2 bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Refresh data"
+          {/* Header actions */}
+          <div className="flex items-center justify-between px-8 pt-6 pb-3">
+            <div>
+              <h1 className="text-xl font-semibold text-slate-900">Stock Management</h1>
+              <p className="text-sm text-slate-500">Track and manage ingredient inventory</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleRefresh}
+                disabled={loading}
+                className="flex items-center space-x-2 rounded-lg bg-slate-100 text-slate-700 px-4 py-2 text-sm font-medium hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Refresh data"
+              >
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                <span>Refresh</span>
+              </button>
+              {managerBranch && (
+                <span
+                  className={`text-xs md:text-sm px-3 py-1 rounded-full font-medium ${
+                    isWithinBusinessHours ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'
+                  }`}
+                  title={`Operating hours ${openLabel} - ${closeLabel} (buffer +${BUSINESS_BUFFER_MINUTES}m)`}
                 >
-                  <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
-                  <span className="font-medium">Refresh</span>
-                </button>
-                {managerBranch && (
-                  <span
-                    className={`text-sm px-3 py-1 rounded-full font-medium ${
-                      isWithinBusinessHours ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'
-                    }`}
-                    title={`Operating hours ${openLabel} - ${closeLabel} (buffer +${BUSINESS_BUFFER_MINUTES}m)`}
-                  >
-                    {isWithinBusinessHours
-                      ? `Adjustments locked until ${closeBufferLabel}`
-                      : `Adjustment window open (after ${closeLabel} + ${BUSINESS_BUFFER_MINUTES}m)`}
-                  </span>
-                )}
-              </div>
+                  {isWithinBusinessHours
+                    ? `Adjustments locked until ${closeBufferLabel}`
+                    : `Adjustment window open (after ${closeLabel} + ${BUSINESS_BUFFER_MINUTES}m)`}
+                </span>
+              )}
             </div>
           </div>
 
-          <div className="p-8">
+          <div className="p-8 pt-4">
             {/* Stats Cards */}
             {stockData && (
               <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -310,11 +304,11 @@ const StockManagement: React.FC = () => {
                   placeholder="Search by ingredient name..."
                   value={keyword}
                   onChange={(e) => setKeyword(e.target.value)}
-                  className="w-full px-4 py-3 pl-10 pr-4 text-gray-700 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                  className="w-full px-4 py-3 pl-10 pr-4 text-gray-700 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
                 />
                 <div className="absolute inset-y-0 left-0 flex items-center pl-3">
                   {loading ? (
-                    <div className="w-5 h-5 text-gray-400 animate-spin border-2 border-gray-300 border-t-amber-500 rounded-full"></div>
+                    <div className="w-5 h-5 text-gray-400 animate-spin border-2 border-gray-300 border-t-sky-500 rounded-full"></div>
                   ) : (
                     <Search className="w-5 h-5 text-gray-400" />
                   )}
@@ -324,7 +318,7 @@ const StockManagement: React.FC = () => {
                 <select
                   value={lowStockFilter === undefined ? '' : lowStockFilter.toString()}
                   onChange={(e) => setLowStockFilter(e.target.value === '' ? undefined : e.target.value === 'true')}
-                  className="w-full px-4 py-3 text-gray-700 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                  className="w-full px-4 py-3 text-gray-700 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
                 >
                   <option value="">All Stock Status</option>
                   <option value="true">Low Stock</option>
@@ -335,7 +329,7 @@ const StockManagement: React.FC = () => {
                 <select
                   value={size}
                   onChange={(e) => setSize(Number(e.target.value))}
-                  className="w-full px-4 py-3 text-gray-700 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                  className="w-full px-4 py-3 text-gray-700 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
                 >
                   <option value={5}>5/page</option>
                   <option value={10}>10/page</option>
@@ -372,7 +366,7 @@ const StockManagement: React.FC = () => {
               <div className="overflow-auto">
                 {loading ? (
                   <div className="flex justify-center items-center h-64">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-600"></div>
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-500"></div>
                   </div>
                 ) : !stockData?.content || stockData.content.length === 0 ? (
                   <div className="text-center py-12">
@@ -436,11 +430,11 @@ const StockManagement: React.FC = () => {
                                 <Eye className="w-4 h-4" />
                               </button>
                               <button
-                                className="p-2 rounded hover:bg-amber-50"
+                                className="p-2 rounded hover:bg-sky-50"
                                 title="Adjust stock quantity"
                                 onClick={() => openAdjustModal(stock)}
                               >
-                                <Edit3 className="w-4 h-4 text-amber-600" />
+                                <Edit3 className="w-4 h-4 text-sky-600" />
                               </button>
                             </div>
                           </td>
@@ -464,7 +458,7 @@ const StockManagement: React.FC = () => {
                 <button className="px-3 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50" disabled={page === 0} onClick={() => setPage(0)}>First</button>
                 <button className="px-3 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50" disabled={page === 0} onClick={() => setPage(p => Math.max(0, p - 1))}>Prev</button>
                 <div className="flex items-center gap-1">
-                  {Array.from({ length: Math.min(5, Math.max(1, stockData?.totalPages || 0)) }).map((_, idx) => {
+                    {Array.from({ length: Math.min(5, Math.max(1, stockData?.totalPages || 0)) }).map((_, idx) => {
                     const half = 2;
                     let start = Math.max(0, Math.min(page - half, ((stockData?.totalPages || 1) - 1) - (5 - 1)));
                     if ((stockData?.totalPages || 0) <= 5) start = 0;
@@ -472,7 +466,7 @@ const StockManagement: React.FC = () => {
                     if (pageNum >= (stockData?.totalPages || 0)) return null;
                     const active = pageNum === page;
                     return (
-                      <button key={pageNum} className={`px-3 py-1 text-sm border rounded-lg ${active ? 'bg-amber-600 text-white border-amber-600' : 'border-gray-300 hover:bg-gray-50'}`} onClick={() => setPage(pageNum)}>
+                      <button key={pageNum} className={`px-3 py-1 text-sm border rounded-lg ${active ? 'bg-sky-500 text-white border-sky-500' : 'border-gray-300 hover:bg-gray-50'}`} onClick={() => setPage(pageNum)}>
                         {pageNum + 1}
                       </button>
                     );
