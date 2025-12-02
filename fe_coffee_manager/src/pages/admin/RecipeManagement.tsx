@@ -49,35 +49,28 @@ export default function RecipeManagement() {
   const currentInactive = (data?.content || []).filter(r => r.status !== 'ACTIVE').length;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50">
-      <div className="max-w-7xl mx-auto px-2 py-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-slate-50">
+      <div className="max-w-7xl mx-auto px-2 py-4 sm:px-4 lg:px-4">
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-          <div className="bg-gradient-to-r from-amber-600 to-orange-600 px-8 py-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="bg-white p-2 rounded-lg">
-                  <ChefHat className="w-8 h-8 text-amber-600" />
-                </div>
-                <div>
-                  <h1 className="text-3xl font-bold text-white">Recipe Management</h1>
-                  <p className="text-amber-100 mt-1">Manage product recipes</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={load}
-                  disabled={loading}
-                  className="flex items-center space-x-2 bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Refresh data"
-                >
-                  <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
-                  <span className="font-medium">Refresh</span>
-                </button>
-              </div>
+          <div className="flex items-center justify-between px-8 pt-6 pb-2">
+            <div>
+              <h1 className="text-xl font-semibold text-slate-800">Recipe Management</h1>
+              <p className="text-sm text-slate-500">Manage product recipes</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={load}
+                disabled={loading}
+                className="flex items-center space-x-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:border-sky-300 hover:text-sky-700 hover:bg-sky-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Refresh data"
+              >
+                <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+                <span>Refresh</span>
+              </button>
             </div>
           </div>
 
-          <div className="p-8">
+          <div className="p-8 pt-4">
             {/* Search & Status Filter (single-field like IngredientManagement) */}
             <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="relative">
@@ -158,7 +151,7 @@ export default function RecipeManagement() {
               {!showDeleted && (
                 <button
                   onClick={() => { setEditing(null); setModalOpen(true); }}
-                  className="flex items-center space-x-2 bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg"
+                  className="flex items-center space-x-2 bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-lg"
                 >
                   <Plus className="w-5 h-5" />
                   <span>Create recipe</span>
@@ -269,7 +262,7 @@ export default function RecipeManagement() {
                     if (pageNum >= totalPages) return null;
                     const active = pageNum === page;
                     return (
-                      <button key={pageNum} className={`px-3 py-1 text-sm border rounded-lg ${active ? 'bg-amber-600 text-white border-amber-600' : 'border-gray-300 hover:bg-gray-50'}`} onClick={() => setPage(pageNum)}>
+                    <button key={pageNum} className={`px-3 py-1 text-sm border rounded-lg ${active ? 'bg-sky-500 text-white border-sky-500' : 'border-gray-300 hover:bg-gray-50'}`} onClick={() => setPage(pageNum)}>
                         {pageNum + 1}
                       </button>
                     );

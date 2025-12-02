@@ -55,7 +55,7 @@ export default function StaffOrders() {
     const [selectedRecipe, setSelectedRecipe] = useState<CatalogRecipe | null>(null);
     const [recipeLoading, setRecipeLoading] = useState<boolean>(false);
     const [refreshing, setRefreshing] = useState<boolean>(false);
-    const [autoRefresh, setAutoRefresh] = useState<boolean>(false);
+    const [autoRefresh, setAutoRefresh] = useState<boolean>(true);
     const [tableDetails, setTableDetails] = useState<Map<number, any>>(new Map());
     const [staffDetails, setStaffDetails] = useState<Map<number, any>>(new Map());
 
@@ -137,16 +137,9 @@ export default function StaffOrders() {
         if (!autoRefresh) return;
         
         const interval = setInterval(() => {
+            // Silent auto-refresh (no toast)
             loadOrders(true);
-            toast.success('Orders refreshed automatically', {
-                duration: 2000,
-                position: 'top-right',
-                style: {
-                    background: '#10B981',
-                    color: '#fff',
-                },
-            });
-        }, 10000); // Refresh every 10 seconds
+        }, 30000); // Refresh every 30 seconds
 
         return () => clearInterval(interval);
     }, [autoRefresh, branchId]);
@@ -156,8 +149,6 @@ export default function StaffOrders() {
 
     const filteredOrders = useMemo(() => {
         const byStatus = (o: SimpleOrder) => {
-            // POS orders không filter theo status
-            if (activeTab === 'pos') return true;
             if (statusFilter === 'all') return true;
             return (o.status || '').toLowerCase() === statusFilter;
         };
@@ -487,12 +478,15 @@ export default function StaffOrders() {
     };
 
     return (
-        <div className="p-8">
-            <div className="max-w-7xl mx-auto">
+        <div className="min-h-screen bg-slate-50">
+            <div className="max-w-7xl mx-auto px-2 py-4 sm:px-4 lg:px-4">
                 <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-                    <div className="bg-gradient-to-r from-amber-600 to-orange-600 px-8 py-5 flex items-center justify-between">
-                        <h1 className="text-2xl font-bold text-white">Branch Orders</h1>
-                        <div className="flex items-center gap-4 text-amber-50"> 
+                    <div className="flex items-center justify-between px-8 pt-6 pb-3">
+                        <div>
+                            <h1 className="text-xl font-semibold text-slate-900">Branch Orders</h1>
+                            <p className="text-sm text-slate-500">Quản lý đơn hàng trong chi nhánh</p>
+                        </div>
+                        <div className="flex items-center gap-4 text-slate-600"> 
                             {/* 1. Thanh điều hướng Tab (Từ pos_order) */}
                             <div className="mt-4 flex space-x-1 bg-gray-100 p-1 rounded-lg w-fit">
                                 <button
@@ -520,7 +514,7 @@ export default function StaffOrders() {
                             {activeTab === 'regular' && (
                                 <div className="flex items-center gap-3">
                                     {/* Auto refresh toggle */}
-                                    <label className="flex items-center gap-2 text-sm text-amber-50">
+                                    <label className="flex items-center gap-2 text-sm text-slate-600">
                                         <input
                                             type="checkbox"
                                             checked={autoRefresh}
@@ -528,7 +522,7 @@ export default function StaffOrders() {
                                             className="w-4 h-4 text-amber-600 bg-gray-100 border-gray-300 rounded focus:ring-amber-500 focus:ring-2"
                                         />
                                         <span className="flex items-center gap-1">
-                                            Auto Refresh (10s)
+                                            Auto Refresh (30s)
                                             {autoRefresh && (
                                                 <div className="w-2 h-2 bg-green-300 rounded-full animate-pulse" title="Auto refresh is active"></div>
                                             )}
@@ -576,34 +570,30 @@ export default function StaffOrders() {
                 <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
                     <div className="px-6 py-4 border-b border-gray-100">
                         <div className="flex flex-wrap items-center gap-3">
-                            {activeTab === 'regular' && (
-                                <>
-                                    <div className="flex items-center gap-2">
-                                        <label className="text-sm text-gray-600">Status</label>
-                                        <select
-                                            className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
-                                            value={statusFilter}
-                                            onChange={(e) => setStatusFilter(e.target.value as any)}
-                                        >
-                                            <option value="all">All</option>
-                                            <option value="pending">Pending</option>
-                                            <option value="preparing">Preparing</option>
-                                            <option value="ready">Ready</option>
-                                            <option value="completed">Completed</option>
-                                            <option value="cancelled">Cancelled</option>
-                                        </select>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <label className="text-sm text-gray-600">Date</label>
-                                        <input
-                                            type="date"
-                                            className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
-                                            value={selectedDate}
-                                            onChange={(e) => setSelectedDate(e.target.value)}
-                                        />
-                                    </div>
-                                </>
-                            )}
+                            <div className="flex items-center gap-2">
+                                <label className="text-sm text-gray-600">Status</label>
+                                <select
+                                    className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
+                                    value={statusFilter}
+                                    onChange={(e) => setStatusFilter(e.target.value as any)}
+                                >
+                                    <option value="all">All</option>
+                                    <option value="pending">Pending</option>
+                                    <option value="preparing">Preparing</option>
+                                    <option value="ready">Ready</option>
+                                    <option value="completed">Completed</option>
+                                    <option value="cancelled">Cancelled</option>
+                                </select>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <label className="text-sm text-gray-600">Date</label>
+                                <input
+                                    type="date"
+                                    className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
+                                    value={selectedDate}
+                                    onChange={(e) => setSelectedDate(e.target.value)}
+                                />
+                            </div>
                             <div className="flex-1 min-w-[220px]">
                                 <input
                                     type="text"

@@ -235,16 +235,19 @@ export const StaffStockUsage = () => {
   }
 
   return (
-    <div className="p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
-        <div className="bg-gradient-to-r from-amber-600 to-orange-600 px-8 py-5 rounded-2xl shadow-sm">
-          <h1 className="text-2xl font-bold text-white">Daily Stock Usage</h1>
-          <p className="text-amber-100 text-sm mt-1">
-            Ghi nhận và đối soát lượng sử dụng nguyên liệu trong ca làm việc
-          </p>
-        </div>
+    <div className="min-h-screen bg-slate-50">
+      <div className="max-w-7xl mx-auto px-2 py-4 sm:px-4 lg:px-4 space-y-6">
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+          <div className="flex items-center justify-between px-8 pt-6 pb-3">
+            <div>
+              <h1 className="text-xl font-semibold text-slate-900">Daily Stock Usage</h1>
+              <p className="text-sm text-slate-500">
+                Ghi nhận và đối soát lượng sử dụng nguyên liệu trong ca làm việc
+              </p>
+            </div>
+          </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-2 p-6 lg:p-8 pt-4">
         <div className="rounded-2xl bg-white shadow-sm border border-amber-100 p-5">
           <div className="flex items-center justify-between mb-4">
             <div>
@@ -294,7 +297,7 @@ export const StaffStockUsage = () => {
                 loadData();
                 loadUsageSummary();
               }}
-              className="w-full rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white py-2 font-semibold shadow-lg shadow-amber-500/30 hover:shadow-xl transition"
+              className="w-full rounded-full bg-sky-500 text-white py-2 font-semibold shadow-lg shadow-sky-500/30 hover:bg-sky-600 hover:shadow-xl transition"
             >
               Refresh
             </button>
@@ -304,7 +307,7 @@ export const StaffStockUsage = () => {
 
       {/* Section: Ingredients used today */}
       {usageSummary && usageSummary.items.length > 0 && (
-        <div className="rounded-2xl bg-white border border-amber-100 shadow-sm">
+        <div className="rounded-2xl bg-white border border-amber-100 shadow-sm mt-6">
           <div className="flex items-center justify-between p-5 border-b border-neutral-100">
             <div>
               <h3 className="text-lg font-semibold text-gray-900">Ingredients used today</h3>
@@ -419,7 +422,7 @@ export const StaffStockUsage = () => {
         </div>
       )}
 
-      <div className="rounded-2xl bg-white border border-neutral-100 shadow-sm">
+        <div className="rounded-2xl bg-white border border-neutral-100 shadow-sm mt-6">
         <div className="flex items-center justify-between p-5 border-b border-neutral-100">
           <div>
             <h3 className="text-lg font-semibold text-gray-900">Adjustment log</h3>
@@ -434,7 +437,7 @@ export const StaffStockUsage = () => {
             {data?.content?.some(item => item.status === 'PENDING') && (
               <button
                 onClick={handleCommitAll}
-                className="px-4 py-2 text-sm font-semibold rounded-full bg-emerald-500 text-white hover:bg-emerald-600 transition shadow-md"
+                className="px-4 py-2 text-sm font-semibold rounded-full bg-sky-500 text-white hover:bg-sky-600 transition shadow-md"
               >
                 Commit all
               </button>
@@ -540,7 +543,7 @@ export const StaffStockUsage = () => {
                         <>
                           <button
                             onClick={() => handleEdit(item)}
-                            className="px-3 py-1.5 text-xs font-semibold rounded-full bg-blue-500 text-white hover:bg-blue-600 transition"
+                            className="px-3 py-1.5 text-xs font-semibold rounded-full bg-sky-500 text-white hover:bg-sky-600 transition"
                             title="Edit"
                           >
                             Edit
@@ -554,7 +557,7 @@ export const StaffStockUsage = () => {
                           </button>
                           <button
                             onClick={() => handleCommit(item.adjustmentId)}
-                            className="px-3 py-1.5 text-xs font-semibold rounded-full bg-emerald-500 text-white hover:bg-emerald-600 transition"
+                            className="px-3 py-1.5 text-xs font-semibold rounded-full bg-sky-500 text-white hover:bg-sky-600 transition"
                             title="Commit"
                           >
                             Commit
@@ -595,6 +598,7 @@ export const StaffStockUsage = () => {
             </div>
           </div>
         )}
+      </div>
       </div>
 
       {/* Modal sửa adjustment */}
@@ -666,7 +670,7 @@ export const StaffStockUsage = () => {
               </button>
               <button
                 onClick={handleSaveEdit}
-                className="flex-1 px-4 py-2 text-sm font-semibold rounded-lg bg-amber-500 text-white hover:bg-amber-600 transition"
+                className="flex-1 px-4 py-2 text-sm font-semibold rounded-lg bg-sky-500 text-white hover:bg-sky-600 transition"
               >
                 Save
               </button>
@@ -700,7 +704,7 @@ export const StaffStockUsage = () => {
               </button>
               <button
                 onClick={confirmModal.onConfirm}
-                className="flex-1 px-4 py-2 text-sm font-semibold rounded-lg bg-amber-500 text-white hover:bg-amber-600 transition"
+                className="flex-1 px-4 py-2 text-sm font-semibold rounded-lg bg-sky-500 text-white hover:bg-sky-600 transition"
               >
                 Confirm
               </button>

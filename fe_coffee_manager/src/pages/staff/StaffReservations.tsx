@@ -243,14 +243,16 @@ export default function StaffReservations() {
                     {toast.message}
                 </div>
             )}
-            <div className="p-8">
-                <div className="max-w-7xl mx-auto">
+            <div className="min-h-screen bg-slate-50">
+                <div className="max-w-7xl mx-auto px-2 py-4 sm:px-4 lg:px-4">
                     <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-                        <div className="bg-gradient-to-r from-amber-600 to-orange-600 px-8 py-5">
-                            <h1 className="text-2xl font-bold text-white">Branch Reservations</h1>
-                            <p className="text-amber-100 text-sm mt-1">Quản lý các đơn đặt bàn trong chi nhánh</p>
+                        <div className="flex items-center justify-between px-8 pt-6 pb-3">
+                            <div>
+                                <h1 className="text-xl font-semibold text-slate-900">Branch Reservations</h1>
+                                <p className="text-sm text-slate-500">Quản lý các đơn đặt bàn trong chi nhánh</p>
+                            </div>
                         </div>
-                        <div className="p-6 lg:p-8">
+                        <div className="p-6 lg:p-8 pt-4">
 
                 {loading && <div className="bg-white rounded-2xl shadow p-6">Loading...</div>}
                 {error && <div className="bg-red-50 text-red-700 border border-red-200 rounded-xl p-4 mb-4">{error}</div>}

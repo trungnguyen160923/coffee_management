@@ -215,56 +215,47 @@ const BranchManagement: React.FC = () => {
   }, [allBranches, limit, page]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50">
-      <div className="max-w-7xl mx-auto px-2 py-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-slate-50">
+      <div className="max-w-7xl mx-auto px-2 py-4 sm:px-4 lg:px-4">
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-          <div className="bg-gradient-to-r from-amber-600 to-orange-600 px-8 py-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="bg-white p-2 rounded-lg">
-                  <svg className="w-8 h-8 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                  </svg>
-                </div>
-                <div>
-                  <h1 className="text-3xl font-bold text-white">Branch Management</h1>
-                  <p className="text-amber-100 mt-1">Manage branch locations</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setIsCreating(true)}
-                  className="flex items-center space-x-2 bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg transition-colors"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                  </svg>
-                  <span className="font-medium">Add Branch</span>
-                </button>
-                <button
-                  onClick={fetchBranches}
-                  className="flex items-center space-x-2 bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg transition-colors"
-                  title="Refresh data"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  <span className="font-medium">Refresh</span>
-                </button>
-                <select
-                  value={limit}
-                  onChange={(e) => { setPage(0); setLimit(parseInt(e.target.value, 10)); }}
-                  className="bg-white/20 hover:bg-white/30 text-white border-white/30 rounded px-3 py-2 text-sm"
-                >
-                  {[10, 20, 50, 100].map((s) => (
-                    <option key={s} value={s} className="text-gray-900">{s} / page</option>
-                  ))}
-                </select>
-              </div>
+          <div className="flex items-center justify-between px-8 pt-6 pb-2">
+            <div>
+              <h1 className="text-xl font-semibold text-slate-800">Branch Management</h1>
+              <p className="text-sm text-slate-500">Manage branch locations</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsCreating(true)}
+                className="flex items-center space-x-2 rounded-lg bg-sky-500 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-sky-600"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+                <span>Add Branch</span>
+              </button>
+              <button
+                onClick={fetchBranches}
+                className="flex items-center space-x-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:border-sky-300 hover:text-sky-700 hover:bg-sky-50"
+                title="Refresh data"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                <span>Refresh</span>
+              </button>
+              <select
+                value={limit}
+                onChange={(e) => { setPage(0); setLimit(parseInt(e.target.value, 10)); }}
+                className="rounded border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 hover:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-300"
+              >
+                {[10, 20, 50, 100].map((s) => (
+                  <option key={s} value={s}>{s} / page</option>
+                ))}
+              </select>
             </div>
           </div>
 
-          <div className="p-8">
+          <div className="p-8 pt-4">
             {/* Statistics Cards */}
             <div className="mb-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="bg-white shadow rounded-lg">
@@ -299,7 +290,7 @@ const BranchManagement: React.FC = () => {
                     <h2 className="text-lg font-medium text-gray-900">Actions</h2>
                     <button
                       onClick={() => setIsCreating(true)}
-                      className="flex items-center space-x-1 text-sm bg-amber-600 text-white px-3 py-1.5 rounded-lg hover:bg-amber-700 transition-colors"
+                      className="flex items-center space-x-1 text-sm bg-sky-500 text-white px-3 py-1.5 rounded-lg hover:bg-sky-600 transition-colors"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />

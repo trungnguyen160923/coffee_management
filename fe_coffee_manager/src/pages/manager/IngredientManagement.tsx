@@ -161,33 +161,26 @@ const IngredientManagement: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50">
-      <div className="max-w-7xl mx-auto px-2 py-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-slate-50">
+      <div className="max-w-7xl mx-auto px-2 py-4 sm:px-4 lg:px-4">
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-          <div className="bg-gradient-to-r from-amber-600 to-orange-600 px-8 py-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="bg-white p-2 rounded-lg">
-                  <UtensilsCrossed className="w-8 h-8 text-amber-600" />
-                </div>
-                <div>
-                  <h1 className="text-3xl font-bold text-white">Ingredient Management</h1>
-                  <p className="text-amber-100 mt-1">View ingredients and manage unit conversions</p>
-                </div>
-              </div>
-              <button
-                onClick={handleRefresh}
-                disabled={loading}
-                className="flex items-center space-x-2 bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Refresh data"
-              >
-                <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
-                <span className="font-medium">Refresh</span>
-              </button>
+          <div className="flex items-center justify-between px-8 pt-6 pb-3">
+            <div>
+              <h1 className="text-xl font-semibold text-slate-900">Ingredient Management</h1>
+              <p className="text-sm text-slate-500">View ingredients and manage unit conversions</p>
             </div>
+            <button
+              onClick={handleRefresh}
+              disabled={loading}
+              className="flex items-center space-x-2 rounded-lg bg-slate-100 text-slate-700 px-4 py-2 text-sm font-medium hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Refresh data"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              <span>Refresh</span>
+            </button>
           </div>
 
-          <div className="p-8">
+          <div className="p-8 pt-0">
             <div className="mb-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="bg-white shadow rounded-lg">
                 <div className="px-4 py-5 sm:p-6">
@@ -395,7 +388,7 @@ const IngredientManagement: React.FC = () => {
                   placeholder="Search ingredients..."
                   value={search}
                   onChange={(e) => { setSearch(e.target.value); setCurrentPage(0); }}
-                  className="w-full px-4 py-3 pl-10 pr-4 text-gray-700 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                  className="w-full px-4 py-3 pl-10 pr-4 text-gray-700 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
                 />
                 <div className="absolute inset-y-0 left-0 flex items-center pl-3">
                   {searchLoading ? (
@@ -412,7 +405,7 @@ const IngredientManagement: React.FC = () => {
                 <select
                   value={supplierFilter}
                   onChange={(e) => { setSupplierFilter(e.target.value ? Number(e.target.value) : ''); setCurrentPage(0); }}
-                  className="w-full px-4 py-3 text-gray-700 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                  className="w-full px-4 py-3 text-gray-700 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
                 >
                   <option value="">All suppliers</option>
                   {suppliers.map(s => (
@@ -430,7 +423,7 @@ const IngredientManagement: React.FC = () => {
 
             {loading ? (
               <div className="flex flex-col items-center justify-center py-16">
-                <Loader className="w-12 h-12 text-amber-600 animate-spin mb-4" />
+                <Loader className="w-12 h-12 text-sky-500 animate-spin mb-4" />
                 <p className="text-gray-500">Loading data...</p>
               </div>
             ) : (
@@ -444,7 +437,7 @@ const IngredientManagement: React.FC = () => {
                   <div className="flex items-center space-x-2">
                     {isUpdating && (
                       <div className="flex items-center text-sm text-gray-500">
-                        <Loader className="w-4 h-4 animate-spin mr-2 text-amber-600" /> Updating...
+                        <Loader className="w-4 h-4 animate-spin mr-2 text-sky-500" /> Updating...
                       </div>
                     )}
                   </div>

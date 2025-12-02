@@ -345,7 +345,7 @@ export const DailyUsageForm = ({
       <button
         type="submit"
         disabled={isSubmitting || isLoadingOptions}
-        className={`w-full rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold shadow-lg shadow-amber-500/30 transition-all focus:ring-2 focus:ring-offset-2 focus:ring-amber-400 disabled:opacity-60 disabled:cursor-not-allowed ${compact ? 'py-2 text-sm' : 'py-3 text-base'
+        className={`w-full rounded-xl bg-sky-500 text-white font-semibold shadow-lg shadow-sky-500/30 hover:bg-sky-600 transition-all focus:ring-2 focus:ring-offset-2 focus:ring-sky-400 disabled:opacity-60 disabled:cursor-not-allowed ${compact ? 'py-2 text-sm' : 'py-3 text-base'
           }`}
       >
         {isSubmitting ? 'Saving...' : 'Save entry'}
