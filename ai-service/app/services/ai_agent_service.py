@@ -4,6 +4,7 @@ Tổng hợp dữ liệu từ các service (Tool 1: Revenue, Inventory, Material
 """
 import json
 import sys
+import asyncio
 from datetime import date
 from pathlib import Path
 from typing import Optional, Dict, Any
@@ -236,37 +237,41 @@ class AIAgentService:
         6. Material cost metrics
         """
         try:
-            # Order Service APIs (4 API)
-            # 1. Revenue Metrics
-            revenue_data = await self.order_client.get_revenue_metrics(
-                branch_id, target_date
+            # Chạy song song tất cả 6 API để tối ưu thời gian
+            # LƯU Ý: Tất cả các API này HOÀN TOÀN ĐỘC LẬP với nhau:
+            # - Mỗi API chỉ cần branch_id và date, không cần kết quả của API khác
+            # - Không có dependency giữa các API
+            # - Có thể chạy song song an toàn
+            # Order Service APIs (4 API) + Catalog Service APIs (2 API)
+            revenue_data, customer_data, product_data, review_data, inventory_data, material_cost_data = await asyncio.gather(
+                self.order_client.get_revenue_metrics(branch_id, target_date),
+                self.order_client.get_customer_metrics(branch_id, target_date),
+                self.order_client.get_product_metrics(branch_id, target_date),
+                self.order_client.get_review_metrics(branch_id, target_date),
+                self.catalog_client.get_inventory_metrics(branch_id, target_date),
+                self.catalog_client.get_material_cost_metrics(branch_id, target_date, target_date),
+                return_exceptions=True  # Trả về exception thay vì raise
             )
             
-            # 2. Customer Metrics
-            customer_data = await self.order_client.get_customer_metrics(
-                branch_id, target_date
-            )
-            
-            # 3. Product Metrics
-            product_data = await self.order_client.get_product_metrics(
-                branch_id, target_date
-            )
-            
-            # 4. Review Metrics
-            review_data = await self.order_client.get_review_metrics(
-                branch_id, target_date
-            )
-            
-            # Catalog Service APIs (2 API)
-            # 5. Inventory Metrics
-            inventory_data = await self.catalog_client.get_inventory_metrics(
-                branch_id, target_date
-            )
-            
-            # 6. Material Cost Metrics
-            material_cost_data = await self.catalog_client.get_material_cost_metrics(
-                branch_id, target_date, target_date
-            )
+            # Xử lý exceptions nếu có
+            if isinstance(revenue_data, Exception):
+                logger.error(f"Error fetching revenue metrics: {revenue_data}")
+                revenue_data = None
+            if isinstance(customer_data, Exception):
+                logger.error(f"Error fetching customer metrics: {customer_data}")
+                customer_data = None
+            if isinstance(product_data, Exception):
+                logger.error(f"Error fetching product metrics: {product_data}")
+                product_data = None
+            if isinstance(review_data, Exception):
+                logger.error(f"Error fetching review metrics: {review_data}")
+                review_data = None
+            if isinstance(inventory_data, Exception):
+                logger.error(f"Error fetching inventory metrics: {inventory_data}")
+                inventory_data = None
+            if isinstance(material_cost_data, Exception):
+                logger.error(f"Error fetching material cost metrics: {material_cost_data}")
+                material_cost_data = None
             
             # Default structure khi không có data (giống backend Java trả về)
             if review_data is None:
@@ -646,37 +651,40 @@ Trả lời bằng tiếng Việt, rõ ràng và dễ hiểu."""
         6. All branches revenue (cần date range, dùng target_date làm cả 2)
         """
         try:
-            # Order Service APIs (4 API) - cho ngày cụ thể
-            # 1. All Branches Revenue Metrics
-            all_revenue_data = await self.order_client.get_all_branches_revenue_metrics(
-                target_date
+            # Chạy song song tất cả 6 API để tối ưu thời gian
+            # LƯU Ý: Tất cả các API này HOÀN TOÀN ĐỘC LẬP với nhau:
+            # - Mỗi API chỉ cần date (hoặc date range), không cần kết quả của API khác
+            # - Không có dependency giữa các API
+            # - Có thể chạy song song an toàn
+            all_revenue_data, all_customer_data, all_product_data, all_review_data, all_stats_data, all_revenue_range_data = await asyncio.gather(
+                self.order_client.get_all_branches_revenue_metrics(target_date),
+                self.order_client.get_all_branches_customer_metrics(target_date),
+                self.order_client.get_all_branches_product_metrics(target_date),
+                self.order_client.get_all_branches_review_metrics(target_date),
+                self.order_client.get_all_branches_stats(target_date, target_date),
+                self.order_client.get_all_branches_revenue(target_date, target_date),
+                return_exceptions=True  # Trả về exception thay vì raise
             )
             
-            # 2. All Branches Customer Metrics
-            all_customer_data = await self.order_client.get_all_branches_customer_metrics(
-                target_date
-            )
-            
-            # 3. All Branches Product Metrics
-            all_product_data = await self.order_client.get_all_branches_product_metrics(
-                target_date
-            )
-            
-            # 4. All Branches Review Metrics
-            all_review_data = await self.order_client.get_all_branches_review_metrics(
-                target_date
-            )
-            
-            # Order Service APIs (2 API) - cho date range (dùng target_date làm cả 2)
-            # 5. All Branches Stats
-            all_stats_data = await self.order_client.get_all_branches_stats(
-                target_date, target_date
-            )
-            
-            # 6. All Branches Revenue
-            all_revenue_range_data = await self.order_client.get_all_branches_revenue(
-                target_date, target_date
-            )
+            # Xử lý exceptions nếu có
+            if isinstance(all_revenue_data, Exception):
+                logger.error(f"Error fetching all branches revenue metrics: {all_revenue_data}")
+                all_revenue_data = None
+            if isinstance(all_customer_data, Exception):
+                logger.error(f"Error fetching all branches customer metrics: {all_customer_data}")
+                all_customer_data = None
+            if isinstance(all_product_data, Exception):
+                logger.error(f"Error fetching all branches product metrics: {all_product_data}")
+                all_product_data = None
+            if isinstance(all_review_data, Exception):
+                logger.error(f"Error fetching all branches review metrics: {all_review_data}")
+                all_review_data = None
+            if isinstance(all_stats_data, Exception):
+                logger.error(f"Error fetching all branches stats: {all_stats_data}")
+                all_stats_data = None
+            if isinstance(all_revenue_range_data, Exception):
+                logger.error(f"Error fetching all branches revenue range: {all_revenue_range_data}")
+                all_revenue_range_data = None
             
             # Default structure khi không có data
             if all_review_data is None:

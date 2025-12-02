@@ -16,7 +16,6 @@ import {
   AlertCircle,
   ChevronDown,
   ChevronUp,
-  Loader2,
   Users,
   CreditCard,
 } from 'lucide-react';
@@ -37,6 +36,13 @@ import { AIAnalysisResponse, BranchMonthlyStats, BranchYearlyStats } from '../..
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-hot-toast';
 import { exportAIStatisticsToPDF } from '../../services/pdfExportService';
+import {
+  MonthlyStatsView,
+  YearlyStatsView,
+  DayTabSkeleton,
+  MonthTabSkeleton,
+  YearTabSkeleton,
+} from './statistics';
 
 type TabType = 'day' | 'month' | 'year';
 
@@ -120,6 +126,7 @@ export default function AIStatistics() {
             raw_data: existingReport.raw_data || {},
             message: 'Dữ liệu đã tồn tại trong database',
           };
+          
           setAiData(convertedData);
           setDataSource('cached'); // Đánh dấu là dữ liệu từ cache/database
           setLoading(false);
@@ -141,6 +148,7 @@ export default function AIStatistics() {
         date: selectedDate,
         tool_type: 'tool1',
       });
+      
       setAiData(response);
       setDataSource('new'); // Đánh dấu là dữ liệu mới được tạo bởi AI
     } catch (err: any) {
@@ -196,6 +204,7 @@ export default function AIStatistics() {
         year,
         month
       );
+      
       setMonthlyStats(stats);
     } catch (err: any) {
       console.error('Error fetching monthly stats:', err);
@@ -220,6 +229,7 @@ export default function AIStatistics() {
         managerBranch.branchId,
         selectedYear
       );
+      
       setYearlyStats(stats);
     } catch (err: any) {
       console.error('Error fetching yearly stats:', err);
@@ -781,25 +791,18 @@ export default function AIStatistics() {
               </div>
             )}
 
-            {/* Loading State */}
-            {(loading && !aiData && activeTab === 'day') && (
-              <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-amber-600" />
-          <span className="ml-3 text-gray-600">Đang tải dữ liệu AI...</span>
-        </div>
-      )}
-      {(loadingMonthly && activeTab === 'month') && (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-amber-600" />
-          <span className="ml-3 text-gray-600">Đang tải dữ liệu thống kê tháng...</span>
-        </div>
-      )}
-      {(loadingYearly && activeTab === 'year') && (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-amber-600" />
-                <span className="ml-3 text-gray-600">Đang tải dữ liệu thống kê năm...</span>
-              </div>
+            {/* Loading State - Skeleton for Day tab */}
+            {activeTab === 'day' && (loading || (!aiData && managerBranch?.branchId && selectedDate)) && (
+              <DayTabSkeleton />
             )}
+      {/* Loading State - Skeleton for Month tab */}
+      {activeTab === 'month' && (loadingMonthly || (!monthlyStats && managerBranch?.branchId && selectedMonth)) && (
+        <MonthTabSkeleton />
+      )}
+      {/* Loading State - Skeleton for Year tab */}
+      {activeTab === 'year' && (loadingYearly || (!yearlyStats && managerBranch?.branchId && selectedYear)) && (
+        <YearTabSkeleton />
+      )}
 
             {/* Alerts - Compact - Only show in Day tab */}
             {activeTab === 'day' && !loading && displayData.alerts.length > 0 && (
@@ -1818,367 +1821,6 @@ export default function AIStatistics() {
   );
 }
 
-// Monthly Stats View Component
-function MonthlyStatsView({ stats, branchName }: { stats: BranchMonthlyStats; branchName: string }) {
-  const formatCurrency = (value: number) => {
-    if (value >= 1000000) {
-      return `${(value / 1000000).toFixed(1)}tr`;
-    } else if (value >= 1000) {
-      return `${(value / 1000).toFixed(0)}k`;
-    }
-    return value.toFixed(0);
-  };
-
-  const monthNames = ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6', 
-                      'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'];
-
-  return (
-    <div className="space-y-6">
-      {/* Key Metrics */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <MetricCard
-          title="Tổng doanh thu"
-          value={formatCurrency(stats.total_revenue)}
-          change={0}
-          icon={DollarSign}
-          color="emerald"
-        />
-        <MetricCard
-          title="Tổng đơn hàng"
-          value={stats.total_orders.toString()}
-          change={0}
-          icon={ShoppingCart}
-          color="blue"
-        />
-        <MetricCard
-          title="TB doanh thu/ngày"
-          value={formatCurrency(stats.avg_revenue_per_day)}
-          change={0}
-          icon={Activity}
-          color="purple"
-        />
-        <MetricCard
-          title="TB đơn hàng/ngày"
-          value={stats.avg_orders_per_day.toFixed(1)}
-          change={0}
-          icon={Activity}
-          color="amber"
-        />
-      </div>
-
-      {/* Additional Metrics */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <MetricCard
-          title="Thực lời (Lợi nhuận)"
-          value={formatCurrency(stats.total_profit || 0)}
-          change={0}
-          icon={DollarSign}
-          color="emerald"
-        />
-        <MetricCard
-          title="Tỷ suất lợi nhuận"
-          value={`${(stats.profit_margin || 0).toFixed(1)}%`}
-          change={0}
-          icon={TrendingUp}
-          color="emerald"
-        />
-        <MetricCard
-          title="Chi phí nguyên liệu"
-          value={formatCurrency(stats.total_material_cost || 0)}
-          change={0}
-          icon={Package}
-          color="amber"
-        />
-        <MetricCard
-          title="TB lợi nhuận/ngày"
-          value={formatCurrency(stats.avg_profit_per_day || 0)}
-          change={0}
-          icon={Activity}
-          color="emerald"
-        />
-      </div>
-
-      {/* Additional Metrics Row 2 */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <MetricCard
-          title="Giá trị đơn TB"
-          value={formatCurrency(stats.avg_order_value)}
-          change={0}
-          icon={DollarSign}
-          color="blue"
-        />
-        <MetricCard
-          title="Số ngày có dữ liệu"
-          value={stats.days_with_data.toString()}
-          change={0}
-          icon={Activity}
-          color="purple"
-        />
-        <MetricCard
-          title="Số khách hàng"
-          value={stats.customer_count.toString()}
-          change={0}
-          icon={Users}
-          color="blue"
-        />
-        <MetricCard
-          title="Tháng"
-          value={monthNames[stats.month - 1]}
-          change={0}
-          icon={BarChart3}
-          color="amber"
-        />
-      </div>
-
-      {/* Summary Card */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-bold text-gray-900 mb-4">
-          {branchName} - Tổng hợp tháng {monthNames[stats.month - 1]} năm {stats.year}
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-gray-50 rounded-lg p-4">
-            <p className="text-sm text-gray-600 mb-1">Tổng doanh thu</p>
-            <p className="text-2xl font-bold text-gray-900">{formatCurrency(stats.total_revenue)} VNĐ</p>
-          </div>
-          <div className="bg-gray-50 rounded-lg p-4">
-            <p className="text-sm text-gray-600 mb-1">Tổng số đơn hàng</p>
-            <p className="text-2xl font-bold text-gray-900">{stats.total_orders} đơn</p>
-          </div>
-          <div className="bg-gray-50 rounded-lg p-4">
-            <p className="text-sm text-gray-600 mb-1">Trung bình mỗi ngày</p>
-            <p className="text-xl font-bold text-gray-900">
-              {formatCurrency(stats.avg_revenue_per_day)} VNĐ / {stats.avg_orders_per_day.toFixed(1)} đơn
-            </p>
-          </div>
-          <div className="bg-gray-50 rounded-lg p-4">
-            <p className="text-sm text-gray-600 mb-1">Giá trị đơn trung bình</p>
-            <p className="text-xl font-bold text-gray-900">{formatCurrency(stats.avg_order_value)} VNĐ</p>
-          </div>
-          <div className="bg-green-50 rounded-lg p-4 border border-green-200">
-            <p className="text-sm text-gray-600 mb-1">Thực lời (Lợi nhuận)</p>
-            <p className="text-2xl font-bold text-green-700">{formatCurrency(stats.total_profit || 0)} VNĐ</p>
-            <p className="text-xs text-gray-500 mt-1">Tỷ suất: {(stats.profit_margin || 0).toFixed(1)}%</p>
-          </div>
-          <div className="bg-red-50 rounded-lg p-4 border border-red-200">
-            <p className="text-sm text-gray-600 mb-1">Chi phí nguyên liệu</p>
-            <p className="text-xl font-bold text-red-700">{formatCurrency(stats.total_material_cost || 0)} VNĐ</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Yearly Stats View Component
-function YearlyStatsView({ stats, branchName }: { stats: BranchYearlyStats; branchName: string }) {
-  const formatCurrency = (value: number) => {
-    if (value >= 1000000) {
-      return `${(value / 1000000).toFixed(1)}tr`;
-    } else if (value >= 1000) {
-      return `${(value / 1000).toFixed(0)}k`;
-    }
-    return value.toFixed(0);
-  };
-
-  const monthNames = ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8', 'T9', 'T10', 'T11', 'T12'];
-
-  // Prepare chart data
-  const chartData = stats.monthly_data.map(month => ({
-    month: monthNames[month.month - 1],
-    revenue: month.total_revenue,
-    orders: month.total_orders,
-  }));
-
-  return (
-    <div className="space-y-6">
-      {/* Key Metrics */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <MetricCard
-          title="Tổng doanh thu năm"
-          value={formatCurrency(stats.total_revenue)}
-          change={0}
-          icon={DollarSign}
-          color="emerald"
-        />
-        <MetricCard
-          title="Tổng đơn hàng năm"
-          value={stats.total_orders.toString()}
-          change={0}
-          icon={ShoppingCart}
-          color="blue"
-        />
-        <MetricCard
-          title="TB doanh thu/tháng"
-          value={formatCurrency(stats.avg_revenue_per_month)}
-          change={0}
-          icon={Activity}
-          color="purple"
-        />
-        <MetricCard
-          title="TB đơn hàng/tháng"
-          value={stats.avg_orders_per_month.toFixed(1)}
-          change={0}
-          icon={Activity}
-          color="amber"
-        />
-      </div>
-
-      {/* Additional Metrics */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <MetricCard
-          title="Thực lời (Lợi nhuận)"
-          value={formatCurrency(stats.total_profit || 0)}
-          change={0}
-          icon={DollarSign}
-          color="emerald"
-        />
-        <MetricCard
-          title="Tỷ suất lợi nhuận"
-          value={`${(stats.profit_margin || 0).toFixed(1)}%`}
-          change={0}
-          icon={TrendingUp}
-          color="emerald"
-        />
-        <MetricCard
-          title="Chi phí nguyên liệu"
-          value={formatCurrency(stats.total_material_cost || 0)}
-          change={0}
-          icon={Package}
-          color="amber"
-        />
-        <MetricCard
-          title="TB lợi nhuận/tháng"
-          value={formatCurrency(stats.avg_profit_per_month || 0)}
-          change={0}
-          icon={Activity}
-          color="emerald"
-        />
-      </div>
-
-      {/* Additional Metrics Row 2 */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <MetricCard
-          title="Giá trị đơn TB"
-          value={formatCurrency(stats.avg_order_value)}
-          change={0}
-          icon={DollarSign}
-          color="blue"
-        />
-        <MetricCard
-          title="Số tháng có dữ liệu"
-          value={stats.months_with_data.toString()}
-          change={0}
-          icon={Activity}
-          color="purple"
-        />
-        <MetricCard
-          title="Năm"
-          value={stats.year.toString()}
-          change={0}
-          icon={BarChart3}
-          color="amber"
-        />
-        <MetricCard
-          title="Chi nhánh"
-          value={branchName}
-          change={0}
-          icon={Users}
-          color="blue"
-        />
-      </div>
-
-      {/* Revenue Chart */}
-      {chartData.length > 0 && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-bold text-gray-900 mb-4">
-            Doanh thu theo tháng năm {stats.year}
-          </h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <AreaChart data={chartData}>
-              <defs>
-                <linearGradient id="colorRevenueYear" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="month" stroke="#666" tick={{ fontSize: 12 }} />
-              <YAxis stroke="#666" tick={{ fontSize: 12 }} />
-              <Tooltip
-                formatter={(value: any) => `${formatCurrency(value)} VNĐ`}
-                contentStyle={{
-                  backgroundColor: '#fff',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '6px',
-                  fontSize: '12px',
-                }}
-              />
-              <Area
-                type="monotone"
-                dataKey="revenue"
-                stroke="#f59e0b"
-                fillOpacity={1}
-                fill="url(#colorRevenueYear)"
-                name="Doanh thu"
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-
-      {/* Profit Summary */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-bold text-gray-900 mb-4">Tổng hợp lợi nhuận năm {stats.year}</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-green-50 rounded-lg p-4 border border-green-200">
-            <p className="text-sm text-gray-600 mb-1">Tổng thực lời</p>
-            <p className="text-2xl font-bold text-green-700">{formatCurrency(stats.total_profit || 0)} VNĐ</p>
-            <p className="text-xs text-gray-500 mt-1">Tỷ suất: {(stats.profit_margin || 0).toFixed(1)}%</p>
-          </div>
-          <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-            <p className="text-sm text-gray-600 mb-1">Trung bình/tháng</p>
-            <p className="text-xl font-bold text-blue-700">{formatCurrency(stats.avg_profit_per_month || 0)} VNĐ</p>
-          </div>
-          <div className="bg-red-50 rounded-lg p-4 border border-red-200">
-            <p className="text-sm text-gray-600 mb-1">Tổng chi phí nguyên liệu</p>
-            <p className="text-xl font-bold text-red-700">{formatCurrency(stats.total_material_cost || 0)} VNĐ</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Monthly Breakdown */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-bold text-gray-900 mb-4">Chi tiết theo tháng</h3>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-200">
-                <th className="text-left py-3 px-4 font-semibold text-gray-700">Tháng</th>
-                <th className="text-right py-3 px-4 font-semibold text-gray-700">Doanh thu</th>
-                <th className="text-right py-3 px-4 font-semibold text-gray-700">Số đơn</th>
-                <th className="text-right py-3 px-4 font-semibold text-gray-700">TB/ngày</th>
-              </tr>
-            </thead>
-            <tbody>
-              {stats.monthly_data.map((month, idx) => (
-                <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="py-3 px-4 text-gray-900">{monthNames[month.month - 1]}</td>
-                  <td className="py-3 px-4 text-right font-semibold text-gray-900">
-                    {formatCurrency(month.total_revenue)} VNĐ
-                  </td>
-                  <td className="py-3 px-4 text-right text-gray-700">{month.total_orders}</td>
-                  <td className="py-3 px-4 text-right text-gray-600">
-                    {formatCurrency(month.avg_revenue_per_day)} / {month.avg_orders_per_day.toFixed(1)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // Metric Card Component
 interface MetricCardProps {
