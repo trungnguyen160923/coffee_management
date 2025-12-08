@@ -91,10 +91,11 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
             // Actuator endpoints (health checks, metrics, etc.) - all methods
             "/profiles/actuator/.*",
             "/notification-service/actuator/.*",
-            "/catalog-service/actuator/.*",
+            "/catalogs/actuator/.*",  // Match /api/catalogs/actuator/** route
             "/order-service/actuator/.*",
             "/auth-service/actuator/.*",
             "/ai-service/actuator/.*",
+            "/ai/actuator/.*",  // Alternative for AI service
             "/actuator/.*",
 
     };
@@ -103,10 +104,11 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
     private String[] publicGetEndpoints = {
         "/profiles/actuator/.*",
         "/notification-service/actuator/.*",
-        "/catalog-service/actuator/.*",
+        "/catalogs/actuator/.*",  // Match /api/catalogs/actuator/** route
         "/order-service/actuator/.*",
         "/auth-service/actuator/.*",
         "/ai-service/actuator/.*",
+        "/ai/actuator/.*",  // Alternative for AI service
         "/actuator/.*",
     };
 

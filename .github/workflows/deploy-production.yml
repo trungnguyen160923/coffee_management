@@ -344,8 +344,8 @@ jobs:
             echo "=========================================="
             
             # Wait a bit more for services to be ready
-            echo "Waiting for services to be ready (90 seconds)..."
-            sleep 90
+            echo "Waiting for services to be ready (120 seconds)..."
+            sleep 120
             
             # Check if services are running
             echo ""
@@ -376,16 +376,19 @@ jobs:
             echo ""
             echo "=== Performing Health Checks ==="
             
-            # Function to check health
+            # Function to check health with retry and timeout
             check_health() {
               local service_name=$1
               local url=$2
-              local max_retries=5
+              local max_retries=${3:-8}  # Default 8 retries, can be overridden
+              local wait_time=${4:-15}  # Default 15 seconds, can be overridden
               local retry_count=0
-              local wait_time=10
+              
+              echo "🔍 Checking $service_name at $url..."
               
               while [ $retry_count -lt $max_retries ]; do
-                if curl -f "$url" > /dev/null 2>&1; then
+                # Use curl with timeout (15 seconds) and follow redirects
+                if curl -f --max-time 15 --connect-timeout 8 "$url" > /dev/null 2>&1; then
                   echo "✅ $service_name is healthy"
                   return 0
                 else
@@ -400,7 +403,7 @@ jobs:
               echo "❌ $service_name health check failed after $max_retries attempts"
               echo "   URL: $url"
               echo "   Trying to get more info..."
-              curl -v "$url" 2>&1 | head -20 || true
+              curl -v --max-time 15 "$url" 2>&1 | head -20 || true
               return 1
             }
             
@@ -408,62 +411,74 @@ jobs:
             echo ""
             echo "=== Critical Services Health Checks ==="
             
-            # Check API Gateway (direct access)
-            if ! check_health "API Gateway (Direct)" "http://localhost:8000/actuator/health"; then
+            # Check API Gateway (direct access) - may need more time to start
+            if ! check_health "API Gateway (Direct)" "http://localhost:8000/actuator/health" 10 20; then
               echo ""
               echo "=== API Gateway Logs (last 30 lines) ==="
               REGISTRY_PREFIX=$REGISTRY_PREFIX docker compose -f $COMPOSE_FILE --env-file .env.prod logs --tail=30 api-gateway || true
               exit 1
             fi
+            sleep 3  # Small delay between checks
             
             # Check Auth Service (direct access)
-            if ! check_health "Auth Service (Direct)" "http://localhost:8001/auth-service/actuator/health"; then
+            if ! check_health "Auth Service (Direct)" "http://localhost:8001/auth-service/actuator/health" 10 18; then
               echo ""
               echo "=== Auth Service Logs (last 30 lines) ==="
               REGISTRY_PREFIX=$REGISTRY_PREFIX docker compose -f $COMPOSE_FILE --env-file .env.prod logs --tail=30 auth-service || true
               exit 1
             fi
+            sleep 3  # Small delay between checks
             
             # Check Auth Service via API Gateway (test routing)
-            check_health "Auth Service (via Gateway)" "http://localhost:8000/api/auth-service/actuator/health" || exit 1
+            check_health "Auth Service (via Gateway)" "http://localhost:8000/api/auth-service/actuator/health" 8 15 || exit 1
+            sleep 3  # Small delay between checks
             
             # Important Services - Should pass
             echo ""
             echo "=== Important Services Health Checks ==="
             
             # Check Order Service (direct access)
-            check_health "Order Service (Direct)" "http://localhost:8002/order-service/actuator/health" || exit 1
+            check_health "Order Service (Direct)" "http://localhost:8002/order-service/actuator/health" 10 18 || exit 1
+            sleep 3  # Small delay between checks
             
             # Check Order Service via API Gateway
-            check_health "Order Service (via Gateway)" "http://localhost:8000/api/order-service/actuator/health" || exit 1
+            check_health "Order Service (via Gateway)" "http://localhost:8000/api/order-service/actuator/health" 8 15 || exit 1
+            sleep 3  # Small delay between checks
             
             # Check Catalog Service (direct access)
-            check_health "Catalog Service (Direct)" "http://localhost:8004/catalogs/actuator/health" || exit 1
+            check_health "Catalog Service (Direct)" "http://localhost:8004/catalogs/actuator/health" 10 18 || exit 1
+            sleep 3  # Small delay between checks
             
             # Check Catalog Service via API Gateway
-            check_health "Catalog Service (via Gateway)" "http://localhost:8000/api/catalogs/actuator/health" || exit 1
+            check_health "Catalog Service (via Gateway)" "http://localhost:8000/api/catalogs/actuator/health" 8 15 || exit 1
+            sleep 3  # Small delay between checks
             
             # Optional Services - Nice to have
             echo ""
             echo "=== Optional Services Health Checks ==="
             
             # Check Profile Service (direct access)
-            check_health "Profile Service (Direct)" "http://localhost:8003/profiles/actuator/health" || true
+            check_health "Profile Service (Direct)" "http://localhost:8003/profiles/actuator/health" 8 15 || true
+            sleep 2  # Small delay between checks
             
             # Check Profile Service via API Gateway
-            check_health "Profile Service (via Gateway)" "http://localhost:8000/api/profiles/actuator/health" || true
+            check_health "Profile Service (via Gateway)" "http://localhost:8000/api/profiles/actuator/health" 8 15 || true
+            sleep 2  # Small delay between checks
             
             # Check Notification Service (direct access)
-            check_health "Notification Service (Direct)" "http://localhost:8006/notification-service/actuator/health" || true
+            check_health "Notification Service (Direct)" "http://localhost:8006/notification-service/actuator/health" 8 15 || true
+            sleep 2  # Small delay between checks
             
             # Check Notification Service via API Gateway
-            check_health "Notification Service (via Gateway)" "http://localhost:8000/api/notification-service/actuator/health" || true
+            check_health "Notification Service (via Gateway)" "http://localhost:8000/api/notification-service/actuator/health" 8 15 || true
+            sleep 2  # Small delay between checks
             
             # Check AI Service (direct access - custom endpoint)
-            check_health "AI Service (Direct)" "http://localhost:8005/health" || true
+            check_health "AI Service (Direct)" "http://localhost:8005/health" 8 15 || true
+            sleep 2  # Small delay between checks
             
             # Check AI Service via API Gateway
-            check_health "AI Service (via Gateway)" "http://localhost:8000/api/ai/health" || true
+            check_health "AI Service (via Gateway)" "http://localhost:8000/api/ai/health" 8 15 || true
             
             echo ""
             echo "=========================================="
