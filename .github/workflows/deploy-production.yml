@@ -344,8 +344,8 @@ jobs:
             echo "=========================================="
             
             # Wait a bit more for services to be ready
-            echo "Waiting for services to be ready (45 seconds)..."
-            sleep 45
+            echo "Waiting for services to be ready (90 seconds)..."
+            sleep 90
             
             # Check if services are running
             echo ""
@@ -380,8 +380,9 @@ jobs:
             check_health() {
               local service_name=$1
               local url=$2
-              local max_retries=3
+              local max_retries=5
               local retry_count=0
+              local wait_time=10
               
               while [ $retry_count -lt $max_retries ]; do
                 if curl -f "$url" > /dev/null 2>&1; then
@@ -390,18 +391,26 @@ jobs:
                 else
                   retry_count=$((retry_count + 1))
                   if [ $retry_count -lt $max_retries ]; then
-                    echo "⏳ $service_name not ready yet, retrying... ($retry_count/$max_retries)"
-                    sleep 5
+                    echo "⏳ $service_name not ready yet, retrying... ($retry_count/$max_retries) - waiting ${wait_time}s"
+                    sleep $wait_time
                   fi
                 fi
               done
               
               echo "❌ $service_name health check failed after $max_retries attempts"
+              echo "   URL: $url"
+              echo "   Trying to get more info..."
+              curl -v "$url" 2>&1 | head -20 || true
               return 1
             }
             
-            # Check API Gateway
-            check_health "API Gateway" "http://localhost:8000/actuator/health" || exit 1
+            # Check API Gateway (with detailed error info)
+            if ! check_health "API Gateway" "http://localhost:8000/actuator/health"; then
+              echo ""
+              echo "=== API Gateway Logs (last 30 lines) ==="
+              REGISTRY_PREFIX=$REGISTRY_PREFIX docker compose -f $COMPOSE_FILE --env-file .env.prod logs --tail=30 api-gateway || true
+              exit 1
+            fi
             
             # Check Auth Service
             check_health "Auth Service" "http://localhost:8001/auth-service/actuator/health" || exit 1
