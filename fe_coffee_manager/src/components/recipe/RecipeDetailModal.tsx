@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { CatalogRecipe } from '../../types';
-import { X, ChefHat, Clock, Info, ListChecks } from 'lucide-react';
+import { X, ChefHat, Clock, Info, ListChecks, Coffee } from 'lucide-react';
+import { API_BASE_URL } from '../../config/api';
 
 interface Props {
   open: boolean;
   onClose: () => void;
   recipe: CatalogRecipe | null;
+  productImageUrl?: string | null;
 }
 
-export default function RecipeDetailModal({ open, onClose, recipe }: Props) {
+export default function RecipeDetailModal({ open, onClose, recipe, productImageUrl }: Props) {
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
@@ -108,11 +110,26 @@ export default function RecipeDetailModal({ open, onClose, recipe }: Props) {
 
             {/* Meta grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-              <div className="bg-gray-50 rounded-lg p-4">
-                <div className="text-sm text-gray-600">Product Detail</div>
-                <div className="mt-1 text-gray-900 font-semibold">PD #{recipe.productDetail?.pdId}</div>
-                <div className="text-sm text-gray-600">Size: {recipe.productDetail?.size?.name || '—'}</div>
-                <div className="text-sm text-gray-600">Price: {recipe.productDetail?.price != null ? Number(recipe.productDetail.price).toLocaleString() : '—'}</div>
+              <div className="bg-gray-50 rounded-lg p-4 relative">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="text-sm text-gray-600">Product Detail</div>
+                    <div className="mt-1 text-gray-900 font-semibold">PD #{recipe.productDetail?.pdId}</div>
+                    <div className="text-sm text-gray-600">Size: {recipe.productDetail?.size?.name || '—'}</div>
+                    <div className="text-sm text-gray-600">Price: {recipe.productDetail?.price != null ? Number(recipe.productDetail.price).toLocaleString() : '—'}</div>
+                  </div>
+                  {productImageUrl && (
+                    <div className="ml-4 flex-shrink-0">
+                      <img
+                        src={productImageUrl}
+                        alt="Product"
+                        className="w-24 h-24 rounded-lg object-cover border border-gray-200"
+                        loading="lazy"
+                        decoding="async"
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="bg-gray-50 rounded-lg p-4">
                 <div className="text-sm text-gray-600">Category</div>

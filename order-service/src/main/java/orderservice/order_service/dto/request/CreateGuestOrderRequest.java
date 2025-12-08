@@ -24,8 +24,7 @@ public class CreateGuestOrderRequest {
 
     String email; // Optional
 
-    // Địa chỉ giao hàng
-    @NotNull(message = "Delivery address is required")
+    // Địa chỉ giao hàng (không bắt buộc nếu orderType = "takeaway")
     String deliveryAddress;
 
     // Địa chỉ để tìm chi nhánh (chỉ district + province)
@@ -48,6 +47,10 @@ public class CreateGuestOrderRequest {
     java.math.BigDecimal discount;
     java.math.BigDecimal vat;
     String discountCode;
+
+    // Order type: "dine-in", "takeaway", "online"
+    // Nếu không cung cấp, sẽ được suy luận từ các field khác
+    String orderType;
 
     @NotEmpty(message = "Order items cannot be empty")
     @Valid

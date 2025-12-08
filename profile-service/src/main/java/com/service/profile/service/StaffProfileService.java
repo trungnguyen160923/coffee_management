@@ -2,15 +2,18 @@ package com.service.profile.service;
 
 import com.service.profile.dto.request.StaffProfileCreationRequest;
 import com.service.profile.dto.request.StaffProfileUpdateRequest;
+import com.service.profile.dto.request.StaffProfileFullUpdateRequest;
 import com.service.profile.dto.response.BranchResponse;
 import com.service.profile.dto.response.StaffProfileResponse;
 import com.service.profile.dto.response.StaffWithUserResponse;
 import com.service.profile.dto.response.UserResponse;
 import com.service.profile.entity.StaffProfile;
+import com.service.profile.entity.StaffRoleAssignment;
 import com.service.profile.exception.AppException;
 import com.service.profile.exception.ErrorCode;
 import com.service.profile.mapper.StaffProfileMapper;
 import com.service.profile.repository.StaffProfileRepository;
+import com.service.profile.repository.StaffRoleAssignmentRepository;
 import com.service.profile.repository.http_client.AuthClient;
 import com.service.profile.repository.http_client.BranchClient;
 
@@ -38,6 +41,7 @@ public class StaffProfileService {
     StaffProfileMapper staffProfileMapper;
     BranchClient branchClient;
     AuthClient authClient;
+    StaffRoleAssignmentRepository staffRoleAssignmentRepository;
 
     @Transactional
     @PreAuthorize("hasRole('MANAGER')")
@@ -64,14 +68,12 @@ public class StaffProfileService {
         if(request.getIdentityCard() != null){
             staffProfile.setIdentityCard(request.getIdentityCard());
         }
-        if(request.getPosition() != null){
-            staffProfile.setPosition(request.getPosition());
-        }
         if(request.getHireDate() != null){
             staffProfile.setHireDate(request.getHireDate());
         }
+        // Map trường salary từ request sang baseSalary trong StaffProfile (giữ backward-compat với DTO cũ)
         if(request.getSalary() != null){
-            staffProfile.setSalary(request.getSalary());
+            staffProfile.setBaseSalary(request.getSalary());
         }
         staffProfile.setUpdateAt(LocalDateTime.now());
         staffProfileRepository.save(staffProfile);
@@ -116,13 +118,27 @@ public class StaffProfileService {
             BranchResponse branch = branchClient.getBranchById(staffProfile.getBranchId()).getResult();
             StaffProfileResponse staffProfileResponse = staffProfileMapper.toStaffProfileResponse(staffProfile);
             staffProfileResponse.setBranch(branch);
+            
+            // Load staff role assignments
+            List<StaffRoleAssignment> assignments = staffRoleAssignmentRepository.findByStaffProfile(staffProfile);
+            List<Integer> roleIds = assignments.stream()
+                    .map(StaffRoleAssignment::getRoleId)
+                    .collect(Collectors.toList());
+            String proficiencyLevel = assignments.stream()
+                    .findFirst()
+                    .map(StaffRoleAssignment::getProficiencyLevel)
+                    .orElse(null);
+            
+            staffProfileResponse.setStaffBusinessRoleIds(roleIds);
+            staffProfileResponse.setProficiencyLevel(proficiencyLevel);
+            
             return staffProfileResponse;
         } catch (Exception e) {
             throw new AppException(ErrorCode.BRANCH_NOT_FOUND);
         }
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER') or hasRole('STAFF')")
     public List<StaffProfileResponse> getStaffProfilesByBranch(Integer branchId){
         return getStaffProfilesByBranchInternal(branchId);
     }
@@ -147,28 +163,96 @@ public class StaffProfileService {
     }
 
     @PreAuthorize("hasRole('MANAGER')")
+    @Transactional
     public void deleteStaffProfile(Integer userId){
-        staffProfileRepository.deleteById(userId);
+        StaffProfile staffProfile = staffProfileRepository.findById(userId)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_ID_NOT_FOUND));
+        // Xoá tất cả staff_role_assignments trước (dùng userId để chắc chắn)
+        staffRoleAssignmentRepository.deleteByStaffUserId(userId);
+        // Sau đó xoá staff_profile
+        staffProfileRepository.delete(staffProfile);
+    }
+
+    @PreAuthorize("hasRole('MANAGER')")
+    @Transactional
+    public void updateStaffProfileFull(Integer userId, StaffProfileFullUpdateRequest request) {
+        StaffProfile staffProfile = staffProfileRepository.findById(userId)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_ID_NOT_FOUND));
+
+        if (request.getIdentityCard() != null) {
+            staffProfile.setIdentityCard(request.getIdentityCard());
+        }
+        if (request.getHireDate() != null) {
+            staffProfile.setHireDate(request.getHireDate());
+        }
+        if (request.getEmploymentType() != null) {
+            staffProfile.setEmploymentType(request.getEmploymentType());
+        }
+        if (request.getPayType() != null) {
+            staffProfile.setPayType(request.getPayType());
+        }
+
+        // Pay rules: MONTHLY requires baseSalary, HOURLY requires hourlyRate
+        String effectivePayType = request.getPayType() != null
+                ? request.getPayType()
+                : staffProfile.getPayType();
+
+        if ("MONTHLY".equalsIgnoreCase(effectivePayType)) {
+            if (request.getBaseSalary() == null) {
+                throw new AppException(ErrorCode.EMPTY_BASE_SALARY);
+            }
+            staffProfile.setBaseSalary(request.getBaseSalary());
+            staffProfile.setHourlyRate(java.math.BigDecimal.ZERO);
+        } else if ("HOURLY".equalsIgnoreCase(effectivePayType)) {
+            if (request.getHourlyRate() == null) {
+                throw new AppException(ErrorCode.EMPTY_HOURLY_RATE);
+            }
+            staffProfile.setHourlyRate(request.getHourlyRate());
+            staffProfile.setBaseSalary(java.math.BigDecimal.ZERO);
+        }
+
+        if (request.getOvertimeRate() != null) {
+            staffProfile.setOvertimeRate(request.getOvertimeRate());
+        }
+
+        staffProfile.setUpdateAt(LocalDateTime.now());
+        staffProfileRepository.save(staffProfile);
+
+        // Update staff_role_assignments
+        if (request.getStaffBusinessRoleIds() != null) {
+            staffRoleAssignmentRepository.deleteByStaffProfile(staffProfile);
+
+            if (!request.getStaffBusinessRoleIds().isEmpty()) {
+                String level = request.getProficiencyLevel() != null
+                        ? request.getProficiencyLevel()
+                        : "INTERMEDIATE";
+                request.getStaffBusinessRoleIds().forEach(roleId -> {
+                    StaffRoleAssignment assignment = StaffRoleAssignment.builder()
+                            .staffProfile(staffProfile)
+                            .roleId(roleId)
+                            .proficiencyLevel(level)
+                            .certifiedAt(staffProfile.getHireDate())
+                            .build();
+                    staffRoleAssignmentRepository.save(assignment);
+                });
+            }
+        }
     }
 
     /**
      * Lấy danh sách nhân viên ở chi nhánh kèm thông tin đầy đủ từ auth-service
      */
-    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER') or hasRole('STAFF')")
     public List<StaffWithUserResponse> getStaffsWithUserInfoByBranch(Integer branchId) {
-        log.info("Getting staffs with user info for branch: {}", branchId);
-        
         // 1. Lấy danh sách StaffProfile từ profile-service
         List<StaffProfile> staffProfiles = staffProfileRepository.findByBranchId(branchId);
-        log.debug("Found {} staff profiles for branch {}", staffProfiles.size(), branchId);
         
         // 2. Lấy danh sách User từ auth-service
         List<UserResponse> users;
         try {
             users = authClient.getStaffsByBranch(branchId).getResult();
-            log.debug("Found {} users from auth-service for branch {}", users != null ? users.size() : 0, branchId);
         } catch (Exception e) {
-            log.error("Error fetching users from auth-service for branch {}: {}", branchId, e.getMessage());
+            log.error("Error fetching users from auth-service for branch {}: {}", branchId, e.getMessage(), e);
             users = List.of(); // Trả về danh sách rỗng nếu có lỗi
         }
         
@@ -188,21 +272,37 @@ public class StaffProfileService {
             log.warn("Failed to fetch branch {}: {}", branchId, e.getMessage());
         }
         
-        // 5. Merge thông tin từ StaffProfile và User
+        // 5. Merge thông tin từ StaffProfile, StaffRoleAssignment và User
         final BranchResponse finalBranch = branch;
         return staffProfiles.stream()
             .map(staffProfile -> {
                 UserResponse user = userMap.get(staffProfile.getUserId());
-                
+
+                // Lấy danh sách role assignment cho staff này
+                List<StaffRoleAssignment> assignments =
+                        staffRoleAssignmentRepository.findByStaffProfile(staffProfile);
+                List<Integer> roleIds = assignments.stream()
+                        .map(StaffRoleAssignment::getRoleId)
+                        .collect(Collectors.toList());
+                String proficiencyLevel = assignments.stream()
+                        .findFirst()
+                        .map(StaffRoleAssignment::getProficiencyLevel)
+                        .orElse(null);
+
                 StaffWithUserResponse.StaffWithUserResponseBuilder builder = StaffWithUserResponse.builder()
                     .userId(staffProfile.getUserId())
                     .branch(finalBranch)
                     .identityCard(staffProfile.getIdentityCard())
-                    .position(staffProfile.getPosition())
                     .hireDate(staffProfile.getHireDate())
-                    .salary(staffProfile.getSalary())
+                    .employmentType(staffProfile.getEmploymentType())
+                    .payType(staffProfile.getPayType())
+                    .baseSalary(staffProfile.getBaseSalary())
+                    .hourlyRate(staffProfile.getHourlyRate())
+                    .overtimeRate(staffProfile.getOvertimeRate())
                     .createAt(staffProfile.getCreateAt())
-                    .updateAt(staffProfile.getUpdateAt());
+                    .updateAt(staffProfile.getUpdateAt())
+                    .staffBusinessRoleIds(roleIds)
+                    .proficiencyLevel(proficiencyLevel);
                 
                 // Thêm thông tin từ User nếu có
                 if (user != null) {

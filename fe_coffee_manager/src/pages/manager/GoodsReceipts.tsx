@@ -3,6 +3,7 @@ import { catalogService } from '../../services/catalogService';
 import { useAuth } from '../../context/AuthContext';
 import { Package, RefreshCw, Search, Loader } from 'lucide-react';
 import GoodsReceiptDetailModal from '../../components/manager/GoodsReceiptDetailModal';
+import { GoodsReceiptsSkeleton } from '../../components/manager/skeletons';
 
 interface Page<T> { content: T[]; totalPages: number; totalElements: number; }
 interface GoodsReceiptRow {
@@ -72,6 +73,10 @@ export default function GoodsReceipts() {
     }, 400);
     return () => clearTimeout(t);
   }, [query, fromDate, toDate]);
+
+  if (loading && !data) {
+    return <GoodsReceiptsSkeleton />;
+  }
 
   return (
     <>

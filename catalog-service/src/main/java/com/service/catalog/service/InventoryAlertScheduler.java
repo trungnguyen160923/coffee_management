@@ -25,7 +25,7 @@ public class InventoryAlertScheduler {
     private final StockRepository stockRepository;
     private final InventoryAlertService inventoryAlertService;
 
-    @Scheduled(cron = "${app.inventory-alert.scheduler.cron:0 */1 * * * ?}")
+    @Scheduled(cron = "${app.inventory-alert.scheduler.cron:0 0 * * * ?}")
     public void scanForLowStocks() {
         List<Integer> branchIds = stockRepository.findDistinctBranchIds();
         if (branchIds == null || branchIds.isEmpty()) {

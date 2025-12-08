@@ -40,7 +40,7 @@ public class SizeService {
             size.setCreateAt(LocalDateTime.now());
             size.setUpdateAt(LocalDateTime.now());
             sizeRepository.save(size);
-            return sizeMapper.toSizeResponse(size);
+            return toSizeResponse(size);
         } catch (Exception e) {
             if(e instanceof DataIntegrityViolationException) {
                 throw new AppException(ErrorCode.SIZE_NAME_ALREADY_EXISTS, "Size with name '" + request.getName() + "' already exists");
@@ -54,7 +54,7 @@ public class SizeService {
     public List<SizeResponse> getAllSizes() {
         return sizeRepository.findAll()
                 .stream()
-                .map(sizeMapper::toSizeResponse)
+                .map(this::toSizeResponse)
                 .toList();
     }
 
@@ -76,7 +76,21 @@ public class SizeService {
         size.setDescription(request.getDescription());
         size.setUpdateAt(LocalDateTime.now());
         sizeRepository.save(size);
-        return sizeMapper.toSizeResponse(size);
+        return toSizeResponse(size);
+    }
+
+    /**
+     * Helper method to convert Size entity to SizeResponse with default active = true
+     */
+    private SizeResponse toSizeResponse(Size size) {
+        if (size == null) {
+            return null;
+        }
+        SizeResponse response = sizeMapper.toSizeResponse(size);
+        if (response != null && response.getActive() == null) {
+            response.setActive(true); // Default to true if entity doesn't have active field
+        }
+        return response;
     }
 
     @Transactional

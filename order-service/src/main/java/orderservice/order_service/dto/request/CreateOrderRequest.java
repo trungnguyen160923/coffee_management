@@ -44,6 +44,10 @@ public class CreateOrderRequest {
     Integer cartId;
     String guestId;
 
+    // Order type: "dine-in", "takeaway", "online", "pos"
+    // Nếu không cung cấp, sẽ được suy luận từ các field khác
+    String orderType;
+
     @NotEmpty(message = "Order items cannot be empty")
     @Valid
     List<OrderItemRequest> orderItems;

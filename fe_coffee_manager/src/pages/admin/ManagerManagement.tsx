@@ -7,6 +7,7 @@ import AssignBranchModal from '../../components/common/modal/AssignBranchModal';
 import ConfirmModal from '../../components/common/modal/ConfirmModal';
 import { branchService } from '../../services';
 import { toast } from 'react-hot-toast';
+import { ManagerManagementSkeleton } from '../../components/admin/skeletons';
 
 const ManagerManagement: React.FC = () => {
   const [managers, setManagers] = useState<UserResponseDto[]>([]);
@@ -299,11 +300,7 @@ const ManagerManagement: React.FC = () => {
 
 
   if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    );
+    return <ManagerManagementSkeleton />;
   }
 
   if (error) {

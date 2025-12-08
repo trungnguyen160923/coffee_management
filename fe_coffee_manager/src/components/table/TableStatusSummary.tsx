@@ -6,9 +6,10 @@ import { TABLE_STATUS } from '../../config/constants';
 
 interface TableStatusSummaryProps {
     branchId: number;
+    refreshTrigger?: number;
 }
 
-export default function TableStatusSummary({ branchId }: TableStatusSummaryProps) {
+export default function TableStatusSummary({ branchId, refreshTrigger }: TableStatusSummaryProps) {
     const [tables, setTables] = useState<Table[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -29,7 +30,7 @@ export default function TableStatusSummary({ branchId }: TableStatusSummaryProps
         };
 
         loadTableStatus();
-    }, [branchId]);
+    }, [branchId, refreshTrigger]);
 
     const statusCounts = tables.reduce((acc, table) => {
         acc[table.status] = (acc[table.status] || 0) + 1;
@@ -68,8 +69,21 @@ export default function TableStatusSummary({ branchId }: TableStatusSummaryProps
 
     if (loading) {
         return (
-            <div className="bg-white rounded-2xl shadow p-6">
-                <div className="text-center text-gray-600">Loading table status...</div>
+            <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 animate-pulse">
+                <div className="h-6 bg-slate-200 rounded w-48 mb-4"></div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {[...Array(4)].map((_, idx) => (
+                        <div key={idx} className="text-center">
+                            <div className="h-8 bg-slate-200 rounded-lg w-24 mx-auto mb-2"></div>
+                            <div className="h-6 bg-slate-300 rounded w-12 mx-auto mb-1"></div>
+                            <div className="h-3 bg-slate-200 rounded w-16 mx-auto"></div>
+                        </div>
+                    ))}
+                </div>
+                <div className="mt-6 flex items-center justify-between">
+                    <div className="h-5 bg-slate-200 rounded w-32"></div>
+                    <div className="h-8 bg-slate-300 rounded w-16"></div>
+                </div>
             </div>
         );
     }

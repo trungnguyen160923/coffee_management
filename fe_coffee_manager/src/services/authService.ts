@@ -30,6 +30,13 @@ export interface AuthService {
   refreshToken: () => Promise<LoginResponse>;
   getCurrentUser: () => Promise<User>;
   changePassword: (oldPassword: string, newPassword: string) => Promise<void>;
+  getStaffBusinessRoles: () => Promise<StaffBusinessRole[]>;
+}
+
+export interface StaffBusinessRole {
+  roleId: number;
+  name: string;
+  roleName: string;
 }
 
 // Auth Service Implementation
@@ -141,6 +148,8 @@ export const authService: AuthService = {
         salary: number | null;
         adminLevel: number | null;
         notes: string | null;
+        staffBusinessRoleIds?: number[];
+        proficiencyLevel?: string | null;
       };
     }>(API_ENDPOINTS.AUTH.ME);
     
@@ -169,7 +178,10 @@ export const authService: AuthService = {
       position: userData.position || undefined,
       salary: userData.salary || undefined,
       adminLevel: userData.adminLevel || undefined,
-      notes: userData.notes || undefined
+      notes: userData.notes || undefined,
+      // Staff business roles & proficiency
+      staffBusinessRoleIds: userData.staffBusinessRoleIds || undefined,
+      proficiencyLevel: userData.proficiencyLevel as 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED' | 'EXPERT' | null | undefined
     };
   },
 
@@ -178,6 +190,14 @@ export const authService: AuthService = {
       oldPassword,
       newPassword,
     });
+  },
+
+  async getStaffBusinessRoles(): Promise<StaffBusinessRole[]> {
+    const response = await apiClient.get<{
+      code: number;
+      result: StaffBusinessRole[];
+    }>(API_ENDPOINTS.AUTH.STAFF_BUSINESS_ROLES);
+    return response.result || [];
   },
 };
 

@@ -1,11 +1,17 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { apiClient, branchService } from '../../services';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { apiClient, branchService, branchClosureService } from '../../services';
 import { Branch } from '../../types';
 import { API_ENDPOINTS } from '../../config/constants';
-import { Pencil, Check, X, Trash2 } from 'lucide-react';
+import { Eye, Pencil, Trash2, Settings } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import ConfirmModal from '../../components/common/modal/ConfirmModal';
 import CreateBranchModal from '../../components/common/modal/CreateBranchModal';
+import BranchDetailModal from '../../components/common/modal/BranchDetailModal';
+import BranchClosureModal, { BranchClosureFormValues } from '../../components/common/modal/BranchClosureModal';
+import BranchClosureDetailModal from '../../components/common/modal/BranchClosureDetailModal';
+import AllClosuresModal from '../../components/common/modal/AllClosuresModal';
+import type { BranchClosure } from '../../services/branchClosureService';
+import { BranchManagementSkeleton } from '../../components/admin/skeletons';
 
 const BranchManagement: React.FC = () => {
   const [allBranches, setAllBranches] = useState<Branch[]>([]);
@@ -16,10 +22,17 @@ const BranchManagement: React.FC = () => {
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [isCreating, setIsCreating] = useState(false);
-  const [editing, setEditing] = useState<{ id: number; field: 'name' | 'address' | 'phone' | 'openHours' | 'endHours' | 'businessHours' } | null>(null);
-  const [editValue, setEditValue] = useState('');
+  const [editBranch, setEditBranch] = useState<Branch | null>(null);
+  const [viewBranch, setViewBranch] = useState<Branch | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Branch | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [allClosures, setAllClosures] = useState<BranchClosure[]>([]);
+  const [loadingClosures, setLoadingClosures] = useState(false);
+  const [closureModalOpen, setClosureModalOpen] = useState(false);
+  const [editClosure, setEditClosure] = useState<BranchClosure | null>(null);
+  const [viewClosure, setViewClosure] = useState<BranchClosure[] | null>(null);
+  const [allClosuresModalOpen, setAllClosuresModalOpen] = useState(false);
+  const [highlightedGroupKey, setHighlightedGroupKey] = useState<string | null>(null);
   const topScrollRef = useRef<HTMLDivElement | null>(null);
   const bottomScrollRef = useRef<HTMLDivElement | null>(null);
   const tableRef = useRef<HTMLTableElement | null>(null);
@@ -40,6 +53,9 @@ const BranchManagement: React.FC = () => {
       const qs = `?page=${page}&size=${limit}`;
       const resp = await apiClient.get<{ code: number; result: { data: Branch[]; total: number; page: number; size: number; totalPages: number } }>(`${API_ENDPOINTS.BRANCHES.BASE}/paged${qs}`);
       const payload = resp?.result;
+      // Delay to show skeleton (for demo purposes)
+      await new Promise(resolve => setTimeout(resolve, 2500));
+      
       setAllBranches(payload?.data || []);
       setTotal(payload?.total || 0);
       setTotalPages(payload?.totalPages || 1);
@@ -61,71 +77,96 @@ const BranchManagement: React.FC = () => {
     return value;
   }
 
-  const startEdit = (b: Branch, field: 'name' | 'address' | 'phone' | 'businessHours' | 'openHours' | 'endHours') => {
-    setEditing({ id: b.branchId, field });
-    if (field === 'businessHours') {
-      setEditValue(`${String(b.openHours).slice(0,5)} - ${String(b.endHours).slice(0,5)}`);
-    } else {
-      setEditValue(String((b as any)[field] ?? ''));
-    }
+  const parseOpenDays = (openDays?: string | null): number[] => {
+    if (!openDays || !openDays.trim()) return [1, 2, 3, 4, 5, 6, 7];
+    const parts = openDays.split(',').map((p) => parseInt(p.trim(), 10));
+    return Array.from(new Set(parts.filter((d) => d >= 1 && d <= 7))).sort((a, b) => a - b);
   };
 
-  const cancelEdit = () => {
-    setEditing(null);
-    setEditValue('');
+  const dayLabels: Record<number, string> = {
+    1: 'Mon',
+    2: 'Tue',
+    3: 'Wed',
+    4: 'Thu',
+    5: 'Fri',
+    6: 'Sat',
+    7: 'Sun',
   };
 
-  const saveEdit = async (b: Branch) => {
-    if (!editing) return;
+  const formatDateDisplay = (isoDate: string): string => {
+    if (!isoDate) return '';
+    const d = new Date(isoDate);
+    if (Number.isNaN(d.getTime())) return isoDate;
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yyyy = d.getFullYear();
+    return `${dd}/${mm}/${yyyy}`;
+  };
+
+  // Group closures by startDate, endDate, and reason
+  const groupedClosures = useMemo(() => {
+    const groups = new Map<string, BranchClosure[]>();
     
-    let payload: any = {
-      name: editing.field === 'name' ? editValue : b.name,
-      address: editing.field === 'address' ? editValue : b.address,
-      phone: editing.field === 'phone' ? editValue : b.phone,
-      managerUserId: (b as any).managerUserId ?? undefined,
-      openHours: toHHmmss((b as any).openHours),
-      endHours: toHHmmss((b as any).endHours),
-    };
-
-    // Handle business hours editing
-    if (editing.field === 'businessHours') {
-      const [openTime, endTime] = editValue.split(' - ');
-      if (openTime && endTime) {
-        payload.openHours = toHHmmss(openTime);
-        payload.endHours = toHHmmss(endTime);
+    allClosures.forEach((closure) => {
+      const key = `${closure.startDate}|${closure.endDate}|${closure.reason || ''}`;
+      if (!groups.has(key)) {
+        groups.set(key, []);
       }
-    } else if (editing.field === 'openHours') {
-      payload.openHours = toHHmmss(editValue);
-    } else if (editing.field === 'endHours') {
-      payload.endHours = toHHmmss(editValue);
-    }
+      groups.get(key)!.push(closure);
+    });
 
+    // Convert to array and sort by latest updateAt/createAt
+    return Array.from(groups.values())
+      .map((group) => {
+        // Sort group by updateAt (newest first), then createAt
+        group.sort((a, b) => {
+          const aTime = new Date(b.updateAt || b.createAt).getTime();
+          const bTime = new Date(a.updateAt || a.createAt).getTime();
+          return aTime - bTime;
+        });
+        return group;
+      })
+      .sort((a, b) => {
+        // Sort groups by latest updateAt/createAt (newest first)
+        const aLatest = new Date(a[0].updateAt || a[0].createAt).getTime();
+        const bLatest = new Date(b[0].updateAt || b[0].createAt).getTime();
+        return bLatest - aLatest;
+      });
+  }, [allClosures]);
+
+
+  const fetchClosures = useCallback(async () => {
     try {
-      await branchService.updateBranch(String(b.branchId), payload);
-      
-      // Cập nhật local state thay vì reload toàn bộ
-      setAllBranches(prevBranches => 
-        prevBranches.map(branch => 
-          branch.branchId === b.branchId 
-            ? { 
-                ...branch, 
-                [editing.field]: editValue,
-                // Cập nhật thời gian update
-                updateAt: new Date().toISOString()
-              }
-            : branch
-        )
-      );
-      
-      cancelEdit();
-      toast.success('Branch updated successfully');
+      setLoadingClosures(true);
+      const result = await branchClosureService.list();
+      setAllClosures(result || []);
     } catch (e) {
       console.error(e);
       const err: any = e as any;
-      const msg = err?.response?.message || err?.message || 'Failed to update branch';
+      const msg = err?.response?.message || err?.message || 'Failed to load branch closures';
       toast.error(msg);
+    } finally {
+      setLoadingClosures(false);
     }
-  };
+  }, []);
+
+  const fetchClosuresWithFilter = useCallback(async (from?: string, to?: string) => {
+    try {
+      setLoadingClosures(true);
+      const params: { from?: string; to?: string } = {};
+      if (from) params.from = from;
+      if (to) params.to = to;
+      const result = await branchClosureService.list(params);
+      setAllClosures(result || []);
+    } catch (e) {
+      console.error(e);
+      const err: any = e as any;
+      const msg = err?.response?.message || err?.message || 'Failed to load branch closures';
+      toast.error(msg);
+    } finally {
+      setLoadingClosures(false);
+    }
+  }, []);
 
   const deleteBranch = async () => {
     if (!pendingDelete) return;
@@ -152,6 +193,7 @@ const BranchManagement: React.FC = () => {
 
   useEffect(() => {
     fetchBranches();
+    fetchClosures();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, limit]);
 
@@ -234,7 +276,10 @@ const BranchManagement: React.FC = () => {
                 <span>Add Branch</span>
               </button>
               <button
-                onClick={fetchBranches}
+                onClick={() => {
+                  fetchBranches();
+                  fetchClosures();
+                }}
                 className="flex items-center space-x-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:border-sky-300 hover:text-sky-700 hover:bg-sky-50"
                 title="Refresh data"
               >
@@ -263,10 +308,16 @@ const BranchManagement: React.FC = () => {
                   <div className="flex items-center justify-between mb-4">
                     <h2 className="text-lg font-medium text-gray-900">Total Branches</h2>
                   </div>
-                  <div className="bg-blue-50 rounded-lg p-3">
-                    <div className="text-xl font-bold text-blue-600">{total}</div>
-                    <div className="text-xs text-blue-800">Branches</div>
-                  </div>
+                  {loading ? (
+                    <div className="animate-pulse">
+                      <div className="bg-slate-200 rounded-lg p-3 h-16"></div>
+                    </div>
+                  ) : (
+                    <div className="bg-blue-50 rounded-lg p-3">
+                      <div className="text-xl font-bold text-blue-600">{total}</div>
+                      <div className="text-xs text-blue-800">Branches</div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -275,43 +326,128 @@ const BranchManagement: React.FC = () => {
                   <div className="flex items-center justify-between mb-4">
                     <h2 className="text-lg font-medium text-gray-900">With Managers</h2>
                   </div>
-                  <div className="bg-green-50 rounded-lg p-3">
-                    <div className="text-xl font-bold text-green-600">
-                      {branches.filter(b => (b as any).managerUserId).length}
+                  {loading ? (
+                    <div className="animate-pulse">
+                      <div className="bg-slate-200 rounded-lg p-3 h-16"></div>
                     </div>
-                    <div className="text-xs text-green-800">Have managers</div>
-                  </div>
+                  ) : (
+                    <div className="bg-green-50 rounded-lg p-3">
+                      <div className="text-xl font-bold text-green-600">
+                        {branches.filter(b => (b as any).managerUserId).length}
+                      </div>
+                      <div className="text-xs text-green-800">Have managers</div>
+                    </div>
+                  )}
                 </div>
               </div>
 
               <div className="bg-white shadow rounded-lg">
                 <div className="px-4 py-5 sm:p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-medium text-gray-900">Actions</h2>
+                  <div className="flex items-center justify-between mb-3">
+                    <h2 className="text-lg font-medium text-gray-900">Branch closures</h2>
                     <button
-                      onClick={() => setIsCreating(true)}
+                      onClick={() => setClosureModalOpen(true)}
                       className="flex items-center space-x-1 text-sm bg-sky-500 text-white px-3 py-1.5 rounded-lg hover:bg-sky-600 transition-colors"
+                      disabled={loadingClosures}
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                       </svg>
-                      <span>Add New</span>
+                      <span>Add closure</span>
                     </button>
                   </div>
-                  <div className="bg-purple-50 rounded-lg p-3">
-                    <div className="text-xl font-bold text-purple-600">
-                      {branches.filter(b => b.createAt && new Date(b.createAt) > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)).length}
+                  {loadingClosures ? (
+                    <div className="animate-pulse">
+                      <div className="bg-slate-200 rounded-lg p-3 h-16 mb-2"></div>
+                      <div className="space-y-2">
+                        {[...Array(2)].map((_, idx) => (
+                          <div key={idx} className="h-8 bg-slate-200 rounded"></div>
+                        ))}
+                      </div>
                     </div>
-                    <div className="text-xs text-purple-800">Added in 30 days</div>
+                  ) : (
+                    <div className="bg-purple-50 rounded-lg p-3">
+                      {groupedClosures.length === 0 ? (
+                      <div className="text-xs text-purple-500 py-2">No closures configured</div>
+                    ) : (
+                      <>
+                        <ul className="space-y-2">
+                          {groupedClosures.slice(0, 2).map((group, idx) => {
+                            const first = group[0];
+                            const isSingleDay = first.startDate === first.endDate;
+                            const isAllBranches = first.branchId === null;
+                            const branchCount = group.length;
+
+                            return (
+                              <li
+                                key={`${first.startDate}-${first.endDate}-${first.reason || ''}-${idx}`}
+                                className="flex items-center justify-between gap-2 bg-white rounded-lg px-3 py-2.5 shadow-sm"
+                              >
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-semibold text-purple-700 text-sm mb-1">
+                                    {isSingleDay
+                                      ? formatDateDisplay(first.startDate)
+                                      : `${formatDateDisplay(first.startDate)} → ${formatDateDisplay(first.endDate)}`}
+                                  </div>
+                                  <div className="text-xs text-purple-600 mb-0.5">
+                                    {isAllBranches ? 'All branches' : `${branchCount} ${branchCount === 1 ? 'branch' : 'branches'}`}
+                                  </div>
+                                  {first.reason && (
+                                    <div className="text-xs text-purple-500 truncate" title={first.reason}>
+                                      {first.reason}
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-1 flex-shrink-0">
+                                  <button
+                                    type="button"
+                                    className="inline-flex items-center justify-center h-7 w-7 rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                                    title="View details"
+                                    onClick={() => setViewClosure(group)}
+                                  >
+                                    <Eye className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="inline-flex items-center justify-center h-7 w-7 rounded-full text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                                    title="Manage closure"
+                                    onClick={() => {
+                                      const groupKey = `${first.startDate}|${first.endDate}|${first.reason || ''}`;
+                                      setHighlightedGroupKey(groupKey);
+                                      setAllClosuresModalOpen(true);
+                                    }}
+                                  >
+                                    <Settings className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                        {groupedClosures.length > 2 && (
+                          <div className="mt-3 text-center">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setHighlightedGroupKey(null);
+                                setAllClosuresModalOpen(true);
+                              }}
+                              className="text-xs text-purple-600 hover:text-purple-800 font-medium underline"
+                            >
+                              View all {groupedClosures.length} closure groups
+                            </button>
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
+                  )}
                 </div>
               </div>
             </div>
 
             {loading ? (
-              <div className="flex justify-center items-center h-64">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-              </div>
+              <BranchManagementSkeleton />
             ) : error ? (
               <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">{error}</div>
             ) : (
@@ -328,11 +464,8 @@ const BranchManagement: React.FC = () => {
                         <tr>
                           <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" rowSpan={2}>ID</th>
                           <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" rowSpan={2}>Name</th>
-                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" rowSpan={2}>Address</th>
                           <th className="px-6 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" colSpan={2}>Business Hours</th>
-                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" rowSpan={2}>Phone</th>
-                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" rowSpan={2}>Created At</th>
-                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" rowSpan={2}>Updated At</th>
+                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" rowSpan={2}>Open Days</th>
                           <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" rowSpan={2}>Actions</th>
                         </tr>
                         <tr>
@@ -345,104 +478,61 @@ const BranchManagement: React.FC = () => {
                           <tr key={b.branchId} className="hover:bg-gray-50">
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{b.branchId}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                              {editing && editing.id === b.branchId && editing.field === 'name' ? (
-                                <div className="flex items-center gap-2">
-                                  <input
-                                    className="border rounded px-2 py-1 text-sm"
-                                    value={editValue}
-                                    onChange={(e) => setEditValue(e.target.value)}
-                                  />
-                                  <button onClick={() => saveEdit(b)} className="text-emerald-600 hover:text-emerald-700"><Check className="w-4 h-4" /></button>
-                                  <button onClick={cancelEdit} className="text-gray-500 hover:text-gray-700"><X className="w-4 h-4" /></button>
-                                </div>
-                              ) : (
-                                <div className="flex items-center gap-2">
-                                  <span>{b.name}</span>
-                                  <button onClick={() => startEdit(b, 'name')} className="text-blue-600 hover:text-blue-700"><Pencil className="w-4 h-4" /></button>
-                                </div>
-                              )}
+                              {b.name}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {editing && editing.id === b.branchId && editing.field === 'address' ? (
-                                <div className="flex items-center gap-2">
-                                  <input
-                                    className="border rounded px-2 py-1 text-sm w-64"
-                                    value={editValue}
-                                    onChange={(e) => setEditValue(e.target.value)}
-                                  />
-                                  <button onClick={() => saveEdit(b)} className="text-emerald-600 hover:text-emerald-700"><Check className="w-4 h-4" /></button>
-                                  <button onClick={cancelEdit} className="text-gray-500 hover:text-gray-700"><X className="w-4 h-4" /></button>
-                                </div>
-                              ) : (
-                                <div className="flex items-center gap-2">
-                                  <span>{b.address}</span>
-                                  <button onClick={() => startEdit(b, 'address')} className="text-blue-600 hover:text-blue-700"><Pencil className="w-4 h-4" /></button>
-                                </div>
-                              )}
+                              {b.openHours ? String(b.openHours).slice(0, 5) : '--:--'}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {editing && editing.id === b.branchId && editing.field === 'openHours' ? (
-                                <div className="flex items-center gap-2">
-                                  <input
-                                    type="time"
-                                    className="border rounded px-2 py-1 text-sm"
-                                    value={editValue}
-                                    onChange={(e) => setEditValue(e.target.value)}
-                                  />
-                                  <button onClick={() => saveEdit(b)} className="text-emerald-600 hover:text-emerald-700"><Check className="w-4 h-4" /></button>
-                                  <button onClick={cancelEdit} className="text-gray-500 hover:text-gray-700"><X className="w-4 h-4" /></button>
-                                </div>
-                              ) : (
-                                <div className="flex items-center gap-2">
-                                  <span>{b.openHours ? String(b.openHours).slice(0,5) : '--:--'}</span>
-                                  <button onClick={() => startEdit(b, 'openHours')} className="text-blue-600 hover:text-blue-700"><Pencil className="w-4 h-4" /></button>
-                                </div>
-                              )}
+                              {b.endHours ? String(b.endHours).slice(0, 5) : '--:--'}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {editing && editing.id === b.branchId && editing.field === 'endHours' ? (
-                                <div className="flex items-center gap-2">
-                                  <input
-                                    type="time"
-                                    className="border rounded px-2 py-1 text-sm"
-                                    value={editValue}
-                                    onChange={(e) => setEditValue(e.target.value)}
-                                  />
-                                  <button onClick={() => saveEdit(b)} className="text-emerald-600 hover:text-emerald-700"><Check className="w-4 h-4" /></button>
-                                  <button onClick={cancelEdit} className="text-gray-500 hover:text-gray-700"><X className="w-4 h-4" /></button>
+                              <div className="flex flex-wrap gap-1 justify-center">
+                                {[1, 2, 3, 4, 5, 6, 7].map((d) => {
+                                  const active = parseOpenDays((b as any).openDays).includes(d);
+                                  return (
+                                    <span
+                                      key={d}
+                                      className={
+                                        'inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium border ' +
+                                        (active
+                                          ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
+                                          : 'bg-slate-50 border-slate-200 text-slate-300 line-through')
+                                      }
+                                    >
+                                      {dayLabels[d] ?? d}
+                                    </span>
+                                  );
+                                })}
                                 </div>
-                              ) : (
-                                <div className="flex items-center gap-2">
-                                  <span>{b.endHours ? String(b.endHours).slice(0,5) : '--:--'}</span>
-                                  <button onClick={() => startEdit(b, 'endHours')} className="text-blue-600 hover:text-blue-700"><Pencil className="w-4 h-4" /></button>
-                                </div>
-                              )}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {editing && editing.id === b.branchId && editing.field === 'phone' ? (
-                                <div className="flex items-center gap-2">
-                                  <input
-                                    className="border rounded px-2 py-1 text-sm"
-                                    value={editValue}
-                                    onChange={(e) => setEditValue(e.target.value)}
-                                  />
-                                  <button onClick={() => saveEdit(b)} className="text-emerald-600 hover:text-emerald-700"><Check className="w-4 h-4" /></button>
-                                  <button onClick={cancelEdit} className="text-gray-500 hover:text-gray-700"><X className="w-4 h-4" /></button>
-                                </div>
-                              ) : (
-                                <div className="flex items-center gap-2">
-                                  <span>{b.phone}</span>
-                                  <button onClick={() => startEdit(b, 'phone')} className="text-blue-600 hover:text-blue-700"><Pencil className="w-4 h-4" /></button>
-                                </div>
-                              )}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{b.createAt ? new Date(b.createAt).toLocaleString('en-GB') : '-'}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{b.updateAt ? new Date(b.updateAt).toLocaleString('en-GB') : '-'}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              <button onClick={() => setPendingDelete(b)} className="inline-flex items-center gap-1 text-red-600 hover:text-red-700">
+                              <div className="flex items-center justify-center gap-3">
+                                <button
+                                  type="button"
+                                  onClick={() => setViewBranch(b)}
+                                  className="text-slate-500 hover:text-slate-800"
+                                  title="View details"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditBranch(b)}
+                                  className="text-blue-600 hover:text-blue-800"
+                                  title="Edit branch"
+                                >
+                                  <Pencil className="w-4 h-4" />
+                                </button>
+                                <button
+                                  type= "button"
+                                  onClick={() => setPendingDelete(b)}
+                                  className="text-red-600 hover:text-red-700"
+                                  title="Delete branch"
+                                >
                                 <Trash2 className="w-4 h-4" />
-                                Delete
                               </button>
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -490,15 +580,13 @@ const BranchManagement: React.FC = () => {
 
       <CreateBranchModal
         open={isCreating}
+        mode="create"
         onClose={() => { setIsCreating(false); }}
         onSubmit={async (payload) => {
           try {
             await branchService.createBranch(payload);
             setIsCreating(false);
-            
-            // Refresh the data to get the latest state from server
             await fetchBranches();
-            
             toast.success('Branch created successfully');
           } catch (e) {
             console.error(e);
@@ -507,6 +595,157 @@ const BranchManagement: React.FC = () => {
             toast.error(msg);
           }
         }}
+      />
+
+      <CreateBranchModal
+        open={!!editBranch}
+        mode="edit"
+        initialData={
+          editBranch
+            ? {
+                name: editBranch.name,
+                address: editBranch.address,
+                phone: editBranch.phone,
+                openHours: editBranch.openHours ? String(editBranch.openHours).slice(0, 5) : '08:00',
+                endHours: editBranch.endHours ? String(editBranch.endHours).slice(0, 5) : '22:00',
+                openDays: (editBranch as any).openDays ?? '1,2,3,4,5,6,7',
+              }
+            : undefined
+        }
+        onClose={() => { setEditBranch(null); }}
+        onSubmit={async (payload) => {
+          if (!editBranch) return;
+          try {
+            await branchService.updateBranch(String(editBranch.branchId), {
+              name: payload.name,
+              address: payload.address,
+              phone: payload.phone,
+              openHours: toHHmmss(payload.openHours),
+              endHours: toHHmmss(payload.endHours),
+              openDays: payload.openDays,
+            });
+            setEditBranch(null);
+            await fetchBranches();
+            toast.success('Branch updated successfully');
+          } catch (e) {
+            console.error(e);
+            const err: any = e as any;
+            const msg = err?.response?.message || err?.message || 'Failed to update branch';
+            toast.error(msg);
+          }
+        }}
+      />
+
+      <BranchDetailModal
+        open={!!viewBranch}
+        branch={viewBranch}
+        onClose={() => setViewBranch(null)}
+      />
+
+      <BranchClosureModal
+        open={closureModalOpen}
+        branches={allBranches}
+        defaultBranchId={null}
+        mode="create"
+        onClose={() => setClosureModalOpen(false)}
+        onSubmit={async (values: BranchClosureFormValues) => {
+          try {
+            const created: BranchClosure[] = [];
+            if (values.isGlobal || !values.branchIds.length) {
+              const c = await branchClosureService.create({
+                branchId: null,
+                startDate: values.startDate,
+                endDate: values.endDate || values.startDate,
+                reason: values.reason || undefined,
+              });
+              created.push(c);
+            } else {
+              for (const id of values.branchIds) {
+                const c = await branchClosureService.create({
+                  branchId: id,
+                  startDate: values.startDate,
+                  endDate: values.endDate || values.startDate,
+                  reason: values.reason || undefined,
+                });
+                created.push(c);
+              }
+            }
+            setAllClosures((prev) => [...created, ...prev]);
+            setClosureModalOpen(false);
+            toast.success('Branch closure created');
+          } catch (e) {
+            console.error(e);
+            const err: any = e as any;
+            const msg =
+              err?.response?.message || err?.message || 'Failed to create branch closure';
+            toast.error(msg);
+          }
+        }}
+      />
+
+      <BranchClosureModal
+        open={!!editClosure}
+        branches={allBranches}
+        defaultBranchId={null}
+        mode="edit"
+        initialValues={
+          editClosure
+            ? {
+                isGlobal: editClosure.branchId == null,
+                isMultiDay: editClosure.startDate !== editClosure.endDate,
+                branchIds: editClosure.branchId != null ? [editClosure.branchId] : [],
+                startDate: editClosure.startDate,
+                endDate: editClosure.endDate,
+                reason: editClosure.reason || '',
+              }
+            : undefined
+        }
+        onClose={() => setEditClosure(null)}
+        onSubmit={async (values: BranchClosureFormValues) => {
+          if (!editClosure) return;
+          try {
+            const updated = await branchClosureService.update(editClosure.id, {
+              branchId:
+                values.isGlobal || !values.branchIds.length
+                  ? null
+                  : values.branchIds[0],
+              startDate: values.startDate,
+              endDate: values.endDate || values.startDate,
+              reason: values.reason || undefined,
+            });
+            setAllClosures((prev) =>
+              prev.map((c: BranchClosure) => (c.id === updated.id ? updated : c))
+            );
+            setEditClosure(null);
+            toast.success('Branch closure updated');
+          } catch (e) {
+            console.error(e);
+            const err: any = e as any;
+            const msg =
+              err?.response?.message || err?.message || 'Failed to update branch closure';
+            toast.error(msg);
+          }
+        }}
+      />
+
+      <BranchClosureDetailModal
+        open={!!viewClosure}
+        closures={viewClosure}
+        branches={allBranches}
+        onClose={() => setViewClosure(null)}
+      />
+
+      <AllClosuresModal
+        open={allClosuresModalOpen}
+        groupedClosures={groupedClosures}
+        branches={allBranches}
+        highlightedGroupKey={highlightedGroupKey}
+        onClose={() => {
+          setAllClosuresModalOpen(false);
+          setHighlightedGroupKey(null);
+        }}
+        onRefresh={fetchClosures}
+        fetchClosuresWithFilter={fetchClosuresWithFilter}
       />
     </div>
   );

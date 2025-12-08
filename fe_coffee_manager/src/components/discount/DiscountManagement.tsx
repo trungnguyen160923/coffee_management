@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Edit, Trash2, Eye, Tag } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Eye, Tag, RefreshCw } from 'lucide-react';
 import { discountService } from '../../services/discountService';
 import { Discount, CreateDiscountRequest, UpdateDiscountRequest } from '../../types/discount';
 import { useAuth } from '../../context/AuthContext';
@@ -7,11 +7,13 @@ import { toast } from 'react-hot-toast';
 import DiscountForm from './DiscountForm';
 import DiscountDetailModal from './DiscountDetailModal';
 import ConfirmModal from '../common/ConfirmModal';
+import { DiscountsSkeleton } from '../manager/skeletons';
 
 const DiscountManagement: React.FC = () => {
     const { managerBranch } = useAuth();
     const [discounts, setDiscounts] = useState<Discount[]>([]);
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const [showForm, setShowForm] = useState(false);
     const [showDetail, setShowDetail] = useState(false);
     const [selectedDiscount, setSelectedDiscount] = useState<Discount | null>(null);
@@ -23,9 +25,13 @@ const DiscountManagement: React.FC = () => {
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [discountToDelete, setDiscountToDelete] = useState<Discount | null>(null);
 
-    const loadDiscounts = async () => {
+    const loadDiscounts = async (isRefresh = false) => {
         try {
-            setLoading(true);
+            if (isRefresh) {
+                setRefreshing(true);
+            } else {
+                setLoading(true);
+            }
             const response = await discountService.getAllDiscounts({
                 branchId: managerBranch?.branchId,
                 keyword: searchKeyword || undefined,
@@ -54,7 +60,11 @@ const DiscountManagement: React.FC = () => {
             console.error('Error loading discounts:', error);
             toast.error('Unable to load discount list');
         } finally {
-            setLoading(false);
+            if (isRefresh) {
+                setRefreshing(false);
+            } else {
+                setLoading(false);
+            }
         }
     };
 
@@ -155,6 +165,10 @@ const DiscountManagement: React.FC = () => {
         return <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">Active</span>;
     };
 
+    if (loading && discounts.length === 0) {
+        return <DiscountsSkeleton />;
+    }
+
     return (
         <div className="min-h-screen bg-slate-50">
             <div className="max-w-7xl mx-auto px-2 py-4 sm:px-4 lg:px-4">
@@ -167,16 +181,26 @@ const DiscountManagement: React.FC = () => {
                                 Quản lý ưu đãi & mã giảm giá cho chi nhánh
                             </p>
                         </div>
-                        <button
-                            onClick={() => {
-                                setEditingDiscount(null);
-                                setShowForm(true);
-                            }}
-                            className="flex items-center px-4 py-2 rounded-lg bg-sky-500 text-white text-sm font-medium shadow-sm hover:bg-sky-600"
-                        >
-                            <Plus className="w-4 h-4 mr-2" />
-                            Create Discount
-                        </button>
+                        <div className="flex items-center gap-3">
+                            <button
+                                onClick={() => loadDiscounts(true)}
+                                disabled={refreshing || loading}
+                                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+                                Refresh
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setEditingDiscount(null);
+                                    setShowForm(true);
+                                }}
+                                className="flex items-center px-4 py-2 rounded-lg bg-sky-500 text-white text-sm font-medium shadow-sm hover:bg-sky-600"
+                            >
+                                <Plus className="w-4 h-4 mr-2" />
+                                Create Discount
+                            </button>
+                        </div>
                     </div>
 
                     {/* Content */}

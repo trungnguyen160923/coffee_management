@@ -1,6 +1,5 @@
 package com.service.profile.service;
 
-import com.service.profile.dto.ApiResponse;
 import com.service.profile.dto.request.AssignManagerRequest;
 import com.service.profile.dto.request.AssignManagerRequest_;
 import com.service.profile.dto.request.ManagerProfileCreationRequest;
@@ -51,25 +50,27 @@ public class ManagerProfileService {
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
     public ManagerProfileResponse getManagerProfile(Integer userId){
         ManagerProfile managerProfile = managerProfileRepository.findById(userId).orElseThrow(() -> new AppException(ErrorCode.USER_ID_NOT_FOUND));
-        try {
-            ManagerProfileResponse managerProfileResponse = managerProfileMapper.toManagerProfileResponse(managerProfile);
-            if(managerProfile.getBranchId() != -1){
+        ManagerProfileResponse managerProfileResponse = managerProfileMapper.toManagerProfileResponse(managerProfile);
+        if(managerProfile.getBranchId() != null && managerProfile.getBranchId() != -1){
+            try {
                 BranchResponse branch = branchClient.getBranchById(managerProfile.getBranchId()).getResult();
                 managerProfileResponse.setBranch(branch);
+            } catch (Exception e) {
+                log.warn("Failed to fetch branch {} for manager {}: {}", managerProfile.getBranchId(), userId, e.getMessage());
+                // Continue without branch info instead of throwing exception
+                // This allows the profile to be returned even if order-service is unavailable
             }
-            return managerProfileResponse;
-        } catch (Exception e) {
-            log.error("Error fetching manager profile: {}", e.getMessage());
-            throw new AppException(ErrorCode.BRANCH_NOT_FOUND);
         }
+        return managerProfileResponse;
     }
 
     @PreAuthorize("hasRole('ADMIN')")
     public List<ManagerProfileResponse> getAllManagerProfiles(){
         List<ManagerProfile> managerProfiles = managerProfileRepository.findAll(); 
+        List<ManagerProfileResponse> managerProfileResponses = managerProfiles.stream().map(managerProfileMapper::toManagerProfileResponse).toList();
+        
         try {
             List<BranchResponse> branches = branchClient.getBranches().getResult();
-            List<ManagerProfileResponse> managerProfileResponses = managerProfiles.stream().map(managerProfileMapper::toManagerProfileResponse).toList();
             for(ManagerProfileResponse managerProfileResponse : managerProfileResponses){
                 BranchResponse branch = branches.stream()
                     .filter(b -> b.getManagerUserId() != null && b.getManagerUserId().equals(managerProfileResponse.getUserId()))
@@ -78,13 +79,12 @@ public class ManagerProfileService {
                     managerProfileResponse.setBranch(branch);
                 }
             }
-        return managerProfileResponses;
         } catch (Exception e) {
-            log.error("[ManagerProfileService] Error in getAllManagerProfiles() - exception type: {}, message: {}", 
-                e.getClass().getSimpleName(), e.getMessage(), e);
-            throw new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION);
+            log.warn("Failed to fetch branches for manager profiles: {}", e.getMessage());
+            // Continue without branch info - return profiles anyway
         }
         
+        return managerProfileResponses;
     }
 
     @PreAuthorize("hasRole('ADMIN')")
@@ -114,10 +114,11 @@ public class ManagerProfileService {
         try {
             AssignManagerRequest request = new AssignManagerRequest();
             request.setManagerUserId(userId);
-            BranchResponse branch = branchClient.unassignManager(managerProfile.getBranchId(), request).getResult();    
+            branchClient.unassignManager(managerProfile.getBranchId(), request).getResult();    
             managerProfile.setBranchId(-1);
             managerProfileRepository.save(managerProfile);
         } catch (Exception e) {
+            log.error("Failed to unassign manager from branch: {}", e.getMessage());
             throw new AppException(ErrorCode.BRANCH_NOT_FOUND);
         }
     }
@@ -131,10 +132,11 @@ public class ManagerProfileService {
         try {
             AssignManagerRequest request_ = new AssignManagerRequest();
             request_.setManagerUserId(request.getManagerUserId());
-            BranchResponse branch = branchClient.assignManager(managerProfile.getBranchId(), request_).getResult();
+            branchClient.assignManager(managerProfile.getBranchId(), request_).getResult();
             managerProfile.setBranchId(managerProfile.getBranchId());
             managerProfileRepository.save(managerProfile);
         } catch (Exception e) {
+            log.error("Failed to assign manager to branch: {}", e.getMessage());
             throw new AppException(ErrorCode.BRANCH_NOT_FOUND);
         }
     }

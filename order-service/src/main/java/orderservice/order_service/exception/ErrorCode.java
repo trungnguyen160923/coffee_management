@@ -88,6 +88,14 @@ public enum ErrorCode {
     COMMENT_MAX_LENGTH_255(4004, "Comment must not exceed 255 characters", HttpStatus.BAD_REQUEST),
     REVIEW_NOT_FOUND(4005, "Review not found", HttpStatus.NOT_FOUND),
     REVIEW_CREATION_FAILED(4006, "Review creation failed", HttpStatus.INTERNAL_SERVER_ERROR),
+
+    // Branch closure error codes
+    BRANCH_CLOSURE_NOT_FOUND(4100, "Branch closure not found", HttpStatus.NOT_FOUND),
+    BRANCH_CLOSURE_INVALID_DATE(4101, "End date must be on or after start date", HttpStatus.BAD_REQUEST),
+    BRANCH_CLOSURE_CANNOT_DELETE(4102, "Cannot delete closures that have already started or are starting today. Only future closures can be deleted", HttpStatus.BAD_REQUEST),
+    BRANCH_CLOSED_ON_DATE(4103, "Chi nhánh đang nghỉ vào ngày này. Vui lòng chọn ngày khác", HttpStatus.BAD_REQUEST),
+    BRANCH_NOT_OPERATING_ON_DAY(4104, "Chi nhánh không hoạt động vào ngày này. Vui lòng chọn ngày khác", HttpStatus.BAD_REQUEST),
+    POS_ORDER_OUTSIDE_BUSINESS_HOURS(4105, "Không thể tạo đơn ngoài giờ làm việc của chi nhánh", HttpStatus.BAD_REQUEST),
     ;
 
     ErrorCode(int code, String message, HttpStatusCode statusCode) {

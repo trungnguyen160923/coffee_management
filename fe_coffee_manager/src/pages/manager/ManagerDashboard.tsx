@@ -5,19 +5,21 @@ import {
   DollarSign,
   ShoppingBag,
   AlertTriangle,
-  CheckCircle
+  CheckCircle,
+  RefreshCw
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { useAuth } from '../../context/AuthContext';
 import { stockService } from '../../services/stockService';
 import staffService from '../../services/staffService';
 import { analyticsService } from '../../services/analyticsService';
-import { LoadingSpinner } from '../../components/common/LoadingSpinner';
+import { ManagerDashboardSkeleton } from '../../components/manager/skeletons';
 
 export function ManagerDashboard() {
   const { user, managerBranch } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
   // Data states
@@ -71,43 +73,51 @@ export function ManagerDashboard() {
     return colors[index];
   };
 
+  const loadDashboardData = async (isRefresh = false) => {
+    if (!branchId) {
+      setError('Branch not found');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+      setError(null);
+
+      // Get today's date in YYYY-MM-DD format
+      const today = new Date().toISOString().split('T')[0];
+
+      // Load all data in parallel
+      const [dailyStatsData, weeklyRevenueData, lowStockData, staffData] = await Promise.all([
+        analyticsService.getBranchDailyStats(branchId, today),
+        analyticsService.getBranchWeeklyRevenue(branchId),
+        stockService.getLowOrOutOfStockItems(branchId),
+        staffService.getStaffsWithUserInfoByBranch(branchId)
+      ]);
+
+      setDailyStats(dailyStatsData);
+      setWeeklyRevenue(weeklyRevenueData);
+      setLowStockItems(lowStockData || []);
+      setStaffList(staffData || []);
+    } catch (err: any) {
+      console.error('Error loading dashboard data:', err);
+      setError(err.message || 'Failed to load dashboard data');
+    } finally {
+      if (isRefresh) {
+        setRefreshing(false);
+      } else {
+        setLoading(false);
+      }
+    }
+  };
+
   // Load all data
   useEffect(() => {
-    const loadDashboardData = async () => {
-      if (!branchId) {
-        setError('Branch not found');
-        setLoading(false);
-        return;
-      }
-
-      try {
-        setLoading(true);
-        setError(null);
-
-        // Get today's date in YYYY-MM-DD format
-        const today = new Date().toISOString().split('T')[0];
-
-        // Load all data in parallel
-        const [dailyStatsData, weeklyRevenueData, lowStockData, staffData] = await Promise.all([
-          analyticsService.getBranchDailyStats(branchId, today),
-          analyticsService.getBranchWeeklyRevenue(branchId),
-          stockService.getLowOrOutOfStockItems(branchId),
-          staffService.getStaffsWithUserInfoByBranch(branchId)
-        ]);
-
-        setDailyStats(dailyStatsData);
-        setWeeklyRevenue(weeklyRevenueData);
-        setLowStockItems(lowStockData || []);
-        setStaffList(staffData || []);
-      } catch (err: any) {
-        console.error('Error loading dashboard data:', err);
-        setError(err.message || 'Failed to load dashboard data');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadDashboardData();
+    loadDashboardData(false);
   }, [branchId]);
 
   // Prepare stats cards data
@@ -183,11 +193,7 @@ export function ManagerDashboard() {
   const branchName = managerBranch?.name || user?.branch?.name || 'Branch';
 
   if (loading) {
-    return (
-      <div className="p-8 flex items-center justify-center min-h-screen">
-        <LoadingSpinner />
-      </div>
-    );
+    return <ManagerDashboardSkeleton />;
   }
 
   if (error) {
@@ -206,10 +212,22 @@ export function ManagerDashboard() {
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
           {/* Header info */}
           <div className="px-8 pt-6 pb-3">
-            <h1 className="text-xl font-semibold text-slate-900 mb-1">Branch Management</h1>
-            <p className="text-sm text-slate-500">
-              {branchName} - Today, {new Date().toLocaleDateString('en-US')}
-            </p>
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-xl font-semibold text-slate-900 mb-1">Branch Management</h1>
+                <p className="text-sm text-slate-500">
+                  {branchName} - Today, {new Date().toLocaleDateString('en-US')}
+                </p>
+              </div>
+              <button
+                onClick={() => loadDashboardData(true)}
+                disabled={refreshing || loading}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
+            </div>
           </div>
 
           {/* Content */}

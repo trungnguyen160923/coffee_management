@@ -1,15 +1,18 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { CatalogProduct, CatalogProductDetail } from '../../types';
+import { CatalogProduct, CatalogProductDetail, Branch } from '../../types';
 import { Table } from '../../types/table';
 import { DiscountApplicationResponse, Discount } from '../../types/discount';
 import catalogService from '../../services/catalogService';
 import { posService, tableService } from '../../services';
 import discountService from '../../services/discountService';
+import branchService from '../../services/branchService';
 import { NotificationBell } from '../../components/notifications/NotificationBell';
 import { UsageFloatingWidget } from '../../components/stock/UsageFloatingWidget';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../../config/api';
+import { POSSkeleton, POSTableManagementSkeleton } from '../../components/staff/skeletons';
+import { toast } from 'react-hot-toast';
 import {
     ShoppingCart,
     Plus,
@@ -23,7 +26,12 @@ import {
     Users,
     Tag,
     X,
-    ArrowLeft
+    ArrowLeft,
+    RefreshCw,
+    ShoppingBag,
+    UserSearch,
+    ChevronDown,
+    ChevronUp
 } from 'lucide-react';
 
 interface CartItem {
@@ -53,6 +61,12 @@ export default function StaffPOS() {
     const [receivedAmount, setReceivedAmount] = useState<number>(0);
     const [orderSuccess, setOrderSuccess] = useState(false);
     const [leftPanelTab, setLeftPanelTab] = useState<'products' | 'tables'>('products');
+    const [orderMode, setOrderMode] = useState<'dine-in' | 'takeaway'>('dine-in');
+    const [customerName, setCustomerName] = useState<string>('');
+    const [customerPhone, setCustomerPhone] = useState<string>('');
+    const [searchingCustomer, setSearchingCustomer] = useState(false);
+    const [customerSearchResult, setCustomerSearchResult] = useState<any>(null);
+    const [customerSearchError, setCustomerSearchError] = useState<string | null>(null);
     const [tables, setTables] = useState<Table[]>([]);
     const [tablesLoading, setTablesLoading] = useState(false);
     const [tablesError, setTablesError] = useState<string | null>(null);
@@ -64,6 +78,9 @@ export default function StaffPOS() {
     const [discountLoading, setDiscountLoading] = useState(false);
     const [discountError, setDiscountError] = useState<string | null>(null);
     const [loadingDiscounts, setLoadingDiscounts] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
+    const [branchInfo, setBranchInfo] = useState<Branch | null>(null);
+    const [customerInfoCollapsed, setCustomerInfoCollapsed] = useState(false);
 
     const branchId = useMemo(() => {
         if (user?.branch?.branchId) return Number(user.branch.branchId);
@@ -125,6 +142,21 @@ export default function StaffPOS() {
         };
 
         loadDiscounts();
+    }, [branchId]);
+
+    useEffect(() => {
+        const loadBranchInfo = async () => {
+            if (!branchId) return;
+
+            try {
+                const branch = await branchService.getBranch(String(branchId));
+                setBranchInfo(branch);
+            } catch (error) {
+                console.error('Failed to load branch info:', error);
+            }
+        };
+
+        loadBranchInfo();
     }, [branchId]);
 
     // Helper function to filter active product details
@@ -224,16 +256,19 @@ export default function StaffPOS() {
                 setAppliedDiscount(response);
                 setSelectedDiscount(discount);
                 setDiscountError(null);
+                toast.success(`Đã áp dụng mã giảm giá: ${discount.code}`, { duration: 2000 });
             } else {
                 setDiscountError(response.message);
                 setAppliedDiscount(null);
                 setSelectedDiscount(null);
+                toast.error(response.message || 'Không thể áp dụng mã giảm giá', { duration: 3000 });
             }
         } catch (error) {
             console.error('Failed to apply discount:', error);
             setDiscountError('Unable to apply discount code');
             setAppliedDiscount(null);
             setSelectedDiscount(null);
+            toast.error('Lỗi khi áp dụng mã giảm giá. Vui lòng thử lại.', { duration: 3000 });
         } finally {
             setDiscountLoading(false);
         }
@@ -243,47 +278,156 @@ export default function StaffPOS() {
         setAppliedDiscount(null);
         setSelectedDiscount(null);
         setDiscountError(null);
+        toast.success('Đã xóa mã giảm giá', { duration: 2000 });
+    };
+
+    // Kiểm tra thời gian làm việc của chi nhánh
+    const isWithinBusinessHours = (): boolean => {
+        if (!branchInfo?.openHours || !branchInfo?.endHours) {
+            // Nếu không có thông tin giờ làm việc, cho phép tạo đơn
+            return true;
+        }
+
+        const now = new Date();
+        const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+        
+        const openTime = branchInfo.openHours.length === 5 ? branchInfo.openHours : branchInfo.openHours.substring(0, 5);
+        const endTime = branchInfo.endHours.length === 5 ? branchInfo.endHours : branchInfo.endHours.substring(0, 5);
+
+        // So sánh thời gian (HH:mm format)
+        if (endTime > openTime) {
+            // Normal same-day window (e.g., 08:00 -> 22:00)
+            return currentTime >= openTime && currentTime <= endTime;
+        } else {
+            // Overnight window (e.g., 20:00 -> 02:00)
+            return currentTime >= openTime || currentTime <= endTime;
+        }
+    };
+
+    const handleSearchCustomer = async () => {
+        if (!customerPhone.trim()) {
+            toast.error('Vui lòng nhập số điện thoại');
+            setCustomerSearchError('Please enter a phone number');
+            return;
+        }
+
+        setSearchingCustomer(true);
+        setCustomerSearchError(null);
+        setCustomerSearchResult(null);
+
+        try {
+            const { apiClient } = await import('../../config/api');
+            // Search customer by phone
+            const response = await apiClient.get(`/api/auth-service/users/customers/search?phone=${encodeURIComponent(customerPhone.trim())}`);
+            
+            if (response && response.result) {
+                const customer = response.result;
+                setCustomerSearchResult(customer);
+                setCustomerName(customer.name || customer.fullname || '');
+                setCustomerPhone(customer.phone || customer.phoneNumber || customerPhone);
+                toast.success(`Đã tìm thấy khách hàng: ${customer.name || customer.fullname}`);
+            } else {
+                setCustomerSearchError('Customer not found');
+                toast.error('Không tìm thấy khách hàng');
+            }
+        } catch (error: any) {
+            console.error('Failed to search customer:', error);
+            if (error?.response?.status === 404 || error?.response?.data?.code === 1024) {
+                setCustomerSearchError('Customer not found');
+                toast.error('Không tìm thấy khách hàng với số điện thoại này');
+            } else {
+                setCustomerSearchError('Failed to search customer. Please try again.');
+                toast.error('Lỗi khi tìm kiếm khách hàng. Vui lòng thử lại.');
+            }
+        } finally {
+            setSearchingCustomer(false);
+        }
     };
 
     const handleCheckout = async () => {
         if (cart.length === 0) return;
-        if (!selectedTable && selectedTables.length === 0) {
-            alert('Please select a table');
-            return;
+        
+        // Validation dựa trên mode
+        if (orderMode === 'dine-in') {
+            if (!selectedTable && selectedTables.length === 0) {
+                toast.error('Vui lòng chọn bàn');
+                return;
+            }
+        } else if (orderMode === 'takeaway') {
+            if (!customerName.trim() || !customerPhone.trim()) {
+                toast.error('Vui lòng nhập tên và số điện thoại khách hàng');
+                return;
+            }
         }
+        
         if (!branchId || !user?.user_id) {
-            alert('Missing branch or staff information');
+            toast.error('Thiếu thông tin chi nhánh hoặc nhân viên');
             return;
         }
 
         // Check if user has STAFF role
         if (user?.role !== 'staff') {
-            alert('You need to login with a staff account to use POS');
+            toast.error('Bạn cần đăng nhập bằng tài khoản nhân viên để sử dụng POS');
             return;
         }
 
+        // Kiểm tra thời gian làm việc
+        if (!isWithinBusinessHours()) {
+            const openTime = branchInfo?.openHours || 'N/A';
+            const endTime = branchInfo?.endHours || 'N/A';
+            toast.error(`Không thể tạo đơn ngoài giờ làm việc của chi nhánh.\nGiờ làm việc: ${openTime} - ${endTime}`);
+            return;
+        }
 
         setProcessing(true);
         try {
-            const orderData = {
-                staffId: Number(user.user_id),
-                branchId: branchId,
-                tableIds: selectedTable ? [selectedTable.tableId] : selectedTables.map(t => t.tableId),
-                orderItems: cart.map(item => ({
-                    productId: item.product.productId,
-                    productDetailId: item.productDetail.pdId,
-                    quantity: item.quantity,
-                    notes: item.notes
-                })),
-                paymentMethod: paymentMethod,
-                paymentStatus: 'PENDING',
-                discount: appliedDiscount?.discountAmount || 0,
-                discountCode: appliedDiscount?.discountCode,
-                notes: selectedTable ? `Table ${selectedTable.label}` :
-                    selectedTables.length > 0 ? `Tables ${selectedTables.map(t => t.label).join(', ')}` : 'In-store'
-            };
+            // Tạo order data dựa trên mode
+            let orderData: any;
+            
+            if (orderMode === 'takeaway') {
+                // Takeaway order - sử dụng guest order endpoint
+                const { apiClient } = await import('../../config/api');
+                orderData = {
+                    customerName: customerName.trim(),
+                    phone: customerPhone.trim(),
+                    branchId: branchId,
+                    orderType: 'takeaway',
+                    orderItems: cart.map(item => ({
+                        productId: item.product.productId,
+                        productDetailId: item.productDetail.pdId,
+                        quantity: item.quantity,
+                        notes: item.notes
+                    })),
+                    paymentMethod: paymentMethod,
+                    paymentStatus: 'PENDING',
+                    discount: appliedDiscount?.discountAmount || 0,
+                    discountCode: appliedDiscount?.discountCode,
+                    notes: `Takeaway order - ${customerName}`
+                };
+                
+                await apiClient.post('/api/order-service/api/orders/guest', orderData);
+            } else {
+                // Dine-in order - sử dụng posService như cũ
+                orderData = {
+                    staffId: Number(user.user_id),
+                    branchId: branchId,
+                    tableIds: selectedTable ? [selectedTable.tableId] : selectedTables.map(t => t.tableId),
+                    orderItems: cart.map(item => ({
+                        productId: item.product.productId,
+                        productDetailId: item.productDetail.pdId,
+                        quantity: item.quantity,
+                        notes: item.notes
+                    })),
+                    paymentMethod: paymentMethod,
+                    paymentStatus: 'PENDING',
+                    discount: appliedDiscount?.discountAmount || 0,
+                    discountCode: appliedDiscount?.discountCode,
+                    notes: selectedTable ? `Table ${selectedTable.label}` :
+                        selectedTables.length > 0 ? `Tables ${selectedTables.map(t => t.label).join(', ')}` : 'In-store'
+                };
 
-            await posService.createPOSOrder(orderData);
+                await posService.createPOSOrder(orderData);
+            }
 
             // Reset form
             setCart([]);
@@ -292,8 +436,19 @@ export default function StaffPOS() {
             setAppliedDiscount(null);
             setSelectedDiscount(null);
             setDiscountError(null);
+            setCustomerName('');
+            setCustomerPhone('');
+            setCustomerSearchResult(null);
             setShowPaymentModal(false);
             setOrderSuccess(true);
+
+            // Show success toast
+            toast.success(
+                orderMode === 'takeaway' 
+                    ? 'Đã tạo đơn takeaway thành công!' 
+                    : 'Đã tạo đơn thành công!',
+                { duration: 3000 }
+            );
 
             // Auto print receipt after successful order
             setTimeout(() => {
@@ -301,9 +456,20 @@ export default function StaffPOS() {
             }, 1000);
 
             setTimeout(() => setOrderSuccess(false), 3000);
-        } catch (error) {
+        } catch (error: any) {
             console.error('Failed to create order:', error);
-            alert('Error occurred while creating order');
+            const errorMessage = error?.response?.data?.message || error?.message || 'Có lỗi xảy ra khi tạo đơn';
+            
+            // Hiển thị thông báo lỗi cụ thể từ backend
+            if (errorMessage.includes('giờ làm việc') || errorMessage.includes('business hours') || errorMessage.includes('POS_ORDER_OUTSIDE_BUSINESS_HOURS')) {
+                toast.error('Không thể tạo đơn ngoài giờ làm việc của chi nhánh', { duration: 4000 });
+            } else if (errorMessage.includes('nghỉ') || errorMessage.includes('closed') || errorMessage.includes('BRANCH_CLOSED')) {
+                toast.error('Chi nhánh đang nghỉ. Không thể tạo đơn', { duration: 4000 });
+            } else if (errorMessage.includes('không hoạt động') || errorMessage.includes('not operating') || errorMessage.includes('BRANCH_NOT_OPERATING')) {
+                toast.error('Chi nhánh không hoạt động vào ngày này. Vui lòng chọn ngày khác', { duration: 4000 });
+            } else {
+                toast.error(errorMessage, { duration: 4000 });
+            }
         } finally {
             setProcessing(false);
         }
@@ -471,37 +637,122 @@ export default function StaffPOS() {
         setSelectedTables([]);
     };
 
+    const handleRefresh = async () => {
+        if (!branchId) return;
+        
+        setRefreshing(true);
+        try {
+            // Reload products
+            const productsData = await catalogService.getProducts();
+            setProducts(Array.isArray(productsData) ? productsData : []);
+            
+            // Reload tables
+            const tablesData = await tableService.getTablesByBranch(branchId);
+            setTables(Array.isArray(tablesData) ? tablesData : []);
+            
+            // Reload discounts
+            const discounts = await discountService.getActiveDiscounts(branchId);
+            setAvailableDiscounts(discounts);
+        } catch (error) {
+            console.error('Failed to refresh data:', error);
+        } finally {
+            setRefreshing(false);
+        }
+    };
+
     return (
         <>
         <div className="h-screen bg-gray-50 flex">
             {/* Left Panel - Products */}
             <div className="flex-1 flex flex-col">
                 {/* Header */}
-                <div className="bg-white border-b border-gray-200 p-4">
-                    <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center space-x-4">
-                            <button
-                                onClick={() => navigate('/staff/orders')}
-                                className="flex items-center space-x-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
-                                title="Go back to the orders screen"
-                            >
-                                <ArrowLeft className="h-4 w-4" />
-                                <span className="text-sm font-medium">Back</span>
-                            </button>
-                            <h1 className="text-2xl font-bold text-gray-800">POS - In-Store Orders</h1>
-                        </div>
-                        <div className="flex items-center space-x-4">
-                            <NotificationBell />
-                            <div className="text-sm text-gray-600">
-                                Staff: {user?.name || 'Unknown'}
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-200 shadow-sm">
+                    <div className="p-4">
+                        {/* Top Row: Navigation & User Info */}
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center space-x-4">
+                                <button
+                                    onClick={() => navigate('/staff/orders')}
+                                    className="flex items-center space-x-2 px-4 py-2 bg-white hover:bg-gray-50 text-gray-700 rounded-lg transition-all shadow-sm hover:shadow"
+                                    title="Go back to the orders screen"
+                                >
+                                    <ArrowLeft className="h-4 w-4" />
+                                    <span className="text-sm font-medium">Back</span>
+                                </button>
+                                <div className="h-6 w-px bg-gray-300"></div>
+                                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                                    POS System
+                                </h1>
                             </div>
-                            <div className="text-sm text-gray-600">
-                                Branch: {user?.branch?.name || 'Unknown'}
+                            <div className="flex items-center space-x-4">
+                                <button
+                                    onClick={handleRefresh}
+                                    disabled={refreshing}
+                                    className="flex items-center space-x-2 px-4 py-2 bg-white hover:bg-gray-50 text-gray-700 rounded-lg transition-all shadow-sm hover:shadow disabled:opacity-50 disabled:cursor-not-allowed"
+                                    title="Refresh data"
+                                >
+                                    <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                                    <span className="text-sm font-medium">Refresh</span>
+                                </button>
+                                <NotificationBell />
+                                <div className="flex items-center space-x-3 bg-white px-4 py-2 rounded-lg shadow-sm">
+                                    <div className="flex flex-col items-end">
+                                        <div className="text-sm font-semibold text-gray-800">
+                                            {user?.name || 'Unknown'}
+                                        </div>
+                                        <div className="text-xs text-gray-500">
+                                            {user?.branch?.name || 'Unknown Branch'}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        {/* Bottom Row: Order Mode Selector */}
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-3">
+                                <span className="text-sm font-medium text-gray-600">Order Type:</span>
+                                <div className="flex items-center space-x-1 bg-white rounded-lg p-1 shadow-sm">
+                                    <button
+                                        onClick={() => {
+                                            setOrderMode('dine-in');
+                                            setSelectedTable(null);
+                                            setSelectedTables([]);
+                                        }}
+                                        className={`px-5 py-2 rounded-md text-sm font-medium transition-all ${
+                                            orderMode === 'dine-in'
+                                                ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md'
+                                                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                        }`}
+                                    >
+                                        <div className="flex items-center space-x-2">
+                                            <TableIcon className="h-4 w-4" />
+                                            <span>Dine-in</span>
+                                        </div>
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setOrderMode('takeaway');
+                                            setSelectedTable(null);
+                                            setSelectedTables([]);
+                                        }}
+                                        className={`px-5 py-2 rounded-md text-sm font-medium transition-all ${
+                                            orderMode === 'takeaway'
+                                                ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-md'
+                                                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                        }`}
+                                    >
+                                        <div className="flex items-center space-x-2">
+                                            <ShoppingBag className="h-4 w-4" />
+                                            <span>Takeaway</span>
+                                        </div>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    {/* Tab Navigation */}
+                    {/* Tab Navigation - Ẩn Table Management khi chọn Takeaway */}
                     <div className="flex space-x-2 mb-4">
                         <button
                             onClick={() => setLeftPanelTab('products')}
@@ -513,16 +764,18 @@ export default function StaffPOS() {
                             <Coffee className="h-4 w-4" />
                             <span>Products</span>
                         </button>
-                        <button
-                            onClick={() => setLeftPanelTab('tables')}
-                            className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 ${leftPanelTab === 'tables'
-                                ? 'bg-blue-100 text-blue-700 border border-blue-200'
-                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                }`}
-                        >
-                            <TableIcon className="h-4 w-4" />
-                            <span>Table Management</span>
-                        </button>
+                        {orderMode === 'dine-in' && (
+                            <button
+                                onClick={() => setLeftPanelTab('tables')}
+                                className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 ${leftPanelTab === 'tables'
+                                    ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                    }`}
+                            >
+                                <TableIcon className="h-4 w-4" />
+                                <span>Table Management</span>
+                            </button>
+                        )}
                     </div>
 
                     {/* Search and Filters - Only show for products tab */}
@@ -558,9 +811,7 @@ export default function StaffPOS() {
                     {leftPanelTab === 'products' ? (
                         // Products Tab
                         loading ? (
-                            <div className="flex items-center justify-center h-64">
-                                <div className="text-gray-500">Loading products...</div>
-                            </div>
+                            <POSSkeleton />
                         ) : (
                             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                                 {filteredProducts.map((product) => (
@@ -718,9 +969,7 @@ export default function StaffPOS() {
 
                                 {/* Tables Grid */}
                                 {tablesLoading ? (
-                                    <div className="flex items-center justify-center h-32">
-                                        <div className="text-gray-500">Loading tables...</div>
-                                    </div>
+                                    <POSTableManagementSkeleton />
                                 ) : tablesError ? (
                                     <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
                                         <div className="text-red-600 mb-2">{tablesError}</div>
@@ -845,173 +1094,393 @@ export default function StaffPOS() {
             </div>
 
             {/* Right Panel - Cart & Checkout */}
-            <div className="w-96 bg-white border-l border-gray-200 flex flex-col">
-                {/* Cart Header */}
-                <div className="p-4 border-b border-gray-200">
-                    <div className="flex items-center space-x-2 mb-4">
-                        <ShoppingCart className="h-5 w-5 text-gray-600" />
-                        <h2 className="text-lg font-semibold text-gray-800">Shopping Cart</h2>
-                        <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
-                            {cart.length}
-                        </span>
+            <div className="w-[500px] bg-white border-l border-gray-200 flex flex-col h-screen">
+                {/* Cart Header - Scrollable with max height */}
+                <div className="border-b border-gray-200 flex-shrink-0">
+                    <div className="p-4">
+                        <div className="flex items-center space-x-2 mb-3">
+                            <ShoppingCart className="h-5 w-5 text-gray-600" />
+                            <h2 className="text-lg font-semibold text-gray-800">Shopping Cart</h2>
+                            <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
+                                {cart.length}
+                            </span>
+                        </div>
                     </div>
 
-                    {/* Selected Table Info */}
-                    {selectedTable && (
-                        <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg shadow-sm">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center space-x-3">
-                                    <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                                        <TableIcon className="h-5 w-5 text-blue-600" />
-                                    </div>
-                                    <div>
-                                        <div className="text-sm font-medium text-blue-800">
-                                            Table {selectedTable.label}
-                                        </div>
-                                        <div className="text-xs text-blue-600 flex items-center space-x-1">
-                                            <Users className="h-3 w-3" />
-                                            <span>{selectedTable.capacity} seats</span>
-                                        </div>
-                                    </div>
-                                </div>
+                    {/* Scrollable header content */}
+                    <div className="overflow-y-auto max-h-[40vh] px-4 pb-4">
+                        {/* Customer Info and Discount Code - Side by Side */}
+                        {orderMode === 'takeaway' && (
+                            <div className="mb-3 flex gap-3">
+                                {/* Customer Info for Takeaway - Collapsible */}
+                                <div className="flex-1 p-3 bg-gradient-to-br from-orange-50 to-amber-50 border border-orange-200 rounded-lg shadow-sm">
                                 <button
-                                    onClick={() => setSelectedTable(null)}
-                                    className="text-blue-600 hover:text-blue-800 hover:bg-blue-100 p-2 rounded-full transition-colors"
-                                    title="Deselect table"
+                                    onClick={() => setCustomerInfoCollapsed(!customerInfoCollapsed)}
+                                    className="w-full flex items-center justify-between mb-2"
                                 >
-                                    <Trash2 className="h-4 w-4" />
+                                    <div className="flex items-center space-x-2">
+                                        <Users className="h-4 w-4 text-orange-600" />
+                                        <h3 className="text-sm font-semibold text-orange-800">Customer Information</h3>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                        {customerSearchResult && (
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setCustomerSearchResult(null);
+                                                    setCustomerName('');
+                                                    setCustomerPhone('');
+                                                }}
+                                                className="text-xs text-orange-600 hover:text-orange-800 underline"
+                                            >
+                                                New Customer
+                                            </button>
+                                        )}
+                                        {customerInfoCollapsed ? (
+                                            <ChevronDown className="h-4 w-4 text-orange-600" />
+                                        ) : (
+                                            <ChevronUp className="h-4 w-4 text-orange-600" />
+                                        )}
+                                    </div>
                                 </button>
-                            </div>
-                        </div>
-                    )}
+                                
+                                {!customerInfoCollapsed && (
+                                    <>
+                                        {/* Search Customer Section */}
+                                        {!customerSearchResult && (
+                                            <div className="mb-3 p-2 bg-white rounded-lg border border-orange-200">
+                                                <div className="flex items-center space-x-2 mb-2">
+                                                    <UserSearch className="h-3.5 w-3.5 text-orange-600" />
+                                                    <span className="text-xs font-medium text-gray-700">Search Customer</span>
+                                                </div>
+                                                <div className="flex space-x-2">
+                                                    <input
+                                                        type="tel"
+                                                        value={customerPhone}
+                                                        onChange={(e) => setCustomerPhone(e.target.value)}
+                                                        onKeyPress={(e) => {
+                                                            if (e.key === 'Enter' && customerPhone.trim()) {
+                                                                handleSearchCustomer();
+                                                            }
+                                                        }}
+                                                        placeholder="Enter phone number"
+                                                        className="flex-1 px-2 py-1.5 border border-gray-300 rounded-md text-xs focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                                                    />
+                                                    <button
+                                                        onClick={handleSearchCustomer}
+                                                        disabled={!customerPhone.trim() || searchingCustomer}
+                                                        className="px-2 py-1.5 bg-orange-500 text-white rounded-md hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-medium transition-colors"
+                                                    >
+                                                        {searchingCustomer ? (
+                                                            <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                                                        ) : (
+                                                            <Search className="h-3.5 w-3.5" />
+                                                        )}
+                                                    </button>
+                                                </div>
+                                                {customerSearchError && (
+                                                    <div className="mt-2 text-xs text-red-600">{customerSearchError}</div>
+                                                )}
+                                            </div>
+                                        )}
 
-                    {/* Selected Tables Info (Multiple) */}
-                    {selectedTables.length > 0 && (
-                        <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg shadow-sm">
-                            <div className="flex items-center justify-between mb-2">
-                                <div className="flex items-center space-x-2">
-                                    <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                                        <Users className="h-4 w-4 text-green-600" />
-                                    </div>
-                                    <div>
-                                        <div className="text-sm font-medium text-green-800">
-                                            {selectedTables.length} tables selected
+                                        {/* Customer Info Display */}
+                                        {customerSearchResult && (
+                                            <div className="mb-3 p-2 bg-green-50 border border-green-200 rounded-lg">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="text-sm font-medium text-green-800 truncate">
+                                                            {customerSearchResult.name || customerSearchResult.fullname}
+                                                        </div>
+                                                        <div className="text-xs text-green-600 truncate">
+                                                            {customerSearchResult.phone || customerPhone}
+                                                        </div>
+                                                        {customerSearchResult.email && (
+                                                            <div className="text-xs text-green-500 mt-1 truncate">
+                                                                {customerSearchResult.email}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0 ml-2" />
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Customer Input Fields */}
+                                        <div className="space-y-2">
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-700 mb-1">
+                                                    Customer Name <span className="text-red-500">*</span>
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={customerName}
+                                                    onChange={(e) => setCustomerName(e.target.value)}
+                                                    placeholder="Enter customer name"
+                                                    className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                                                    disabled={!!customerSearchResult}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-700 mb-1">
+                                                    Phone Number <span className="text-red-500">*</span>
+                                                </label>
+                                                <input
+                                                    type="tel"
+                                                    value={customerPhone}
+                                                    onChange={(e) => setCustomerPhone(e.target.value)}
+                                                    placeholder="Enter phone number"
+                                                    className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                                                    disabled={!!customerSearchResult}
+                                                />
+                                            </div>
                                         </div>
-                                        <div className="text-xs text-green-600">
-                                            {selectedTables.map(t => t.label).join(', ')}
-                                        </div>
-                                    </div>
-                                </div>
-                                <button
-                                    onClick={clearTableSelection}
-                                    className="text-green-600 hover:text-green-800 hover:bg-green-100 p-2 rounded-full transition-colors"
-                                    title="Deselect all"
-                                >
-                                    <Trash2 className="h-4 w-4" />
-                                </button>
-                            </div>
-                            <div className="flex flex-wrap gap-2">
-                                {selectedTables.map((table) => (
-                                    <div key={table.tableId} className="flex items-center space-x-1 bg-white px-2 py-1 rounded border border-green-200">
-                                        <span className="text-xs text-green-700">Table {table.label}</span>
-                                        <button
-                                            onClick={() => setSelectedTables(selectedTables.filter(t => t.tableId !== table.tableId))}
-                                            className="text-green-600 hover:text-green-800"
-                                        >
-                                            <X className="h-3 w-3" />
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Discount Section */}
-                    <div className="space-y-3">
-                        <div className="flex items-center space-x-2">
-                            <Tag className="h-4 w-4 text-gray-600" />
-                            <span className="text-sm font-medium text-gray-700">Discount Code</span>
-                        </div>
-
-                        {!appliedDiscount ? (
-                            <div className="space-y-2">
-                                {loadingDiscounts ? (
-                                    <div className="text-center text-gray-500 py-4">
-                                        <div className="animate-spin rounded-full h-6 w-6 border-2 border-blue-500 border-t-transparent mx-auto mb-2"></div>
-                                        <div className="text-sm">Loading discounts...</div>
-                                    </div>
-                                ) : availableDiscounts.length === 0 ? (
-                                    <div className="text-center text-gray-500 py-4">
-                                        <Tag className="h-8 w-8 mx-auto mb-2 text-gray-300" />
-                                        <div className="text-sm">No discounts available</div>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-2">
-                                        <select
-                                            value={selectedDiscount?.discountId || ''}
-                                            onChange={(e) => {
-                                                const discountId = parseInt(e.target.value);
-                                                const discount = availableDiscounts.find(d => d.discountId === discountId);
-                                                setSelectedDiscount(discount || null);
-                                            }}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                        >
-                                            <option value="">Select discount code...</option>
-                                            {availableDiscounts.map((discount) => (
-                                                <option key={discount.discountId} value={discount.discountId}>
-                                                    {discount.name} ({discount.code}) - {discount.discountType === 'PERCENT'
-                                                        ? `${discount.discountValue}% off`
-                                                        : `${formatCurrency(discount.discountValue)} off`}
-                                                </option>
-                                            ))}
-                                        </select>
-                                        <button
-                                            onClick={() => selectedDiscount && applyDiscount(selectedDiscount)}
-                                            disabled={!selectedDiscount || discountLoading}
-                                            className="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-                                        >
-                                            {discountLoading ? 'Applying...' : 'Apply Discount'}
-                                        </button>
-                                    </div>
+                                    </>
                                 )}
+                                </div>
+
+                                {/* Discount Section */}
+                                <div className="flex-1 space-y-2">
+                                    <div className="flex items-center space-x-2">
+                                        <Tag className="h-4 w-4 text-gray-600" />
+                                        <span className="text-sm font-medium text-gray-700">Discount Code</span>
+                                    </div>
+
+                                    {!appliedDiscount ? (
+                                        <div className="space-y-2">
+                                            {loadingDiscounts ? (
+                                                <div className="text-center text-gray-500 py-3">
+                                                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-blue-500 border-t-transparent mx-auto mb-2"></div>
+                                                    <div className="text-xs">Loading discounts...</div>
+                                                </div>
+                                            ) : availableDiscounts.length === 0 ? (
+                                                <div className="text-center text-gray-500 py-3">
+                                                    <Tag className="h-6 w-6 mx-auto mb-2 text-gray-300" />
+                                                    <div className="text-xs">No discounts available</div>
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-2">
+                                                    <select
+                                                        value={selectedDiscount?.discountId || ''}
+                                                        onChange={(e) => {
+                                                            const discountId = parseInt(e.target.value);
+                                                            const discount = availableDiscounts.find(d => d.discountId === discountId);
+                                                            setSelectedDiscount(discount || null);
+                                                        }}
+                                                        className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                    >
+                                                        <option value="">Select discount code...</option>
+                                                        {availableDiscounts.map((discount) => (
+                                                            <option key={discount.discountId} value={discount.discountId}>
+                                                                {discount.name} ({discount.code}) - {discount.discountType === 'PERCENT'
+                                                                    ? `${discount.discountValue}% off`
+                                                                    : `${formatCurrency(discount.discountValue)} off`}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                    <button
+                                                        onClick={() => selectedDiscount && applyDiscount(selectedDiscount)}
+                                                        disabled={!selectedDiscount || discountLoading}
+                                                        className="w-full px-3 py-1.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-medium"
+                                                    >
+                                                        {discountLoading ? 'Applying...' : 'Apply Discount'}
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div className="bg-green-50 border border-green-200 rounded-lg p-2">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center space-x-2 flex-1 min-w-0">
+                                                    <CheckCircle className="h-3.5 w-3.5 text-green-600 flex-shrink-0" />
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="text-xs font-medium text-green-800 truncate">
+                                                            {appliedDiscount.discountName}
+                                                        </div>
+                                                        <div className="text-xs text-green-600 truncate">
+                                                            {selectedDiscount?.code} - {appliedDiscount.discountType === 'PERCENT'
+                                                                ? `${appliedDiscount.discountValue}% off`
+                                                                : `${formatCurrency(appliedDiscount.discountValue)} off`}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onClick={removeDiscount}
+                                                    className="text-green-600 hover:text-green-800 p-1 flex-shrink-0"
+                                                >
+                                                    <X className="h-3.5 w-3.5" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {discountError && (
+                                        <div className="bg-red-50 border border-red-200 rounded-lg p-2">
+                                            <div className="text-xs text-red-600">{discountError}</div>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
-                        ) : (
-                            <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                        )}
+
+                        {/* Selected Table Info - Chỉ hiển thị khi Dine-in */}
+                        {orderMode === 'dine-in' && selectedTable && (
+                            <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg shadow-sm">
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center space-x-2">
-                                        <CheckCircle className="h-4 w-4 text-green-600" />
+                                        <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                                            <TableIcon className="h-4 w-4 text-blue-600" />
+                                        </div>
                                         <div>
-                                            <div className="text-sm font-medium text-green-800">
-                                                {appliedDiscount.discountName}
+                                            <div className="text-sm font-medium text-blue-800">
+                                                Table {selectedTable.label}
                                             </div>
-                                            <div className="text-xs text-green-600">
-                                                {selectedDiscount?.code} - {appliedDiscount.discountType === 'PERCENT'
-                                                    ? `${appliedDiscount.discountValue}% off`
-                                                    : `${formatCurrency(appliedDiscount.discountValue)} off`}
+                                            <div className="text-xs text-blue-600 flex items-center space-x-1">
+                                                <Users className="h-3 w-3" />
+                                                <span>{selectedTable.capacity} seats</span>
                                             </div>
                                         </div>
                                     </div>
                                     <button
-                                        onClick={removeDiscount}
-                                        className="text-green-600 hover:text-green-800 p-1"
+                                        onClick={() => setSelectedTable(null)}
+                                        className="text-blue-600 hover:text-blue-800 hover:bg-blue-100 p-1.5 rounded-full transition-colors"
+                                        title="Deselect table"
                                     >
-                                        <X className="h-4 w-4" />
+                                        <Trash2 className="h-3.5 w-3.5" />
                                     </button>
                                 </div>
                             </div>
                         )}
 
-                        {discountError && (
-                            <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                                <div className="text-sm text-red-600">{discountError}</div>
+                        {/* Selected Tables Info (Multiple) - Chỉ hiển thị khi Dine-in */}
+                        {orderMode === 'dine-in' && selectedTables.length > 0 && (
+                            <div className="mb-3 p-3 bg-green-50 border border-green-200 rounded-lg shadow-sm">
+                                <div className="flex items-center justify-between mb-2">
+                                    <div className="flex items-center space-x-2">
+                                        <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                                            <Users className="h-4 w-4 text-green-600" />
+                                        </div>
+                                        <div>
+                                            <div className="text-sm font-medium text-green-800">
+                                                {selectedTables.length} tables selected
+                                            </div>
+                                            <div className="text-xs text-green-600 truncate">
+                                                {selectedTables.map(t => t.label).join(', ')}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={clearTableSelection}
+                                        className="text-green-600 hover:text-green-800 hover:bg-green-100 p-1.5 rounded-full transition-colors"
+                                        title="Deselect all"
+                                    >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                    </button>
+                                </div>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {selectedTables.map((table) => (
+                                        <div key={table.tableId} className="flex items-center space-x-1 bg-white px-2 py-1 rounded border border-green-200">
+                                            <span className="text-xs text-green-700">Table {table.label}</span>
+                                            <button
+                                                onClick={() => setSelectedTables(selectedTables.filter(t => t.tableId !== table.tableId))}
+                                                className="text-green-600 hover:text-green-800"
+                                            >
+                                                <X className="h-3 w-3" />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Discount Section - Only show when not takeaway mode */}
+                        {orderMode !== 'takeaway' && (
+                            <div className="space-y-2">
+                                <div className="flex items-center space-x-2">
+                                    <Tag className="h-4 w-4 text-gray-600" />
+                                    <span className="text-sm font-medium text-gray-700">Discount Code</span>
+                                </div>
+
+                                {!appliedDiscount ? (
+                                    <div className="space-y-2">
+                                        {loadingDiscounts ? (
+                                            <div className="text-center text-gray-500 py-3">
+                                                <div className="animate-spin rounded-full h-5 w-5 border-2 border-blue-500 border-t-transparent mx-auto mb-2"></div>
+                                                <div className="text-xs">Loading discounts...</div>
+                                            </div>
+                                        ) : availableDiscounts.length === 0 ? (
+                                            <div className="text-center text-gray-500 py-3">
+                                                <Tag className="h-6 w-6 mx-auto mb-2 text-gray-300" />
+                                                <div className="text-xs">No discounts available</div>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-2">
+                                                <select
+                                                    value={selectedDiscount?.discountId || ''}
+                                                    onChange={(e) => {
+                                                        const discountId = parseInt(e.target.value);
+                                                        const discount = availableDiscounts.find(d => d.discountId === discountId);
+                                                        setSelectedDiscount(discount || null);
+                                                    }}
+                                                    className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                >
+                                                    <option value="">Select discount code...</option>
+                                                    {availableDiscounts.map((discount) => (
+                                                        <option key={discount.discountId} value={discount.discountId}>
+                                                            {discount.name} ({discount.code}) - {discount.discountType === 'PERCENT'
+                                                                ? `${discount.discountValue}% off`
+                                                                : `${formatCurrency(discount.discountValue)} off`}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                                <button
+                                                    onClick={() => selectedDiscount && applyDiscount(selectedDiscount)}
+                                                    disabled={!selectedDiscount || discountLoading}
+                                                    className="w-full px-3 py-1.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-medium"
+                                                >
+                                                    {discountLoading ? 'Applying...' : 'Apply Discount'}
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div className="bg-green-50 border border-green-200 rounded-lg p-2">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center space-x-2 flex-1 min-w-0">
+                                                <CheckCircle className="h-3.5 w-3.5 text-green-600 flex-shrink-0" />
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="text-xs font-medium text-green-800 truncate">
+                                                        {appliedDiscount.discountName}
+                                                    </div>
+                                                    <div className="text-xs text-green-600 truncate">
+                                                        {selectedDiscount?.code} - {appliedDiscount.discountType === 'PERCENT'
+                                                            ? `${appliedDiscount.discountValue}% off`
+                                                            : `${formatCurrency(appliedDiscount.discountValue)} off`}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={removeDiscount}
+                                                className="text-green-600 hover:text-green-800 p-1 flex-shrink-0"
+                                            >
+                                                <X className="h-3.5 w-3.5" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {discountError && (
+                                    <div className="bg-red-50 border border-red-200 rounded-lg p-2">
+                                        <div className="text-xs text-red-600">{discountError}</div>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
-
                 </div>
 
-                {/* Cart Items */}
-                <div className="flex-1 overflow-y-auto p-4">
+                {/* Cart Items - Always visible with proper spacing */}
+                <div className="flex-1 overflow-y-auto p-4 min-h-0">
                     {cart.length === 0 ? (
                         <div className="text-center text-gray-500 py-8">
                             <ShoppingCart className="h-12 w-12 mx-auto mb-4 text-gray-300" />
@@ -1066,8 +1535,8 @@ export default function StaffPOS() {
                     )}
                 </div>
 
-                {/* Checkout */}
-                <div className="border-t border-gray-200 p-4">
+                {/* Checkout - Fixed at bottom */}
+                <div className="border-t border-gray-200 p-4 flex-shrink-0 bg-white">
                     <div className="space-y-3">
                         {/* Subtotal */}
                         <div className="flex justify-between items-center">

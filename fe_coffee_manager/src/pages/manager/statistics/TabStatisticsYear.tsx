@@ -91,28 +91,28 @@ export default function YearlyStatsView({ stats, branchName }: YearlyStatsViewPr
       {/* Key Metrics */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <MetricCard
-          title="Tổng doanh thu năm"
+          title="Total Annual Revenue"
           value={formatCurrency(stats.total_revenue)}
           change={0}
           icon={DollarSign}
           color="emerald"
         />
         <MetricCard
-          title="Tổng đơn hàng năm"
+          title="Total Annual Orders"
           value={stats.total_orders.toString()}
           change={0}
           icon={ShoppingCart}
           color="blue"
         />
         <MetricCard
-          title="TB doanh thu/tháng"
+          title="Avg Revenue/Month"
           value={formatCurrency(stats.avg_revenue_per_month)}
           change={0}
           icon={Activity}
           color="purple"
         />
         <MetricCard
-          title="TB đơn hàng/tháng"
+          title="Avg Orders/Month"
           value={stats.avg_orders_per_month.toFixed(1)}
           change={0}
           icon={Activity}
@@ -123,28 +123,28 @@ export default function YearlyStatsView({ stats, branchName }: YearlyStatsViewPr
       {/* Additional Metrics */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <MetricCard
-          title="Thực lời (Lợi nhuận)"
+          title="Profit"
           value={formatCurrency(stats.total_profit || 0)}
           change={0}
           icon={DollarSign}
           color="emerald"
         />
         <MetricCard
-          title="Tỷ suất lợi nhuận"
+          title="Profit Margin"
           value={`${(stats.profit_margin || 0).toFixed(1)}%`}
           change={0}
           icon={TrendingUp}
           color="emerald"
         />
         <MetricCard
-          title="Chi phí nguyên liệu"
+          title="Material Costs"
           value={formatCurrency(stats.total_material_cost || 0)}
           change={0}
           icon={Package}
           color="amber"
         />
         <MetricCard
-          title="TB lợi nhuận/tháng"
+          title="Avg Profit/Month"
           value={formatCurrency(stats.avg_profit_per_month || 0)}
           change={0}
           icon={Activity}
@@ -155,28 +155,28 @@ export default function YearlyStatsView({ stats, branchName }: YearlyStatsViewPr
       {/* Additional Metrics Row 2 */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <MetricCard
-          title="Giá trị đơn TB"
+          title="Avg Order Value"
           value={formatCurrency(stats.avg_order_value)}
           change={0}
           icon={DollarSign}
           color="blue"
         />
         <MetricCard
-          title="Số tháng có dữ liệu"
+          title="Months with Data"
           value={stats.months_with_data.toString()}
           change={0}
           icon={Activity}
           color="purple"
         />
         <MetricCard
-          title="Năm"
+          title="Year"
           value={stats.year.toString()}
           change={0}
           icon={BarChart3}
           color="amber"
         />
         <MetricCard
-          title="Chi nhánh"
+          title="Branch"
           value={branchName}
           change={0}
           icon={Users}
@@ -188,7 +188,7 @@ export default function YearlyStatsView({ stats, branchName }: YearlyStatsViewPr
       {chartData.length > 0 && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <h3 className="text-lg font-bold text-gray-900 mb-4">
-            Doanh thu theo tháng năm {stats.year}
+            Monthly Revenue for Year {stats.year}
           </h3>
           <ResponsiveContainer width="100%" height={300}>
             <AreaChart data={chartData}>
@@ -216,7 +216,7 @@ export default function YearlyStatsView({ stats, branchName }: YearlyStatsViewPr
                 stroke="#f59e0b"
                 fillOpacity={1}
                 fill="url(#colorRevenueYear)"
-                name="Doanh thu"
+                name="Revenue"
               />
             </AreaChart>
           </ResponsiveContainer>
@@ -225,19 +225,19 @@ export default function YearlyStatsView({ stats, branchName }: YearlyStatsViewPr
 
       {/* Profit Summary */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-bold text-gray-900 mb-4">Tổng hợp lợi nhuận năm {stats.year}</h3>
+        <h3 className="text-lg font-bold text-gray-900 mb-4">Annual Profit Summary for {stats.year}</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="bg-green-50 rounded-lg p-4 border border-green-200">
-            <p className="text-sm text-gray-600 mb-1">Tổng thực lời</p>
+            <p className="text-sm text-gray-600 mb-1">Total Profit</p>
             <p className="text-2xl font-bold text-green-700">{formatCurrency(stats.total_profit || 0)} VNĐ</p>
-            <p className="text-xs text-gray-500 mt-1">Tỷ suất: {(stats.profit_margin || 0).toFixed(1)}%</p>
+            <p className="text-xs text-gray-500 mt-1">Margin: {(stats.profit_margin || 0).toFixed(1)}%</p>
           </div>
           <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-            <p className="text-sm text-gray-600 mb-1">Trung bình/tháng</p>
+            <p className="text-sm text-gray-600 mb-1">Average/Month</p>
             <p className="text-xl font-bold text-blue-700">{formatCurrency(stats.avg_profit_per_month || 0)} VNĐ</p>
           </div>
           <div className="bg-red-50 rounded-lg p-4 border border-red-200">
-            <p className="text-sm text-gray-600 mb-1">Tổng chi phí nguyên liệu</p>
+            <p className="text-sm text-gray-600 mb-1">Total Material Cost</p>
             <p className="text-xl font-bold text-red-700">{formatCurrency(stats.total_material_cost || 0)} VNĐ</p>
           </div>
         </div>
@@ -245,15 +245,15 @@ export default function YearlyStatsView({ stats, branchName }: YearlyStatsViewPr
 
       {/* Monthly Breakdown */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-bold text-gray-900 mb-4">Chi tiết theo tháng</h3>
+        <h3 className="text-lg font-bold text-gray-900 mb-4">Monthly Details</h3>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-200">
-                <th className="text-left py-3 px-4 font-semibold text-gray-700">Tháng</th>
-                <th className="text-right py-3 px-4 font-semibold text-gray-700">Doanh thu</th>
-                <th className="text-right py-3 px-4 font-semibold text-gray-700">Số đơn</th>
-                <th className="text-right py-3 px-4 font-semibold text-gray-700">TB/ngày</th>
+                <th className="text-left py-3 px-4 font-semibold text-gray-700">Month</th>
+                <th className="text-right py-3 px-4 font-semibold text-gray-700">Revenue</th>
+                <th className="text-right py-3 px-4 font-semibold text-gray-700">Orders</th>
+                <th className="text-right py-3 px-4 font-semibold text-gray-700">Avg/Day</th>
               </tr>
             </thead>
             <tbody>

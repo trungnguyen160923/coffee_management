@@ -7,6 +7,7 @@ import PurchaseOrderDetailModal from '../../components/purchase_order/PurchaseOr
 import SendToSupplierModal from '../../components/purchase_order/SendToSupplierModal';
 import GoodsReceiptModal from '../../components/purchase_order/GoodsReceiptModal';
 import { formatCurrency } from '../../utils/helpers';
+import { PurchaseOrdersSkeleton } from '../../components/manager/skeletons';
 
 export default function PurchaseOrders() {
   const { managerBranch } = useAuth();
@@ -31,19 +32,22 @@ export default function PurchaseOrders() {
     setLoading(true);
     try {
       // Prefer fast branch fetch if no filters, else fallback to search
+      let result;
       if (!debounced && !status && !supplierId && managerBranch?.branchId) {
         const list = await catalogService.getPurchaseOrdersByBranch(managerBranch.branchId);
         // Sort by createAt DESC to show newest first
         const sortedList = list.sort((a, b) => new Date(b.createAt).getTime() - new Date(a.createAt).getTime());
-        setData({ content: sortedList, totalPages: 1, totalElements: sortedList.length, page: 0, size });
+        result = { content: sortedList, totalPages: 1, totalElements: sortedList.length, page: 0, size };
       } else {
         const res = await catalogService.searchPurchaseOrders({ page, size, search: debounced || undefined, status: status || undefined, supplierId, branchId: managerBranch?.branchId, sortBy: 'createAt', sortDir: 'DESC' });
         // Ensure the search results are also sorted by newest first
         if (res.content) {
           res.content.sort((a, b) => new Date(b.createAt).getTime() - new Date(a.createAt).getTime());
         }
-        setData(res);
+        result = res;
       }
+      
+      setData(result);
     } finally { setLoading(false); }
   };
 
@@ -101,6 +105,10 @@ export default function PurchaseOrders() {
 
   const totalPages = data?.totalPages || 0;
   const totalElements = data?.totalElements || 0;
+
+  if (loading && !data) {
+    return <PurchaseOrdersSkeleton />;
+  }
 
   return (
     <div className="min-h-screen bg-slate-50">

@@ -11,4 +11,5 @@ import lombok.experimental.FieldDefaults;
 public class RoleResponse {
     Integer roleId;
     String name;
+    String roleName;
 }

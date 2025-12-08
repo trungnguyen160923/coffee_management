@@ -5,6 +5,7 @@ import { Login } from './pages/auth/Login';
 import { Layout } from './components/layout/Layout';
 import { RoleRedirect } from './components/common/RoleRedirect';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
+import { ProtectedStaffRoute } from './components/auth/ProtectedStaffRoute';
 import { NotFoundPage } from './components/common/NotFoundPage';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
 import ManagerManagement from './pages/admin/ManagerManagement';
@@ -29,6 +30,12 @@ import { TableManagement } from './pages/manager/TableManagement';
 import DiscountManagementPage from './pages/manager/DiscountManagement';
 import ManagerIngredientManagement from './pages/manager/IngredientManagement';
 import ManagerAIStatistics from './pages/manager/AIStatistics';
+import ManagerStaffSchedule from './pages/manager/ManagerStaffSchedule';
+import ShiftTemplateManagement from './pages/manager/ShiftTemplateManagement';
+import ShiftCalendarPage from './pages/manager/ShiftCalendarPage';
+import ShiftAssignmentsManagement from './pages/manager/ShiftAssignmentsManagement';
+import BranchClosureManagement from './pages/manager/BranchClosureManagement';
+import ManagerShiftRequests from './pages/manager/ManagerShiftRequests';
 import { StaffDashboard } from './pages/staff/StaffDashboard';
 import SupplierConfirmPage from './pages/supplier/SupplierConfirmPage';
 import SupplierSuccessPage from './pages/supplier/SupplierSuccessPage';
@@ -39,6 +46,9 @@ import StaffRecipes from './pages/staff/StaffRecipes';
 import StaffPOS from './pages/staff/StaffPOS';
 import StaffTables from './pages/staff/StaffTables';
 import StaffStockUsage from './pages/staff/StaffStockUsage';
+import StaffShiftRegistration from './pages/staff/StaffShiftRegistration';
+import StaffMyShifts from './pages/staff/StaffMyShifts';
+import StaffMyRequests from './pages/staff/StaffMyRequests';
 
 function AppRoutes() {
   const { user, loading } = useAuth();
@@ -122,6 +132,12 @@ function AppRoutes() {
           <Routes>
             <Route path="staff" element={<Layout><StaffManagement /></Layout>} />
             <Route path="products" element={<Layout><ManagerProductManagement /></Layout>} />
+            <Route path="shifts" element={<Layout><ShiftCalendarPage /></Layout>} />
+            <Route path="shift-templates" element={<Layout><ShiftTemplateManagement /></Layout>} />
+            <Route path="shift-assignments" element={<Layout><ShiftAssignmentsManagement /></Layout>} />
+            <Route path="shift-requests" element={<Layout><ManagerShiftRequests /></Layout>} />
+            <Route path="staff-schedule" element={<Layout><ManagerStaffSchedule /></Layout>} />
+            <Route path="branch-closures" element={<Layout><BranchClosureManagement /></Layout>} />
             <Route path="tables" element={<Layout><TableManagement /></Layout>} />
             <Route path="discounts" element={<Layout><DiscountManagementPage /></Layout>} />
             <Route path="procurement" element={<Layout><IngredientProcurement /></Layout>} />
@@ -148,12 +164,16 @@ function AppRoutes() {
       <Route path="/staff/*" element={
         <ProtectedRoute allowedRoles={['staff']}>
           <Routes>
-            <Route path="orders" element={<Layout><StaffOrders /></Layout>} />
-            <Route path="reservations" element={<Layout><StaffReservations /></Layout>} />
-            <Route path="tables" element={<Layout><StaffTables /></Layout>} />
-            <Route path="recipes" element={<Layout><StaffRecipes /></Layout>} />
-            <Route path="pos" element={<StaffPOS />} />
-            <Route path="stock-usage" element={<Layout><StaffStockUsage /></Layout>} />
+            <Route path="orders" element={<ProtectedStaffRoute requiredPermission="canViewOrders"><Layout><StaffOrders /></Layout></ProtectedStaffRoute>} />
+            <Route path="reservations" element={<ProtectedStaffRoute requiredPermission="canViewReservations"><Layout><StaffReservations /></Layout></ProtectedStaffRoute>} />
+            <Route path="tables" element={<ProtectedStaffRoute requiredPermission="canViewTables"><Layout><StaffTables /></Layout></ProtectedStaffRoute>} />
+            <Route path="recipes" element={<ProtectedStaffRoute requiredPermission="canViewRecipes"><Layout><StaffRecipes /></Layout></ProtectedStaffRoute>} />
+            <Route path="pos" element={<ProtectedStaffRoute requiredPermission="canViewPOS"><StaffPOS /></ProtectedStaffRoute>} />
+            <Route path="stock-usage" element={<ProtectedStaffRoute requiredPermission="canViewStockUsage"><Layout><StaffStockUsage /></Layout></ProtectedStaffRoute>} />
+            <Route path="shifts" element={<Layout><StaffShiftRegistration /></Layout>} />
+            <Route path="my-shifts" element={<Layout><StaffMyShifts /></Layout>} />
+            <Route path="my-requests" element={<Layout><StaffMyRequests /></Layout>} />
+            <Route path="pending-requests" element={<Layout><StaffMyRequests /></Layout>} />
             <Route path="*" element={<NotFoundPage showLoginButton={false} />} />
           </Routes>
         </ProtectedRoute>

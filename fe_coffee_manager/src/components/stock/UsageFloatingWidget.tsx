@@ -1,10 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
 import { Droplet } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useStaffPermissions } from '../../hooks/useStaffPermissions';
 import { DailyUsageForm } from './DailyUsageForm';
 
 export const UsageFloatingWidget = () => {
   const { user } = useAuth();
+  const staffPermissions = useStaffPermissions();
   const [isOpen, setIsOpen] = useState(false);
   const [formKey, setFormKey] = useState(0); // Key to force re-mount form
   // When null → use responsive bottom-right placement; when user drags → store explicit (x,y)
@@ -27,15 +29,45 @@ export const UsageFloatingWidget = () => {
         typeof parsed.xRatio === 'number' &&
         typeof parsed.yRatio === 'number'
       ) {
+        // Validate ratios are within reasonable bounds (0-1 for viewport)
+        // If ratios are invalid (e.g., > 1 or < 0), reset to default position
+        if (parsed.xRatio < 0 || parsed.xRatio > 1 || parsed.yRatio < 0 || parsed.yRatio > 1) {
+          // Invalid position, clear it and use default
+          localStorage.removeItem('usageWidgetPosition');
+          return;
+        }
+
         const x = parsed.xRatio * window.innerWidth;
         const y = parsed.yRatio * window.innerHeight;
-        setPosition({ x, y });
+        
+        // Additional validation: ensure position is within viewport
+        // Estimate button size (approximately 56px including padding)
+        const buttonSize = 56;
+        const maxX = window.innerWidth - buttonSize;
+        const maxY = window.innerHeight - buttonSize;
+        
+        if (x >= 0 && x <= maxX && y >= 0 && y <= maxY) {
+          setPosition({ x, y });
+        } else {
+          // Position is outside viewport, reset to default
+          localStorage.removeItem('usageWidgetPosition');
+        }
         return;
       }
 
       // Backward-compatible: absolute pixels (old format)
       if (typeof parsed.x === 'number' && typeof parsed.y === 'number') {
-        setPosition({ x: parsed.x, y: parsed.y });
+        // Validate absolute position is within viewport
+        const buttonSize = 56;
+        const maxX = window.innerWidth - buttonSize;
+        const maxY = window.innerHeight - buttonSize;
+        
+        if (parsed.x >= 0 && parsed.x <= maxX && parsed.y >= 0 && parsed.y <= maxY) {
+          setPosition({ x: parsed.x, y: parsed.y });
+        } else {
+          // Position is outside viewport, reset to default
+          localStorage.removeItem('usageWidgetPosition');
+        }
       }
     } catch {
       // ignore and fall back to responsive CSS placement
@@ -140,6 +172,11 @@ export const UsageFloatingWidget = () => {
   }, [isDragging, dragOffset, position]);
 
   if (user?.role !== 'staff') {
+    return null;
+  }
+
+  // Hide if staff cannot view recipes
+  if (!staffPermissions.loading && !staffPermissions.canViewRecipes) {
     return null;
   }
 

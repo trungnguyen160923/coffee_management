@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useStaffPermissions } from '../../hooks/useStaffPermissions';
 import {
   Coffee,
   Users,
@@ -26,6 +27,9 @@ import {
   ChevronDown,
   Menu,
   X,
+  Clock,
+  AlertCircle,
+  Inbox,
 } from 'lucide-react';
 
 import { NotificationBell } from '../notifications/NotificationBell';
@@ -37,6 +41,7 @@ interface LayoutProps {
 
 export function Layout({ children }: LayoutProps) {
   const { user, managerBranch, logout } = useAuth();
+  const staffPermissions = useStaffPermissions();
   const location = useLocation();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [showMoreNav, setShowMoreNav] = useState(false);
@@ -67,6 +72,12 @@ export function Layout({ children }: LayoutProps) {
         { icon: Home, label: 'Overview', path: '/manager' },
         { icon: Users, label: 'Staff', path: '/manager/staff' },
         { icon: Package, label: 'Products', path: '/manager/products' },
+        { icon: Calendar, label: 'Shifts', path: '/manager/shifts' },
+        { icon: Calendar, label: 'Shift Templates', path: '/manager/shift-templates' },
+        { icon: Users, label: 'Shift Assignments', path: '/manager/shift-assignments' },
+        { icon: Inbox, label: 'Shift Requests', path: '/manager/shift-requests' },
+        { icon: Calendar, label: 'Staff Schedule', path: '/manager/staff-schedule' },
+        { icon: Store, label: 'Branch Closures', path: '/manager/branch-closures' },
         { icon: Square, label: 'Tables', path: '/manager/tables' },
         { icon: Tag, label: 'Discounts', path: '/manager/discounts' },
         { icon: Truck, label: 'Procurement', path: '/manager/procurement' },
@@ -79,17 +90,44 @@ export function Layout({ children }: LayoutProps) {
         { icon: BarChart3, label: 'Statistics', path: '/manager/statistics' },
       ];
     } else {
-      return [
-        { icon: Home, label: 'Overview', path: '/staff' },
-        { icon: Terminal, label: 'POS', path: '/staff/pos' },
-        { icon: ShoppingCart, label: 'Orders', path: '/staff/orders' },
-        { icon: Calendar, label: 'Reservations', path: '/staff/reservations' },
-        { icon: Square, label: 'Tables', path: '/staff/tables' },
-        { icon: BookOpen, label: 'Recipes', path: '/staff/recipes' },
-        { icon: Droplet, label: 'Stock Usage', path: '/staff/stock-usage' },
+      // Staff menu items - filter based on permissions
+      const allStaffItems = [
+        { icon: Home, label: 'Overview', path: '/staff', requiresPermission: 'canViewMenuItems' },
+        { icon: Terminal, label: 'POS', path: '/staff/pos', requiresPermission: 'canViewPOS' },
+        { icon: ShoppingCart, label: 'Orders', path: '/staff/orders', requiresPermission: 'canViewOrders' },
+        { icon: Calendar, label: 'Reservations', path: '/staff/reservations', requiresPermission: 'canViewReservations' },
+        { icon: Clock, label: 'Shift Registration', path: '/staff/shifts', requiresPermission: null }, // Always visible
+        { icon: Calendar, label: 'My Schedule', path: '/staff/my-shifts', requiresPermission: null }, // Always visible
+        { icon: AlertCircle, label: 'My Requests', path: '/staff/my-requests', requiresPermission: null }, // Always visible
+        { icon: Square, label: 'Tables', path: '/staff/tables', requiresPermission: 'canViewTables' },
+        { icon: BookOpen, label: 'Recipes', path: '/staff/recipes', requiresPermission: 'canViewRecipes' },
+        { icon: Droplet, label: 'Stock Usage', path: '/staff/stock-usage', requiresPermission: 'canViewStockUsage' },
       ];
+
+      // Filter items based on permissions
+      return allStaffItems.filter(item => {
+        if (!item.requiresPermission) return true; // Always visible items (Shift menu)
+        
+        // If permissions are still loading, hide items that require permissions to avoid showing unauthorized items
+        // Only show items that are always visible (Shift menu)
+        if (staffPermissions.loading) return false;
+        
+        // Check permission
+        const permission = item.requiresPermission as keyof typeof staffPermissions;
+        return staffPermissions[permission] === true;
+      });
     }
-  }, [user?.role]);
+  }, [
+    user?.role, 
+    staffPermissions.loading,
+    staffPermissions.canViewMenuItems,
+    staffPermissions.canViewPOS,
+    staffPermissions.canViewOrders,
+    staffPermissions.canViewReservations,
+    staffPermissions.canViewTables,
+    staffPermissions.canViewRecipes,
+    staffPermissions.canViewStockUsage,
+  ]);
 
   // Grouped navigation (tree-style menu) per role
   const navGroups = useMemo(() => {
@@ -103,7 +141,8 @@ export function Layout({ children }: LayoutProps) {
     if (user?.role === 'manager') {
       return [
         { title: 'Overview', items: pick(['/manager']) },
-        { title: 'Store & Staff', items: pick(['/manager/staff', '/manager/tables']) },
+        { title: 'Store & Staff', items: pick(['/manager/staff', '/manager/branch-closures', '/manager/tables']) },
+        { title: 'Shift', items: pick(['/manager/shifts', '/manager/shift-templates', '/manager/shift-assignments', '/manager/staff-schedule', '/manager/shift-requests']) },
         {
           title: 'Menu & Promotions',
           items: pick(['/manager/products', '/manager/ingredients', '/manager/discounts']),
@@ -144,19 +183,65 @@ export function Layout({ children }: LayoutProps) {
     }
 
     if (user?.role === 'staff') {
-      return [
-        { title: 'Overview', items: pick(['/staff']) },
-        {
-          title: 'Operations',
-          items: pick(['/staff/pos', '/staff/orders', '/staff/reservations', '/staff/tables']),
-        },
-        { title: 'Knowledge', items: pick(['/staff/recipes']) },
-        { title: 'Inventory', items: pick(['/staff/stock-usage']) },
-      ].filter((group) => group.items.length > 0);
+      const groups = [];
+      
+      // Overview - only if can view menu items (hide when loading to avoid showing unauthorized items)
+      if (!staffPermissions.loading && staffPermissions.canViewMenuItems) {
+        groups.push({ title: 'Overview', items: pick(['/staff']) });
+      }
+      
+      // Operations - filter based on permissions (hide when loading)
+      if (!staffPermissions.loading) {
+        const operationsItems = pick(['/staff/pos', '/staff/orders', '/staff/reservations', '/staff/tables']).filter(item => {
+          if (item.path === '/staff/pos') return staffPermissions.canViewPOS;
+          if (item.path === '/staff/orders') return staffPermissions.canViewOrders;
+          if (item.path === '/staff/reservations') return staffPermissions.canViewReservations;
+          if (item.path === '/staff/tables') return staffPermissions.canViewTables;
+          return false;
+        });
+        if (operationsItems.length > 0) {
+          groups.push({ title: 'Operations', items: operationsItems });
+        }
+      }
+      
+      // Knowledge (Recipes) - only if can view recipes (hide when loading)
+      if (!staffPermissions.loading && staffPermissions.canViewRecipes) {
+        const recipesItems = pick(['/staff/recipes']);
+        if (recipesItems.length > 0) {
+          groups.push({ title: 'Knowledge', items: recipesItems });
+        }
+      }
+      
+      // Inventory (Stock Usage) - only if can view stock usage (hide when loading)
+      if (!staffPermissions.loading && staffPermissions.canViewStockUsage) {
+        const stockItems = pick(['/staff/stock-usage']);
+        if (stockItems.length > 0) {
+          groups.push({ title: 'Inventory', items: stockItems });
+        }
+      }
+      
+      // Shift - always visible
+      groups.push({
+        title: 'Shift',
+        items: pick(['/staff/shifts', '/staff/my-shifts', '/staff/my-requests', '/staff/pending-requests']),
+      });
+      
+      return groups.filter((group) => group.items.length > 0);
     }
 
     return null;
-  }, [user?.role, navigationItems]);
+  }, [
+    user?.role, 
+    navigationItems,
+    staffPermissions.loading,
+    staffPermissions.canViewMenuItems,
+    staffPermissions.canViewPOS,
+    staffPermissions.canViewOrders,
+    staffPermissions.canViewReservations,
+    staffPermissions.canViewTables,
+    staffPermissions.canViewRecipes,
+    staffPermissions.canViewStockUsage,
+  ]);
 
   // Open/close state for nav groups
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
@@ -200,10 +285,10 @@ export function Layout({ children }: LayoutProps) {
   };
 
   const getRoleLabel = () => {
-    if (user?.role === 'manager') return 'Quản lý';
+    if (user?.role === 'manager') return 'Manager';
     if (user?.role === 'admin') return 'Admin';
-    if (user?.role === 'staff') return 'Nhân viên';
-    return user?.role || 'Người dùng';
+    if (user?.role === 'staff') return 'Staff';
+    return user?.role || 'User';
   };
 
   const getUserInitials = () => {

@@ -15,6 +15,9 @@ CREATE TABLE branches (
   manager_user_id INT DEFAULT NULL, -- loose reference to users/manager_profiles
   openhours TIME DEFAULT '08:00:00',
   endhours TIME DEFAULT '22:00:00',
+  -- Days of week the branch is normally open (1=Monday..7=Sunday), stored as comma-separated list.
+  -- Example: '1,2,3,4,5,6,7' = open all week, '1,2,3,4,5' = Mon–Fri only.
+  open_days VARCHAR(20) NOT NULL DEFAULT '1,2,3,4,5,6,7',
   create_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   update_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (branch_id)
@@ -153,6 +156,27 @@ CREATE TABLE reviews (
   KEY idx_reviews_customer_id_is_deleted (customer_id, is_deleted),
   KEY idx_reviews_product_id_is_deleted (product_id, is_deleted),
   KEY idx_reviews_customer_product_order (customer_id, product_id, order_id, is_deleted)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Branch closures (special closed days, maintenance, holidays, etc.)
+-- If branch_id IS NULL, the closure applies to all branches in the chain.
+DROP TABLE IF EXISTS branch_closures;
+CREATE TABLE branch_closures (
+  id INT NOT NULL AUTO_INCREMENT,
+  branch_id INT NULL,
+  start_date DATE NOT NULL,
+  end_date DATE NOT NULL,
+  user_id INT NULL,
+  reason VARCHAR(255) DEFAULT NULL,
+  create_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  update_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_branch_closures_branch_id (branch_id),
+  KEY idx_branch_closures_start_date (start_date),
+  KEY idx_branch_closures_end_date (end_date),
+  CONSTRAINT fk_branch_closures_branch
+    FOREIGN KEY (branch_id) REFERENCES branches(branch_id)
+    ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Example seeds (optional)

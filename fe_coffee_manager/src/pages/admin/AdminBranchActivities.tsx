@@ -10,6 +10,7 @@ import {
   Eye,
   PhoneCall,
   Clock,
+  RefreshCw,
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { analyticsService } from '../../services/analyticsService';
@@ -19,12 +20,13 @@ import staffService from '../../services/staffService';
 import { Branch } from '../../types';
 import { API_ENDPOINTS } from '../../config/constants';
 import { apiClient } from '../../config/api';
-import { LoadingSpinner } from '../../components/common/LoadingSpinner';
+import { BranchActivitiesSkeleton } from '../../components/admin/skeletons';
 import { toast } from 'react-hot-toast';
 
 export function AdminBranchActivities() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
   // Branch selection
@@ -70,47 +72,55 @@ export function AdminBranchActivities() {
     loadBranches();
   }, []);
 
+  const loadBranchData = async (isRefresh = false) => {
+    if (!selectedBranchId) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+      setError(null);
+
+      // Find selected branch
+      const branch = branches.find(b => b.branchId === selectedBranchId);
+      setSelectedBranch(branch || null);
+
+      // Get today's date in YYYY-MM-DD format
+      const today = new Date().toISOString().split('T')[0];
+
+      // Load all data in parallel
+      const [dailyStatsData, weeklyRevenueData, lowStockData, staffData] = await Promise.all([
+        analyticsService.getBranchDailyStats(selectedBranchId, today),
+        analyticsService.getBranchWeeklyRevenue(selectedBranchId),
+        stockService.getLowOrOutOfStockItems(selectedBranchId).catch(() => []),
+        staffService.getStaffsWithUserInfoByBranch(selectedBranchId).catch(() => [])
+      ]);
+      
+      setDailyStats(dailyStatsData);
+      setWeeklyRevenue(weeklyRevenueData);
+      setLowStockItems(lowStockData || []);
+      setStaffList(staffData || []);
+    } catch (err: any) {
+      console.error('Error loading branch data:', err);
+      setError(err.message || 'Failed to load branch data');
+      toast.error('Failed to load branch activities');
+    } finally {
+      if (isRefresh) {
+        setRefreshing(false);
+      } else {
+        setLoading(false);
+      }
+    }
+  };
+
   // Load branch data when branch is selected
   useEffect(() => {
-    const loadBranchData = async () => {
-      if (!selectedBranchId) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        setLoading(true);
-        setError(null);
-
-        // Find selected branch
-        const branch = branches.find(b => b.branchId === selectedBranchId);
-        setSelectedBranch(branch || null);
-
-        // Get today's date in YYYY-MM-DD format
-        const today = new Date().toISOString().split('T')[0];
-
-        // Load all data in parallel
-        const [dailyStatsData, weeklyRevenueData, lowStockData, staffData] = await Promise.all([
-          analyticsService.getBranchDailyStats(selectedBranchId, today),
-          analyticsService.getBranchWeeklyRevenue(selectedBranchId),
-          stockService.getLowOrOutOfStockItems(selectedBranchId).catch(() => []),
-          staffService.getStaffsWithUserInfoByBranch(selectedBranchId).catch(() => [])
-        ]);
-
-        setDailyStats(dailyStatsData);
-        setWeeklyRevenue(weeklyRevenueData);
-        setLowStockItems(lowStockData || []);
-        setStaffList(staffData || []);
-      } catch (err: any) {
-        console.error('Error loading branch data:', err);
-        setError(err.message || 'Failed to load branch data');
-        toast.error('Failed to load branch activities');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadBranchData();
+    loadBranchData(false);
   }, [selectedBranchId, branches]);
 
   // Format currency
@@ -219,11 +229,7 @@ export function AdminBranchActivities() {
   }, [weeklyRevenue]);
 
   if (loading && !selectedBranchId) {
-    return (
-      <div className="p-8 flex items-center justify-center min-h-screen">
-        <LoadingSpinner />
-      </div>
-    );
+    return <BranchActivitiesSkeleton />;
   }
 
   if (branches.length === 0) {
@@ -247,6 +253,16 @@ export function AdminBranchActivities() {
                 <h1 className="text-xl font-semibold text-slate-800 mb-1">Branch Activities Monitor</h1>
                 <p className="text-sm text-slate-500">View detailed activities of each branch</p>
               </div>
+              {selectedBranchId && (
+                <button
+                  onClick={() => loadBranchData(true)}
+                  disabled={refreshing || loading}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+                  Refresh
+                </button>
+              )}
             </div>
 
             <div className="mt-2">
@@ -278,9 +294,7 @@ export function AdminBranchActivities() {
               <p className="text-gray-600 text-lg">Please select a branch to view its activities</p>
             </div>
           ) : loading ? (
-            <div className="p-8 flex items-center justify-center">
-              <LoadingSpinner />
-            </div>
+            <BranchActivitiesSkeleton />
           ) : error ? (
             <div className="p-8">
               <div className="bg-red-50 border border-red-200 rounded-lg p-4">

@@ -4,6 +4,7 @@ import { CatalogProduct, ProductPageResponse, CatalogCategory } from '../../type
 import { Coffee, Loader, RefreshCw, Search, Eye } from 'lucide-react';
 import ProductDetailModal from '../../components/manager/staff/ProductDetailModal';
 import { API_BASE_URL } from '../../config/api';
+import { ProductManagementSkeleton } from '../../components/manager/skeletons';
 
 export default function ProductManagement() {
   const [data, setData] = useState<ProductPageResponse | null>(null);
@@ -29,6 +30,7 @@ export default function ProductManagement() {
         active: true,
         categoryId
       });
+      
       setData(res);
     } finally {
       setLoading(false);
@@ -59,6 +61,10 @@ export default function ProductManagement() {
   const totalElements = data?.totalElements || 0;
   const activeProducts = (data?.content || []).filter(p => p.active).length;
   const inactiveProducts = (data?.content || []).filter(p => !p.active).length;
+
+  if (loading && !data) {
+    return <ProductManagementSkeleton />;
+  }
 
   return (
     <div className="min-h-screen bg-slate-50">

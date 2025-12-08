@@ -5,6 +5,7 @@ import { toast } from 'react-hot-toast';
 import { Truck, Plus, Settings, Loader, X, Trash2, RefreshCw, Pencil, Check, Eye } from 'lucide-react';
 import ConfirmModal from '../../components/common/ConfirmModal';
 import { SupplierModal, SupplierDetailModal } from '../../components/supplier';
+import { AdminSupplierManagementSkeleton } from '../../components/admin/skeletons';
 
 type ModalType = 'create' | 'edit' | 'view' | null;
 
@@ -235,10 +236,16 @@ const SupplierManagement: React.FC = () => {
                   <div className="flex items-center justify-between mb-4">
                     <h2 className="text-lg font-medium text-gray-900">Total Suppliers</h2>
                   </div>
-                  <div className="bg-blue-50 rounded-lg p-3">
-                    <div className="text-xl font-bold text-blue-600">{totalElements}</div>
-                    <div className="text-xs text-blue-800">Suppliers</div>
-                  </div>
+                  {loading && suppliers.length === 0 ? (
+                    <div className="animate-pulse">
+                      <div className="bg-slate-200 rounded-lg p-3 h-16"></div>
+                    </div>
+                  ) : (
+                    <div className="bg-blue-50 rounded-lg p-3">
+                      <div className="text-xl font-bold text-blue-600">{totalElements}</div>
+                      <div className="text-xs text-blue-800">Suppliers</div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -247,12 +254,18 @@ const SupplierManagement: React.FC = () => {
                   <div className="flex items-center justify-between mb-4">
                     <h2 className="text-lg font-medium text-gray-900">With Contact</h2>
                   </div>
-                  <div className="bg-green-50 rounded-lg p-3">
-                    <div className="text-xl font-bold text-green-600">
-                      {suppliers.filter(s => s.contactName || s.phone || s.email).length}
+                  {loading && suppliers.length === 0 ? (
+                    <div className="animate-pulse">
+                      <div className="bg-slate-200 rounded-lg p-3 h-16"></div>
                     </div>
-                    <div className="text-xs text-green-800">Have contact info</div>
-                  </div>
+                  ) : (
+                    <div className="bg-green-50 rounded-lg p-3">
+                      <div className="text-xl font-bold text-green-600">
+                        {suppliers.filter(s => s.contactName || s.phone || s.email).length}
+                      </div>
+                      <div className="text-xs text-green-800">Have contact info</div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -263,17 +276,24 @@ const SupplierManagement: React.FC = () => {
                     <button
                       onClick={handleCreate}
                       className="flex items-center space-x-1 text-sm bg-sky-500 text-white px-3 py-1.5 rounded-lg hover:bg-sky-600 transition-colors"
+                      disabled={loading}
                     >
                       <Plus className="w-4 h-4" />
                       <span>Add New</span>
                     </button>
                   </div>
-                  <div className="bg-purple-50 rounded-lg p-3">
-                    <div className="text-xl font-bold text-purple-600">
-                      {suppliers.filter(s => s.createAt && new Date(s.createAt) > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)).length}
+                  {loading && suppliers.length === 0 ? (
+                    <div className="animate-pulse">
+                      <div className="bg-slate-200 rounded-lg p-3 h-16"></div>
                     </div>
-                    <div className="text-xs text-purple-800">Added in 30 days</div>
-                  </div>
+                  ) : (
+                    <div className="bg-purple-50 rounded-lg p-3">
+                      <div className="text-xl font-bold text-purple-600">
+                        {suppliers.filter(s => s.createAt && new Date(s.createAt) > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)).length}
+                      </div>
+                      <div className="text-xs text-purple-800">Added in 30 days</div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -300,11 +320,8 @@ const SupplierManagement: React.FC = () => {
               </div>
             </div>
 
-            {loading ? (
-              <div className="flex flex-col items-center justify-center py-16">
-                <Loader className="w-12 h-12 text-amber-600 animate-spin mb-4" />
-                <p className="text-gray-500">Loading data...</p>
-              </div>
+            {loading && suppliers.length === 0 ? (
+              <AdminSupplierManagementSkeleton />
             ) : (
               <>
                 <div className="mb-6 flex items-center justify-between">

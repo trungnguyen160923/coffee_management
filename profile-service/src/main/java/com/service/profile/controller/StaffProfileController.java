@@ -4,6 +4,7 @@ package com.service.profile.controller;
 import com.service.profile.dto.ApiResponse;
 import com.service.profile.dto.request.StaffProfileCreationRequest;
 import com.service.profile.dto.request.StaffProfileUpdateRequest;
+import com.service.profile.dto.request.StaffProfileFullUpdateRequest;
 import com.service.profile.dto.response.StaffProfileResponse;
 import com.service.profile.dto.response.StaffWithUserResponse;
 import com.service.profile.service.StaffProfileService;
@@ -43,6 +44,13 @@ public class StaffProfileController {
     ApiResponse<StaffProfileResponse> updateStaffProfile(@PathVariable Integer userId, @Valid @RequestBody StaffProfileUpdateRequest request) {
         StaffProfileResponse result = staffProfileService.updateStaffProfile(userId, request);
         return ApiResponse.<StaffProfileResponse>builder().result(result).build();
+    }
+
+    @PutMapping("/full/{userId}")
+    ApiResponse<Void> updateStaffProfileFull(@PathVariable Integer userId,
+                                             @Valid @RequestBody StaffProfileFullUpdateRequest request) {
+        staffProfileService.updateStaffProfileFull(userId, request);
+        return ApiResponse.<Void>builder().build();
     }
 
     @GetMapping

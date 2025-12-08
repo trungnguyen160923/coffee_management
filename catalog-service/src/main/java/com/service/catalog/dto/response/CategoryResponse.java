@@ -15,6 +15,7 @@ public class CategoryResponse {
     Integer categoryId;
     String name;
     String description;
+    Boolean active;
     LocalDateTime createAt;
     LocalDateTime updateAt;
 }

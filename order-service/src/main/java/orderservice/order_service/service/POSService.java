@@ -9,11 +9,13 @@ import orderservice.order_service.dto.request.CreatePOSOrderRequest;
 import orderservice.order_service.dto.response.POSOrderResponse;
 import orderservice.order_service.dto.response.ProductDetailResponse;
 import orderservice.order_service.dto.response.ProductResponse;
+import orderservice.order_service.entity.Branch;
 import orderservice.order_service.entity.Order;
 import orderservice.order_service.entity.OrderItem;
 import orderservice.order_service.entity.OrderTable;
 import orderservice.order_service.exception.AppException;
 import orderservice.order_service.exception.ErrorCode;
+import orderservice.order_service.repository.BranchRepository;
 import orderservice.order_service.repository.CafeTableRepository;
 import orderservice.order_service.repository.OrderItemRepository;
 import orderservice.order_service.repository.OrderRepository;
@@ -38,6 +40,8 @@ public class POSService {
     CatalogServiceClient catalogServiceClient;
     DiscountService discountService;
     OrderEventProducer orderEventProducer;
+    BranchClosureService branchClosureService;
+    BranchRepository branchRepository;
 
     @Transactional
     public POSOrderResponse createPOSOrder(CreatePOSOrderRequest request) {
@@ -94,6 +98,40 @@ public class POSService {
             vat = vat.setScale(2, java.math.RoundingMode.HALF_UP);
 
             BigDecimal totalAmount = subtotal.subtract(discount).add(vat);
+
+            // Kiểm tra xem chi nhánh có đang nghỉ vào ngày hôm nay không
+            java.time.LocalDate today = java.time.LocalDate.now();
+            if (branchClosureService.isBranchClosedOnDate(request.getBranchId(), today)) {
+                log.warn("POS order creation rejected: Branch {} is closed on {}", request.getBranchId(), today);
+                throw new AppException(ErrorCode.BRANCH_CLOSED_ON_DATE);
+            }
+
+            // Kiểm tra xem chi nhánh có hoạt động vào ngày hôm nay không (dựa trên openDays)
+            Branch branch = branchRepository.findById(request.getBranchId()).orElse(null);
+            if (branch != null && !branchClosureService.isBranchOperatingOnDate(branch, today)) {
+                log.warn("POS order creation rejected: Branch {} is not operating on {} (not in openDays)", request.getBranchId(), today);
+                throw new AppException(ErrorCode.BRANCH_NOT_OPERATING_ON_DAY);
+            }
+
+            // Kiểm tra thời gian làm việc của chi nhánh
+            if (branch != null && branch.getOpenHours() != null && branch.getEndHours() != null) {
+                java.time.LocalTime currentTime = java.time.LocalTime.now();
+                boolean withinHours;
+                if (branch.getEndHours().isAfter(branch.getOpenHours())) {
+                    // Normal same-day window (e.g., 08:00 -> 22:00)
+                    withinHours = !currentTime.isBefore(branch.getOpenHours())
+                            && !currentTime.isAfter(branch.getEndHours());
+                } else {
+                    // Overnight window (e.g., 20:00 -> 02:00)
+                    withinHours = !currentTime.isBefore(branch.getOpenHours())
+                            || !currentTime.isAfter(branch.getEndHours());
+                }
+                if (!withinHours) {
+                    log.warn("POS order creation rejected: Branch {} business hours are {} - {}, current time is {}", 
+                            branch.getBranchId(), branch.getOpenHours(), branch.getEndHours(), currentTime);
+                    throw new AppException(ErrorCode.POS_ORDER_OUTSIDE_BUSINESS_HOURS);
+                }
+            }
 
             // Validate customer info for constraint
             if (request.getCustomerId() == null &&

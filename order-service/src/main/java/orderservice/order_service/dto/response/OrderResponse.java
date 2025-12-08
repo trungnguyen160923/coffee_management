@@ -35,6 +35,7 @@ public class OrderResponse {
     LocalDateTime orderDate;
     LocalDateTime createAt;
     LocalDateTime updateAt;
+    String type; // Order type: "dine-in", "takeaway", "online", "pos"
 
     List<OrderItemResponse> orderItems;
 

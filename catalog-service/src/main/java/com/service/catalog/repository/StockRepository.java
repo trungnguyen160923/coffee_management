@@ -99,4 +99,23 @@ public interface StockRepository extends JpaRepository<Stock, Integer> {
      */
     @Query("SELECT s FROM Stock s WHERE s.branchId = :branchId AND (s.quantity - s.reservedQuantity) <= s.threshold ORDER BY (s.quantity - s.reservedQuantity) ASC")
     List<Stock> findLowOrOutOfStockItems(@Param("branchId") Integer branchId);
+
+    /**
+     * Tìm tất cả stocks matching filters (không phân trang) để tính tổng stock value
+     */
+    @Query("SELECT s FROM Stock s " +
+           "JOIN s.ingredient i " +
+           "LEFT JOIN s.unit u " +
+           "WHERE (:search IS NULL OR :search = '' OR " +
+           "       LOWER(i.name) LIKE LOWER(CONCAT('%', :search, '%'))) " +
+           "AND (:branchId IS NULL OR s.branchId = :branchId) " +
+           "AND (:ingredientId IS NULL OR i.ingredientId = :ingredientId) " +
+           "AND (:unitCode IS NULL OR u.code = :unitCode) " +
+           "AND (:lowStock IS NULL OR :lowStock = false OR s.quantity <= s.threshold)")
+    List<Stock> findAllStocksWithFilters(
+            @Param("search") String search,
+            @Param("branchId") Integer branchId,
+            @Param("ingredientId") Integer ingredientId,
+            @Param("unitCode") String unitCode,
+            @Param("lowStock") Boolean lowStock);
 }

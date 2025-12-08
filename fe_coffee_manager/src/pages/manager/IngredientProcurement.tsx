@@ -6,6 +6,7 @@ import catalogService from '../../services/catalogService';
 import { stockService } from '../../services/stockService';
 import { CatalogIngredient, CatalogSupplier, IngredientPageResponse } from '../../types';
 import { useAuth } from '../../context/AuthContext';
+import { ProcurementSkeleton } from '../../components/manager/skeletons';
 
 type CartItem = {
   ingredient: CatalogIngredient;
@@ -232,6 +233,10 @@ export default function IngredientProcurement() {
 
   const totalPages = ingredientsPage?.totalPages || 0;
   const totalElements = ingredientsPage?.totalElements || 0;
+
+  if (loading && !ingredientsPage) {
+    return <ProcurementSkeleton />;
+  }
 
   return (
     <div className="min-h-screen bg-slate-50">

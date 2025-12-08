@@ -3,6 +3,7 @@ package com.service.auth.controller;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -11,6 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.service.auth.dto.response.ApiResponse;
 import com.service.auth.service.UserV2Service;
+import com.service.auth.dto.request.StaffUpdateV2Request;
 import com.service.auth.saga.SagaCoordinator;
 
 import jakarta.validation.Valid;
@@ -87,6 +89,13 @@ public class UserV2Controller {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(ApiResponse.builder().code(500).message("Saga wait failed").result(null).build());
         }
+    }
+
+    @PutMapping("/staff/{userId}")
+    public ResponseEntity<ApiResponse<?>> updateStaff(@PathVariable Integer userId,
+            @Valid @RequestBody StaffUpdateV2Request req) {
+        userV2Service.updateStaffUser(userId, req);
+        return ResponseEntity.ok(ApiResponse.builder().build());
     }
 
     @DeleteMapping("/delete-manager/{userId}")

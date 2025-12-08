@@ -1,5 +1,6 @@
 package orderservice.order_service.service;
 
+import feign.FeignException;
 import orderservice.order_service.client.AuthServiceClient;
 import orderservice.order_service.dto.request.CreateReservationRequest;
 import orderservice.order_service.dto.response.ApiResponse;
@@ -39,6 +40,7 @@ public class ReservationService {
     private final AuthServiceClient authServiceClient;
     private final EmailService emailService;
     private final OrderEventProducer orderEventProducer;
+    private final BranchClosureService branchClosureService;
 
     @Autowired
     public ReservationService(ReservationRepository reservationRepository,
@@ -47,7 +49,8 @@ public class ReservationService {
             ReservationTableRepository reservationTableRepository,
             AuthServiceClient authServiceClient,
             EmailService emailService,
-            OrderEventProducer orderEventProducer) {
+            OrderEventProducer orderEventProducer,
+            BranchClosureService branchClosureService) {
         this.reservationRepository = reservationRepository;
         this.branchRepository = branchRepository;
         this.cafeTableRepository = cafeTableRepository;
@@ -55,6 +58,7 @@ public class ReservationService {
         this.authServiceClient = authServiceClient;
         this.emailService = emailService;
         this.orderEventProducer = orderEventProducer;
+        this.branchClosureService = branchClosureService;
     }
 
     public ReservationResponse createReservation(CreateReservationRequest request, String token) {
@@ -87,6 +91,19 @@ public class ReservationService {
             throw e;
         }
 
+        // Kiểm tra xem chi nhánh có đang nghỉ vào ngày đặt bàn không
+        java.time.LocalDate reservationDate = request.getReservedAt().toLocalDate();
+        if (branchClosureService.isBranchClosedOnDate(branch.getBranchId(), reservationDate)) {
+            log.warn("Reservation creation rejected: Branch {} is closed on {}", branch.getBranchId(), reservationDate);
+            throw new AppException(ErrorCode.BRANCH_CLOSED_ON_DATE);
+        }
+
+        // Kiểm tra xem chi nhánh có hoạt động vào ngày đặt bàn không (dựa trên openDays)
+        if (!branchClosureService.isBranchOperatingOnDate(branch, reservationDate)) {
+            log.warn("Reservation creation rejected: Branch {} is not operating on {} (not in openDays)", branch.getBranchId(), reservationDate);
+            throw new AppException(ErrorCode.BRANCH_NOT_OPERATING_ON_DAY);
+        }
+
         // Enforce branch business hours (local time comparison)
         java.time.LocalTime reservedTime = request.getReservedAt().toLocalTime();
         if (branch.getOpenHours() != null && branch.getEndHours() != null) {
@@ -112,24 +129,49 @@ public class ReservationService {
             // Authenticated user - get user info from auth service
             log.info("Fetching user info for customerId={}, token present={}", request.getCustomerId(), token != null);
             try {
-                ApiResponse<UserResponse> response = authServiceClient.getUserById(request.getCustomerId(), token);
-                log.debug("Auth service response: {}", response != null ? "received" : "null");
+                // Ensure token has "Bearer " prefix if provided
+                String bearerToken = null;
+                if (token != null && !token.trim().isEmpty()) {
+                    bearerToken = token.startsWith("Bearer ") ? token : "Bearer " + token;
+                    log.debug("Token format: {}", bearerToken.substring(0, Math.min(20, bearerToken.length())) + "...");
+                }
+                
+                log.debug("Calling auth-service: GET /users/internal/{}", request.getCustomerId());
+                ApiResponse<UserResponse> response = authServiceClient.getUserById(request.getCustomerId(), bearerToken);
+                
+                log.debug("Auth service response received: {}", response != null);
+                if (response != null) {
+                    log.debug("Response code: {}, message: {}, result: {}", 
+                            response.getCode(), response.getMessage(), response.getResult() != null);
+                }
+                
                 if (response != null && response.getResult() != null) {
                     UserResponse userInfo = response.getResult();
                     reservation.setCustomerId(request.getCustomerId());
                     reservation.setCustomerName(userInfo.getFullname());
                     reservation.setPhone(userInfo.getPhoneNumber());
                     reservation.setEmail(userInfo.getEmail());
-                    log.info("User info retrieved: name={}, email={}", userInfo.getFullname(), userInfo.getEmail());
+                    log.info("User info retrieved successfully: name={}, email={}, phone={}", 
+                            userInfo.getFullname(), userInfo.getEmail(), userInfo.getPhoneNumber());
                 } else {
-                    log.error("User not found or invalid response for customerId={}", request.getCustomerId());
+                    log.error("User not found or invalid response for customerId={}. Response: {}", 
+                            request.getCustomerId(), response);
                     throw new AppException(ErrorCode.EMAIL_NOT_EXISTED);
                 }
+            } catch (FeignException.NotFound e) {
+                log.error("User not found in auth-service (404) for customerId={}. Response body: {}", 
+                        request.getCustomerId(), e.contentUTF8());
+                throw new AppException(ErrorCode.EMAIL_NOT_EXISTED);
+            } catch (FeignException e) {
+                log.error("FeignException when calling auth-service for customerId={}. Status: {}, Response: {}", 
+                        request.getCustomerId(), e.status(), e.contentUTF8(), e);
+                throw new AppException(ErrorCode.EMAIL_NOT_EXISTED);
             } catch (AppException e) {
-                log.error("AppException when fetching user: {}", e.getMessage());
+                log.error("AppException when fetching user for customerId={}: {}", request.getCustomerId(), e.getMessage());
                 throw e;
             } catch (Exception e) {
-                log.error("Exception when fetching user info for customerId={}: {}", request.getCustomerId(), e.getMessage(), e);
+                log.error("Unexpected exception when fetching user info for customerId={}: {}. Exception type: {}", 
+                        request.getCustomerId(), e.getMessage(), e.getClass().getName(), e);
                 throw new AppException(ErrorCode.EMAIL_NOT_EXISTED);
             }
         } else {

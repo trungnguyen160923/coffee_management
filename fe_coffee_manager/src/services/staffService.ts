@@ -1,5 +1,5 @@
 import { apiClient } from '../config/api';
-import { UsersListResponseDto, UserResponseDto } from '../types';
+import { UsersListResponseDto, UserResponseDto, StaffWithUserDto } from '../types';
 
 class StaffService {
   private baseUrl = '/api/auth-service/users/staffs';
@@ -92,11 +92,16 @@ class StaffService {
     phoneNumber: string;
     role: 'STAFF';
     branchId: number;
-    salary?: number;
-    position?: string;
+    salary?: number; // monthly salary for FULL_TIME
+    employmentType?: 'FULL_TIME' | 'PART_TIME';
+    payType?: 'MONTHLY' | 'HOURLY';
+    hourlyRate?: number;
+    overtimeRate?: number;
+    proficiencyLevel?: 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED' | 'EXPERT';
     hireDate?: string;
     identityCard?: string;
     active?: boolean;
+    staffBusinessRoleIds?: number[];
   }): Promise<any> {
     try {
       const response = await apiClient.post('/api/auth-service/users-v2/create-staff', payload);
@@ -122,17 +127,20 @@ class StaffService {
     phone?: string;
     hireDate?: string; 
     email?: string;
-    position?: string;
-    salary?: number;
+    employmentType?: 'FULL_TIME' | 'PART_TIME';
+    payType?: 'MONTHLY' | 'HOURLY';
+    baseSalary?: number;
+    hourlyRate?: number;
+    overtimeRate?: number;
+    staffBusinessRoleIds?: number[];
+    proficiencyLevel?: 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED' | 'EXPERT';
   }): Promise<any> {
     try {
-      if(payload.phone || payload.email){
-        const response = await apiClient.put(`${this.userUrl}/${userId}`, payload);
-        return response;
-      } else {
-        const response = await apiClient.put(`${this.staffProfileUrl}/${userId}`, payload);
-        return response;
-      }
+      const response = await apiClient.put(
+        `${this.v2Url}/staff/${userId}`,
+        payload
+      );
+      return response;
     } catch (error) {
       console.error('Error updating staff profile:', error);
       throw error;
@@ -149,9 +157,9 @@ class StaffService {
     }
   }
 
-  async getStaffsWithUserInfoByBranch(branchId: number): Promise<any[]> {
+  async getStaffsWithUserInfoByBranch(branchId: number): Promise<StaffWithUserDto[]> {
     try {
-      const response = await apiClient.get<{ code: number; result: any[] }>(`${this.staffProfileUrl}/branch/${branchId}/with-user-info`);
+      const response = await apiClient.get<{ code: number; result: StaffWithUserDto[] }>(`${this.staffProfileUrl}/branch/${branchId}/with-user-info`);
       if (response.code === 200 || response.code === 1000) {
         return response.result || [];
       } else {

@@ -11,12 +11,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.service.auth.dto.request.ManagerProfileCreationRequest;
 import com.service.auth.dto.request.StaffProfileCreationRequest;
 import com.service.auth.dto.request.CustomerUserCreationRequest;
+import com.service.auth.dto.request.StaffUpdateV2Request;
 import com.service.auth.entity.User;
 import com.service.auth.events.UserCreatedV2Event;
 import com.service.auth.outbox.OutboxEvent;
 import com.service.auth.outbox.OutboxEventRepository;
 import com.service.auth.repository.RoleRepository;
 import com.service.auth.repository.UserRepository;
+import com.service.auth.repository.http_client.ProfileClient;
 
 @Service
 public class UserV2Service {
@@ -25,14 +27,17 @@ public class UserV2Service {
     private final PasswordEncoder passwordEncoder;
     private final OutboxEventRepository outboxRepo;
     private final ObjectMapper json;
+    private final ProfileClient profileClient;
 
     public UserV2Service(UserRepository userRepository, RoleRepository roleRepository,
-            PasswordEncoder passwordEncoder, OutboxEventRepository outboxRepo, ObjectMapper json) {
+            PasswordEncoder passwordEncoder, OutboxEventRepository outboxRepo, ObjectMapper json,
+            ProfileClient profileClient) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.passwordEncoder = passwordEncoder;
         this.outboxRepo = outboxRepo;
         this.json = json;
+        this.profileClient = profileClient;
     }
 
     @Transactional
@@ -105,8 +110,15 @@ public class UserV2Service {
         evt.branchId = req.getBranchId();
         evt.hireDate = req.getHireDate();
         evt.identityCard = req.getIdentityCard();
-        evt.position = req.getPosition();
-        evt.salary = req.getSalary().doubleValue();
+        evt.salary = req.getSalary() != null ? req.getSalary().doubleValue() : null;
+
+        // New employment & pay structure fields (optional)
+        evt.employmentType = req.getEmploymentType();
+        evt.payType = req.getPayType();
+        evt.hourlyRate = req.getHourlyRate();
+        evt.overtimeRate = req.getOvertimeRate();
+        evt.staffBusinessRoleIds = req.getStaffBusinessRoleIds();
+        evt.proficiencyLevel = req.getProficiencyLevel();
         evt.occurredAt = Instant.now();
 
         OutboxEvent ob = new OutboxEvent();
@@ -170,6 +182,34 @@ public class UserV2Service {
         outboxRepo.save(ob);
 
         return java.util.Map.of("userId", user.getUserId(), "sagaId", evt.sagaId);
+    }
+
+    @Transactional
+    public void updateStaffUser(Integer userId, StaffUpdateV2Request req) {
+        var user = userRepository.findById(userId).orElseThrow();
+        if (user.getRole() == null || user.getRole().getName() == null || !"STAFF".equals(user.getRole().getName())) {
+            throw new RuntimeException("USER_NOT_STAFF");
+        }
+
+        // Email duplicate check (trừ user hiện tại)
+        if (req.getEmail() != null) {
+            var existing = userRepository.findByEmail(req.getEmail());
+            if (existing.isPresent() && !existing.get().getUserId().equals(userId)) {
+                throw new com.service.auth.exception.AppException(com.service.auth.exception.ErrorCode.EMAIL_EXISTED);
+            }
+            user.setEmail(req.getEmail());
+        }
+
+        if (req.getFullname() != null) {
+            user.setFullname(req.getFullname());
+        }
+        if (req.getPhoneNumber() != null) {
+            user.setPhoneNumber(req.getPhoneNumber());
+        }
+        userRepository.save(user);
+
+        // Forward full staff profile update to profile-service
+        profileClient.updateStaffProfileFull(userId, req);
     }
 
     @Transactional

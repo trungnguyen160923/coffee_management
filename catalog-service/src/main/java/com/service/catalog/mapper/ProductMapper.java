@@ -34,6 +34,7 @@ public class ProductMapper {
                     .categoryId(product.getCategory().getCategoryId())
                     .name(product.getCategory().getName())
                     .description(product.getCategory().getDescription())
+                    .active(true) // Default to true if entity doesn't have active field
                     .createAt(product.getCategory().getCreateAt())
                     .updateAt(product.getCategory().getUpdateAt())
                     .build();

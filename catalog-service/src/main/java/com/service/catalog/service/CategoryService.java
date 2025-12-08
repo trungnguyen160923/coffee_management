@@ -49,6 +49,7 @@ public class CategoryService {
                 .categoryId(category.getCategoryId())
                 .name(category.getName())
                 .description(category.getDescription())
+                .active(true) // Default to true if entity doesn't have active field
                 .createAt(category.getCreateAt())
                 .updateAt(category.getUpdateAt())
                 .build();

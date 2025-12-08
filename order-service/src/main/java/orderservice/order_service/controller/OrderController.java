@@ -9,6 +9,7 @@ import orderservice.order_service.dto.ApiResponse;
 import orderservice.order_service.dto.request.CreateOrderRequest;
 import orderservice.order_service.dto.request.CreateGuestOrderRequest;
 import orderservice.order_service.dto.response.OrderResponse;
+import orderservice.order_service.dto.response.OrderListResponse;
 import orderservice.order_service.dto.response.ProductResponse;
 import orderservice.order_service.service.OrderService;
 import org.springframework.http.HttpStatus;
@@ -109,6 +110,36 @@ public class OrderController {
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             ApiResponse<List<OrderResponse>> response = ApiResponse.<List<OrderResponse>>builder()
+                    .code(500)
+                    .message("Failed to retrieve orders: " + e.getMessage())
+                    .result(null)
+                    .build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    @GetMapping
+    public ResponseEntity<ApiResponse<OrderListResponse>> getOrders(
+            @RequestParam(required = false) String branchId,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) String staffId,
+            @RequestParam(required = false) String dateFrom,
+            @RequestParam(required = false) String dateTo,
+            @RequestParam(required = false, defaultValue = "0") Integer page,
+            @RequestParam(required = false, defaultValue = "50") Integer limit) {
+        try {
+            OrderListResponse result = orderService.getOrders(
+                    branchId, status, type, staffId, dateFrom, dateTo, page, limit);
+            ApiResponse<OrderListResponse> response = ApiResponse.<OrderListResponse>builder()
+                    .code(200)
+                    .message("Orders retrieved successfully")
+                    .result(result)
+                    .build();
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("Failed to retrieve orders", e);
+            ApiResponse<OrderListResponse> response = ApiResponse.<OrderListResponse>builder()
                     .code(500)
                     .message("Failed to retrieve orders: " + e.getMessage())
                     .result(null)

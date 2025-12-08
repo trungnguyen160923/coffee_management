@@ -9,5 +9,6 @@ import org.mapstruct.Mapping;
 public interface RoleMapper {
     @Mapping(source = "roleId", target = "roleId")
     @Mapping(source = "name", target = "name")
+    @Mapping(source = "roleName", target = "roleName")
     RoleResponse toRoleResponse(Role role);
 }

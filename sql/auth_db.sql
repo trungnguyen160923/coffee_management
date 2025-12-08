@@ -3,11 +3,11 @@ DROP DATABASE IF EXISTS auth_db;
 CREATE DATABASE auth_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE auth_db;
 
--- Roles table
 DROP TABLE IF EXISTS roles;
 CREATE TABLE roles (
   role_id INT NOT NULL AUTO_INCREMENT,
   name VARCHAR(50) NOT NULL UNIQUE,
+  role_name VARCHAR(100) DEFAULT NULL,
   PRIMARY KEY (role_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -40,8 +40,16 @@ CREATE TABLE invalidated_tokens (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
--- Example seed
-INSERT INTO roles (name) VALUES ('ADMIN'), ('MANAGER'), ('STAFF'), ('CUSTOMER');
+INSERT INTO roles (name, role_name) VALUES
+  ('ADMIN', 'Chủ sở hữu'),
+  ('MANAGER', 'Quản lý chi nhánh'),
+  ('STAFF', 'Nhân viên'),
+  ('CUSTOMER', 'Khách hàng'),
+  -- Các role nghiệp vụ cho nhân viên F&B (dùng cho chia ca)
+  ('BARISTA_STAFF', 'Pha chế'),
+  ('CASHIER_STAFF', 'Thu ngân'),
+  ('SERVER_STAFF', 'Phục vụ'),
+  ('SECURITY_STAFF', 'Bảo vệ');
 
 -- Event: tự động xóa token hết hạn lúc 00:00 hằng ngày
 DROP EVENT IF EXISTS ev_clean_invalidated_tokens;

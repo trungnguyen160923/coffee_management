@@ -23,6 +23,7 @@ public class BranchResponse {
     Integer managerUserId;
     LocalTime openHours;
     LocalTime endHours;
+    String openDays; // Days of week the branch is normally open (1=Monday..7=Sunday), stored as comma-separated list
     LocalDateTime createAt;
     LocalDateTime updateAt;
     

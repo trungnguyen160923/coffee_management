@@ -231,8 +231,12 @@ class ApiClient {
   }
 
   // DELETE request
-  async delete<T>(endpoint: string): Promise<T> {
-    return this.request<T>(endpoint, { method: 'DELETE' });
+  async delete<T>(endpoint: string, options?: { data?: any }): Promise<T> {
+    const body = options?.data !== undefined ? JSON.stringify(options.data) : undefined;
+    return this.request<T>(endpoint, {
+      method: 'DELETE',
+      body,
+    });
   }
 
   // PATCH request

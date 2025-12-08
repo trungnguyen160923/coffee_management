@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import catalogService from '../../services/catalogService';
 import { CatalogSupplier, SupplierPageResponse } from '../../types';
 import { Truck, Loader, RefreshCw, Search, Eye } from 'lucide-react';
+import { SuppliersSkeleton } from '../../components/manager/skeletons';
 
 export default function SupplierManagement() {
   const [data, setData] = useState<SupplierPageResponse | null>(null);
@@ -38,6 +39,10 @@ export default function SupplierManagement() {
 
   const totalPages = data?.totalPages || 0;
   const totalElements = data?.totalElements || 0;
+
+  if (loading && !data) {
+    return <SuppliersSkeleton />;
+  }
 
   return (
     <div className="min-h-screen bg-slate-50">

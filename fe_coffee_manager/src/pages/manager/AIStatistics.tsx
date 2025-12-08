@@ -75,13 +75,65 @@ export default function AIStatistics() {
   const [error, setError] = useState<string | null>(null);
   const [aiData, setAiData] = useState<AIAnalysisResponse | null>(null);
   const [dataSource, setDataSource] = useState<'cached' | 'new' | null>(null); // Track data source
+  const [hasFetchedAIData, setHasFetchedAIData] = useState<boolean>(false); // Track if AI data has been fetched
 
-  // Fetch AI data when branch or date changes (for day tab)
+  // Check if AI data exists in database when page loads or date changes (without calling ChatGPT)
   useEffect(() => {
     if (activeTab === 'day' && managerBranch?.branchId && selectedDate) {
-      fetchAIData();
+      checkExistingAIData();
     }
   }, [managerBranch?.branchId, selectedDate, activeTab]);
+
+  // Check existing AI data (without calling ChatGPT)
+  const checkExistingAIData = async () => {
+    if (!managerBranch?.branchId) return;
+
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Check if data exists in database
+      try {
+        const existingReport = await aiStatisticsService.getReportByBranchAndDate(
+          managerBranch.branchId,
+          selectedDate
+        );
+        
+        // If data exists, load it
+        if (existingReport && existingReport.id) {
+          const convertedData: AIAnalysisResponse = {
+            success: true,
+            branch_id: existingReport.branch_id,
+            date: existingReport.report_date,
+            analysis: existingReport.analysis || '',
+            summary: existingReport.summary || {},
+            recommendations: existingReport.recommendations || [],
+            raw_data: existingReport.raw_data || {},
+            message: 'Data already exists in database',
+          };
+          
+          setAiData(convertedData);
+          setDataSource('cached');
+          setHasFetchedAIData(true);
+        } else {
+          setHasFetchedAIData(false);
+        }
+      } catch (checkError: any) {
+        // If 404, no data exists
+        if (checkError?.response?.status === 404) {
+          setHasFetchedAIData(false);
+        } else {
+          // Other errors, don't show error, just mark as no data
+          setHasFetchedAIData(false);
+        }
+      }
+    } catch (err: any) {
+      // Silent fail, just mark as no data
+      setHasFetchedAIData(false);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Fetch monthly stats when branch or month changes
   useEffect(() => {
@@ -99,7 +151,7 @@ export default function AIStatistics() {
 
   const fetchAIData = async () => {
     if (!managerBranch?.branchId) {
-      setError('Không tìm thấy thông tin chi nhánh');
+      setError('Branch information not found');
       return;
     }
 
@@ -124,11 +176,12 @@ export default function AIStatistics() {
             summary: existingReport.summary || {},
             recommendations: existingReport.recommendations || [],
             raw_data: existingReport.raw_data || {},
-            message: 'Dữ liệu đã tồn tại trong database',
+            message: 'Data already exists in database',
           };
           
           setAiData(convertedData);
           setDataSource('cached'); // Đánh dấu là dữ liệu từ cache/database
+          setHasFetchedAIData(true); // Mark as fetched
           setLoading(false);
           setRefreshing(false);
           return; // Dừng lại, không cần gọi AI nữa
@@ -151,9 +204,10 @@ export default function AIStatistics() {
       
       setAiData(response);
       setDataSource('new'); // Đánh dấu là dữ liệu mới được tạo bởi AI
+      setHasFetchedAIData(true); // Mark as fetched
     } catch (err: any) {
       console.error('Error fetching AI data:', err);
-      const errorMessage = err?.response?.data?.detail || err?.message || 'Không thể tải dữ liệu AI';
+      const errorMessage = err?.response?.data?.detail || err?.message || 'Unable to load AI data';
       setError(errorMessage);
       toast.error(errorMessage);
     } finally {
@@ -178,10 +232,11 @@ export default function AIStatistics() {
       });
       setAiData(response);
       setDataSource('new');
-      toast.success('Đã làm mới dữ liệu AI');
+      setHasFetchedAIData(true); // Mark as fetched
+      toast.success('AI data refreshed');
     } catch (err: any) {
       console.error('Error refreshing AI data:', err);
-      const errorMessage = err?.response?.data?.detail || err?.message || 'Không thể làm mới dữ liệu AI';
+      const errorMessage = err?.response?.data?.detail || err?.message || 'Unable to refresh AI data';
       setError(errorMessage);
       toast.error(errorMessage);
     } finally {
@@ -191,7 +246,7 @@ export default function AIStatistics() {
 
   const fetchMonthlyStats = async () => {
     if (!managerBranch?.branchId) {
-      setError('Không tìm thấy thông tin chi nhánh');
+      setError('Branch information not found');
       return;
     }
 
@@ -208,7 +263,7 @@ export default function AIStatistics() {
       setMonthlyStats(stats);
     } catch (err: any) {
       console.error('Error fetching monthly stats:', err);
-      const errorMessage = err?.response?.data?.detail || err?.message || 'Không thể tải dữ liệu thống kê tháng';
+      const errorMessage = err?.response?.data?.detail || err?.message || 'Unable to load monthly statistics';
       setError(errorMessage);
       toast.error(errorMessage);
     } finally {
@@ -218,7 +273,7 @@ export default function AIStatistics() {
 
   const fetchYearlyStats = async () => {
     if (!managerBranch?.branchId) {
-      setError('Không tìm thấy thông tin chi nhánh');
+      setError('Branch information not found');
       return;
     }
 
@@ -233,7 +288,7 @@ export default function AIStatistics() {
       setYearlyStats(stats);
     } catch (err: any) {
       console.error('Error fetching yearly stats:', err);
-      const errorMessage = err?.response?.data?.detail || err?.message || 'Không thể tải dữ liệu thống kê năm';
+      const errorMessage = err?.response?.data?.detail || err?.message || 'Unable to load yearly statistics';
       setError(errorMessage);
       toast.error(errorMessage);
     } finally {
@@ -243,7 +298,7 @@ export default function AIStatistics() {
 
   const handleExportPDF = async () => {
     if (!aiData || !managerBranch) {
-      toast.error('Không có dữ liệu để xuất PDF');
+      toast.error('No data available to export PDF');
       return;
     }
 
@@ -254,10 +309,10 @@ export default function AIStatistics() {
         reportDate: selectedDate,
         aiData: aiData,
       });
-      toast.success('Đang mở cửa sổ in PDF...');
+      toast.success('Opening PDF print window...');
     } catch (error: any) {
       console.error('Error exporting PDF:', error);
-      toast.error(error?.message || 'Không thể xuất PDF. Vui lòng thử lại.');
+      toast.error(error?.message || 'Unable to export PDF. Please try again.');
     }
   };
 
@@ -503,8 +558,8 @@ export default function AIStatistics() {
     if (inventory?.outOfStockProducts > 0) {
       alerts.push({
         type: 'critical',
-        title: 'Nguyên liệu hết hàng',
-        message: `${inventory.outOfStockProducts} nguyên liệu đã hết hàng`,
+        title: 'Out of stock ingredients',
+        message: `${inventory.outOfStockProducts} ingredients are out of stock`,
         count: inventory.outOfStockProducts,
       });
     }
@@ -512,8 +567,8 @@ export default function AIStatistics() {
     if (inventory?.lowStockProducts > 0) {
       alerts.push({
         type: 'warning',
-        title: 'Nguyên liệu sắp hết',
-        message: `${inventory.lowStockProducts} nguyên liệu cần nhập khẩn cấp`,
+        title: 'Low stock ingredients',
+        message: `${inventory.lowStockProducts} ingredients need urgent restocking`,
         count: inventory.lowStockProducts,
       });
     }
@@ -524,8 +579,8 @@ export default function AIStatistics() {
       if (anomalyCount > 0) {
         alerts.push({
           type: 'warning',
-          title: 'Phát hiện bất thường',
-          message: `Có ${anomalyCount} chỉ tiêu bất thường được phát hiện`,
+          title: 'Anomaly detected',
+          message: `${anomalyCount} abnormal indicators detected`,
         });
       }
     }
@@ -567,7 +622,7 @@ export default function AIStatistics() {
       pending: rawData?.revenue_metrics?.pendingOrders || 0,
     },
     topCustomers: (rawData?.customer_metrics?.topCustomers || []).map((item: any) => ({
-      name: item.customerName || 'Khách vãng lai',
+      name: item.customerName || 'Walk-in customer',
       orderCount: item.orderCount || 0,
       totalSpent: item.totalSpent ? Number(item.totalSpent) : 0,
     })),
@@ -617,8 +672,8 @@ export default function AIStatistics() {
       weaknesses: parsedAnalysis.weaknesses,
       recommendations: parsedAnalysis.recommendations.length > 0 
         ? parsedAnalysis.recommendations.map((rec: string) => {
-            const priority = rec.toLowerCase().includes('khẩn cấp') || rec.toLowerCase().includes('khẩn') ? 'high' :
-                            rec.toLowerCase().includes('quan trọng') || rec.toLowerCase().includes('nên') || rec.toLowerCase().includes('tăng cường') ? 'medium' : 'low';
+            const priority = rec.toLowerCase().includes('urgent') || rec.toLowerCase().includes('critical') ? 'high' :
+                            rec.toLowerCase().includes('important') || rec.toLowerCase().includes('should') || rec.toLowerCase().includes('enhance') ? 'medium' : 'low';
             return { priority, action: rec };
           })
         : (aiData?.recommendations || []).map((rec: string) => {
@@ -641,25 +696,57 @@ export default function AIStatistics() {
             <div>
               <h1 className="text-xl font-semibold text-slate-900">AI Statistics</h1>
               <p className="text-sm text-slate-500">
-                Phân tích & dự báo tự động cho chi nhánh của bạn
+                Automated analysis & forecasting for your branch
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <button 
-                onClick={handleRefresh}
-                disabled={loading || refreshing}
-                className="flex items-center space-x-2 rounded-lg bg-slate-100 text-slate-700 px-4 py-2 text-sm font-medium hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-                <span>Làm mới</span>
-              </button>
+              {activeTab === 'day' && !hasFetchedAIData && (
+                <button 
+                  onClick={fetchAIData}
+                  disabled={loading || refreshing}
+                  className="flex items-center space-x-2 rounded-lg bg-amber-500 text-white px-4 py-2 text-sm font-medium hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Brain className="w-4 h-4" />
+                  <span>{loading || refreshing ? 'Đang phân tích AI...' : 'Phân tích AI'}</span>
+                </button>
+              )}
+              {activeTab === 'day' && hasFetchedAIData && (
+                <button 
+                  onClick={handleRefresh}
+                  disabled={loading || refreshing}
+                  className="flex items-center space-x-2 rounded-lg bg-slate-100 text-slate-700 px-4 py-2 text-sm font-medium hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+                  <span>Refresh</span>
+                </button>
+              )}
+              {activeTab === 'month' && (
+                <button 
+                  onClick={fetchMonthlyStats}
+                  disabled={loadingMonthly}
+                  className="flex items-center space-x-2 rounded-lg bg-slate-100 text-slate-700 px-4 py-2 text-sm font-medium hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <RefreshCw className={`w-4 h-4 ${loadingMonthly ? 'animate-spin' : ''}`} />
+                  <span>Refresh</span>
+                </button>
+              )}
+              {activeTab === 'year' && (
+                <button 
+                  onClick={fetchYearlyStats}
+                  disabled={loadingYearly}
+                  className="flex items-center space-x-2 rounded-lg bg-slate-100 text-slate-700 px-4 py-2 text-sm font-medium hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <RefreshCw className={`w-4 h-4 ${loadingYearly ? 'animate-spin' : ''}`} />
+                  <span>Refresh</span>
+                </button>
+              )}
               <button 
                 onClick={handleExportPDF}
                 disabled={loading || !aiData}
                 className="flex items-center space-x-2 rounded-lg bg-sky-500 text-white px-4 py-2 text-sm font-medium hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Download className="w-4 h-4" />
-                <span>Xuất PDF</span>
+                <span>Export PDF</span>
               </button>
             </div>
           </div>
@@ -678,7 +765,7 @@ export default function AIStatistics() {
                       : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                   }`}
                 >
-                  Ngày
+                  Day
                 </button>
                 <button
                   onClick={() => setActiveTab('month')}
@@ -688,7 +775,7 @@ export default function AIStatistics() {
                       : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                   }`}
                 >
-                  Tháng
+                  Month
                 </button>
                 <button
                   onClick={() => setActiveTab('year')}
@@ -698,7 +785,7 @@ export default function AIStatistics() {
                       : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                   }`}
                 >
-                  Năm
+                  Year
                 </button>
               </div>
             </div>
@@ -707,19 +794,22 @@ export default function AIStatistics() {
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 mb-6">
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="flex-1">
-              <label className="block text-xs font-medium text-gray-700 mb-1">Chi nhánh</label>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Branch</label>
               <div className="px-3 py-2 text-sm bg-gray-50 border border-gray-300 rounded-lg text-gray-700">
-                {managerBranch?.name || 'Chưa có thông tin chi nhánh'}
+                {managerBranch?.name || 'No branch information'}
               </div>
             </div>
             {activeTab === 'day' && (
               <div className="flex-1">
-                <label className="block text-xs font-medium text-gray-700 mb-1">Ngày</label>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Date</label>
                 <input
                   type="date"
                   value={selectedDate}
                   max={new Date().toISOString().split('T')[0]}
-                  onChange={(e) => setSelectedDate(e.target.value)}
+                  onChange={(e) => {
+                    setSelectedDate(e.target.value);
+                    setHasFetchedAIData(false); // Reset khi đổi ngày
+                  }}
                   className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-transparent"
                   disabled={loading}
                 />
@@ -727,7 +817,7 @@ export default function AIStatistics() {
             )}
             {activeTab === 'month' && (
               <div className="flex-1">
-                <label className="block text-xs font-medium text-gray-700 mb-1">Tháng</label>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Month</label>
                 <input
                   type="month"
                   value={selectedMonth}
@@ -740,7 +830,7 @@ export default function AIStatistics() {
             )}
             {activeTab === 'year' && (
               <div className="flex-1">
-                <label className="block text-xs font-medium text-gray-700 mb-1">Năm</label>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Year</label>
                 <input
                   type="number"
                   value={selectedYear}
@@ -770,13 +860,13 @@ export default function AIStatistics() {
               <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
           <div className="flex items-center gap-2 text-yellow-800">
             <AlertTriangle className="h-5 w-5" />
-            <p className="text-sm font-medium">Không tìm thấy thông tin chi nhánh. Vui lòng đăng nhập lại.</p>
+            <p className="text-sm font-medium">Branch information not found. Please log in again.</p>
                 </div>
               </div>
             )}
 
             {/* Loading State - Skeleton for Day tab */}
-            {activeTab === 'day' && (loading || (!aiData && managerBranch?.branchId && selectedDate)) && (
+            {activeTab === 'day' && loading && (
               <DayTabSkeleton />
             )}
       {/* Loading State - Skeleton for Month tab */}
@@ -823,28 +913,28 @@ export default function AIStatistics() {
             {activeTab === 'day' && !loading && aiData && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
           <MetricCard
-            title="Doanh thu"
+            title="Revenue"
             value={formatCurrency(displayData.summary.total_revenue || 0)}
             change={0}
             icon={DollarSign}
             color="emerald"
           />
           <MetricCard
-            title="Đơn hàng"
+            title="Orders"
             value={(displayData.summary.order_count || 0).toString()}
             change={0}
             icon={ShoppingCart}
             color="blue"
           />
           <MetricCard
-            title="Trung bình/đơn"
+            title="Avg/Order"
             value={formatCurrency(displayData.summary.avg_order_value || 0)}
             change={0}
             icon={Activity}
             color="purple"
           />
           <MetricCard
-            title="Đánh giá"
+            title="Rating"
             value={`${(displayData.summary.avg_review_score || 0).toFixed(1)}/5`}
             change={0}
             icon={Star}
@@ -857,28 +947,28 @@ export default function AIStatistics() {
       {activeTab === 'day' && !loading && aiData && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
           <MetricCard
-            title="Khách hàng"
+            title="Customers"
             value={(displayData.summary.customer_count || 0).toString()}
             change={0}
             icon={Activity}
             color="blue"
           />
           <MetricCard
-            title="Khách mới"
+            title="New Customers"
             value={(displayData.summary.new_customers || 0).toString()}
             change={0}
             icon={Activity}
             color="emerald"
           />
           <MetricCard
-            title="Tỷ lệ quay lại"
+            title="Retention Rate"
             value={`${((displayData.summary.customer_retention_rate || 0) * 100).toFixed(0)}%`}
             change={0}
             icon={Activity}
             color="purple"
           />
           <MetricCard
-            title="Sản phẩm đa dạng"
+            title="Product Diversity"
             value={`${((displayData.summary.product_diversity_score || 0) * 100).toFixed(0)}%`}
             change={0}
             icon={Package}
@@ -887,12 +977,29 @@ export default function AIStatistics() {
               </div>
             )}
 
+            {/* Empty State - Chưa gọi API ChatGPT */}
+            {activeTab === 'day' && !loading && !hasFetchedAIData && !error && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 flex flex-col items-center justify-center">
+                <Brain className="h-16 w-16 text-amber-400 mb-4" />
+                <p className="text-gray-600 text-lg mb-2 font-semibold">Chưa có phân tích AI</p>
+                <p className="text-gray-500 text-sm mb-4">Nhấn nút "Phân tích AI" ở trên để bắt đầu phân tích</p>
+                <button
+                  onClick={fetchAIData}
+                  disabled={loading}
+                  className="px-6 py-3 rounded-lg bg-amber-500 text-white text-sm font-medium hover:bg-amber-600 flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Brain className="h-5 w-5" />
+                  {loading ? 'Đang phân tích...' : 'Phân tích AI'}
+                </button>
+              </div>
+            )}
+
             {/* Day Tab Content */}
-            {activeTab === 'day' && !loading && aiData && (
+            {activeTab === 'day' && !loading && hasFetchedAIData && aiData && (
         <div className="space-y-4">
-          {/* 1. TỔNG QUAN & DỰ BÁO */}
+          {/* 1. OVERVIEW & FORECAST */}
           <CollapsibleSection
-            title="Tổng quan & Dự báo"
+            title="Overview & Forecast"
             icon={Activity}
             expanded={expandedSections.overview}
             onToggle={() => toggleSection('overview')}
@@ -901,7 +1008,7 @@ export default function AIStatistics() {
               {/* Revenue Chart */}
               <div className="lg:col-span-2 bg-white rounded-lg border border-gray-200 p-4">
                 <h3 className="text-sm font-semibold text-gray-700 mb-3">
-                  Doanh thu theo giờ ({selectedDate})
+                  Revenue by Hour ({selectedDate})
                 </h3>
                 {displayData.revenueByHour.length > 0 ? (
                   <ResponsiveContainer width="100%" height={200}>
@@ -930,27 +1037,27 @@ export default function AIStatistics() {
                         stroke="#f59e0b"
                         fillOpacity={1}
                         fill="url(#colorRevenue)"
-                        name="Doanh thu"
+                        name="Revenue"
                       />
                     </AreaChart>
                   </ResponsiveContainer>
                 ) : (
                   <div className="flex items-center justify-center h-[200px] text-gray-400 text-sm">
-                    Không có dữ liệu doanh thu theo giờ
+                    No hourly revenue data available
                   </div>
                 )}
                 {/* Order Status Summary */}
                 <div className="mt-4 grid grid-cols-3 gap-2 text-xs">
                   <div className="bg-green-50 p-2 rounded border border-green-200">
-                    <p className="text-gray-600">Hoàn thành</p>
+                    <p className="text-gray-600">Completed</p>
                     <p className="font-bold text-green-700">{displayData.orderStatus.completed}</p>
                   </div>
                   <div className="bg-yellow-50 p-2 rounded border border-yellow-200">
-                    <p className="text-gray-600">Đang chờ</p>
+                    <p className="text-gray-600">Pending</p>
                     <p className="font-bold text-yellow-700">{displayData.orderStatus.pending}</p>
                   </div>
                   <div className="bg-red-50 p-2 rounded border border-red-200">
-                    <p className="text-gray-600">Đã hủy</p>
+                    <p className="text-gray-600">Cancelled</p>
                     <p className="font-bold text-red-700">{displayData.orderStatus.cancelled}</p>
                   </div>
                 </div>
@@ -960,34 +1067,34 @@ export default function AIStatistics() {
             <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg border border-green-200 p-4">
               <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
                 <TrendingUp className="h-4 w-4 text-green-600" />
-                Dự báo ngày mai
+                Tomorrow's Forecast
               </h3>
               <div className="space-y-3">
                 {displayData.aiAnalysis.forecast.tomorrow.revenue > 0 ? (
                   <>
 
                     <div>
-                      <p className="text-xs text-gray-600">Số đơn dự kiến</p>
+                      <p className="text-xs text-gray-600">Expected Orders</p>
                       <p className="text-xl font-bold text-gray-800">
-                        {displayData.aiAnalysis.forecast.tomorrow.orders} đơn
+                        {displayData.aiAnalysis.forecast.tomorrow.orders} orders
                       </p>
                     </div>
                     <div className="pt-2 border-t border-green-200">
                       <p className="text-xs text-gray-500">
-                        Độ tin cậy: <span className={`font-semibold ${
+                        Confidence: <span className={`font-semibold ${
                           displayData.aiAnalysis.forecast.tomorrow.confidence === 'high' ? 'text-green-600' :
                           displayData.aiAnalysis.forecast.tomorrow.confidence === 'medium' ? 'text-yellow-600' :
                           'text-gray-600'
                         }`}>
-                          {displayData.aiAnalysis.forecast.tomorrow.confidence === 'high' ? 'Cao' :
-                           displayData.aiAnalysis.forecast.tomorrow.confidence === 'medium' ? 'Trung bình' : 'Thấp'}
+                          {displayData.aiAnalysis.forecast.tomorrow.confidence === 'high' ? 'High' :
+                           displayData.aiAnalysis.forecast.tomorrow.confidence === 'medium' ? 'Medium' : 'Low'}
                         </span>
                       </p>
                     </div>
                   </>
                 ) : (
                   <div className="text-center text-gray-400 text-sm py-4">
-                    Chưa có dự báo
+                    No forecast available
                   </div>
                 )}
               </div>
@@ -995,9 +1102,9 @@ export default function AIStatistics() {
           </div>
         </CollapsibleSection>
 
-        {/* 2. PHÂN TÍCH BẤT THƯỜNG & DỰ ĐOÁN TƯƠNG LAI */}
+        {/* 2. ANOMALY ANALYSIS & FUTURE FORECAST */}
         <CollapsibleSection
-          title="Phân tích Bất thường & Dự đoán Tương lai"
+          title="Anomaly Analysis & Future Forecast"
           icon={Activity}
           expanded={expandedSections.anomalyForecast}
           onToggle={() => toggleSection('anomalyForecast')}
@@ -1007,7 +1114,7 @@ export default function AIStatistics() {
             <div className="bg-white rounded-lg border border-gray-200 p-4">
               <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4 text-amber-600" />
-                Các điểm cần chú ý - Phát hiện Bất thường
+                Points to Note - Anomaly Detection
               </h3>
               {(() => {
                 const anomalyData = getAnomalyData();
@@ -1021,8 +1128,8 @@ export default function AIStatistics() {
                 if (!anomalyData && anomalyPoints.length === 0) {
                   return (
                     <div className="text-center py-6 text-gray-400 text-sm">
-                      <p>✓ Không có bất thường được phát hiện</p>
-                      <p className="text-xs mt-1">Tất cả các chỉ tiêu đều hoạt động bình thường</p>
+                      <p>✓ No anomalies detected</p>
+                      <p className="text-xs mt-1">All indicators are operating normally</p>
                     </div>
                   );
                 }
@@ -1038,13 +1145,13 @@ export default function AIStatistics() {
                       }`}>
                         <div className="flex items-center justify-between mb-2">
                           <span className="font-semibold text-sm">
-                            {anomalyData.isAnomaly ? '⚠️ Phát hiện bất thường' : '✓ Không có bất thường'}
+                            {anomalyData.isAnomaly ? '⚠️ Anomaly detected' : '✓ No anomalies'}
                           </span>
                           {anomalyData.confidencePercent > 0 && (
                             <span className={`text-xs font-medium ${
                               anomalyData.isAnomaly ? 'text-red-700' : 'text-green-700'
                             }`}>
-                              Độ tin cậy: {anomalyData.confidencePercent.toFixed(1)}%
+                              Confidence: {anomalyData.confidencePercent.toFixed(1)}%
                             </span>
                           )}
                         </div>
@@ -1059,7 +1166,7 @@ export default function AIStatistics() {
                     {/* Anomaly Points from Analysis or Raw Data */}
                     {anomalyPoints.length > 0 && (
                       <div>
-                        <h4 className="text-xs font-semibold text-gray-700 mb-2">Các chỉ tiêu bất thường:</h4>
+                        <h4 className="text-xs font-semibold text-gray-700 mb-2">Abnormal indicators:</h4>
                         <div className="space-y-2">
                           {anomalyPoints.map((point: any, idx: number) => {
                             // Handle both string and object formats
@@ -1074,10 +1181,10 @@ export default function AIStatistics() {
                                 {(change || severity) && (
                                   <div className="mt-1 flex gap-3 text-xs text-gray-600">
                                     {change && (
-                                      <span>Thay đổi: <span className="font-semibold">{change > 0 ? '+' : ''}{change}%</span></span>
+                                      <span>Change: <span className="font-semibold">{change > 0 ? '+' : ''}{change}%</span></span>
                                     )}
                                     {severity && (
-                                      <span>Mức độ: <span className="font-semibold">{severity}</span></span>
+                                      <span>Severity: <span className="font-semibold">{severity}</span></span>
                                     )}
                                   </div>
                                 )}
@@ -1096,7 +1203,7 @@ export default function AIStatistics() {
             <div className="bg-white rounded-lg border border-gray-200 p-4">
               <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
                 <TrendingUp className="h-4 w-4 text-green-600" />
-                Dự đoán Tương lai
+                Future Forecast
               </h3>
               {(() => {
                 const forecastData = getForecastData();
@@ -1105,8 +1212,8 @@ export default function AIStatistics() {
                 if (!forecastData && !analysisInfo.forecast) {
                   return (
                     <div className="text-center py-6 text-gray-400 text-sm">
-                      <p>Chưa có dữ liệu dự đoán</p>
-                      <p className="text-xs mt-1">Dữ liệu sẽ được cập nhật khi có model được train</p>
+                      <p>No forecast data available</p>
+                      <p className="text-xs mt-1">Data will be updated when model is trained</p>
                     </div>
                   );
                 }
@@ -1137,21 +1244,21 @@ export default function AIStatistics() {
                     {forecastData && (
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                         <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg border border-green-200 p-3">
-                          <p className="text-xs text-gray-600 mb-1">Dự đoán ngày mai</p>
+                          <p className="text-xs text-gray-600 mb-1">Tomorrow's Forecast</p>
                           <p className="text-xl font-bold text-green-700">
                             {forecastData.tomorrow.orders > 0 
-                              ? `${Math.max(0, forecastData.tomorrow.orders).toFixed(0)} đơn`
+                              ? `${Math.max(0, forecastData.tomorrow.orders).toFixed(0)} orders`
                               : formatCurrency(Math.max(0, forecastData.tomorrow.revenue || forecastData.tomorrow.orders))
                             }
                           </p>
                           {forecastData.tomorrow.rawValue !== undefined && forecastData.tomorrow.rawValue < 0 && (
                             <p className="text-xs text-yellow-600 mt-1">
-                              Giá trị gốc: {forecastData.tomorrow.rawValue}
+                              Original value: {forecastData.tomorrow.rawValue}
                             </p>
                           )}
                         </div>
                         <div className="bg-blue-50 rounded-lg border border-blue-200 p-3">
-                          <p className="text-xs text-gray-600 mb-1">Độ tin cậy</p>
+                          <p className="text-xs text-gray-600 mb-1">Confidence</p>
                           <p className={`text-lg font-bold ${
                             typeof forecastData.confidenceLevel === 'string' 
                               ? (forecastData.confidenceLevel === 'CAO' || forecastData.confidenceLevel === 'high' ? 'text-green-600' : 
@@ -1160,8 +1267,8 @@ export default function AIStatistics() {
                                  forecastData.confidenceLevel > 0.4 ? 'text-yellow-600' : 'text-gray-600')
                           }`}>
                             {typeof forecastData.confidenceLevel === 'string' 
-                              ? (forecastData.confidenceLevel === 'CAO' || forecastData.confidenceLevel === 'high' ? 'Cao' : 
-                                 forecastData.confidenceLevel === 'TRUNG BÌNH' || forecastData.confidenceLevel === 'medium' ? 'Trung bình' : 'Thấp')
+                              ? (forecastData.confidenceLevel === 'CAO' || forecastData.confidenceLevel === 'high' ? 'High' : 
+                                 forecastData.confidenceLevel === 'TRUNG BÌNH' || forecastData.confidenceLevel === 'medium' ? 'Medium' : 'Low')
                               : `${(forecastData.confidenceLevel * 100).toFixed(0)}%`
                             }
                           </p>
@@ -1172,9 +1279,9 @@ export default function AIStatistics() {
                           )}
                         </div>
                         <div className="bg-purple-50 rounded-lg border border-purple-200 p-3">
-                          <p className="text-xs text-gray-600 mb-1">Số ngày dự đoán</p>
+                          <p className="text-xs text-gray-600 mb-1">Forecast Days</p>
                           <p className="text-lg font-bold text-purple-700">
-                            {forecastData.allForecasts?.length || 0} ngày
+                            {forecastData.allForecasts?.length || 0} days
                           </p>
                           {forecastData.forecastStartDate && forecastData.forecastEndDate && (
                             <p className="text-xs text-gray-500 mt-1">
@@ -1190,16 +1297,16 @@ export default function AIStatistics() {
                       <div>
                         <div className="flex items-center justify-between mb-2">
                           <h4 className="text-xs font-semibold text-gray-700">
-                            Biểu đồ dự đoán {forecastData?.chiTieu || 'số lượng đơn hàng'} ({chartData.length} ngày)
+                            Forecast Chart - {forecastData?.chiTieu || 'order count'} ({chartData.length} days)
                           </h4>
                           <div className="flex items-center gap-4 text-xs text-gray-500">
                             <div className="flex items-center gap-1">
                               <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                              <span>Dự đoán</span>
+                              <span>Forecast</span>
                             </div>
                             <div className="flex items-center gap-1">
                               <div className="w-3 h-3 bg-blue-200 rounded"></div>
-                              <span>Khoảng tin cậy</span>
+                              <span>Confidence Interval</span>
                             </div>
                           </div>
                         </div>
@@ -1224,21 +1331,21 @@ export default function AIStatistics() {
                             <YAxis 
                               stroke="#666" 
                               tick={{ fontSize: 11 }}
-                              label={{ value: forecastData?.chiTieuCode === 'order_count' ? 'Số đơn' : 'Giá trị', angle: -90, position: 'insideLeft', style: { fontSize: 11 } }}
+                              label={{ value: forecastData?.chiTieuCode === 'order_count' ? 'Orders' : 'Value', angle: -90, position: 'insideLeft', style: { fontSize: 11 } }}
                             />
                             <Tooltip
                               formatter={(_value: any, name: string, props: any) => {
-                                if (name === 'Khoảng tin cậy') {
-                                  return [`${formatCurrency(props.payload.min)} - ${formatCurrency(props.payload.max)}`, 'Khoảng tin cậy'];
+                                if (name === 'Confidence Interval') {
+                                  return [`${formatCurrency(props.payload.min)} - ${formatCurrency(props.payload.max)}`, 'Confidence Interval'];
                                 }
                                 const rawValue = props.payload.rawValue;
                                 const displayValue = Math.max(0, rawValue);
                                 return [
-                                  `${formatCurrency(displayValue)}${rawValue < 0 ? ' (giá trị gốc: ' + rawValue + ')' : ''}`,
+                                  `${formatCurrency(displayValue)}${rawValue < 0 ? ' (original: ' + rawValue + ')' : ''}`,
                                   name
                                 ];
                               }}
-                              labelFormatter={(label) => `Ngày: ${label}`}
+                              labelFormatter={(label) => `Date: ${label}`}
                               contentStyle={{
                                 backgroundColor: '#fff',
                                 border: '1px solid #e2e8f0',
@@ -1259,7 +1366,7 @@ export default function AIStatistics() {
                               stroke="none"
                               fill="url(#confidenceGradient)"
                               fillOpacity={0.3}
-                              name="Khoảng tin cậy"
+                              name="Confidence Interval"
                               isAnimationActive={false}
                             />
                             <Area
@@ -1278,14 +1385,14 @@ export default function AIStatistics() {
                               strokeWidth={3}
                               dot={{ fill: '#10b981', r: 5, strokeWidth: 2, stroke: '#fff' }}
                               activeDot={{ r: 7, stroke: '#10b981', strokeWidth: 2 }}
-                              name="Dự đoán"
+                              name="Forecast"
                               isAnimationActive={true}
                             />
                           </ComposedChart>
                         </ResponsiveContainer>
                         {chartData.some((item: any) => item.rawValue < 0) && (
                           <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-800">
-                            <span className="font-semibold">Lưu ý:</span> Một số giá trị dự đoán là số âm (có thể do dữ liệu lịch sử không đủ), đã hiển thị là 0 trên biểu đồ.
+                            <span className="font-semibold">Note:</span> Some forecast values are negative (possibly due to insufficient historical data), displayed as 0 on the chart.
                           </div>
                         )}
                       </div>
@@ -1294,7 +1401,7 @@ export default function AIStatistics() {
                     {/* Forecast Text Description */}
                     {analysisInfo.forecast && (
                       <div className="bg-blue-50 rounded-lg border border-blue-200 p-3">
-                        <h4 className="text-xs font-semibold text-gray-700 mb-2">Mô tả dự đoán:</h4>
+                        <h4 className="text-xs font-semibold text-gray-700 mb-2">Forecast Description:</h4>
                         <p className="text-sm text-gray-700 leading-relaxed">{analysisInfo.forecast}</p>
                       </div>
                     )}
@@ -1302,7 +1409,7 @@ export default function AIStatistics() {
                     {/* Forecast List */}
                     {forecastData?.allForecasts && forecastData.allForecasts.length > 0 && (
                       <div>
-                        <h4 className="text-xs font-semibold text-gray-700 mb-2">Chi tiết dự đoán từng ngày:</h4>
+                        <h4 className="text-xs font-semibold text-gray-700 mb-2">Daily Forecast Details:</h4>
                         <div className="space-y-2 max-h-64 overflow-y-auto">
                           {forecastData.allForecasts.map((item: any, idx: number) => {
                             const value = item.value || 0;
@@ -1367,7 +1474,7 @@ export default function AIStatistics() {
 
         {/* 3. PHÂN TÍCH AI */}
         <CollapsibleSection
-          title="Phân tích AI - Điểm mạnh & Điểm yếu"
+          title="AI Analysis - Strengths & Weaknesses"
           icon={Brain}
           expanded={expandedSections.analysis}
           onToggle={() => toggleSection('analysis')}
@@ -1377,7 +1484,7 @@ export default function AIStatistics() {
             <div className="bg-green-50 rounded-lg border border-green-200 p-4">
               <h3 className="text-sm font-semibold text-green-800 mb-3 flex items-center gap-2">
                 <CheckCircle className="h-4 w-4" />
-                Điểm mạnh
+                Strengths
               </h3>
               <ul className="space-y-2">
                 {displayData.aiAnalysis.strengths.length > 0 ? (
@@ -1388,7 +1495,7 @@ export default function AIStatistics() {
                     </li>
                   ))
                 ) : (
-                  <li className="text-sm text-gray-500">Chưa có thông tin</li>
+                  <li className="text-sm text-gray-500">No information available</li>
                 )}
               </ul>
             </div>
@@ -1397,7 +1504,7 @@ export default function AIStatistics() {
             <div className="bg-red-50 rounded-lg border border-red-200 p-4">
               <h3 className="text-sm font-semibold text-red-800 mb-3 flex items-center gap-2">
                 <AlertCircle className="h-4 w-4" />
-                Điểm yếu & Vấn đề
+                Weaknesses & Issues
               </h3>
               <ul className="space-y-2">
                 {displayData.aiAnalysis.weaknesses.length > 0 ? (
@@ -1408,7 +1515,7 @@ export default function AIStatistics() {
                     </li>
                   ))
                 ) : (
-                  <li className="text-sm text-gray-500">Không có vấn đề</li>
+                  <li className="text-sm text-gray-500">No issues</li>
                 )}
               </ul>
             </div>
@@ -1416,7 +1523,7 @@ export default function AIStatistics() {
 
           {/* Recommendations */}
           <div className="mt-4 bg-blue-50 rounded-lg border border-blue-200 p-4">
-            <h3 className="text-sm font-semibold text-blue-800 mb-3">Khuyến nghị hành động</h3>
+            <h3 className="text-sm font-semibold text-blue-800 mb-3">Action Recommendations</h3>
             <div className="space-y-2">
               {displayData.aiAnalysis.recommendations.length > 0 ? (
                 displayData.aiAnalysis.recommendations.map((rec, idx) => (
@@ -1439,13 +1546,13 @@ export default function AIStatistics() {
                         : 'bg-gray-200 text-gray-800'
                     }`}
                   >
-                    {rec.priority === 'high' ? 'Khẩn cấp' : rec.priority === 'medium' ? 'Quan trọng' : 'Theo dõi'}
+                    {rec.priority === 'high' ? 'Urgent' : rec.priority === 'medium' ? 'Important' : 'Monitor'}
                   </span>
                   <p className="text-sm text-gray-700 flex-1">{rec.action}</p>
                 </div>
                 ))
               ) : (
-                <div className="text-sm text-gray-500 p-3">Chưa có khuyến nghị</div>
+                <div className="text-sm text-gray-500 p-3">No recommendations available</div>
               )}
             </div>
           </div>
@@ -1453,7 +1560,7 @@ export default function AIStatistics() {
 
         {/* 4. SẢN PHẨM BÁN CHẠY */}
         <CollapsibleSection
-          title="Sản phẩm bán chạy"
+          title="Best Selling Products"
           icon={BarChart3}
           expanded={expandedSections.products}
           onToggle={() => toggleSection('products')}
@@ -1472,7 +1579,7 @@ export default function AIStatistics() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-sm text-gray-900 truncate">{product.name}</p>
-                        <p className="text-xs text-gray-500">{product.quantity} sản phẩm • {formatCurrency(product.revenue)}</p>
+                        <p className="text-xs text-gray-500">{product.quantity} items • {formatCurrency(product.revenue)}</p>
                       </div>
                       <div className="text-right">
                         {product.trend !== 0 && (
@@ -1493,7 +1600,7 @@ export default function AIStatistics() {
                     </div>
                   ))
                 ) : (
-                  <div className="text-center text-gray-400 text-sm py-4">Chưa có dữ liệu sản phẩm</div>
+                  <div className="text-center text-gray-400 text-sm py-4">No product data available</div>
                 )}
               </div>
             </div>
@@ -1501,7 +1608,7 @@ export default function AIStatistics() {
             {/* Products by Category */}
             {Object.keys(displayData.productsByCategory).length > 0 && (
               <div className="bg-white rounded-lg border border-gray-200 p-4">
-                <h4 className="text-sm font-semibold text-gray-700 mb-3">Sản phẩm theo danh mục</h4>
+                <h4 className="text-sm font-semibold text-gray-700 mb-3">Products by Category</h4>
                 <div className="grid grid-cols-2 gap-2">
                   {Object.entries(displayData.productsByCategory).map(([category, count]: [string, any]) => (
                     <div key={category} className="p-2 bg-gray-50 rounded border border-gray-200">
@@ -1517,7 +1624,7 @@ export default function AIStatistics() {
 
         {/* 5. TỒN KHO */}
         <CollapsibleSection
-          title="Cảnh báo tồn kho"
+          title="Inventory Alerts"
           icon={Package}
           expanded={expandedSections.inventory}
           onToggle={() => toggleSection('inventory')}
@@ -1544,10 +1651,10 @@ export default function AIStatistics() {
                 </div>
                 <div className="space-y-1">
                   <p className="text-xs text-gray-600">
-                    Còn lại: <span className="font-bold text-gray-900">{item.current} {item.unit}</span>
+                    Remaining: <span className="font-bold text-gray-900">{item.current} {item.unit}</span>
                   </p>
                   <p className="text-xs text-gray-500">
-                    Ngưỡng an toàn: {item.threshold} {item.unit}
+                    Safety threshold: {item.threshold} {item.unit}
                   </p>
                   <div className="w-full bg-gray-200 rounded-full h-1.5 mt-2">
                     <div
@@ -1561,14 +1668,14 @@ export default function AIStatistics() {
               </div>
               ))
             ) : (
-              <div className="text-center text-gray-400 text-sm py-4 col-span-full">Không có cảnh báo tồn kho</div>
+              <div className="text-center text-gray-400 text-sm py-4 col-span-full">No inventory alerts</div>
             )}
           </div>
         </CollapsibleSection>
 
         {/* 6. PHẢN HỒI KHÁCH HÀNG */}
         <CollapsibleSection
-          title="Phản hồi khách hàng"
+          title="Customer Feedback"
           icon={Star}
           expanded={expandedSections.feedback}
           onToggle={() => toggleSection('feedback')}
@@ -1578,22 +1685,22 @@ export default function AIStatistics() {
             <div className="bg-white rounded-lg border border-gray-200 p-4">
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <p className="text-xs text-gray-600">Tổng đánh giá</p>
+                  <p className="text-xs text-gray-600">Total Reviews</p>
                   <p className="text-xl font-bold text-gray-900">{displayData.summary.total_reviews || 0}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-600">Tích cực</p>
+                  <p className="text-xs text-gray-600">Positive</p>
                   <p className="text-xl font-bold text-green-600">{displayData.summary.positive_reviews || 0}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-600">Tiêu cực</p>
+                  <p className="text-xs text-gray-600">Negative</p>
                   <p className="text-xl font-bold text-red-600">{displayData.summary.negative_reviews || 0}</p>
                 </div>
               </div>
               {/* Review Distribution */}
               {Object.keys(displayData.reviewDistribution).length > 0 && (
                 <div className="mt-4 pt-4 border-t border-gray-200">
-                  <p className="text-xs text-gray-600 mb-2">Phân bố đánh giá</p>
+                  <p className="text-xs text-gray-600 mb-2">Review Distribution</p>
                   <div className="flex gap-2">
                     {[5, 4, 3, 2, 1].map((rating) => (
                       <div key={rating} className="flex-1 text-center">
@@ -1619,7 +1726,7 @@ export default function AIStatistics() {
             
             {/* Recent Reviews */}
             <div className="space-y-3">
-              <h4 className="text-sm font-semibold text-gray-700">Đánh giá gần đây</h4>
+              <h4 className="text-sm font-semibold text-gray-700">Recent Reviews</h4>
               {displayData.recentReviews.length > 0 ? (
                 displayData.recentReviews.map((review: any, idx: number) => (
                   <div
@@ -1645,7 +1752,7 @@ export default function AIStatistics() {
                   </div>
                 ))
               ) : (
-                <div className="text-center text-gray-400 text-sm py-4">Chưa có phản hồi khách hàng</div>
+                <div className="text-center text-gray-400 text-sm py-4">No customer feedback available</div>
               )}
             </div>
           </div>
@@ -1653,7 +1760,7 @@ export default function AIStatistics() {
 
         {/* 7. KHÁCH HÀNG */}
         <CollapsibleSection
-          title="Khách hàng hàng đầu"
+          title="Top Customers"
           icon={Users}
           expanded={expandedSections.customers}
           onToggle={() => toggleSection('customers')}
@@ -1671,12 +1778,12 @@ export default function AIStatistics() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-sm text-gray-900 truncate">{customer.name}</p>
-                      <p className="text-xs text-gray-500">{customer.orderCount} đơn • {formatCurrency(customer.totalSpent)}</p>
+                      <p className="text-xs text-gray-500">{customer.orderCount} orders • {formatCurrency(customer.totalSpent)}</p>
                     </div>
                   </div>
                 ))
               ) : (
-                <div className="text-center text-gray-400 text-sm py-4">Chưa có dữ liệu khách hàng</div>
+                <div className="text-center text-gray-400 text-sm py-4">No customer data available</div>
               )}
             </div>
           </div>
@@ -1684,7 +1791,7 @@ export default function AIStatistics() {
 
         {/* 8. NGUYÊN LIỆU & CHI PHÍ */}
         <CollapsibleSection
-          title="Nguyên liệu & Chi phí"
+          title="Ingredients & Costs"
           icon={Package}
           expanded={expandedSections.materials}
           onToggle={() => toggleSection('materials')}
@@ -1693,7 +1800,7 @@ export default function AIStatistics() {
             {/* Top Ingredients by Value */}
             {displayData.topIngredientsByValue.length > 0 && (
               <div className="bg-white rounded-lg border border-gray-200 p-4">
-                <h4 className="text-sm font-semibold text-gray-700 mb-3">Nguyên liệu có giá trị cao nhất</h4>
+                <h4 className="text-sm font-semibold text-gray-700 mb-3">Highest Value Ingredients</h4>
                 <div className="space-y-2">
                   {displayData.topIngredientsByValue.slice(0, 5).map((item: any, idx: number) => (
                     <div
@@ -1714,7 +1821,7 @@ export default function AIStatistics() {
             {/* Top Cost Ingredients */}
             {displayData.topCostIngredients.length > 0 && (
               <div className="bg-white rounded-lg border border-gray-200 p-4">
-                <h4 className="text-sm font-semibold text-gray-700 mb-3">Nguyên liệu có chi phí cao nhất</h4>
+                <h4 className="text-sm font-semibold text-gray-700 mb-3">Highest Cost Ingredients</h4>
                 <div className="space-y-2">
                   {displayData.topCostIngredients.map((item: any, idx: number) => (
                     <div
@@ -1745,7 +1852,7 @@ export default function AIStatistics() {
               <div className="bg-white rounded-lg border border-gray-200 p-4">
                 <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
                   <CreditCard className="h-4 w-4" />
-                  Doanh thu theo phương thức thanh toán
+                  Revenue by Payment Method
                 </h4>
                 <div className="space-y-2">
                   {Object.entries(displayData.revenueByPaymentMethod).map(([method, amount]: [string, any]) => {
@@ -1755,7 +1862,7 @@ export default function AIStatistics() {
                       <div key={method} className="flex items-center justify-between p-2 rounded border border-gray-200">
                         <div className="flex-1">
                           <p className="text-sm font-medium text-gray-900">
-                            {method === 'CASH' ? 'Tiền mặt' : method === 'CARD' ? 'Thẻ' : method === 'MOMO' ? 'MoMo' : method}
+                            {method === 'CASH' ? 'Cash' : method === 'CARD' ? 'Card' : method === 'MOMO' ? 'MoMo' : method}
                           </p>
                           <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
                             <div

@@ -49,7 +49,8 @@ export interface StockPageResponse {
   last: boolean;
   numberOfElements: number;
   empty: boolean;
-  pageable: {
+  totalStockValue: number; // Total stock value for all matching stocks (not just current page)
+  pageable?: {
     pageNumber: number;
     pageSize: number;
     sort: {
@@ -61,7 +62,7 @@ export interface StockPageResponse {
     paged: boolean;
     unpaged: boolean;
   };
-  sort: {
+  sort?: {
     empty: boolean;
     sorted: boolean;
     unsorted: boolean;

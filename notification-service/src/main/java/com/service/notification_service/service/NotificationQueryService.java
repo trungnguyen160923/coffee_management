@@ -40,6 +40,11 @@ public class NotificationQueryService {
                         if (createdAt == null || createdAt.isBefore(startOfDay) || createdAt.isAfter(endOfDay)) {
                             return false;
                         }
+                        // Only show branch-level notifications (userId == null)
+                        // Staff receives notifications when: userId == null AND targetRole matches
+                        if (n.getUserId() != null) {
+                            return false; // Skip user-specific notifications (they are fetched via getNotificationsByUser)
+                        }
                         // Filter by role: show notification if targetRole is null (all roles) or matches userRole
                         String targetRole = n.getTargetRole();
                         return targetRole == null || targetRole.equalsIgnoreCase(userRole);

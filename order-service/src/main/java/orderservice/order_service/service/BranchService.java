@@ -43,6 +43,9 @@ public class BranchService {
         // Set default values if not provided
         LocalTime openHours = request.getOpenHours() != null ? request.getOpenHours() : LocalTime.of(8, 0);
         LocalTime endHours = request.getEndHours() != null ? request.getEndHours() : LocalTime.of(22, 0);
+        String openDays = (request.getOpenDays() != null && !request.getOpenDays().trim().isEmpty())
+                ? request.getOpenDays().trim()
+                : "1,2,3,4,5,6,7";
 
         // Validate business hours
         if (openHours.isAfter(endHours)) {
@@ -56,6 +59,7 @@ public class BranchService {
         branch.setManagerUserId(request.getManagerUserId());
         branch.setOpenHours(openHours);
         branch.setEndHours(endHours);
+        branch.setOpenDays(openDays);
 
         // Geocode address to get coordinates - with rollback on failure if mandatory
         if (request.getAddress() != null && !request.getAddress().trim().isEmpty()) {
@@ -159,6 +163,9 @@ public class BranchService {
         // Set default values if not provided
         LocalTime openHours = request.getOpenHours() != null ? request.getOpenHours() : branch.getOpenHours();
         LocalTime endHours = request.getEndHours() != null ? request.getEndHours() : branch.getEndHours();
+        String openDays = (request.getOpenDays() != null && !request.getOpenDays().trim().isEmpty())
+                ? request.getOpenDays().trim()
+                : branch.getOpenDays();
 
         // Validate business hours
         if (openHours.isAfter(endHours)) {
@@ -174,6 +181,7 @@ public class BranchService {
         branch.setManagerUserId(request.getManagerUserId());
         branch.setOpenHours(openHours);
         branch.setEndHours(endHours);
+        branch.setOpenDays(openDays);
 
         // Geocode address to get coordinates if address has changed - with rollback on
         // failure if mandatory

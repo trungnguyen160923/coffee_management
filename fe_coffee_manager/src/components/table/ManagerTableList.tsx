@@ -38,6 +38,7 @@ export default function ManagerTableList({ onEditTable, onDeleteTable, refreshTr
                 setLoading(true);
                 setError(null);
                 const data = await tableService.getTablesByBranch(branchId);
+                
                 setTables(Array.isArray(data) ? data : []);
             } catch (e: any) {
                 console.error('Failed to load tables', e);

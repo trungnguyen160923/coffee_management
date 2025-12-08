@@ -25,8 +25,10 @@ public class UserResponse {
     @NoArgsConstructor
     @AllArgsConstructor
     @Builder
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Role {
         private Integer roleId;
         private String name;
+        private String roleName; // Tên hiển thị (ví dụ: Pha chế, Thu ngân)
     }
 }

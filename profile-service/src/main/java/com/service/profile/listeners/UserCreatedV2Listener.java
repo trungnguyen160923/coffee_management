@@ -23,11 +23,13 @@ import com.service.profile.repository.http_client.BranchClient;
 import com.service.profile.repository.ManagerProfileRepository;
 import com.service.profile.repository.StaffProfileRepository;
 import com.service.profile.repository.CustomerProfileRepository;
+import com.service.profile.repository.StaffRoleAssignmentRepository;
 import com.service.profile.service.ManagerProfileService;
 import com.service.profile.service.StaffProfileService;
 import com.service.profile.service.CustomerProfileService;
 
 import java.time.Instant;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Objects;
 
@@ -42,6 +44,7 @@ public class UserCreatedV2Listener {
     private final ManagerProfileRepository managerProfileRepository;
     private final StaffProfileRepository staffProfileRepository;
     private final CustomerProfileRepository customerProfileRepository;
+    private final StaffRoleAssignmentRepository staffRoleAssignmentRepository;
     private final KafkaTemplate<String, String> kafkaTemplate;
 
     public UserCreatedV2Listener(ObjectMapper json, ProcessedEventRepository processed,
@@ -52,6 +55,7 @@ public class UserCreatedV2Listener {
             ManagerProfileRepository managerProfileRepository,
             StaffProfileRepository staffProfileRepository,
             CustomerProfileRepository customerProfileRepository,
+            StaffRoleAssignmentRepository staffRoleAssignmentRepository,
             KafkaTemplate<String, String> kafkaTemplate) {
         this.json = json;
         this.processed = processed;
@@ -62,6 +66,7 @@ public class UserCreatedV2Listener {
         this.managerProfileRepository = managerProfileRepository;
         this.staffProfileRepository = staffProfileRepository;
         this.customerProfileRepository = customerProfileRepository;
+        this.staffRoleAssignmentRepository = staffRoleAssignmentRepository;
         this.kafkaTemplate = kafkaTemplate;
     }
 
@@ -119,15 +124,45 @@ public class UserCreatedV2Listener {
                                 .hireDate(evt.hireDate)
                                 .identityCard(evt.identityCard)
                                 .build());
-                case "STAFF" -> staffProfileService.createStaffProfile(
-                        StaffProfileCreationRequest.builder()
-                                .userId(evt.userId)
-                                .branchId(evt.branchId)
-                                .identityCard(evt.identityCard)
-                                .position(evt.position)
-                                .hireDate(evt.hireDate)
-                                .salary(java.math.BigDecimal.valueOf(evt.salary))
-                                .build());
+                case "STAFF" -> {
+                    // Defaults if not provided
+                    String employmentType = evt.employmentType != null ? evt.employmentType : "FULL_TIME";
+                    String payType = evt.payType != null ? evt.payType
+                            : ("FULL_TIME".equals(employmentType) ? "MONTHLY" : "HOURLY");
+                    BigDecimal baseSalary = evt.salary != null ? BigDecimal.valueOf(evt.salary) : BigDecimal.ZERO;
+                    BigDecimal hourlyRate = evt.hourlyRate != null ? BigDecimal.valueOf(evt.hourlyRate) : BigDecimal.ZERO;
+                    BigDecimal overtimeRate = evt.overtimeRate != null ? BigDecimal.valueOf(evt.overtimeRate) : null;
+
+                    staffProfileService.createStaffProfile(
+                            StaffProfileCreationRequest.builder()
+                                    .userId(evt.userId)
+                                    .branchId(evt.branchId)
+                                    .identityCard(evt.identityCard)
+                                    .hireDate(evt.hireDate)
+                                    .baseSalary(baseSalary)
+                                    .hourlyRate(hourlyRate)
+                                    .overtimeRate(overtimeRate)
+                                    .employmentType(employmentType)
+                                    .payType(payType)
+                                    .build());
+
+                    // After staff profile is created, create staff_role_assignments for business roles (if any)
+                    if (evt.staffBusinessRoleIds != null && !evt.staffBusinessRoleIds.isEmpty()) {
+                        var staffProfileOpt = staffProfileRepository.findById(evt.userId);
+                        staffProfileOpt.ifPresent(staffProfile -> {
+                            String level = evt.proficiencyLevel != null ? evt.proficiencyLevel : "INTERMEDIATE";
+                            evt.staffBusinessRoleIds.forEach(roleId -> {
+                                var assignment = com.service.profile.entity.StaffRoleAssignment.builder()
+                                        .staffProfile(staffProfile)
+                                        .roleId(roleId)
+                                        .proficiencyLevel(level)
+                                        .certifiedAt(evt.hireDate)
+                                        .build();
+                                staffRoleAssignmentRepository.save(assignment);
+                            });
+                        });
+                    }
+                }
                 case "CUSTOMER" -> customerProfileService.createCustomerProfile(
                         CustomerProfileCreationRequest.builder()
                                 .userId(evt.userId)
@@ -163,7 +198,16 @@ public class UserCreatedV2Listener {
                 }
                 if (Objects.equals(evt.role, "STAFF")) {
                     try {
-                        staffProfileRepository.deleteById(evt.userId);
+                        var staffOpt = staffProfileRepository.findById(evt.userId);
+                        staffOpt.ifPresent(sp -> {
+                            try {
+                                // Xoá hết staff_role_assignments trước
+                                staffRoleAssignmentRepository.deleteByStaffProfile(sp);
+                            } catch (Exception ignoreAssign) {}
+                            try {
+                                staffProfileRepository.delete(sp);
+                            } catch (Exception ignoreProfile) {}
+                        });
                     } catch (Exception ignore3) {
                     }
                 }

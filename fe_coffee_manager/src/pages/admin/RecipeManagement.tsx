@@ -5,6 +5,7 @@ import { CatalogRecipe, RecipePageResponse } from '../../types';
 import RecipeModal from '../../components/recipe/RecipeModal';
 import RecipeDetailModal from '../../components/recipe/RecipeDetailModal';
 import { BookOpen, ChefHat, Loader, RefreshCw, Settings, Trash2, Plus, Search, Eye, RotateCcw } from 'lucide-react';
+import { RecipeManagementSkeleton } from '../../components/admin/skeletons';
 
 export default function RecipeManagement() {
   const [data, setData] = useState<RecipePageResponse | null>(null);
@@ -47,6 +48,10 @@ export default function RecipeManagement() {
   const totalElements = data?.totalElements || 0;
   const currentActive = (data?.content || []).filter(r => r.status === 'ACTIVE').length;
   const currentInactive = (data?.content || []).filter(r => r.status !== 'ACTIVE').length;
+
+  if (loading && !data) {
+    return <RecipeManagementSkeleton />;
+  }
 
   return (
     <div className="min-h-screen bg-slate-50">

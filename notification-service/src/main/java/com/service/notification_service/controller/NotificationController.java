@@ -12,11 +12,13 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.service.notification_service.dto.ApiResponse;
+import com.service.notification_service.dto.request.SendShiftNotificationRequest;
 import com.service.notification_service.dto.response.NotificationResponse;
 import com.service.notification_service.events.OrderCreatedEvent;
 import com.service.notification_service.events.ReservationCreatedEvent;
 import com.service.notification_service.service.NotificationQueryService;
 import com.service.notification_service.service.OrderNotificationService;
+import com.service.notification_service.service.ShiftNotificationService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,6 +31,7 @@ public class NotificationController {
 
     private final NotificationQueryService notificationQueryService;
     private final OrderNotificationService orderNotificationService;
+    private final ShiftNotificationService shiftNotificationService;
 
     @GetMapping("/branch/{branchId}")
     public ApiResponse<List<NotificationResponse>> getByBranch(
@@ -77,6 +80,12 @@ public class NotificationController {
     @PostMapping("/reservations")
     public ApiResponse<Void> triggerReservationNotification(@RequestBody ReservationCreatedEvent request) throws Exception {
         orderNotificationService.notifyReservationCreated(request);
+        return ApiResponse.<Void>builder().build();
+    }
+
+    @PostMapping("/shifts")
+    public ApiResponse<Void> sendShiftNotification(@RequestBody SendShiftNotificationRequest request) {
+        shiftNotificationService.sendShiftNotification(request);
         return ApiResponse.<Void>builder().build();
     }
 }

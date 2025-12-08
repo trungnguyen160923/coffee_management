@@ -7,6 +7,7 @@ import { IngredientDetailModal } from '../../components/ingredient';
 import UnitManager from '../../components/unit/UnitManager';
 import ManagerConversionModal from '../../components/unit/ManagerConversionModal';
 import { useAuth } from '../../context/AuthContext';
+import { IngredientManagementSkeleton } from '../../components/manager/skeletons';
 
 type ModalType = 'view' | null;
 
@@ -57,7 +58,6 @@ const IngredientManagement: React.FC = () => {
   useEffect(() => {
     loadIngredients();
   }, [currentPage, debouncedSearch, supplierFilter]);
-
 
   const loadSuppliers = async () => {
     try {
@@ -159,6 +159,10 @@ const IngredientManagement: React.FC = () => {
     // Refresh conversions when modal closes
     loadConversions();
   };
+
+  if (loading && ingredients.length === 0) {
+    return <IngredientManagementSkeleton />;
+  }
 
   return (
     <div className="min-h-screen bg-slate-50">

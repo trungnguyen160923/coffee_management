@@ -30,12 +30,19 @@ public class StaffProfileCreationRequest {
     @NotNull(message = "EMPTY_IDENTITY_CARD")
     String identityCard;
 
-    @NotNull(message = "EMPTY_POSITION")
-    String position;
-
     @NotNull(message = "EMPTY_HIRE_DATE")
     LocalDate hireDate;
 
-    @NotNull(message = "EMPTY_SALARY")
-    BigDecimal salary;
+    // Lương cơ bản theo tháng cho FULL_TIME (baseSalary) – có thể null nếu payType = HOURLY
+    BigDecimal baseSalary;
+
+    // Đơn giá lương theo giờ cho PART_TIME / CASUAL
+    BigDecimal hourlyRate;
+
+    // Đơn giá lương tăng ca theo giờ
+    BigDecimal overtimeRate;
+
+    // Kiểu employment và cách tính lương
+    String employmentType; // FULL_TIME / PART_TIME / CASUAL
+    String payType;        // MONTHLY / HOURLY
 }

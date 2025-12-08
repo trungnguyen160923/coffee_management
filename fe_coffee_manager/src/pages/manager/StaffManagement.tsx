@@ -1,15 +1,18 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Pencil, Trash2, X, Check, Users, UserCheck, UserX } from 'lucide-react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Plus, Pencil, Trash2, Users, UserCheck, Eye, X } from 'lucide-react';
 import { staffService } from '../../services';
+import authService, { StaffBusinessRole } from '../../services/authService';
 import CreateStaffModal from '../../components/manager/staff/CreateStaffModal';
-import { UserResponseDto } from '../../types';
+import StaffDetailModal from '../../components/manager/staff/StaffDetailModal';
+import { StaffWithUserDto } from '../../types';
 import ConfirmModal from '../../components/common/modal/ConfirmModal';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
+import { StaffManagementSkeleton } from '../../components/manager/skeletons';
 
 const StaffManagement: React.FC = () => {
   const { managerBranch } = useAuth();
-  const [staff, setStaff] = useState<UserResponseDto[]>([]);
+  const [staff, setStaff] = useState<StaffWithUserDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
@@ -21,15 +24,21 @@ const StaffManagement: React.FC = () => {
   const [inactiveStaff, setInactiveStaff] = useState(0);
   const [isCreating, setIsCreating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [deletingStaff, setDeletingStaff] = useState<UserResponseDto | null>(null);
+  const [deletingStaff, setDeletingStaff] = useState<StaffWithUserDto | null>(null);
   const [deletingLoading, setDeletingLoading] = useState(false);
+  const [editingStaff, setEditingStaff] = useState<StaffWithUserDto | null>(null);
+  const [viewingStaff, setViewingStaff] = useState<StaffWithUserDto | null>(null);
+  
+  // Filter states
+  const [selectedEmploymentType, setSelectedEmploymentType] = useState<'ALL' | 'FULL_TIME' | 'PART_TIME' | 'CASUAL'>('ALL');
+  const [selectedRoleIds, setSelectedRoleIds] = useState<number[]>([]);
+  const [availableRoles, setAvailableRoles] = useState<StaffBusinessRole[]>([]);
+  
   const topScrollRef = useRef<HTMLDivElement | null>(null);
   const bottomScrollRef = useRef<HTMLDivElement | null>(null);
   const tableRef = useRef<HTMLTableElement | null>(null);
   const topInnerRef = useRef<HTMLDivElement | null>(null);
   const syncingRef = useRef(false);
-  const [editing, setEditing] = useState<{ id: number; field: 'email' | 'identityCard' | 'hireDate' | 'phoneNumber' | 'position' | 'salary' } | null>(null);
-  const [editValue, setEditValue] = useState('');
 
   useEffect(() => {
     fetchStaff();
@@ -39,25 +48,36 @@ const StaffManagement: React.FC = () => {
     fetchStaffStats();
   }, [managerBranch]);
 
+  useEffect(() => {
+    // Load available staff business roles
+    authService
+      .getStaffBusinessRoles()
+      .then((roles) => {
+        setAvailableRoles(roles || []);
+      })
+      .catch((err) => {
+        console.error('Failed to load staff business roles:', err);
+      });
+  }, []);
+
   const fetchStaff = async () => {
     try {
       setLoading(true);
       setError(null);
       
       if (managerBranch?.branchId) {
-        // Fetch staff by branch for manager
-        const staffList = await staffService.getStaffProfilesByBranch(managerBranch.branchId);
+        // Fetch staff by branch for manager (full info from profile-service)
+        const staffList = await staffService.getStaffsWithUserInfoByBranch(managerBranch.branchId);
+        
         const sorted = sortStaffNewestFirst(staffList);
         setStaff(sorted);
         setTotal(staffList.length);
         setTotalPages(1);
       } else {
-        // Fallback to paged API if no branch info
-        const resp = await staffService.getStaffProfilesPaged(page, size);
-        const sorted = sortStaffNewestFirst(resp.data);
-        setStaff(sorted);
-        setTotal(resp.total);
-        setTotalPages(resp.totalPages);
+        // Fallback: keep empty list if không xác định branch
+        setStaff([]);
+        setTotal(0);
+        setTotalPages(1);
       }
     } catch (err) {
       setError('Failed to load staff list');
@@ -67,7 +87,7 @@ const StaffManagement: React.FC = () => {
     }
   };
 
-  const sortStaffNewestFirst = (list: UserResponseDto[]): UserResponseDto[] => {
+  const sortStaffNewestFirst = (list: StaffWithUserDto[]): StaffWithUserDto[] => {
     const getTs = (u: any): number => {
       const t = u?.updateAt || u?.createAt || u?.hireDate;
       const ts = t ? Date.parse(t) : 0;
@@ -77,28 +97,65 @@ const StaffManagement: React.FC = () => {
       const bt = getTs(b);
       const at = getTs(a);
       if (bt !== at) return bt - at; // newest first
-      const bid = Number(b.user_id || b.id || 0);
-      const aid = Number(a.user_id || a.id || 0);
+      const bid = Number(b.userId || (b as any).user_id || b.id || 0);
+      const aid = Number(a.userId || (a as any).user_id || a.id || 0);
       return bid - aid;
     });
   };
 
+  // Filter staff based on employment type and roles
+  const filteredStaff = useMemo(() => {
+    let filtered = [...staff];
+
+    // Filter by employment type
+    if (selectedEmploymentType !== 'ALL') {
+      filtered = filtered.filter((s) => s.employmentType === selectedEmploymentType);
+    }
+
+    // Filter by roles
+    if (selectedRoleIds.length > 0) {
+      filtered = filtered.filter((s) => {
+        const staffRoleIds = s.staffBusinessRoleIds || [];
+        // Check if staff has at least one of the selected roles
+        return selectedRoleIds.some((roleId) => staffRoleIds.includes(roleId));
+      });
+    }
+
+    return filtered;
+  }, [staff, selectedEmploymentType, selectedRoleIds]);
+
+  // Paginated staff
+  const paginatedStaff = useMemo(() => {
+    const start = page * size;
+    const end = start + size;
+    return filteredStaff.slice(start, end);
+  }, [filteredStaff, page, size]);
+
+  // Update total pages based on filtered staff
+  useEffect(() => {
+    const newTotalPages = Math.ceil(filteredStaff.length / size);
+    setTotalPages(newTotalPages);
+    setTotal(filteredStaff.length);
+    // Reset to first page if current page is out of bounds
+    if (page >= newTotalPages && newTotalPages > 0) {
+      setPage(0);
+    }
+  }, [filteredStaff.length, size, page]);
+
   const fetchStaffStats = async () => {
     try {
       if (managerBranch?.branchId) {
-        // Get stats for current branch only
-        const branchStaff = await staffService.getStaffProfilesByBranch(managerBranch.branchId);
+        // Get stats for current branch only (full info)
+        const branchStaff = await staffService.getStaffsWithUserInfoByBranch(managerBranch.branchId);
         setTotalStaff(branchStaff.length);
         const active = branchStaff.length; // Assume all staff are active for now
         setActiveStaff(active);
         setInactiveStaff(branchStaff.length - active);
       } else {
-        // Fallback to all staff if no branch info
-        const all = await staffService.getStaffProfiles();
-        setTotalStaff(all.length);
-        const active = all.length; // Assume all staff are active for now
-        setActiveStaff(active);
-        setInactiveStaff(all.length - active);
+        // Fallback: nếu không có branch, không tính stats
+        setTotalStaff(0);
+        setActiveStaff(0);
+        setInactiveStaff(0);
       }
     } catch (err) {
       console.error('Error fetching staff stats:', err);
@@ -109,72 +166,6 @@ const StaffManagement: React.FC = () => {
     setIsCreating(true);
   };
 
-  const startInlineEdit = (s: UserResponseDto, field: 'email' | 'identityCard' | 'hireDate' | 'phoneNumber' | 'position' | 'salary') => {
-    setEditing({ id: s.user_id, field });
-    setEditValue(String((s as any)[field] ?? ''));
-  };
-
-  const cancelInlineEdit = () => {
-    setEditing(null);
-    setEditValue('');
-  };
-
-  const saveInlineEdit = async (s: UserResponseDto) => {
-    if (!editing) return;
-    try {
-      if (editing.field === 'email') {
-        // Gọi Auth Service API
-        await staffService.updateStaffProfile(s.user_id, { email: editValue });
-        toast.success('Email updated successfully');
-      } else if (editing.field === 'phoneNumber') {
-        await staffService.updateStaffProfile(s.user_id, { phone: editValue });
-        toast.success('Phone updated successfully');
-      } else if (editing.field === 'identityCard') {
-        // Gọi Profile Service API
-        await staffService.updateStaffProfile(s.user_id, { identityCard: editValue });
-        toast.success('Identity card updated successfully');
-      } else if (editing.field === 'hireDate') {
-        // Gọi Profile Service API
-        await staffService.updateStaffProfile(s.user_id, { hireDate: editValue });
-        toast.success('Hire date updated successfully');
-      } else if (editing.field === 'position') {
-        await staffService.updateStaffProfile(s.user_id, { position: editValue });
-        toast.success('Position updated successfully');
-      } else if (editing.field === 'salary') {
-        const salaryNum = Number(editValue);
-        if (Number.isNaN(salaryNum)) {
-          toast.error('Salary must be a number');
-          return;
-        }
-        await staffService.updateStaffProfile(s.user_id, { salary: salaryNum });
-        toast.success('Salary updated successfully');
-      }
-      
-      // Cập nhật local state thay vì reload toàn bộ
-      setStaff(prevStaff => 
-        prevStaff.map(staff => 
-          staff.user_id === s.user_id 
-            ? { 
-                ...staff, 
-                [editing.field]: editValue,
-                // Cập nhật thời gian update nếu có
-                updateAt: new Date().toISOString()
-              }
-            : staff
-        )
-      );
-      
-      setEditing(null);
-      setEditValue('');
-      
-      // Cập nhật stats
-      await fetchStaffStats();
-    } catch (e: any) {
-      const msg = e?.response?.message || e?.message || 'Update failed';
-      toast.error(msg);
-    }
-  };
-
   const refreshStaffLight = async () => {
     try {
       await fetchStaff();
@@ -182,10 +173,10 @@ const StaffManagement: React.FC = () => {
     } catch {}
   };
 
-  const handleDeleteStaff = async (staff: UserResponseDto) => {
+  const handleDeleteStaff = async (staff: StaffWithUserDto) => {
     try {
       setDeletingLoading(true);
-      const resp = await staffService.deleteStaff(staff.user_id);
+      const resp = await staffService.deleteStaff(staff.userId);
       if ((resp as any)?.code === 202) {
         toast.success('Delete requested. Saga in progress...');
         setTimeout(refreshStaffLight, 3000);
@@ -199,7 +190,7 @@ const StaffManagement: React.FC = () => {
         throw new Error((resp as any).message || 'Delete staff failed');
       }
 
-      setStaff(prevStaff => prevStaff.filter(s => s.user_id !== staff.user_id));
+      setStaff(prevStaff => prevStaff.filter(s => s.userId !== staff.userId));
       setTotal(prevTotal => prevTotal - 1);
       setTotalStaff(prevTotal => prevTotal - 1);
       // Assume all staff are active for now
@@ -269,11 +260,7 @@ const StaffManagement: React.FC = () => {
   }, [staff, size, page]);
 
   if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    );
+    return <StaffManagementSkeleton />;
   }
 
   if (error) {
@@ -371,19 +358,89 @@ const StaffManagement: React.FC = () => {
                 </div>
               </div>
 
+              {/* Filters */}
               <div className="bg-white overflow-hidden shadow rounded-lg">
                 <div className="p-5">
-                  <div className="flex items-center">
-                    <div className="flex-shrink-0">
-                      <UserX className="h-6 w-6 text-yellow-600" />
+                  <div className="space-y-4">
+                    {/* Employment Type Filter */}
+                    <div className="flex items-center gap-3">
+                      <label className="text-sm font-medium text-gray-700 whitespace-nowrap">
+                        Employment Type:
+                      </label>
+                      <select
+                        value={selectedEmploymentType}
+                        onChange={(e) => {
+                          setSelectedEmploymentType(e.target.value as 'ALL' | 'FULL_TIME' | 'PART_TIME' | 'CASUAL');
+                          setPage(0);
+                        }}
+                        className="border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                      >
+                        <option value="ALL">All</option>
+                        <option value="FULL_TIME">Full Time</option>
+                        <option value="PART_TIME">Part Time</option>
+                        <option value="CASUAL">Casual</option>
+                      </select>
+                      {/* Clear filters button - positioned next to dropdown */}
+                      {(selectedEmploymentType !== 'ALL' || selectedRoleIds.length > 0) && (
+                        <button
+                          onClick={() => {
+                            setSelectedEmploymentType('ALL');
+                            setSelectedRoleIds([]);
+                            setPage(0);
+                          }}
+                          className="ml-auto text-sm text-amber-600 hover:text-amber-700 font-medium flex items-center gap-1.5"
+                        >
+                          <X className="w-4 h-4" />
+                          Clear Filters
+                        </button>
+                      )}
                     </div>
-                    <div className="ml-5 w-0 flex-1">
-                      <dl>
-                        <dt className="text-sm font-medium text-gray-500 truncate">Inactive Staff</dt>
-                        <dd className="text-lg font-medium text-gray-900">
-                          {inactiveStaff}
-                        </dd>
-                      </dl>
+
+                    {/* Role Filter - Tag Style */}
+                    <div className="flex items-start gap-3">
+                      <label className="text-sm font-medium text-gray-700 whitespace-nowrap pt-1.5">
+                        Role:
+                      </label>
+                      <div className="flex-1 flex flex-wrap gap-2">
+                        {availableRoles.length === 0 ? (
+                          <span className="text-sm text-gray-500">Loading...</span>
+                        ) : (
+                          availableRoles.map((role) => {
+                            const isSelected = selectedRoleIds.includes(role.roleId);
+                            const roleName = role.name || role.roleName || '';
+                            // Map role name to English
+                            const roleNameMap: Record<string, string> = {
+                              'BARISTA_STAFF': 'Barista',
+                              'CASHIER_STAFF': 'Cashier',
+                              'SERVER_STAFF': 'Server',
+                              'SECURITY_STAFF': 'Security',
+                            };
+                            const displayName = roleNameMap[roleName] || roleName;
+
+                            return (
+                              <button
+                                key={role.roleId}
+                                type="button"
+                                onClick={() => {
+                                  if (isSelected) {
+                                    setSelectedRoleIds(selectedRoleIds.filter((id) => id !== role.roleId));
+                                  } else {
+                                    setSelectedRoleIds([...selectedRoleIds, role.roleId]);
+                                  }
+                                  setPage(0);
+                                }}
+                                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                                  isSelected
+                                    ? 'bg-amber-500 text-white hover:bg-amber-600'
+                                    : 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100'
+                                }`}
+                              >
+                                {displayName}
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -393,14 +450,13 @@ const StaffManagement: React.FC = () => {
             {/* Staff List */}
             <div className="bg-white shadow rounded-lg">
               <div className="px-4 py-5 sm:p-6">
-                <h2 className="text-lg font-medium text-gray-900 mb-4">Staff</h2>
-                
-                {/* Top horizontal scrollbar */}
-                <div ref={topScrollRef} className="overflow-x-auto overflow-y-hidden h-5 mb-2">
-                  <div ref={topInnerRef} style={{ height: 1 }} />
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-medium text-gray-900">Staff</h2>
                 </div>
-                <div ref={bottomScrollRef} className="overflow-x-auto">
-                  <table ref={tableRef} className="min-w-max divide-y divide-gray-200">
+                
+                {/* Table */}
+                <div className="overflow-x-auto">
+                  <table ref={tableRef} className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -408,115 +464,56 @@ const StaffManagement: React.FC = () => {
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Full name</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID Card</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Position</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Salary</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Hire date</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Phone
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          ID Card
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Actions
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {staff.map((staffMember) => (
-                        <tr key={staffMember.user_id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                            {staffMember.user_id}
+                      {paginatedStaff.map((staffMember) => (
+                        <tr key={staffMember.userId} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                            {staffMember.userId}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
                             {staffMember.fullname}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {editing && editing.id === staffMember.user_id && editing.field === 'email' ? (
-                              <div className="flex items-center gap-2">
-                                <input className="border rounded px-2 py-1 text-sm" value={editValue} onChange={(e) => setEditValue(e.target.value)} />
-                                <button onClick={() => saveInlineEdit(staffMember)} className="text-emerald-600 hover:text-emerald-700" title="Save"><Check className="w-4 h-4" /></button>
-                                <button onClick={cancelInlineEdit} className="text-gray-500 hover:text-gray-700" title="Cancel"><X className="w-4 h-4" /></button>
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-2">
-                                <span>{staffMember.email}</span>
-                                <button onClick={() => startInlineEdit(staffMember, 'email')} className="text-blue-600 hover:text-blue-700" title="Edit email"><Pencil className="w-4 h-4" /></button>
-                              </div>
-                            )}
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                            {staffMember.email}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {editing && editing.id === staffMember.user_id && editing.field === 'phoneNumber' ? (
-                              <div className="flex items-center gap-2">
-                                <input className="border rounded px-2 py-1 text-sm" value={editValue} onChange={(e) => setEditValue(e.target.value.replace(/[^0-9+]/g, ''))} />
-                                <button onClick={() => saveInlineEdit(staffMember)} className="text-emerald-600 hover:text-emerald-700" title="Save"><Check className="w-4 h-4" /></button>
-                                <button onClick={cancelInlineEdit} className="text-gray-500 hover:text-gray-700" title="Cancel"><X className="w-4 h-4" /></button>
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-2">
-                                <span>{staffMember.phoneNumber}</span>
-                                <button onClick={() => startInlineEdit(staffMember, 'phoneNumber')} className="text-blue-600 hover:text-blue-700" title="Edit phone"><Pencil className="w-4 h-4" /></button>
-                              </div>
-                            )}
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                            {staffMember.phoneNumber}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {editing && editing.id === staffMember.user_id && editing.field === 'identityCard' ? (
-                              <div className="flex items-center gap-2">
-                                <input className="border rounded px-2 py-1 text-sm" value={editValue} onChange={(e) => setEditValue(e.target.value.replace(/\D/g, ''))} />
-                                <button onClick={() => saveInlineEdit(staffMember)} className="text-emerald-600 hover:text-emerald-700" title="Save"><Check className="w-4 h-4" /></button>
-                                <button onClick={cancelInlineEdit} className="text-gray-500 hover:text-gray-700" title="Cancel"><X className="w-4 h-4" /></button>
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-2">
-                                <span>{staffMember.identityCard ?? '-'}</span>
-                                <button onClick={() => startInlineEdit(staffMember, 'identityCard')} className="text-blue-600 hover:text-blue-700" title="Edit ID card"><Pencil className="w-4 h-4" /></button>
-                              </div>
-                            )}
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                            {staffMember.identityCard ?? '-'}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {editing && editing.id === staffMember.user_id && editing.field === 'position' ? (
-                              <div className="flex items-center gap-2">
-                                <select className="border rounded px-2 py-1 text-sm" value={editValue} onChange={(e) => setEditValue(e.target.value)}>
-                                  <option value="Pha Chế">Pha Chế</option>
-                                  <option value="Thu Ngân">Thu Ngân</option>
-                                  <option value="Phục Vụ">Phục Vụ</option>
-                                </select>
-                                <button onClick={() => saveInlineEdit(staffMember)} className="text-emerald-600 hover:text-emerald-700" title="Save"><Check className="w-4 h-4" /></button>
-                                <button onClick={cancelInlineEdit} className="text-gray-500 hover:text-gray-700" title="Cancel"><X className="w-4 h-4" /></button>
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium text-gray-900">{staffMember.position ?? '-'}</span>
-                                <button onClick={() => startInlineEdit(staffMember, 'position')} className="text-blue-600 hover:text-blue-700" title="Edit position"><Pencil className="w-4 h-4" /></button>
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {editing && editing.id === staffMember.user_id && editing.field === 'salary' ? (
-                              <div className="flex items-center gap-2">
-                                <input className="border rounded px-2 py-1 text-sm" type="number" value={editValue} onChange={(e) => setEditValue(e.target.value)} />
-                                <button onClick={() => saveInlineEdit(staffMember)} className="text-emerald-600 hover:text-emerald-700" title="Save"><Check className="w-4 h-4" /></button>
-                                <button onClick={cancelInlineEdit} className="text-gray-500 hover:text-gray-700" title="Cancel"><X className="w-4 h-4" /></button>
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-2">
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">{staffMember.salary}</span>
-                                <button onClick={() => startInlineEdit(staffMember, 'salary')} className="text-blue-600 hover:text-blue-700" title="Edit salary"><Pencil className="w-4 h-4" /></button>
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {editing && editing.id === staffMember.user_id && editing.field === 'hireDate' ? (
-                              <div className="flex items-center gap-2">
-                                <input type="date" className="border rounded px-2 py-1 text-sm" value={editValue} onChange={(e) => setEditValue(e.target.value)} />
-                                <button onClick={() => saveInlineEdit(staffMember)} className="text-emerald-600 hover:text-emerald-700" title="Save"><Check className="w-4 h-4" /></button>
-                                <button onClick={cancelInlineEdit} className="text-gray-500 hover:text-gray-700" title="Cancel"><X className="w-4 h-4" /></button>
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-2">
-                                <span>{staffMember.hireDate ? new Date(staffMember.hireDate).toLocaleDateString('en-GB') : '-'}</span>
-                                <button onClick={() => startInlineEdit(staffMember, 'hireDate')} className="text-blue-600 hover:text-blue-700" title="Edit hire date"><Pencil className="w-4 h-4" /></button>
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            <div className="flex items-center gap-2">
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                            <div className="flex items-center gap-1">
                               <button
-                                onClick={() => { setDeletingStaff(staffMember); setIsDeleting(true); }}
+                                onClick={() => setViewingStaff(staffMember)}
+                                className="p-2 rounded hover:bg-gray-100 text-slate-600"
+                                title="View details"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => setEditingStaff(staffMember)}
+                                className="p-2 rounded hover:bg-gray-100 text-blue-600"
+                                title="Edit staff"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setDeletingStaff(staffMember);
+                                  setIsDeleting(true);
+                                }}
                                 className="p-2 rounded hover:bg-gray-100 text-red-600"
                                 title="Delete"
                               >
@@ -530,17 +527,29 @@ const StaffManagement: React.FC = () => {
                   </table>
                 </div>
 
-                {staff.length === 0 && (
+                {paginatedStaff.length === 0 && (
                   <div className="text-center py-12">
                     <Users className="mx-auto h-12 w-12 text-gray-400" />
-                    <h3 className="mt-2 text-sm font-medium text-gray-900">No staff</h3>
-                    <p className="mt-1 text-sm text-gray-500">There are no staff in the system.</p>
+                    <h3 className="mt-2 text-sm font-medium text-gray-900">
+                      {filteredStaff.length === 0 && staff.length > 0
+                        ? 'No staff found matching the filters'
+                        : 'No staff'}
+                    </h3>
+                    <p className="mt-1 text-sm text-gray-500">
+                      {filteredStaff.length === 0 && staff.length > 0
+                        ? 'Please try again with different filters'
+                        : 'There are no staff in the system.'}
+                    </p>
                   </div>
                 )}
 
                 {/* Pagination Controls */}
                 <div className="mt-6 flex items-center justify-between">
-                  <div className="text-sm text-gray-600">Total: {total} • Page {page + 1} / {Math.max(totalPages, 1)}</div>
+                  <div className="text-sm text-gray-600">
+                    Hiển thị {paginatedStaff.length} / {filteredStaff.length} nhân viên
+                    {filteredStaff.length !== staff.length && ` (tổng: ${staff.length})`}
+                    {' • '}Trang {page + 1} / {Math.max(totalPages, 1)}
+                  </div>
                   <div className="flex items-center gap-2">
                     <button
                       disabled={page <= 0}
@@ -573,14 +582,24 @@ const StaffManagement: React.FC = () => {
 
           <CreateStaffModal
             open={isCreating}
+            mode="create"
+            staff={null}
             onClose={() => setIsCreating(false)}
-            onCreated={async (created) => {
-              setStaff(prev => [created, ...prev]);
-              setTotal(prev => prev + 1);
-              setTotalStaff(prev => prev + 1);
-              setActiveStaff(prev => prev + 1);
+            onSuccess={async () => {
               if (page > 0) setPage(0);
+              await fetchStaff();
               await fetchStaffStats();
+            }}
+          />
+          <CreateStaffModal
+            open={!!editingStaff}
+            mode="edit"
+            staff={editingStaff}
+            onClose={() => setEditingStaff(null)}
+            onSuccess={async () => {
+              await fetchStaff();
+              await fetchStaffStats();
+              setEditingStaff(null);
             }}
           />
           <ConfirmModal
@@ -592,6 +611,11 @@ const StaffManagement: React.FC = () => {
             onConfirm={() => { if (deletingStaff) { void handleDeleteStaff(deletingStaff); } }}
             onCancel={() => { setIsDeleting(false); setDeletingStaff(null); }}
             loading={deletingLoading}
+          />
+          <StaffDetailModal
+            open={!!viewingStaff}
+            staff={viewingStaff}
+            onClose={() => setViewingStaff(null)}
           />
         </div>
       </div>

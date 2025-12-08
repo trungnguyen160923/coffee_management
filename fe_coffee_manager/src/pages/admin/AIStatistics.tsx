@@ -159,13 +159,111 @@ export default function MultiBranchDashboard() {
     branchRecommendations: false,
     conclusion: false,
   });
+  const [hasFetchedAIData, setHasFetchedAIData] = useState<boolean>(false); // Track if AI data has been fetched
 
-  // Fetch AI data for all branches (for day tab)
+  // Check if AI data exists in database when page loads or date changes
   useEffect(() => {
-    if (activeTab === 'day' && selectedDate) {
-      fetchAllBranchesData();
+    if (activeTab === 'day' && selectedDate && viewMode === 'all') {
+      checkExistingAIData();
     }
-  }, [selectedDate, activeTab]);
+  }, [selectedDate, activeTab, viewMode]);
+
+  // Check if single branch AI data exists
+  useEffect(() => {
+    if (activeTab === 'day' && viewMode === 'single' && selectedBranch && selectedDate) {
+      checkExistingSingleBranchData();
+    }
+  }, [viewMode, selectedBranch, selectedDate, activeTab]);
+
+  // Check existing AI data for all branches (without calling ChatGPT)
+  const checkExistingAIData = async () => {
+    if (!selectedDate) return;
+    
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Use /analyze-all/report endpoint to check existing data without calling ChatGPT
+      const params = new URLSearchParams({
+        date: selectedDate,
+      });
+      
+      const endpoint = `/api/ai/agent/analyze-all/report?${params.toString()}`;
+      
+      try {
+        const data: AllBranchesAIAnalysisResponse = await apiClient.get<AllBranchesAIAnalysisResponse>(endpoint);
+        const responseData = (data as any).result || data;
+        
+        if (responseData.success) {
+          setAiData(responseData);
+          const transformedBranches = transformAPIDataToBranches(responseData);
+          setBranchesData(transformedBranches);
+          setHasFetchedAIData(true); // Mark as fetched
+        } else {
+          setHasFetchedAIData(false); // No data available
+        }
+      } catch (apiError: any) {
+        // If 404, no data exists
+        if (apiError?.response?.status === 404) {
+          setHasFetchedAIData(false);
+        } else {
+          // Other errors, don't show error, just mark as no data
+          setHasFetchedAIData(false);
+        }
+      }
+    } catch (err: any) {
+      // Silent fail, just mark as no data
+      setHasFetchedAIData(false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Check existing single branch AI data (without calling ChatGPT)
+  const checkExistingSingleBranchData = async () => {
+    if (!selectedBranch || !selectedDate) return;
+    
+    try {
+      setLoadingSingleBranch(true);
+      
+      // Try to get existing report from database
+      try {
+        const existingReport = await aiStatisticsService.getReportByBranchAndDate(
+          selectedBranch,
+          selectedDate
+        );
+        
+        if (existingReport && existingReport.id) {
+          const convertedData: AIAnalysisResponse = {
+            success: true,
+            branch_id: existingReport.branch_id,
+            date: existingReport.report_date,
+            analysis: existingReport.analysis || '',
+            summary: existingReport.summary || {},
+            recommendations: existingReport.recommendations || [],
+            raw_data: existingReport.raw_data || {},
+            message: 'Data already exists in database',
+          };
+          
+          setSingleBranchAiData(convertedData);
+          setHasFetchedAIData(true);
+        } else {
+          setHasFetchedAIData(false);
+        }
+      } catch (checkError: any) {
+        // If 404, no data exists
+        if (checkError?.response?.status === 404) {
+          setHasFetchedAIData(false);
+        } else {
+          setHasFetchedAIData(false);
+        }
+      }
+    } catch (err: any) {
+      setHasFetchedAIData(false);
+    } finally {
+      setLoadingSingleBranch(false);
+    }
+  };
 
   // Fetch monthly stats when month changes
   useEffect(() => {
@@ -189,14 +287,6 @@ export default function MultiBranchDashboard() {
     }
   }, [selectedYear, activeTab, viewMode, selectedBranch]);
 
-  // Fetch single branch AI data when in single branch view (non-blocking, in background)
-  useEffect(() => {
-    if (viewMode === 'single' && selectedBranch && selectedDate) {
-      fetchSingleBranchData();
-    } else {
-      setSingleBranchAiData(null);
-    }
-  }, [viewMode, selectedBranch, selectedDate]);
 
   const fetchSingleBranchData = async () => {
     if (!selectedBranch || !selectedDate) return;
@@ -214,9 +304,10 @@ export default function MultiBranchDashboard() {
       });
       
       setSingleBranchAiData(response);
+      setHasFetchedAIData(true); // Mark as fetched
     } catch (err: any) {
       console.error('Error fetching single branch data:', err);
-      const errorMessage = err?.response?.data?.detail || err?.message || 'Không thể tải dữ liệu chi nhánh';
+      const errorMessage = err?.response?.data?.detail || err?.message || 'Unable to load branch data';
       setError(errorMessage);
       setSingleBranchAiData(null);
     } finally {
@@ -233,7 +324,7 @@ export default function MultiBranchDashboard() {
       setMonthlyStats(stats);
     } catch (err: any) {
       console.error('Error fetching monthly stats:', err);
-      const errorMessage = err?.response?.data?.detail || err?.message || 'Không thể tải dữ liệu thống kê tháng';
+      const errorMessage = err?.response?.data?.detail || err?.message || 'Unable to load monthly statistics';
       setError(errorMessage);
       toast.error(errorMessage);
     } finally {
@@ -249,7 +340,7 @@ export default function MultiBranchDashboard() {
       setYearlyStats(stats);
     } catch (err: any) {
       console.error('Error fetching yearly stats:', err);
-      const errorMessage = err?.response?.data?.detail || err?.message || 'Không thể tải dữ liệu thống kê năm';
+      const errorMessage = err?.response?.data?.detail || err?.message || 'Unable to load yearly statistics';
       setError(errorMessage);
       toast.error(errorMessage);
     } finally {
@@ -267,7 +358,7 @@ export default function MultiBranchDashboard() {
       setSingleBranchMonthlyStats(stats);
     } catch (err: any) {
       console.error('Error fetching single branch monthly stats:', err);
-      const errorMessage = err?.response?.data?.detail || err?.message || 'Không thể tải dữ liệu thống kê tháng';
+      const errorMessage = err?.response?.data?.detail || err?.message || 'Unable to load monthly statistics';
       setError(errorMessage);
       toast.error(errorMessage);
     } finally {
@@ -284,7 +375,7 @@ export default function MultiBranchDashboard() {
       setSingleBranchYearlyStats(stats);
     } catch (err: any) {
       console.error('Error fetching single branch yearly stats:', err);
-      const errorMessage = err?.response?.data?.detail || err?.message || 'Không thể tải dữ liệu thống kê năm';
+      const errorMessage = err?.response?.data?.detail || err?.message || 'Unable to load yearly statistics';
       setError(errorMessage);
       toast.error(errorMessage);
     } finally {
@@ -294,7 +385,7 @@ export default function MultiBranchDashboard() {
 
   const handleExportPDF = async () => {
     if (!aiData || branchesData.length === 0) {
-      toast.error('Không có dữ liệu để xuất PDF');
+      toast.error('No data available to export PDF');
       return;
     }
 
@@ -304,10 +395,10 @@ export default function MultiBranchDashboard() {
         aiData: aiData,
         branchesData: branchesData,
       });
-      toast.success('Đang mở cửa sổ in PDF...');
+      toast.success('Opening PDF print window...');
     } catch (error: any) {
       console.error('Error exporting PDF:', error);
-      toast.error(error?.message || 'Không thể xuất PDF. Vui lòng thử lại.');
+      toast.error(error?.message || 'Unable to export PDF. Please try again.');
     }
   };
 
@@ -337,6 +428,7 @@ export default function MultiBranchDashboard() {
           // Transform API data to branchesData format
           const transformedBranches = transformAPIDataToBranches(responseData);
           setBranchesData(transformedBranches);
+          setHasFetchedAIData(true); // Mark as fetched
         } else {
           throw new Error(responseData.message || 'Failed to fetch data');
         }
@@ -350,7 +442,7 @@ export default function MultiBranchDashboard() {
       }
     } catch (err: any) {
       console.error('Error fetching all branches data:', err);
-      const errorMessage = err?.response?.data?.detail || err?.response?.data?.message || err?.message || 'Không thể tải dữ liệu. Vui lòng thử lại.';
+      const errorMessage = err?.response?.data?.detail || err?.response?.data?.message || err?.message || 'Unable to load data. Please try again.';
       setError(errorMessage);
       setBranchesData([]);
       toast.error(errorMessage);
@@ -371,7 +463,7 @@ export default function MultiBranchDashboard() {
 
     return branchSummaries.map((summary: any) => {
       const branchId = summary.branchId;
-      const branchName = summary.branchName || `Chi nhánh ${branchId}`;
+      const branchName = summary.branchName || `Branch ${branchId}`;
       
       const revenue = summary.revenue || 0;
       const orders = summary.orderCount || 0;
@@ -440,7 +532,7 @@ export default function MultiBranchDashboard() {
   const maxOrders = Math.max(...branchesData.map(b => b.orders), 1);
   
   const comparisonData = branchesData.map(b => ({
-    name: b.name.replace('Chi nhánh ', '').replace('Main Branch', 'Main'),
+    name: b.name.replace('Branch ', '').replace('Chi nhánh ', '').replace('Main Branch', 'Main'),
     revenue: b.revenue / 1000,
     orders: b.orders,
     rating: b.rating,
@@ -448,7 +540,7 @@ export default function MultiBranchDashboard() {
 
   // Performance radar data
   const radarData = branchesData.map(b => ({
-    branch: b.name.replace('Chi nhánh ', '').replace('Main Branch', 'Main'),
+    branch: b.name.replace('Branch ', '').replace('Chi nhánh ', '').replace('Main Branch', 'Main'),
     doanhthu: maxRevenue > 0 ? (b.revenue / maxRevenue) * 100 : 0,
     donhang: maxOrders > 0 ? (b.orders / maxOrders) * 100 : 0,
     danhgia: (b.rating / 5) * 100,
@@ -463,24 +555,72 @@ export default function MultiBranchDashboard() {
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
               <h1 className="text-xl font-semibold text-slate-800">AI Overview Dashboard</h1>
-              <p className="text-sm text-slate-500">Giám sát và phân tích tất cả chi nhánh</p>
+              <p className="text-sm text-slate-500">Monitor and analyze all branches</p>
             </div>
             <div className="flex gap-2">
-              <button
-                onClick={() => fetchAllBranchesData(false)}
-                disabled={loading}
-                className="px-4 py-2 rounded-lg border border-slate-200 bg-white text-sm font-medium text-slate-700 hover:border-sky-300 hover:text-sky-700 hover:bg-sky-50 flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-                {loading ? 'Đang tải...' : 'Làm mới'}
-              </button>
+              {activeTab === 'day' && !hasFetchedAIData && (
+                <button
+                  onClick={() => {
+                    if (viewMode === 'all') {
+                      fetchAllBranchesData(false);
+                    } else if (viewMode === 'single') {
+                      fetchSingleBranchData();
+                    }
+                  }}
+                  disabled={loading || loadingSingleBranch}
+                  className="px-4 py-2 rounded-lg bg-amber-500 text-white text-sm font-medium hover:bg-amber-600 flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Brain className="h-4 w-4" />
+                  {loading || loadingSingleBranch ? 'Analyzing...' : 'Analyze AI'}
+                </button>
+              )}
+              {activeTab === 'day' && hasFetchedAIData && (
+                <button
+                  onClick={() => {
+                    if (viewMode === 'all') {
+                      fetchAllBranchesData(false);
+                    } else if (viewMode === 'single') {
+                      fetchSingleBranchData();
+                    }
+                  }}
+                  disabled={loading || loadingSingleBranch}
+                  className="px-4 py-2 rounded-lg border border-slate-200 bg-white text-sm font-medium text-slate-700 hover:border-sky-300 hover:text-sky-700 hover:bg-sky-50 flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <RefreshCw className={`h-4 w-4 ${loading || loadingSingleBranch ? 'animate-spin' : ''}`} />
+                  {loading || loadingSingleBranch ? 'Loading...' : 'Refresh'}
+                </button>
+              )}
+              {(activeTab === 'month' || activeTab === 'year') && (
+                <button
+                  onClick={() => {
+                    if (activeTab === 'month') {
+                      if (viewMode === 'all') {
+                        fetchMonthlyStats();
+                      } else if (viewMode === 'single') {
+                        fetchSingleBranchMonthlyStats();
+                      }
+                    } else if (activeTab === 'year') {
+                      if (viewMode === 'all') {
+                        fetchYearlyStats();
+                      } else if (viewMode === 'single') {
+                        fetchSingleBranchYearlyStats();
+                      }
+                    }
+                  }}
+                  disabled={loadingMonthly || loadingYearly}
+                  className="px-4 py-2 rounded-lg border border-slate-200 bg-white text-sm font-medium text-slate-700 hover:border-sky-300 hover:text-sky-700 hover:bg-sky-50 flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <RefreshCw className={`h-4 w-4 ${loadingMonthly || loadingYearly ? 'animate-spin' : ''}`} />
+                  {loadingMonthly || loadingYearly ? 'Loading...' : 'Refresh'}
+                </button>
+              )}
               <button 
                 onClick={handleExportPDF}
                 disabled={loading || !aiData}
                 className="px-4 py-2 rounded-lg bg-sky-500 text-white text-sm font-medium hover:bg-sky-600 flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Download className="h-4 w-4" />
-                Xuất báo cáo
+                Export Report
               </button>
             </div>
           </div>
@@ -496,7 +636,7 @@ export default function MultiBranchDashboard() {
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
             }`}
           >
-            Ngày
+            Day
           </button>
           <button
             onClick={() => setActiveTab('month')}
@@ -506,7 +646,7 @@ export default function MultiBranchDashboard() {
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
             }`}
           >
-            Tháng
+            Month
           </button>
           <button
             onClick={() => setActiveTab('year')}
@@ -516,7 +656,7 @@ export default function MultiBranchDashboard() {
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
             }`}
           >
-            Năm
+            Year
           </button>
         </div>
       </div>
@@ -527,7 +667,7 @@ export default function MultiBranchDashboard() {
           <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
             <div className="flex-1">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Chế độ xem
+                View Mode
               </label>
               <div className="flex gap-2">
                 <button
@@ -539,7 +679,7 @@ export default function MultiBranchDashboard() {
                   }`}
                 >
                   <Building2 className="h-4 w-4 inline mr-2" />
-                  Tất cả chi nhánh
+                  All Branches
                 </button>
                 <button
                   onClick={() => {
@@ -557,7 +697,7 @@ export default function MultiBranchDashboard() {
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 >
-                  Chi nhánh đơn lẻ
+                  Single Branch
                 </button>
               </div>
             </div>
@@ -566,7 +706,7 @@ export default function MultiBranchDashboard() {
               <div className="flex-1">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   <Filter className="h-4 w-4 inline mr-1" />
-                  Chọn chi nhánh
+                  Select Branch
                 </label>
                 <select
                   value={selectedBranch}
@@ -585,13 +725,16 @@ export default function MultiBranchDashboard() {
             <div className="flex-1">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 <Calendar className="h-4 w-4 inline mr-1" />
-                Ngày
+                Date
               </label>
               <input
                 type="date"
                 value={selectedDate}
                 max={new Date().toISOString().split('T')[0]}
-                onChange={(e) => setSelectedDate(e.target.value)}
+                onChange={(e) => {
+                  setSelectedDate(e.target.value);
+                  setHasFetchedAIData(false); // Reset khi đổi ngày
+                }}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500"
                 disabled={loading}
               />
@@ -606,7 +749,7 @@ export default function MultiBranchDashboard() {
           <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
             <div className="flex-1">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Chế độ xem
+                View Mode
               </label>
               <div className="flex gap-2">
                 <button
@@ -618,7 +761,7 @@ export default function MultiBranchDashboard() {
                   }`}
                 >
                   <Building2 className="h-4 w-4 inline mr-2" />
-                  Tất cả chi nhánh
+                  All Branches
                 </button>
                 <button
                   onClick={() => {
@@ -636,7 +779,7 @@ export default function MultiBranchDashboard() {
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 >
-                  Chi nhánh đơn lẻ
+                  Single Branch
                 </button>
               </div>
             </div>
@@ -645,7 +788,7 @@ export default function MultiBranchDashboard() {
               <div className="flex-1">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   <Filter className="h-4 w-4 inline mr-1" />
-                  Chọn chi nhánh
+                  Select Branch
                 </label>
                 <select
                   value={selectedBranch}
@@ -664,7 +807,7 @@ export default function MultiBranchDashboard() {
             <div className="flex-1">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 <Calendar className="h-4 w-4 inline mr-1" />
-                Tháng
+                Month
               </label>
               <input
                 type="month"
@@ -685,7 +828,7 @@ export default function MultiBranchDashboard() {
           <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
             <div className="flex-1">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Chế độ xem
+                View Mode
               </label>
               <div className="flex gap-2">
                 <button
@@ -697,7 +840,7 @@ export default function MultiBranchDashboard() {
                   }`}
                 >
                   <Building2 className="h-4 w-4 inline mr-2" />
-                  Tất cả chi nhánh
+                  All Branches
                 </button>
                 <button
                   onClick={() => {
@@ -715,7 +858,7 @@ export default function MultiBranchDashboard() {
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 >
-                  Chi nhánh đơn lẻ
+                  Single Branch
                 </button>
               </div>
             </div>
@@ -724,7 +867,7 @@ export default function MultiBranchDashboard() {
               <div className="flex-1">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   <Filter className="h-4 w-4 inline mr-1" />
-                  Chọn chi nhánh
+                  Select Branch
                 </label>
                 <select
                   value={selectedBranch}
@@ -743,7 +886,7 @@ export default function MultiBranchDashboard() {
             <div className="flex-1">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 <Calendar className="h-4 w-4 inline mr-1" />
-                Năm
+                Year
               </label>
               <input
                 type="number"
@@ -768,7 +911,7 @@ export default function MultiBranchDashboard() {
       )}
 
       {/* Loading State - Skeleton for Day tab */}
-      {(loading || (!aiData && selectedDate && activeTab === 'day')) && activeTab === 'day' && viewMode === 'all' && (
+      {(loading || loadingSingleBranch) && activeTab === 'day' && (
         <DayTabSkeleton />
       )}
       {/* Loading State - Skeleton for Month tab */}
@@ -783,12 +926,28 @@ export default function MultiBranchDashboard() {
       {/* Day Tab Content - All Branches View */}
       {activeTab === 'day' && viewMode === 'all' && !loading ? (
         <>
-          {/* Empty State */}
-          {branchesData.length === 0 && !error && (
+          {/* Empty State - Chưa gọi API ChatGPT */}
+          {!hasFetchedAIData && !error && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 flex flex-col items-center justify-center">
+              <Brain className="h-16 w-16 text-amber-400 mb-4" />
+              <p className="text-gray-600 text-lg mb-2 font-semibold">No AI Analysis Available</p>
+              <p className="text-gray-500 text-sm mb-4">Click the "Analyze AI" button above to start analysis</p>
+              <button
+                onClick={() => fetchAllBranchesData(false)}
+                disabled={loading}
+                className="px-6 py-3 rounded-lg bg-amber-500 text-white text-sm font-medium hover:bg-amber-600 flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Brain className="h-5 w-5" />
+                {loading ? 'Analyzing...' : 'Analyze AI'}
+              </button>
+            </div>
+          )}
+          {/* Empty State - Data fetched but no data available */}
+          {hasFetchedAIData && branchesData.length === 0 && !error && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 flex flex-col items-center justify-center">
               <Building2 className="h-12 w-12 text-gray-400 mb-4" />
-              <p className="text-gray-600 text-lg mb-2">Chưa có dữ liệu</p>
-              <p className="text-gray-500 text-sm">Vui lòng chọn ngày khác hoặc thử lại sau</p>
+              <p className="text-gray-600 text-lg mb-2">No data available</p>
+              <p className="text-gray-500 text-sm">Please select another date or try again later</p>
             </div>
           )}
 
@@ -796,44 +955,44 @@ export default function MultiBranchDashboard() {
           {branchesData.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <SystemMetricCard
-              title="Tổng doanh thu hệ thống"
+              title="Total System Revenue"
               value={`${((aiData?.raw_data?.all_branches_revenue_metrics?.totalRevenue || aiData?.raw_data?.all_branches_stats?.totalRevenue || 0) / 1000000).toFixed(1)}tr`}
-              subtitle={`${aiData?.raw_data?.all_branches_revenue_metrics?.totalOrderCount || aiData?.raw_data?.all_branches_stats?.totalOrders || 0} đơn hàng`}
+              subtitle={`${aiData?.raw_data?.all_branches_revenue_metrics?.totalOrderCount || aiData?.raw_data?.all_branches_stats?.totalOrders || 0} orders`}
               icon={DollarSign}
               color="text-green-600"
               bgColor="bg-green-50"
               trend="up"
-              trendValue={`${((aiData?.raw_data?.all_branches_revenue_metrics?.avgOrderValue || 0) / 1000).toFixed(0)}k/đơn`}
+              trendValue={`${((aiData?.raw_data?.all_branches_revenue_metrics?.avgOrderValue || 0) / 1000).toFixed(0)}k/order`}
             />
             <SystemMetricCard
-              title="Đánh giá trung bình"
+              title="Average Rating"
               value={`${(aiData?.raw_data?.all_branches_review_metrics?.overallAvgReviewScore || 0).toFixed(1)} ⭐`}
-              subtitle={`${aiData?.raw_data?.all_branches_review_metrics?.totalReviews || 0} đánh giá`}
+              subtitle={`${aiData?.raw_data?.all_branches_review_metrics?.totalReviews || 0} reviews`}
               icon={Star}
               color="text-amber-600"
               bgColor="bg-amber-50"
               trend="stable"
-              trendValue={`${aiData?.raw_data?.all_branches_review_metrics?.totalPositiveReviews || 0} tích cực`}
+              trendValue={`${aiData?.raw_data?.all_branches_review_metrics?.totalPositiveReviews || 0} positive`}
             />
             <SystemMetricCard
-              title="Chi nhánh cần chú ý"
+              title="Branches Need Attention"
               value={`${((aiData?.raw_data?.all_branches_stats?.totalBranches || 0) - (aiData?.raw_data?.all_branches_stats?.activeBranches || 0))}/${aiData?.raw_data?.all_branches_stats?.totalBranches || 0}`}
-              subtitle={`${(aiData?.raw_data?.all_branches_stats?.totalBranches || 0) - (aiData?.raw_data?.all_branches_stats?.activeBranches || 0)} không hoạt động`}
+              subtitle={`${(aiData?.raw_data?.all_branches_stats?.totalBranches || 0) - (aiData?.raw_data?.all_branches_stats?.activeBranches || 0)} inactive`}
               icon={AlertTriangle}
               color="text-red-600"
               bgColor="bg-red-50"
               trend="down"
-              trendValue={`${aiData?.raw_data?.all_branches_stats?.activeBranches || 0} hoạt động`}
+              trendValue={`${aiData?.raw_data?.all_branches_stats?.activeBranches || 0} active`}
             />
             <SystemMetricCard
-              title="Chi nhánh hoạt động"
+              title="Active Branches"
               value={`${aiData?.raw_data?.all_branches_stats?.activeBranches || 0}/${aiData?.raw_data?.all_branches_stats?.totalBranches || 0}`}
-              subtitle={`${((aiData?.raw_data?.all_branches_stats?.activeBranches || 0) / (aiData?.raw_data?.all_branches_stats?.totalBranches || 1) * 100).toFixed(0)}% tỷ lệ`}
+              subtitle={`${((aiData?.raw_data?.all_branches_stats?.activeBranches || 0) / (aiData?.raw_data?.all_branches_stats?.totalBranches || 1) * 100).toFixed(0)}% rate`}
               icon={TrendingUp}
               color="text-blue-600"
               bgColor="bg-blue-50"
               trend="up"
-              trendValue={`${((aiData?.raw_data?.all_branches_stats?.averageRevenuePerBranch || 0) / 1000).toFixed(0)}k/chi nhánh`}
+              trendValue={`${((aiData?.raw_data?.all_branches_stats?.averageRevenuePerBranch || 0) / 1000).toFixed(0)}k/branch`}
             />
           </div>
           )}
@@ -869,11 +1028,11 @@ export default function MultiBranchDashboard() {
                     </div>
                     <div className="grid grid-cols-3 gap-2 mt-3">
                       <div className="text-center p-2 bg-gray-50 rounded">
-                        <p className="text-xs text-gray-500">Doanh thu</p>
+                        <p className="text-xs text-gray-500">Revenue</p>
                         <p className="font-semibold text-sm">{(branch.revenue / 1000).toFixed(0)}k</p>
                       </div>
                       <div className="text-center p-2 bg-gray-50 rounded">
-                        <p className="text-xs text-gray-500">Đơn hàng</p>
+                        <p className="text-xs text-gray-500">Orders</p>
                         <p className="font-semibold text-sm">{branch.orders}</p>
                       </div>
                       <div className="text-center p-2 bg-gray-50 rounded">
@@ -892,7 +1051,7 @@ export default function MultiBranchDashboard() {
                 <div className="p-2 bg-red-50 rounded-lg">
                   <AlertTriangle className="h-5 w-5 text-red-600" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-800">Cần hỗ trợ ngay</h3>
+                <h3 className="text-lg font-semibold text-gray-800">Need Immediate Support</h3>
               </div>
               <div className="space-y-3">
                 {needAttention.map((branch) => (
@@ -916,17 +1075,17 @@ export default function MultiBranchDashboard() {
                           <div className="flex gap-2 mt-1">
                             {branch.customerRetention === 0 && (
                               <span className="text-xs px-2 py-1 bg-red-100 text-red-700 rounded">
-                                0% khách quay lại
+                                0% retention
                               </span>
                             )}
                             {branch.outOfStock > 0 && (
                               <span className="text-xs px-2 py-1 bg-red-100 text-red-700 rounded">
-                                {branch.outOfStock} hết hàng
+                                {branch.outOfStock} out of stock
                               </span>
                             )}
                             {branch.lowStock > 0 && (
                               <span className="text-xs px-2 py-1 bg-yellow-100 text-yellow-700 rounded">
-                                {branch.lowStock} sắp hết
+                                {branch.lowStock} low stock
                               </span>
                             )}
                           </div>
@@ -940,15 +1099,15 @@ export default function MultiBranchDashboard() {
                     </div>
                     <div className="grid grid-cols-3 gap-2 mt-3">
                       <div className="text-center p-2 bg-white rounded">
-                        <p className="text-xs text-gray-500">Doanh thu</p>
+                        <p className="text-xs text-gray-500">Revenue</p>
                         <p className="font-semibold text-sm">{(branch.revenue / 1000).toFixed(0)}k</p>
                       </div>
                       <div className="text-center p-2 bg-white rounded">
-                        <p className="text-xs text-gray-500">Đơn</p>
+                        <p className="text-xs text-gray-500">Orders</p>
                         <p className="font-semibold text-sm">{branch.orders}</p>
                       </div>
                       <div className="text-center p-2 bg-white rounded">
-                        <p className="text-xs text-gray-500">Lợi nhuận</p>
+                        <p className="text-xs text-gray-500">Profit</p>
                         <p className="font-semibold text-sm">{(branch.profitMargin / 1000).toFixed(0)}k</p>
                       </div>
                     </div>
@@ -964,7 +1123,7 @@ export default function MultiBranchDashboard() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Revenue Comparison */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">So sánh doanh thu</h3>
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">Revenue Comparison</h3>
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={comparisonData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -978,35 +1137,35 @@ export default function MultiBranchDashboard() {
                     }}
                   />
                   <Legend />
-                  <Bar dataKey="revenue" fill="#f59e0b" name="Doanh thu (k)" radius={[8, 8, 0, 0]} />
+                  <Bar dataKey="revenue" fill="#f59e0b" name="Revenue (k)" radius={[8, 8, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
 
             {/* Performance Radar */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">Phân tích hiệu suất</h3>
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">Performance Analysis</h3>
               <ResponsiveContainer width="100%" height={300}>
                 <RadarChart data={radarData.slice(0, 3)}>
                   <PolarGrid stroke="#e5e7eb" />
                   <PolarAngleAxis dataKey="branch" tick={{ fill: '#666', fontSize: 12 }} />
                   <PolarRadiusAxis angle={90} domain={[0, 100]} tick={{ fill: '#666' }} />
                   <Radar
-                    name="Doanh thu"
+                    name="Revenue"
                     dataKey="doanhthu"
                     stroke="#f59e0b"
                     fill="#f59e0b"
                     fillOpacity={0.3}
                   />
                   <Radar
-                    name="Đánh giá"
+                    name="Rating"
                     dataKey="danhgia"
                     stroke="#10b981"
                     fill="#10b981"
                     fillOpacity={0.3}
                   />
                   <Radar
-                    name="Giữ chân KH"
+                    name="Retention"
                     dataKey="giuchankh"
                     stroke="#3b82f6"
                     fill="#3b82f6"
@@ -1024,11 +1183,11 @@ export default function MultiBranchDashboard() {
           {aiData?.analysis && (() => {
             const analysisSections = parseAIAnalysisIntoSections(aiData.analysis);
             const sectionTitles = {
-              overview: '1. Tổng quan tất cả chi nhánh',
-              branchEvaluation: '2. Đánh giá từng chi nhánh',
-              comparison: '3. So sánh và phân tích',
-              branchRecommendations: '4. Khuyến nghị cho từng chi nhánh',
-              conclusion: '5. Kết luận',
+              overview: '1. Overview of All Branches',
+              branchEvaluation: '2. Branch Evaluation',
+              comparison: '3. Comparison and Analysis',
+              branchRecommendations: '4. Recommendations for Each Branch',
+              conclusion: '5. Conclusion',
             };
             const sectionIcons = {
               overview: Building2,
@@ -1046,7 +1205,7 @@ export default function MultiBranchDashboard() {
                 </div>
                 <div className="flex-1">
                     <h3 className="text-lg font-bold text-gray-800">
-                    Phân tích AI tổng hợp hệ thống
+                    AI System Analysis
                   </h3>
                   </div>
                 </div>
@@ -1089,19 +1248,19 @@ export default function MultiBranchDashboard() {
                                 <ResponsiveContainer width="100%" height={250}>
                                   <BarChart data={[
                                     {
-                                      name: 'Tổng doanh thu',
+                                      name: 'Total Revenue',
                                       value: (aiData?.raw_data?.all_branches_revenue_metrics?.totalRevenue || aiData?.raw_data?.all_branches_stats?.totalRevenue || 0) / 1000000,
                                     },
                                     {
-                                      name: 'Tổng đơn hàng',
+                                      name: 'Total Orders',
                                       value: (aiData?.raw_data?.all_branches_revenue_metrics?.totalOrderCount || aiData?.raw_data?.all_branches_stats?.totalOrders || 0) / 1000,
                                     },
                                     {
-                                      name: 'Chi nhánh hoạt động',
+                                      name: 'Active Branches',
                                       value: aiData?.raw_data?.all_branches_stats?.activeBranches || 0,
                                     },
                                     {
-                                      name: 'Đánh giá TB',
+                                      name: 'Avg Rating',
                                       value: (aiData?.raw_data?.all_branches_review_metrics?.overallAvgReviewScore || 0) * 20,
                                     },
                                   ]}>
@@ -1117,10 +1276,10 @@ export default function MultiBranchDashboard() {
                             
                             {key === 'branchEvaluation' && branchesData.length > 0 && (
                               <div className="mb-4">
-                                <h5 className="text-sm font-semibold text-gray-700 mb-3">Biểu đồ đánh giá từng chi nhánh</h5>
+                                <h5 className="text-sm font-semibold text-gray-700 mb-3">Branch Rating Chart</h5>
                                 <ResponsiveContainer width="100%" height={300}>
                                   <BarChart data={branchesData.map(b => ({
-                                    name: b.name.replace('Chi nhánh ', '').replace('Main Branch', 'Main'),
+                                    name: b.name.replace('Branch ', '').replace('Chi nhánh ', '').replace('Main Branch', 'Main'),
                                     rating: b.rating,
                                     retention: b.customerRetention,
                                   }))}>
@@ -1130,8 +1289,8 @@ export default function MultiBranchDashboard() {
                                     <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12 }} />
                                     <Tooltip />
                                     <Legend />
-                                    <Bar yAxisId="left" dataKey="rating" fill="#f59e0b" name="Đánh giá (⭐)" radius={[8, 8, 0, 0]} />
-                                    <Bar yAxisId="right" dataKey="retention" fill="#10b981" name="Giữ chân KH (%)" radius={[8, 8, 0, 0]} />
+                                    <Bar yAxisId="left" dataKey="rating" fill="#f59e0b" name="Rating (⭐)" radius={[8, 8, 0, 0]} />
+                                    <Bar yAxisId="right" dataKey="retention" fill="#10b981" name="Retention (%)" radius={[8, 8, 0, 0]} />
                                   </BarChart>
                                 </ResponsiveContainer>
                               </div>
@@ -1139,7 +1298,7 @@ export default function MultiBranchDashboard() {
                             
                             {key === 'comparison' && comparisonData.length > 0 && (
                               <div className="mb-4">
-                                <h5 className="text-sm font-semibold text-gray-700 mb-3">Biểu đồ so sánh chi nhánh</h5>
+                                <h5 className="text-sm font-semibold text-gray-700 mb-3">Branch Comparison Chart</h5>
                                 <ResponsiveContainer width="100%" height={300}>
                                   <BarChart data={comparisonData}>
                                     <CartesianGrid strokeDasharray="3 3" />
@@ -1148,8 +1307,8 @@ export default function MultiBranchDashboard() {
                                     <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12 }} />
                                     <Tooltip />
                                     <Legend />
-                                    <Bar yAxisId="left" dataKey="revenue" fill="#f59e0b" name="Doanh thu (k)" radius={[8, 8, 0, 0]} />
-                                    <Bar yAxisId="right" dataKey="orders" fill="#3b82f6" name="Đơn hàng" radius={[8, 8, 0, 0]} />
+                                    <Bar yAxisId="left" dataKey="revenue" fill="#f59e0b" name="Revenue (k)" radius={[8, 8, 0, 0]} />
+                                    <Bar yAxisId="right" dataKey="orders" fill="#3b82f6" name="Orders" radius={[8, 8, 0, 0]} />
                                   </BarChart>
                                 </ResponsiveContainer>
                               </div>
@@ -1157,14 +1316,14 @@ export default function MultiBranchDashboard() {
                             
                             {key === 'branchRecommendations' && branchesData.length > 0 && (
                               <div className="mb-4">
-                                <h5 className="text-sm font-semibold text-gray-700 mb-3">Phân bố trạng thái chi nhánh</h5>
+                                <h5 className="text-sm font-semibold text-gray-700 mb-3">Branch Status Distribution</h5>
                                 <ResponsiveContainer width="100%" height={250}>
                                   <PieChart>
                                     <Pie
                                       data={[
-                                        { name: 'Tốt', value: branchesData.filter(b => b.status === 'good').length, color: '#10b981' },
-                                        { name: 'Cảnh báo', value: branchesData.filter(b => b.status === 'warning').length, color: '#f59e0b' },
-                                        { name: 'Nghiêm trọng', value: branchesData.filter(b => b.status === 'critical').length, color: '#ef4444' },
+                                        { name: 'Good', value: branchesData.filter(b => b.status === 'good').length, color: '#10b981' },
+                                        { name: 'Warning', value: branchesData.filter(b => b.status === 'warning').length, color: '#f59e0b' },
+                                        { name: 'Critical', value: branchesData.filter(b => b.status === 'critical').length, color: '#ef4444' },
                                       ]}
                                       cx="50%"
                                       cy="50%"
@@ -1175,9 +1334,9 @@ export default function MultiBranchDashboard() {
                                       dataKey="value"
                                     >
                                       {[
-                                        { name: 'Tốt', value: branchesData.filter(b => b.status === 'good').length, color: '#10b981' },
-                                        { name: 'Cảnh báo', value: branchesData.filter(b => b.status === 'warning').length, color: '#f59e0b' },
-                                        { name: 'Nghiêm trọng', value: branchesData.filter(b => b.status === 'critical').length, color: '#ef4444' },
+                                        { name: 'Good', value: branchesData.filter(b => b.status === 'good').length, color: '#10b981' },
+                                        { name: 'Warning', value: branchesData.filter(b => b.status === 'warning').length, color: '#f59e0b' },
+                                        { name: 'Critical', value: branchesData.filter(b => b.status === 'critical').length, color: '#ef4444' },
                                       ].map((entry, index) => (
                                         <Cell key={`cell-${index}`} fill={entry.color} />
                                       ))}
@@ -1191,10 +1350,10 @@ export default function MultiBranchDashboard() {
                             
                             {key === 'conclusion' && branchesData.length > 0 && (
                               <div className="mb-4">
-                                <h5 className="text-sm font-semibold text-gray-700 mb-3">Tổng kết hiệu suất</h5>
+                                <h5 className="text-sm font-semibold text-gray-700 mb-3">Performance Summary</h5>
                                 <ResponsiveContainer width="100%" height={250}>
                                   <AreaChart data={branchesData.map((b, idx) => ({
-                                    name: b.name.replace('Chi nhánh ', '').replace('Main Branch', 'Main'),
+                                    name: b.name.replace('Branch ', '').replace('Chi nhánh ', '').replace('Main Branch', 'Main'),
                                     revenue: b.revenue / 1000,
                                     orders: b.orders,
                                     index: idx + 1,
@@ -1211,8 +1370,8 @@ export default function MultiBranchDashboard() {
                                     <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12 }} />
                                     <Tooltip />
                                     <Legend />
-                                    <Area yAxisId="left" type="monotone" dataKey="revenue" stroke="#f59e0b" fillOpacity={1} fill="url(#colorRevenue)" name="Doanh thu (k)" />
-                                    <Line yAxisId="right" type="monotone" dataKey="orders" stroke="#3b82f6" strokeWidth={2} name="Đơn hàng" />
+                                    <Area yAxisId="left" type="monotone" dataKey="revenue" stroke="#f59e0b" fillOpacity={1} fill="url(#colorRevenue)" name="Revenue (k)" />
+                                    <Line yAxisId="right" type="monotone" dataKey="orders" stroke="#3b82f6" strokeWidth={2} name="Orders" />
                                   </AreaChart>
                                 </ResponsiveContainer>
                               </div>
@@ -1221,7 +1380,7 @@ export default function MultiBranchDashboard() {
                             {/* Nội dung text */}
                             {key === 'branchRecommendations' && aiData.recommendations && aiData.recommendations.length > 0 ? (
                               <div>
-                                <h5 className="text-sm font-semibold text-gray-700 mb-3">Danh sách khuyến nghị</h5>
+                                <h5 className="text-sm font-semibold text-gray-700 mb-3">Recommendations List</h5>
                       <ul className="space-y-2">
                         {aiData.recommendations.map((rec, index) => (
                           <li key={index} className="flex items-start gap-2">
@@ -1239,7 +1398,7 @@ export default function MultiBranchDashboard() {
                                 }}
                               />
                             ) : (
-                              <p className="text-gray-500 text-sm">Chưa có nội dung</p>
+                              <p className="text-gray-500 text-sm">No content available</p>
                   )}
                 </div>
                         )}
@@ -1254,19 +1413,19 @@ export default function MultiBranchDashboard() {
           {/* Detailed Branch Table */}
           {branchesData.length > 0 && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">Chi tiết tất cả chi nhánh</h3>
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">All Branches Details</h3>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-gray-200">
-                    <th className="text-left py-3 px-4 font-semibold text-gray-700">Chi nhánh</th>
-                    <th className="text-right py-3 px-4 font-semibold text-gray-700">Doanh thu</th>
-                    <th className="text-right py-3 px-4 font-semibold text-gray-700">Đơn hàng</th>
-                    <th className="text-right py-3 px-4 font-semibold text-gray-700">Giá trị TB</th>
+                    <th className="text-left py-3 px-4 font-semibold text-gray-700">Branch</th>
+                    <th className="text-right py-3 px-4 font-semibold text-gray-700">Revenue</th>
+                    <th className="text-right py-3 px-4 font-semibold text-gray-700">Orders</th>
+                    <th className="text-right py-3 px-4 font-semibold text-gray-700">Avg Value</th>
                     <th className="text-center py-3 px-4 font-semibold text-gray-700">Rating</th>
-                    <th className="text-right py-3 px-4 font-semibold text-gray-700">Giữ chân KH</th>
-                    <th className="text-center py-3 px-4 font-semibold text-gray-700">Trạng thái</th>
-                    <th className="text-center py-3 px-4 font-semibold text-gray-700">Hành động</th>
+                    <th className="text-right py-3 px-4 font-semibold text-gray-700">Retention</th>
+                    <th className="text-center py-3 px-4 font-semibold text-gray-700">Status</th>
+                    <th className="text-center py-3 px-4 font-semibold text-gray-700">Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1320,7 +1479,7 @@ export default function MultiBranchDashboard() {
                           {branch.status === 'good' && <CheckCircle className="h-3 w-3" />}
                           {branch.status === 'warning' && <AlertTriangle className="h-3 w-3" />}
                           {branch.status === 'critical' && <AlertTriangle className="h-3 w-3" />}
-                          {branch.status === 'good' ? 'Tốt' : branch.status === 'warning' ? 'Cảnh báo' : 'Nghiêm trọng'}
+                          {branch.status === 'good' ? 'Good' : branch.status === 'warning' ? 'Warning' : 'Critical'}
                         </span>
                       </td>
                       <td className="py-3 px-4 text-center">
@@ -1332,7 +1491,7 @@ export default function MultiBranchDashboard() {
                           className="inline-flex items-center gap-1 px-3 py-1 bg-amber-50 text-amber-700 rounded-lg hover:bg-amber-100 transition-colors text-sm font-medium"
                         >
                           <Eye className="h-4 w-4" />
-                          Chi tiết
+                          Details
                         </button>
                       </td>
                     </tr>
@@ -1347,36 +1506,53 @@ export default function MultiBranchDashboard() {
 
       {/* Day Tab Content - Single Branch View */}
       {activeTab === 'day' && viewMode === 'single' ? (
-        // Single Branch View - Chỉ hiển thị khi có dữ liệu từ API riêng
-        branchesData.length > 0 && branchesData.find(b => b.id === selectedBranch) ? (
-          <>
-            {/* Loading State - Skeleton for Single Branch Day */}
-            {(loadingSingleBranch || (!singleBranchAiData && selectedBranch && selectedDate)) && (
-              <SingleBranchDaySkeleton />
-            )}
-            {!loadingSingleBranch && !singleBranchAiData && (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 flex flex-col items-center justify-center">
-                <Building2 className="h-12 w-12 text-gray-400 mb-4" />
-                <p className="text-gray-600 text-lg mb-2">Không thể tải dữ liệu cho chi nhánh này</p>
-                <p className="text-gray-500 text-sm">Vui lòng thử lại sau hoặc chọn chi nhánh khác</p>
-              </div>
-            )}
-            {singleBranchAiData && !loadingSingleBranch && (
+        <>
+          {/* Empty State - Chưa gọi API ChatGPT */}
+          {!hasFetchedAIData && !error && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 flex flex-col items-center justify-center">
+              <Brain className="h-16 w-16 text-amber-400 mb-4" />
+              <p className="text-gray-600 text-lg mb-2 font-semibold">No AI Analysis Available</p>
+              <p className="text-gray-500 text-sm mb-4">Click the "Analyze AI" button above to start analysis</p>
+              <button
+                onClick={() => fetchSingleBranchData()}
+                disabled={loadingSingleBranch}
+                className="px-6 py-3 rounded-lg bg-amber-500 text-white text-sm font-medium hover:bg-amber-600 flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Brain className="h-5 w-5" />
+                {loadingSingleBranch ? 'Analyzing...' : 'Analyze AI'}
+              </button>
+            </div>
+          )}
+          {/* Loading State - Skeleton for Single Branch Day */}
+          {loadingSingleBranch && (
+            <SingleBranchDaySkeleton />
+          )}
+          {/* Data fetched but no data available */}
+          {hasFetchedAIData && !loadingSingleBranch && !singleBranchAiData && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 flex flex-col items-center justify-center">
+              <Building2 className="h-12 w-12 text-gray-400 mb-4" />
+              <p className="text-gray-600 text-lg mb-2">Unable to load data for this branch</p>
+              <p className="text-gray-500 text-sm">Please try again later or select another branch</p>
+            </div>
+          )}
+          {/* Display data when available */}
+          {hasFetchedAIData && singleBranchAiData && !loadingSingleBranch && branchesData.length > 0 && branchesData.find(b => b.id === selectedBranch) && (
             <SingleBranchView 
               branch={branchesData.find(b => b.id === selectedBranch)!} 
               singleBranchAiData={singleBranchAiData}
               loadingSingleBranch={loadingSingleBranch}
-                selectedDate={selectedDate}
+              selectedDate={selectedDate}
             />
-            )}
-          </>
-        ) : (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 flex flex-col items-center justify-center">
-            <Building2 className="h-12 w-12 text-gray-400 mb-4" />
-            <p className="text-gray-600 text-lg mb-2">Chưa có dữ liệu cho chi nhánh này</p>
-            <p className="text-gray-500 text-sm">Vui lòng chọn chi nhánh khác hoặc thử lại sau</p>
-          </div>
-        )
+          )}
+          {/* No branch data */}
+          {hasFetchedAIData && !loadingSingleBranch && branchesData.length === 0 && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 flex flex-col items-center justify-center">
+              <Building2 className="h-12 w-12 text-gray-400 mb-4" />
+              <p className="text-gray-600 text-lg mb-2">No data available for this branch</p>
+              <p className="text-gray-500 text-sm">Please select another branch or try again later</p>
+            </div>
+          )}
+        </>
       ) : null}
 
       {/* Month Tab Content - All Branches */}
@@ -1386,8 +1562,8 @@ export default function MultiBranchDashboard() {
       {activeTab === 'month' && viewMode === 'all' && !loadingMonthly && !monthlyStats && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 flex flex-col items-center justify-center">
           <Building2 className="h-12 w-12 text-gray-400 mb-4" />
-          <p className="text-gray-600 text-lg mb-2">Chưa có dữ liệu thống kê cho tháng này</p>
-          <p className="text-gray-500 text-sm">Vui lòng chọn tháng khác hoặc thử lại sau</p>
+          <p className="text-gray-600 text-lg mb-2">No statistics data available for this month</p>
+          <p className="text-gray-500 text-sm">Please select another month or try again later</p>
         </div>
       )}
 
@@ -1399,14 +1575,14 @@ export default function MultiBranchDashboard() {
       {activeTab === 'month' && viewMode === 'single' && !loadingMonthly && singleBranchMonthlyStats && (
         <MonthlyStatsView 
           stats={singleBranchMonthlyStats} 
-          branchName={branchesData.find(b => b.id === selectedBranch)?.name || `Chi nhánh ${selectedBranch}`} 
+          branchName={branchesData.find(b => b.id === selectedBranch)?.name || `Branch ${selectedBranch}`} 
         />
       )}
       {activeTab === 'month' && viewMode === 'single' && !loadingMonthly && !singleBranchMonthlyStats && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 flex flex-col items-center justify-center">
           <Building2 className="h-12 w-12 text-gray-400 mb-4" />
-          <p className="text-gray-600 text-lg mb-2">Chưa có dữ liệu thống kê cho chi nhánh này</p>
-          <p className="text-gray-500 text-sm">Vui lòng chọn chi nhánh khác hoặc thử lại sau</p>
+          <p className="text-gray-600 text-lg mb-2">No statistics data available for this branch</p>
+          <p className="text-gray-500 text-sm">Please select another branch or try again later</p>
         </div>
       )}
 
@@ -1417,8 +1593,8 @@ export default function MultiBranchDashboard() {
       {activeTab === 'year' && viewMode === 'all' && !loadingYearly && !yearlyStats && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 flex flex-col items-center justify-center">
           <Building2 className="h-12 w-12 text-gray-400 mb-4" />
-          <p className="text-gray-600 text-lg mb-2">Chưa có dữ liệu thống kê cho năm này</p>
-          <p className="text-gray-500 text-sm">Vui lòng chọn năm khác hoặc thử lại sau</p>
+          <p className="text-gray-600 text-lg mb-2">No statistics data available for this year</p>
+          <p className="text-gray-500 text-sm">Please select another year or try again later</p>
         </div>
       )}
 
@@ -1430,14 +1606,14 @@ export default function MultiBranchDashboard() {
       {activeTab === 'year' && viewMode === 'single' && !loadingYearly && singleBranchYearlyStats && (
         <YearlyStatsView 
           stats={singleBranchYearlyStats} 
-          branchName={branchesData.find(b => b.id === selectedBranch)?.name || `Chi nhánh ${selectedBranch}`} 
+          branchName={branchesData.find(b => b.id === selectedBranch)?.name || `Branch ${selectedBranch}`} 
         />
       )}
       {activeTab === 'year' && viewMode === 'single' && !loadingYearly && !singleBranchYearlyStats && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 flex flex-col items-center justify-center">
           <Building2 className="h-12 w-12 text-gray-400 mb-4" />
-          <p className="text-gray-600 text-lg mb-2">Chưa có dữ liệu thống kê cho chi nhánh này</p>
-          <p className="text-gray-500 text-sm">Vui lòng chọn chi nhánh khác hoặc thử lại sau</p>
+          <p className="text-gray-600 text-lg mb-2">No statistics data available for this branch</p>
+          <p className="text-gray-500 text-sm">Please select another branch or try again later</p>
         </div>
       )}
         </div>
@@ -1579,7 +1755,7 @@ function SingleBranchView({ branch, singleBranchAiData, loadingSingleBranch, sel
     // Top customers: Chỉ dùng dữ liệu từ API riêng
     topCustomers: (rawData?.customer_metrics?.topCustomers || [])
       .map((item: any) => ({
-        name: item.customerName || 'Khách vãng lai',
+        name: item.customerName || 'Walk-in Customer',
         orderCount: item.orderCount || 0,
         totalSpent: item.totalSpent ? Number(item.totalSpent) : 0,
       })),
@@ -1605,7 +1781,7 @@ function SingleBranchView({ branch, singleBranchAiData, loadingSingleBranch, sel
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-xl font-bold text-gray-800 mb-1">{branch.name}</h2>
-            <p className="text-sm text-gray-600">Phân tích chi tiết ngày {selectedDate ? new Date(selectedDate).toLocaleDateString('vi-VN') : new Date().toLocaleDateString('vi-VN')}</p>
+            <p className="text-sm text-gray-600">Detailed analysis for {selectedDate ? new Date(selectedDate).toLocaleDateString('en-US') : new Date().toLocaleDateString('en-US')}</p>
           </div>
           <div className={`px-3 py-1.5 rounded-lg text-sm ${
             branch.status === 'good' ? 'bg-green-100 text-green-700' :
@@ -1613,9 +1789,9 @@ function SingleBranchView({ branch, singleBranchAiData, loadingSingleBranch, sel
             'bg-red-100 text-red-700'
           }`}>
             <span className="font-semibold">
-              {branch.status === 'good' ? '✓ Hoạt động tốt' :
-               branch.status === 'warning' ? '⚠ Cần chú ý' :
-               '⚠ Cần hỗ trợ gấp'}
+              {branch.status === 'good' ? '✓ Operating Well' :
+               branch.status === 'warning' ? '⚠ Needs Attention' :
+               '⚠ Needs Immediate Support'}
             </span>
           </div>
         </div>
@@ -1623,7 +1799,7 @@ function SingleBranchView({ branch, singleBranchAiData, loadingSingleBranch, sel
           <div className="mt-3 pt-3 border-t border-gray-200">
             <div className="flex items-center gap-2 text-xs text-blue-600">
               <Loader2 className="h-4 w-4 animate-spin" />
-              <span>Đang tải dữ liệu chi tiết từ API riêng...</span>
+              <span>Loading detailed data from API...</span>
             </div>
           </div>
         )}
@@ -1632,7 +1808,7 @@ function SingleBranchView({ branch, singleBranchAiData, loadingSingleBranch, sel
       {/* Key Metrics */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <MetricCard
-          title="Doanh thu"
+          title="Revenue"
           value={formatCurrency(branch.revenue)}
           change={0}
           icon={DollarSign}
@@ -1640,7 +1816,7 @@ function SingleBranchView({ branch, singleBranchAiData, loadingSingleBranch, sel
           bgColor="bg-green-50"
         />
         <MetricCard
-          title="Đơn hàng"
+          title="Orders"
           value={branch.orders.toString()}
           change={0}
           icon={ShoppingCart}
@@ -1648,7 +1824,7 @@ function SingleBranchView({ branch, singleBranchAiData, loadingSingleBranch, sel
           bgColor="bg-blue-50"
         />
         <MetricCard
-          title="Trung bình/đơn"
+          title="Avg/Order"
           value={formatCurrency(branch.avgOrderValue)}
           change={0}
           icon={Activity}
@@ -1656,7 +1832,7 @@ function SingleBranchView({ branch, singleBranchAiData, loadingSingleBranch, sel
           bgColor="bg-purple-50"
         />
         <MetricCard
-          title="Đánh giá"
+          title="Rating"
           value={`${branch.rating.toFixed(1)}/5`}
           change={0}
           icon={Star}
@@ -1669,7 +1845,7 @@ function SingleBranchView({ branch, singleBranchAiData, loadingSingleBranch, sel
       <div className="space-y-4">
         {/* 1. SẢN PHẨM BÁN CHẠY */}
         <CollapsibleSection
-          title="Sản phẩm bán chạy"
+          title="Best-Selling Products"
           icon={BarChart3}
           expanded={expandedSections.products}
           onToggle={() => toggleSection('products')}
@@ -1688,7 +1864,7 @@ function SingleBranchView({ branch, singleBranchAiData, loadingSingleBranch, sel
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-sm text-gray-900 truncate">{product.name}</p>
-                        <p className="text-xs text-gray-500">{product.quantity} sản phẩm • {formatCurrency(product.revenue)}</p>
+                        <p className="text-xs text-gray-500">{product.quantity} items • {formatCurrency(product.revenue)}</p>
                       </div>
                       <div className="text-right">
                         {product.trend !== 0 && (
@@ -1709,7 +1885,7 @@ function SingleBranchView({ branch, singleBranchAiData, loadingSingleBranch, sel
                     </div>
                   ))
                 ) : (
-                  <div className="text-center text-gray-400 text-sm py-4">Chưa có dữ liệu sản phẩm</div>
+                  <div className="text-center text-gray-400 text-sm py-4">No product data available</div>
                 )}
               </div>
             </div>
@@ -1717,7 +1893,7 @@ function SingleBranchView({ branch, singleBranchAiData, loadingSingleBranch, sel
             {/* Products by Category */}
             {Object.keys(displayData.productsByCategory).length > 0 && (
               <div className="bg-white rounded-lg border border-gray-200 p-4">
-                <h4 className="text-sm font-semibold text-gray-700 mb-3">Sản phẩm theo danh mục</h4>
+                <h4 className="text-sm font-semibold text-gray-700 mb-3">Products by Category</h4>
                 <div className="grid grid-cols-2 gap-2">
                   {Object.entries(displayData.productsByCategory).map(([category, count]: [string, any]) => (
                     <div key={category} className="p-2 bg-gray-50 rounded border border-gray-200">
@@ -1733,7 +1909,7 @@ function SingleBranchView({ branch, singleBranchAiData, loadingSingleBranch, sel
 
         {/* 2. TỒN KHO */}
         <CollapsibleSection
-          title="Cảnh báo tồn kho"
+          title="Inventory Alerts"
           icon={Package}
           expanded={expandedSections.inventory}
           onToggle={() => toggleSection('inventory')}
@@ -1760,10 +1936,10 @@ function SingleBranchView({ branch, singleBranchAiData, loadingSingleBranch, sel
                 </div>
                 <div className="space-y-1">
                   <p className="text-xs text-gray-600">
-                    Còn lại: <span className="font-bold text-gray-900">{item.current} {item.unit}</span>
+                    Remaining: <span className="font-bold text-gray-900">{item.current} {item.unit}</span>
                   </p>
                   <p className="text-xs text-gray-500">
-                    Ngưỡng an toàn: {item.threshold} {item.unit}
+                    Safety threshold: {item.threshold} {item.unit}
                   </p>
                   <div className="w-full bg-gray-200 rounded-full h-1.5 mt-2">
                     <div
@@ -1777,14 +1953,14 @@ function SingleBranchView({ branch, singleBranchAiData, loadingSingleBranch, sel
               </div>
               ))
             ) : (
-              <div className="text-center text-gray-400 text-sm py-4 col-span-full">Không có cảnh báo tồn kho</div>
+              <div className="text-center text-gray-400 text-sm py-4 col-span-full">No inventory alerts</div>
             )}
           </div>
         </CollapsibleSection>
 
         {/* 3. PHẢN HỒI KHÁCH HÀNG */}
         <CollapsibleSection
-          title="Phản hồi khách hàng"
+          title="Customer Feedback"
           icon={Star}
           expanded={expandedSections.feedback}
           onToggle={() => toggleSection('feedback')}
@@ -1794,22 +1970,22 @@ function SingleBranchView({ branch, singleBranchAiData, loadingSingleBranch, sel
             <div className="bg-white rounded-lg border border-gray-200 p-4">
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <p className="text-xs text-gray-600">Tổng đánh giá</p>
+                  <p className="text-xs text-gray-600">Total Reviews</p>
                   <p className="text-xl font-bold text-gray-900">{displayData.summary.total_reviews || 0}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-600">Tích cực</p>
+                  <p className="text-xs text-gray-600">Positive</p>
                   <p className="text-xl font-bold text-green-600">{displayData.summary.positive_reviews || 0}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-600">Tiêu cực</p>
+                  <p className="text-xs text-gray-600">Negative</p>
                   <p className="text-xl font-bold text-red-600">{displayData.summary.negative_reviews || 0}</p>
                 </div>
               </div>
               {/* Review Distribution */}
               {Object.keys(displayData.reviewDistribution).length > 0 && (
                 <div className="mt-4 pt-4 border-t border-gray-200">
-                  <p className="text-xs text-gray-600 mb-2">Phân bố đánh giá</p>
+                  <p className="text-xs text-gray-600 mb-2">Review Distribution</p>
                   <div className="flex gap-2">
                     {[5, 4, 3, 2, 1].map((rating) => (
                       <div key={rating} className="flex-1 text-center">
@@ -1861,7 +2037,7 @@ function SingleBranchView({ branch, singleBranchAiData, loadingSingleBranch, sel
                   </div>
                 ))
               ) : (
-                <div className="text-center text-gray-400 text-sm py-4">Chưa có phản hồi khách hàng</div>
+                <div className="text-center text-gray-400 text-sm py-4">No customer feedback available</div>
               )}
             </div>
           </div>
@@ -1869,7 +2045,7 @@ function SingleBranchView({ branch, singleBranchAiData, loadingSingleBranch, sel
 
         {/* 4. KHÁCH HÀNG */}
         <CollapsibleSection
-          title="Khách hàng hàng đầu"
+          title="Top Customers"
           icon={Users}
           expanded={expandedSections.customers}
           onToggle={() => toggleSection('customers')}
@@ -1887,12 +2063,12 @@ function SingleBranchView({ branch, singleBranchAiData, loadingSingleBranch, sel
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-sm text-gray-900 truncate">{customer.name}</p>
-                      <p className="text-xs text-gray-500">{customer.orderCount} đơn • {formatCurrency(customer.totalSpent)}</p>
+                      <p className="text-xs text-gray-500">{customer.orderCount} orders • {formatCurrency(customer.totalSpent)}</p>
                     </div>
                   </div>
                 ))
               ) : (
-                <div className="text-center text-gray-400 text-sm py-4">Chưa có dữ liệu khách hàng</div>
+                <div className="text-center text-gray-400 text-sm py-4">No customer data available</div>
               )}
             </div>
           </div>
@@ -1900,7 +2076,7 @@ function SingleBranchView({ branch, singleBranchAiData, loadingSingleBranch, sel
 
         {/* 5. NGUYÊN LIỆU & CHI PHÍ */}
         <CollapsibleSection
-          title="Nguyên liệu & Chi phí"
+          title="Ingredients & Costs"
           icon={Package}
           expanded={expandedSections.materials}
           onToggle={() => toggleSection('materials')}
@@ -1908,7 +2084,7 @@ function SingleBranchView({ branch, singleBranchAiData, loadingSingleBranch, sel
           <div className="space-y-4">
             {/* Top Ingredients by Value */}
             <div className="bg-white rounded-lg border border-gray-200 p-4">
-              <h4 className="text-sm font-semibold text-gray-700 mb-3">Nguyên liệu có giá trị cao nhất</h4>
+              <h4 className="text-sm font-semibold text-gray-700 mb-3">Highest Value Ingredients</h4>
               {displayData.topIngredientsByValue.length > 0 ? (
                 <div className="space-y-2">
                   {displayData.topIngredientsByValue.slice(0, 5).map((item: any, idx: number) => (
@@ -1925,13 +2101,13 @@ function SingleBranchView({ branch, singleBranchAiData, loadingSingleBranch, sel
                   ))}
                 </div>
               ) : (
-                <div className="text-center text-gray-400 text-sm py-4">Chưa có dữ liệu nguyên liệu</div>
+                <div className="text-center text-gray-400 text-sm py-4">No ingredient data available</div>
               )}
             </div>
 
             {/* Top Cost Ingredients */}
             <div className="bg-white rounded-lg border border-gray-200 p-4">
-              <h4 className="text-sm font-semibold text-gray-700 mb-3">Nguyên liệu có chi phí cao nhất</h4>
+              <h4 className="text-sm font-semibold text-gray-700 mb-3">Highest Cost Ingredients</h4>
               {displayData.topCostIngredients.length > 0 ? (
                 <div className="space-y-2">
                   {displayData.topCostIngredients.map((item: any, idx: number) => (
@@ -1956,7 +2132,7 @@ function SingleBranchView({ branch, singleBranchAiData, loadingSingleBranch, sel
                   ))}
                 </div>
               ) : (
-                <div className="text-center text-gray-400 text-sm py-4">Chưa có dữ liệu chi phí nguyên liệu</div>
+                <div className="text-center text-gray-400 text-sm py-4">No ingredient cost data available</div>
               )}
             </div>
 
@@ -1965,7 +2141,7 @@ function SingleBranchView({ branch, singleBranchAiData, loadingSingleBranch, sel
               <div className="bg-white rounded-lg border border-gray-200 p-4">
                 <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
                   <CreditCard className="h-4 w-4" />
-                  Doanh thu theo phương thức thanh toán
+                  Revenue by Payment Method
                 </h4>
                 <div className="space-y-2">
                   {Object.entries(displayData.revenueByPaymentMethod).map(([method, amount]: [string, any]) => {

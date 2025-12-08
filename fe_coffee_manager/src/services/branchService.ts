@@ -10,6 +10,7 @@ export interface CreateBranchRequest {
   managerUserId?: number;
   openHours?: string; // HH:mm
   endHours?: string;  // HH:mm
+  openDays?: string;  // "1,2,3,4,5,6,7"
 }
 
 export interface UpdateBranchRequest extends Partial<CreateBranchRequest> {

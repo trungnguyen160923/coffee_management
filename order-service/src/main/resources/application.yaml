@@ -19,7 +19,7 @@ spring:
       enabled: ${SPRING_HTTP_ENCODING_ENABLED:true}
       force: ${SPRING_HTTP_ENCODING_FORCE:true}
   datasource:
-    url: ${DB_URL:jdbc:mysql://localhost:3306/order_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+    url: ${DB_URL:jdbc:mysql://localhost:3306/order_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Ho_Chi_Minh}
     driver-class-name: com.mysql.cj.jdbc.Driver
     username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD}
@@ -66,6 +66,10 @@ jwt:
 auth:
   service:
     url: ${AUTH_SERVICE_URL:http://localhost:8001/auth-service}
+
+profile:
+  service:
+    url: ${PROFILE_SERVICE_URL:http://localhost:8003/profiles}
 
 app:
   frontend:

@@ -1,10 +1,14 @@
 package orderservice.order_service.controller;
 
 import jakarta.validation.Valid;
+import orderservice.order_service.client.AuthServiceClient;
+import orderservice.order_service.client.ProfileServiceClient;
 import orderservice.order_service.dto.ApiResponse;
 import orderservice.order_service.dto.request.CreateReservationRequest;
 import orderservice.order_service.dto.response.ReservationResponse;
+import orderservice.order_service.exception.AppException;
 import orderservice.order_service.service.ReservationService;
+import orderservice.order_service.util.StaffPermissionValidator;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -22,10 +26,17 @@ import java.util.Optional;
 public class ReservationController {
 
     private final ReservationService reservationService;
+    private final ProfileServiceClient profileServiceClient;
+    private final AuthServiceClient authServiceClient;
 
     @Autowired
-    public ReservationController(ReservationService reservationService) {
+    public ReservationController(
+            ReservationService reservationService,
+            ProfileServiceClient profileServiceClient,
+            AuthServiceClient authServiceClient) {
         this.reservationService = reservationService;
+        this.profileServiceClient = profileServiceClient;
+        this.authServiceClient = authServiceClient;
     }
 
     @PostMapping
@@ -186,6 +197,9 @@ public class ReservationController {
     @PutMapping("/{reservationId}/status")
     public ResponseEntity<ApiResponse<ReservationResponse>> updateReservationStatus(@PathVariable Integer reservationId,
             @RequestParam String status) {
+        // Validate permission - CASHIER_STAFF hoặc SERVER_STAFF
+        StaffPermissionValidator.requireReservationAccess(profileServiceClient, authServiceClient);
+        
         try {
             ReservationResponse reservation = reservationService.updateReservationStatus(reservationId, status);
             ApiResponse<ReservationResponse> response = ApiResponse.<ReservationResponse>builder()
@@ -194,6 +208,8 @@ public class ReservationController {
                     .result(reservation)
                     .build();
             return ResponseEntity.ok(response);
+        } catch (AppException e) {
+            throw e;
         } catch (Exception e) {
             ApiResponse<ReservationResponse> response = ApiResponse.<ReservationResponse>builder()
                     .code(500)
@@ -206,6 +222,9 @@ public class ReservationController {
 
     @PutMapping("/{reservationId}/cancel")
     public ResponseEntity<ApiResponse<Void>> cancelReservation(@PathVariable Integer reservationId) {
+        // Validate permission - CASHIER_STAFF hoặc SERVER_STAFF
+        StaffPermissionValidator.requireReservationAccess(profileServiceClient, authServiceClient);
+        
         try {
             reservationService.cancelReservation(reservationId);
             ApiResponse<Void> response = ApiResponse.<Void>builder()
@@ -214,6 +233,8 @@ public class ReservationController {
                     .result(null)
                     .build();
             return ResponseEntity.ok(response);
+        } catch (AppException e) {
+            throw e;
         } catch (Exception e) {
             ApiResponse<Void> response = ApiResponse.<Void>builder()
                     .code(500)
@@ -226,6 +247,9 @@ public class ReservationController {
 
     @DeleteMapping("/{reservationId}")
     public ResponseEntity<ApiResponse<Void>> deleteReservation(@PathVariable Integer reservationId) {
+        // Validate permission - CASHIER_STAFF hoặc SERVER_STAFF
+        StaffPermissionValidator.requireReservationAccess(profileServiceClient, authServiceClient);
+        
         try {
             reservationService.deleteReservation(reservationId);
             ApiResponse<Void> response = ApiResponse.<Void>builder()
@@ -234,6 +258,8 @@ public class ReservationController {
                     .result(null)
                     .build();
             return ResponseEntity.ok(response);
+        } catch (AppException e) {
+            throw e;
         } catch (Exception e) {
             ApiResponse<Void> response = ApiResponse.<Void>builder()
                     .code(500)

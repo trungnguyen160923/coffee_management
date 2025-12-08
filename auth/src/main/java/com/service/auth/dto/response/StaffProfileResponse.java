@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
+import java.util.List;
 
 import com.service.auth.entity.Role;
 
@@ -24,4 +25,8 @@ public class StaffProfileResponse {
     private LocalDate hireDate;
     private String position;
     private Double salary;
+    
+    // Staff business roles & proficiency
+    private List<Integer> staffBusinessRoleIds;
+    private String proficiencyLevel;
 }

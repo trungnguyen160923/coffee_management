@@ -19,6 +19,7 @@ public class ProductDetailMapper {
                     .sizeId(productDetail.getSize().getSizeId())
                     .name(productDetail.getSize().getName())
                     .description(productDetail.getSize().getDescription())
+                    .active(true) // Default to true if entity doesn't have active field
                     .createAt(productDetail.getSize().getCreateAt())
                     .updateAt(productDetail.getSize().getUpdateAt())
                     .build();

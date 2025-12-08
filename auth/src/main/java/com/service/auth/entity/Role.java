@@ -25,6 +25,9 @@ public class Role {
     @Column(nullable = false, unique = true, length = 50)
     String name;
 
+    @Column(name = "role_name", length = 100)
+    String roleName; // Tên hiển thị (ví dụ: Pha chế, Thu ngân)
+
     @OneToMany(mappedBy = "role", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     @JsonIgnore
     List<User> users;

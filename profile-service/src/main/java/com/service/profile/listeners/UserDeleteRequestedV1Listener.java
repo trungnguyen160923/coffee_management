@@ -18,6 +18,7 @@ import com.service.profile.events.UserDeleteFailedEvent;
 import com.service.profile.repository.ManagerProfileRepository;
 import com.service.profile.repository.StaffProfileRepository;
 import com.service.profile.repository.CustomerProfileRepository;
+import com.service.profile.repository.StaffRoleAssignmentRepository;
 import com.service.profile.repository.http_client.BranchClient;
 
 import java.time.Instant;
@@ -30,6 +31,7 @@ public class UserDeleteRequestedV1Listener {
     private final ManagerProfileRepository managerProfileRepository;
     private final StaffProfileRepository staffProfileRepository;
     private final CustomerProfileRepository customerProfileRepository;
+    private final StaffRoleAssignmentRepository staffRoleAssignmentRepository;
     private final KafkaTemplate<String, String> kafkaTemplate;
 
     public UserDeleteRequestedV1Listener(ObjectMapper json,
@@ -37,12 +39,19 @@ public class UserDeleteRequestedV1Listener {
                                          ManagerProfileRepository managerProfileRepository,
                                          StaffProfileRepository staffProfileRepository,
                                          CustomerProfileRepository customerProfileRepository,
+                                         StaffRoleAssignmentRepository staffRoleAssignmentRepository,
                                          KafkaTemplate<String, String> kafkaTemplate) {
-        this.json = json; this.branchClient = branchClient; this.managerProfileRepository = managerProfileRepository; this.staffProfileRepository = staffProfileRepository; this.customerProfileRepository = customerProfileRepository; this.kafkaTemplate = kafkaTemplate;
+        this.json = json;
+        this.branchClient = branchClient;
+        this.managerProfileRepository = managerProfileRepository;
+        this.staffProfileRepository = staffProfileRepository;
+        this.customerProfileRepository = customerProfileRepository;
+        this.staffRoleAssignmentRepository = staffRoleAssignmentRepository;
+        this.kafkaTemplate = kafkaTemplate;
     }
 
     @KafkaListener(topics = "user.delete.requested.v1", groupId = "profile-user-delete-v1")
-    // @Transactional
+    @org.springframework.transaction.annotation.Transactional
     public void onUserDeleteRequested(String payload) throws Exception {
         UserDeleteRequestedEvent evt = json.readValue(payload, UserDeleteRequestedEvent.class);
         try {
@@ -60,7 +69,11 @@ public class UserDeleteRequestedV1Listener {
                 }
                 try { managerProfileRepository.deleteById(evt.userId); } catch (Exception ignore) {}
             } else if ("STAFF".equalsIgnoreCase(evt.role)) {
-                try { staffProfileRepository.deleteById(evt.userId); } catch (Exception ignore) {}
+                try {
+                    // Xoá assignments trước bằng userId, sau đó xoá staff profile
+                    staffRoleAssignmentRepository.deleteByStaffUserId(evt.userId);
+                    staffProfileRepository.deleteById(evt.userId);
+                } catch (Exception ignore) {}
             } else if ("CUSTOMER".equalsIgnoreCase(evt.role)) {
                 try { customerProfileRepository.deleteById(evt.userId); } catch (Exception ignore) {}
             }

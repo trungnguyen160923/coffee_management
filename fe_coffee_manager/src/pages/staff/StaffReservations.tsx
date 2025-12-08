@@ -5,6 +5,8 @@ import { tableService } from '../../services';
 import { Table } from '../../types';
 import { UpdateTableStatusRequest } from '../../types/table';
 import { TableAssignmentModal } from '../../components/table';
+import { ReservationsSkeleton } from '../../components/staff/skeletons';
+import { RefreshCw } from 'lucide-react';
 
 export default function StaffReservations() {
     const { user } = useAuth();
@@ -20,6 +22,7 @@ export default function StaffReservations() {
         return `${year}-${month}-${day}`;
     });
     const [loading, setLoading] = useState<boolean>(true);
+    const [refreshing, setRefreshing] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
     const [detailOpen, setDetailOpen] = useState<boolean>(false);
     const [detail, setDetail] = useState<Reservation | null>(null);
@@ -40,26 +43,35 @@ export default function StaffReservations() {
         return null;
     }, [user]);
 
-    useEffect(() => {
-        const load = async () => {
-            if (!branchId) {
-                setLoading(false);
-                setError('Could not determine staff branch.');
-                return;
-            }
-            try {
+    const loadReservations = async (isRefresh = false) => {
+        if (!branchId) {
+            setLoading(false);
+            setError('Could not determine staff branch.');
+            return;
+        }
+        try {
+            if (isRefresh) {
+                setRefreshing(true);
+            } else {
                 setLoading(true);
-                setError(null);
-                const data = await reservationService.getByBranch(branchId);
-                setReservations(Array.isArray(data) ? data : []);
-            } catch (e: any) {
-                console.error('Failed to load reservations by branch', e);
-                setError(`Failed to load reservations: ${e.message || 'Unknown error'}`);
-            } finally {
+            }
+            setError(null);
+            const data = await reservationService.getByBranch(branchId);
+            setReservations(Array.isArray(data) ? data : []);
+        } catch (e: any) {
+            console.error('Failed to load reservations by branch', e);
+            setError(`Failed to load reservations: ${e.message || 'Unknown error'}`);
+        } finally {
+            if (isRefresh) {
+                setRefreshing(false);
+            } else {
                 setLoading(false);
             }
-        };
-        load();
+        }
+    };
+
+    useEffect(() => {
+        loadReservations(false);
     }, [branchId]);
 
     // debounce search
@@ -225,8 +237,7 @@ export default function StaffReservations() {
                     [selectedReservation.reservationId]: tables
                 }));
                 // Refresh reservations to update status
-                const data = await reservationService.getByBranch(branchId!);
-                setReservations(Array.isArray(data) ? data : []);
+                await loadReservations(true);
             } catch (e) {
                 console.error('Failed to load assigned tables', e);
             }
@@ -249,12 +260,20 @@ export default function StaffReservations() {
                         <div className="flex items-center justify-between px-8 pt-6 pb-3">
                             <div>
                                 <h1 className="text-xl font-semibold text-slate-900">Branch Reservations</h1>
-                                <p className="text-sm text-slate-500">Quản lý các đơn đặt bàn trong chi nhánh</p>
+                                <p className="text-sm text-slate-500">Manage reservations at the branch level.</p>
                             </div>
+                            <button
+                                onClick={() => loadReservations(true)}
+                                disabled={refreshing || loading}
+                                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+                                Refresh
+                            </button>
                         </div>
                         <div className="p-6 lg:p-8 pt-4">
 
-                {loading && <div className="bg-white rounded-2xl shadow p-6">Loading...</div>}
+                {loading && <ReservationsSkeleton />}
                 {error && <div className="bg-red-50 text-red-700 border border-red-200 rounded-xl p-4 mb-4">{error}</div>}
 
                 {!loading && !error && (

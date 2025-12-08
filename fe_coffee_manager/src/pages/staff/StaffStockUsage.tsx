@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
+import { useStaffPermissions } from '../../hooks/useStaffPermissions';
 import { stockService, StockAdjustment, StockAdjustmentStatus, PaginatedResponse, DailyUsageSummaryResponse, DailyUsageItem } from '../../services/stockService';
 import { DailyUsageForm } from '../../components/stock/DailyUsageForm';
-import { AlertTriangle, CheckCircle2, XCircle, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, XCircle, X, RefreshCw } from 'lucide-react';
+import { StockUsageSkeleton } from '../../components/staff/skeletons';
 
 const statusLabels: Record<StockAdjustmentStatus, { label: string; color: string }> = {
   PENDING: { label: 'Pending', color: 'bg-yellow-100 text-yellow-700' },
@@ -16,6 +18,7 @@ const today = new Date().toISOString().split('T')[0];
 
 export const StaffStockUsage = () => {
   const { user } = useAuth();
+  const staffPermissions = useStaffPermissions();
   const branchId = useMemo(() => {
     if (user?.branch?.branchId) return user.branch.branchId;
     if (user?.branchId) return Number(user.branchId);
@@ -28,6 +31,7 @@ export const StaffStockUsage = () => {
   const [size] = useState(10);
   const [data, setData] = useState<PaginatedResponse<StockAdjustment> | null>(null);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [usageSummary, setUsageSummary] = useState<DailyUsageSummaryResponse | null>(null);
   const [loadingSummary, setLoadingSummary] = useState(false);
   const [editingAdjustment, setEditingAdjustment] = useState<StockAdjustment | null>(null);
@@ -45,10 +49,14 @@ export const StaffStockUsage = () => {
     onConfirm: () => {},
   });
 
-  const loadData = async () => {
+  const loadData = async (isRefresh = false) => {
     if (!branchId) return;
     try {
-      setLoading(true);
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
       const response = await stockService.getStockAdjustments({
         branchId,
         adjustmentDate: selectedDate,
@@ -61,7 +69,11 @@ export const StaffStockUsage = () => {
       console.error(error);
       toast.error(error?.message || 'Unable to load adjustments');
     } finally {
-      setLoading(false);
+      if (isRefresh) {
+        setRefreshing(false);
+      } else {
+        setLoading(false);
+      }
     }
   };
 
@@ -234,6 +246,10 @@ export const StaffStockUsage = () => {
     );
   }
 
+  if (loading && !data) {
+    return <StockUsageSkeleton />;
+  }
+
   return (
     <div className="min-h-screen bg-slate-50">
       <div className="max-w-7xl mx-auto px-2 py-4 sm:px-4 lg:px-4 space-y-6">
@@ -242,22 +258,24 @@ export const StaffStockUsage = () => {
             <div>
               <h1 className="text-xl font-semibold text-slate-900">Daily Stock Usage</h1>
               <p className="text-sm text-slate-500">
-                Ghi nhận và đối soát lượng sử dụng nguyên liệu trong ca làm việc
+                Log and cross-check stock consumption at the end of the shift.
               </p>
             </div>
           </div>
 
-      <div className="grid gap-6 lg:grid-cols-2 p-6 lg:p-8 pt-4">
-        <div className="rounded-2xl bg-white shadow-sm border border-amber-100 p-5">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <p className="text-sm font-semibold text-amber-700 uppercase tracking-wide">Quick usage log</p>
-              <h2 className="text-xl font-bold text-gray-900">Daily Stock Count</h2>
-              <p className="text-sm text-gray-500">Enter the actual quantity used during the shift</p>
+      <div className={`grid gap-6 p-6 lg:p-8 pt-4 ${(staffPermissions.canViewRecipes || staffPermissions.loading) ? 'lg:grid-cols-2' : 'lg:grid-cols-1'}`}>
+        {(staffPermissions.canViewRecipes || staffPermissions.loading) && (
+          <div className="rounded-2xl bg-white shadow-sm border border-amber-100 p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="text-sm font-semibold text-amber-700 uppercase tracking-wide">Quick usage log</p>
+                <h2 className="text-xl font-bold text-gray-900">Daily Stock Count</h2>
+                <p className="text-sm text-gray-500">Enter the actual quantity used during the shift</p>
+              </div>
             </div>
+            <DailyUsageForm allowDateChange defaultDate={selectedDate} onSuccess={() => loadData(false)} />
           </div>
-          <DailyUsageForm allowDateChange defaultDate={selectedDate} onSuccess={loadData} />
-        </div>
+        )}
 
         <div className="rounded-2xl bg-white shadow-sm border border-amber-100 p-5">
           <h3 className="text-base font-semibold text-gray-900 mb-3">Filters</h3>
@@ -434,6 +452,17 @@ export const StaffStockUsage = () => {
             <div className="text-sm text-gray-500">
               {data ? `${data.totalElements} adjustments` : 'Loading...'}
             </div>
+            <button
+              onClick={() => {
+                loadData(true);
+                loadUsageSummary();
+              }}
+              disabled={refreshing || loading}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
             {data?.content?.some(item => item.status === 'PENDING') && (
               <button
                 onClick={handleCommitAll}
@@ -461,8 +490,10 @@ export const StaffStockUsage = () => {
             <tbody className="divide-y divide-gray-100">
               {loading && (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-gray-500">
-                    Loading data...
+                  <td colSpan={7} className="py-8">
+                    <div className="flex justify-center">
+                      <div className="w-8 h-8 border-4 border-slate-200 border-t-sky-600 rounded-full animate-spin"></div>
+                    </div>
                   </td>
                 </tr>
               )}

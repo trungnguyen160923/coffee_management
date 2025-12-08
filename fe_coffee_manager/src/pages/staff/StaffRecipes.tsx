@@ -1,25 +1,49 @@
 import { useEffect, useMemo, useState } from 'react';
 import catalogService from '../../services/catalogService';
-import { CatalogCategory, CatalogRecipe } from '../../types';
+import { CatalogCategory, CatalogRecipe, CatalogProduct } from '../../types';
+import { API_BASE_URL } from '../../config/api';
+import { Coffee, ChefHat, RefreshCw } from 'lucide-react';
+import RecipeDetailModal from '../../components/recipe/RecipeDetailModal';
+import { RecipesSkeleton } from '../../components/staff/skeletons';
+import ProductRecipeModal from '../../components/recipe/ProductRecipeModal';
 
 export default function StaffRecipes() {
     const [recipes, setRecipes] = useState<CatalogRecipe[]>([]);
     const [categories, setCategories] = useState<CatalogCategory[]>([]);
+    const [products, setProducts] = useState<CatalogProduct[]>([]);
     const [selectedCategoryId, setSelectedCategoryId] = useState<number | 'all'>('all');
     const [search, setSearch] = useState<string>('');
     const [debouncedSearch, setDebouncedSearch] = useState<string>('');
     const [loading, setLoading] = useState<boolean>(true);
+    const [refreshing, setRefreshing] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
     const [detailOpen, setDetailOpen] = useState<boolean>(false);
     const [detail, setDetail] = useState<CatalogRecipe | null>(null);
+    const [selectedProduct, setSelectedProduct] = useState<CatalogProduct | null>(null);
+    const [productModalOpen, setProductModalOpen] = useState(false);
 
-    // Load categories once
+    // Helper function to get product image URL
+    const getProductImageUrl = (product: CatalogProduct): string | null => {
+        if (!product.imageUrl) return null;
+        return product.imageUrl.startsWith('http')
+            ? product.imageUrl
+            : `${API_BASE_URL}/api/catalogs${product.imageUrl}`;
+    };
+
+
+    // Load categories and products once
     useEffect(() => {
         (async () => {
             try {
-                const cats = await catalogService.getCategories();
+                const [cats, productsPage] = await Promise.all([
+                    catalogService.getCategories(),
+                    catalogService.searchProducts({ page: 0, size: 1000, active: true })
+                ]);
                 setCategories(Array.isArray(cats) ? cats : []);
-            } catch { }
+                setProducts(Array.isArray(productsPage?.content) ? productsPage.content : []);
+            } catch (e) {
+                console.error('Failed to load categories or products:', e);
+            }
         })();
     }, []);
 
@@ -30,44 +54,72 @@ export default function StaffRecipes() {
         return () => clearTimeout(handle);
     }, [search]);
 
+    // Load recipes function
+    const loadRecipes = async (isRefresh = false) => {
+        try {
+            if (isRefresh) {
+                setRefreshing(true);
+            } else {
+                setLoading(true);
+            }
+            setError(null);
+            // Fetch only ACTIVE recipes, optionally filtered by category
+            const page = await catalogService.searchRecipes({
+                status: 'ACTIVE',
+                categoryId: selectedCategoryId === 'all' ? undefined : selectedCategoryId,
+                keyword: debouncedSearch || undefined,
+                page: 0,
+                size: 200
+            });
+            setRecipes(Array.isArray(page?.content) ? page.content : []);
+        } catch (e: any) {
+            setError(e?.message || 'Failed to load recipes.');
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
+        }
+    };
+
     // Load recipes whenever category or search changes
     useEffect(() => {
-        const load = async () => {
-            try {
-                setLoading(true);
-                setError(null);
-                // Fetch only ACTIVE recipes, optionally filtered by category
-                const page = await catalogService.searchRecipes({
-                    status: 'ACTIVE',
-                    categoryId: selectedCategoryId === 'all' ? undefined : selectedCategoryId,
-                    keyword: debouncedSearch || undefined,
-                    page: 0,
-                    size: 200
-                });
-                setRecipes(Array.isArray(page?.content) ? page.content : []);
-            } catch (e: any) {
-                setError(e?.message || 'Failed to load recipes.');
-            } finally {
-                setLoading(false);
-            }
-        };
-        load();
+        loadRecipes();
     }, [selectedCategoryId, debouncedSearch]);
 
-    const groupedByCategory = useMemo(() => {
-        const map = new Map<string, CatalogRecipe[]>();
-        for (const r of recipes) {
-            const name = r.category?.name || 'Uncategorized';
-            if (!map.has(name)) map.set(name, []);
-            map.get(name)!.push(r);
-        }
-        return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-    }, [recipes]);
+    // Group recipes by product (similar to dashboard)
+    const groupedByProduct = useMemo(() => {
+        const productMap = new Map<number, { product: CatalogProduct; recipes: CatalogRecipe[] }>();
+        
+        recipes.forEach(recipe => {
+            if (!recipe.productDetail?.pdId) return;
+            
+            // Find product that contains this productDetail
+            const product = products.find(p => 
+                p.productDetails?.some(pd => pd.pdId === recipe.productDetail.pdId)
+            );
+            
+            if (product) {
+                if (!productMap.has(product.productId)) {
+                    productMap.set(product.productId, { product, recipes: [] });
+                }
+                productMap.get(product.productId)!.recipes.push(recipe);
+            }
+        });
+        
+        return Array.from(productMap.values());
+    }, [recipes, products]);
 
-    const openDetail = (r: CatalogRecipe) => {
-        setDetail(r);
-        setDetailOpen(true);
-    };
+    // Group by category for display
+    const groupedByCategory = useMemo(() => {
+        const categoryMap = new Map<string, typeof groupedByProduct>();
+        for (const item of groupedByProduct) {
+            const catName = item.product.category?.name || 'Uncategorized';
+            if (!categoryMap.has(catName)) {
+                categoryMap.set(catName, []);
+            }
+            categoryMap.get(catName)!.push(item);
+        }
+        return Array.from(categoryMap.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+    }, [groupedByProduct]);
 
     const closeDetail = () => {
         setDetailOpen(false);
@@ -81,8 +133,16 @@ export default function StaffRecipes() {
                     <div className="flex items-center justify-between px-8 pt-6 pb-3">
                         <div>
                             <h1 className="text-xl font-semibold text-slate-900">Recipe List</h1>
-                            <p className="text-sm text-slate-500">Danh sách công thức pha chế dành cho nhân viên</p>
+                            <p className="text-sm text-slate-500">Recipe list for staff</p>
                         </div>
+                        <button
+                            onClick={() => loadRecipes(true)}
+                            disabled={refreshing}
+                            className="flex items-center gap-2 px-3 py-2 text-sm bg-amber-100 text-amber-800 rounded-lg hover:bg-amber-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+                            {refreshing ? 'Refreshing...' : 'Refresh'}
+                        </button>
                     </div>
                     <div className="p-6 lg:p-8 pt-4">
             <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -113,58 +173,98 @@ export default function StaffRecipes() {
                 </div>
             </div>
 
-            {loading && <div className="bg-white rounded-2xl shadow p-6">Loading...</div>}
+            {loading && <RecipesSkeleton />}
             {error && <div className="bg-red-50 text-red-700 border border-red-200 rounded-xl p-4 mb-4">{error}</div>}
 
             {!loading && !error && (
-                <div className="space-y-6">
-                    {recipes.length === 0 ? (
-                        <div className="bg-white rounded-2xl shadow p-6 text-gray-600">No recipes.</div>
+                <div className="space-y-8">
+                    {groupedByProduct.length === 0 ? (
+                        <div className="bg-white rounded-2xl shadow p-6 text-gray-600 text-center">No recipes found.</div>
                     ) : (
-                        groupedByCategory.map(([catName, items]) => (
-                            <div key={catName} className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
-                                <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                        groupedByCategory.map(([catName, productItems]) => (
+                            <div key={catName} className="space-y-4">
+                                <div className="flex items-center justify-between">
                                     <h2 className="text-lg font-semibold text-gray-800">{catName}</h2>
-                                    <span className="text-xs text-gray-500">{items.length} recipe(s)</span>
+                                    <span className="text-xs text-gray-500">{productItems.length} {productItems.length === 1 ? 'product' : 'products'}</span>
                                 </div>
-                                <div className="overflow-x-auto">
-                                    <table className="min-w-full table-fixed text-sm">
-                                        <colgroup>
-                                            <col style={{ width: '35%' }} />
-                                            <col style={{ width: '15%' }} />
-                                            <col style={{ width: '15%' }} />
-                                            <col style={{ width: '20%' }} />
-                                            <col style={{ width: '15%' }} />
-                                        </colgroup>
-                                        <thead>
-                                            <tr className="bg-gray-50 text-left text-gray-600">
-                                                <th className="px-6 py-3 font-medium">Name</th>
-                                                <th className="px-6 py-3 font-medium">Size</th>
-                                                <th className="px-6 py-3 font-medium">Version</th>
-                                                <th className="px-6 py-3 font-medium">Status</th>
-                                                <th className="px-6 py-3 font-medium">Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-100">
-                                            {items.map((r) => (
-                                                <tr key={r.recipeId} className="hover:bg-gray-50">
-                                                    <td className="px-6 py-4 font-semibold text-gray-900">{r.name}</td>
-                                                    <td className="px-6 py-4 text-gray-800">{r.productDetail?.size?.name || '-'}</td>
-                                                    <td className="px-6 py-4 text-gray-800">{r.version}</td>
-                                                    <td className="px-6 py-4 text-gray-800">{r.status}</td>
-                                                    <td className="px-6 py-4 whitespace-nowrap">
-                                                        <button
-                                                            onClick={() => openDetail(r)}
-                                                            className="px-2 py-1 text-xs rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 inline-flex"
-                                                            title="View details"
-                                                        >
-                                                            View
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    {productItems.map(({ product, recipes: productRecipes }) => {
+                                        const imageUrl = getProductImageUrl(product);
+                                        const availableSizes = product.productDetails?.filter(pd => pd.active && pd.size) || [];
+                                        const recipesBySize = new Map<number, CatalogRecipe>();
+                                        productRecipes.forEach(recipe => {
+                                            if (recipe.productDetail?.pdId) {
+                                                recipesBySize.set(recipe.productDetail.pdId, recipe);
+                                            }
+                                        });
+
+                                        return (
+                                            <div
+                                                key={product.productId}
+                                                className="bg-white rounded-lg shadow-md border border-gray-200 hover:shadow-lg transition-shadow cursor-pointer"
+                                                onClick={() => {
+                                                    setSelectedProduct(product);
+                                                    setProductModalOpen(true);
+                                                }}
+                                            >
+                                                {/* Product Image */}
+                                                {imageUrl ? (
+                                                    <div className="w-full h-32 bg-gray-100 rounded-t-lg overflow-hidden">
+                                                        <img
+                                                            src={imageUrl}
+                                                            alt={product.name}
+                                                            className="w-full h-full object-cover"
+                                                        />
+                                                    </div>
+                                                ) : (
+                                                    <div className="w-full h-32 bg-amber-50 flex items-center justify-center">
+                                                        <Coffee className="w-12 h-12 text-amber-300" />
+                                                    </div>
+                                                )}
+                                                
+                                                {/* Product Info */}
+                                                <div className="p-4">
+                                                    <div className="flex items-start justify-between mb-2">
+                                                        <h3 className="text-base font-semibold text-gray-900 line-clamp-1">{product.name}</h3>
+                                                        {product.category && (
+                                                            <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-xs font-medium ml-2 flex-shrink-0">
+                                                                {product.category.name}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    
+                                                    {/* Sizes */}
+                                                    <div className="mt-3 min-h-[3rem]">
+                                                        {availableSizes.length > 0 ? (
+                                                            <>
+                                                                <p className="text-xs text-gray-500 mb-1.5">Sizes:</p>
+                                                                <div className="flex flex-wrap gap-1.5">
+                                                                    {availableSizes.map((pd) => {
+                                                                        const hasRecipe = recipesBySize.has(pd.pdId);
+                                                                        return (
+                                                                            <span
+                                                                                key={pd.pdId}
+                                                                                className={`px-2 py-0.5 rounded text-xs font-medium ${
+                                                                                    hasRecipe
+                                                                                        ? 'bg-green-100 text-green-700 border border-green-200'
+                                                                                        : 'bg-gray-100 text-gray-500 border border-gray-200'
+                                                                                }`}
+                                                                            >
+                                                                                {pd.size?.name || 'N/A'}
+                                                                                {hasRecipe && <ChefHat className="w-3 h-3 inline ml-1" />}
+                                                                            </span>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            </>
+                                                        ) : (
+                                                            <div className="h-8"></div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         ))
@@ -172,83 +272,29 @@ export default function StaffRecipes() {
                 </div>
             )}
 
-            {detailOpen && detail && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl">
-                        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-                            <h3 className="text-lg font-semibold text-gray-800">Recipe Details</h3>
-                            <button onClick={closeDetail} className="text-gray-500 hover:text-gray-700">✕</button>
-                        </div>
-                        <div className="p-6 text-sm text-gray-800 space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div><span className="text-gray-500">Name:</span> <span className="font-semibold">{detail.name}</span></div>
-                                <div><span className="text-gray-500">Version:</span> <span className="font-semibold">{detail.version}</span></div>
-                                <div><span className="text-gray-500">Status:</span> <span className="font-semibold">{detail.status}</span></div>
-                                <div><span className="text-gray-500">Product/Size:</span> <span className="font-semibold">{detail.productDetail?.size?.name || '-'}</span></div>
-                            </div>
-                            <div>
-                                <h4 className="font-semibold mb-2">Instructions</h4>
-                                {(() => {
-                                    const steps = (detail.instructions || '')
-                                        .split(/\r?\n/)
-                                        .map(s => s.trim())
-                                        .filter(Boolean);
+            <RecipeDetailModal
+                open={detailOpen}
+                onClose={closeDetail}
+                recipe={detail}
+                productImageUrl={detail ? (() => {
+                    const product = products.find(p => 
+                        p.productDetails?.some(pd => pd.pdId === detail.productDetail?.pdId)
+                    );
+                    return product ? getProductImageUrl(product) : null;
+                })() : null}
+            />
 
-                                    return steps.length === 0 ? (
-                                        <div className="text-gray-500 italic text-xs">No instructions provided</div>
-                                    ) : (
-                                        <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-lg">
-                                            <div className="space-y-2 p-2">
-                                                {steps.map((step, idx) => (
-                                                    <div key={idx} className="flex items-start gap-2 p-2 bg-amber-50 border border-amber-200 rounded text-xs">
-                                                        <div className="flex-shrink-0 w-4 h-4 bg-amber-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
-                                                            {idx + 1}
-                                                        </div>
-                                                        <div className="flex-1 text-gray-800 text-xs leading-relaxed">
-                                                            {step}
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    );
-                                })()}
-                            </div>
-                            <div>
-                                <h4 className="font-semibold mb-2">Ingredients</h4>
-                                {Array.isArray(detail.items) && detail.items.length > 0 ? (
-                                    <div className="border border-gray-100 rounded-xl overflow-hidden">
-                                        <table className="min-w-full text-xs">
-                                            <thead>
-                                                <tr className="bg-gray-50 text-gray-600">
-                                                    <th className="px-4 py-2 text-left font-medium">Ingredient</th>
-                                                    <th className="px-4 py-2 text-left font-medium">Quantity</th>
-                                                    <th className="px-4 py-2 text-left font-medium">Unit</th>
-                                                    <th className="px-4 py-2 text-left font-medium">Note</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-gray-100">
-                                                {detail.items.map((it, i) => (
-                                                    <tr key={i}>
-                                                        <td className="px-4 py-2">{it.ingredient?.name || '-'}</td>
-                                                        <td className="px-4 py-2">{String(it.qty ?? '-')}</td>
-                                                        <td className="px-4 py-2">{it.unit?.name || it.unit?.code || '-'}</td>
-                                                        <td className="px-4 py-2">{it.note || '-'}</td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                ) : (
-                                    <div className="text-gray-600">No ingredients.</div>
-                                )}
-                            </div>
-                        </div>
-                        <div className="px-6 py-4 border-t border-gray-100 flex justify-end">
-                            <button onClick={closeDetail} className="px-4 py-2 text-sm rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50">Close</button>
-                        </div>
-                    </div>
-                </div>
+            {/* Product Recipe Modal */}
+            {selectedProduct && (
+                <ProductRecipeModal
+                    product={selectedProduct}
+                    recipes={groupedByProduct.find(item => item.product.productId === selectedProduct.productId)?.recipes || []}
+                    open={productModalOpen}
+                    onClose={() => {
+                        setProductModalOpen(false);
+                        setSelectedProduct(null);
+                    }}
+                />
             )}
                     </div>
                 </div>

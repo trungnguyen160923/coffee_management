@@ -142,7 +142,6 @@ public class UserService {
                 .role(user.getRole())
                 .identityCard(request.getIdentityCard())
                 .hireDate(request.getHireDate())
-                .position(request.getPosition())
                 .salary(request.getSalary())
                 .build();
 
@@ -151,7 +150,6 @@ public class UserService {
                 .branchId(request.getBranchId())
                 .hireDate(request.getHireDate())
                 .identityCard(request.getIdentityCard())
-                .position(request.getPosition())
                 .salary(BigDecimal.valueOf(request.getSalary()))
                 .build();
         profileClient.createStaffProfile(staffProfileRequest);
@@ -281,14 +279,19 @@ public class UserService {
         }
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER') or hasRole('STAFF')")
     @Transactional(readOnly = true)
     public List<UserResponse> getStaffsByBranch(Integer branchId) {
         try {
-            List<StaffProfileResponse> staffProfiles = profileClient.getStaffProfilesByBranch(branchId).getResult();
+            // Use internal endpoint to avoid authorization issues when called by other services
+            List<StaffProfileResponse> staffProfiles = profileClient.getStaffProfilesByBranchInternal(branchId).getResult();
             List<Integer> userIds = staffProfiles.stream()
                     .map(StaffProfileResponse::getUserId)
                     .toList();
+            
+            if (userIds.isEmpty()) {
+                return List.of();
+            }
             
             List<User> users = userRepository.findAllById(userIds);
             Map<Integer, StaffProfileResponse> staffByUserId = staffProfiles.stream()
@@ -308,7 +311,8 @@ public class UserService {
                     })
                     .toList();
         } catch (Exception e) {
-            throw new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION);
+            log.error("Error in getStaffsByBranch for branchId {}: {}", branchId, e.getMessage(), e);
+            throw new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION, "Failed to get staffs by branch: " + e.getMessage());
         }
     }
 
@@ -474,6 +478,33 @@ public class UserService {
         return userMapper.toUserResponse(user);
     }
 
+    @Transactional(readOnly = true)
+    public UserResponse searchCustomerByPhone(String phone) {
+        if (phone == null || phone.trim().isEmpty()) {
+            throw new AppException(ErrorCode.EMPTY_PHONE_NUMBER);
+        }
+        
+        var user = userRepository.findByPhoneNumberAndRoleName(phone.trim(), PredefinedRole.CUSTOMER_ROLE)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+        
+        UserResponse userResponse = userMapper.toUserResponse(user);
+        
+        // Try to get customer profile if available
+        try {
+            CustomerProfileResponse customerProfile = profileClient.getCustomerProfile(user.getUserId()).getResult();
+            if (customerProfile != null) {
+                userResponse.setDob(customerProfile.getDob());
+                userResponse.setAvatarUrl(customerProfile.getAvatarUrl());
+                userResponse.setBio(customerProfile.getBio());
+            }
+        } catch (Exception e) {
+            log.warn("[UserService] Could not fetch customer profile for userId={}, error={}", user.getUserId(), e.getMessage());
+            // Continue without profile data
+        }
+        
+        return userResponse;
+    }
+
     public UserResponse createCustomer(UserCreationRequest request) {
         if (userRepository.existsByEmail(request.getEmail()))
             throw new AppException(ErrorCode.EMAIL_EXISTED);
@@ -550,6 +581,9 @@ public class UserService {
             user.setHireDate(staffProfile.getHireDate());
             user.setPosition(staffProfile.getPosition());
             user.setSalary(staffProfile.getSalary());
+            // Set staff business roles
+            user.setStaffBusinessRoleIds(staffProfile.getStaffBusinessRoleIds());
+            user.setProficiencyLevel(staffProfile.getProficiencyLevel());
         }
         else if(user.getRole().getName().equals(PredefinedRole.ADMIN_ROLE)) {
             AdminProfileResponse adminProfile = profileClient.getAdminProfile(userId).getResult();

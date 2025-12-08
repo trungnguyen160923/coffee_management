@@ -1,6 +1,7 @@
 package com.service.auth.dto.response;
 
 import java.time.LocalDate;
+import java.util.List;
 
 import com.service.auth.entity.Role;
 import lombok.*;
@@ -27,4 +28,8 @@ public class UserResponse {
     Double salary;
     Byte adminLevel;
     String notes;
+    
+    // Staff business roles & proficiency (only for STAFF role)
+    List<Integer> staffBusinessRoleIds;
+    String proficiencyLevel;
 }

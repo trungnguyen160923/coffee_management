@@ -6,6 +6,7 @@ import { UtensilsCrossed, Plus, Settings, Loader, Trash2, RefreshCw, Eye } from 
 import { IngredientModal, IngredientDetailModal } from '../../components/ingredient';
 import UnitManager from '../../components/unit/UnitManager';
 import AdvancedConversionModal from '../../components/unit/AdvancedConversionModal';
+import { AdminIngredientManagementSkeleton } from '../../components/admin/skeletons';
 import ConfirmModal from '../../components/common/ConfirmModal';
 
 type ModalType = 'create' | 'edit' | 'view' | null;
@@ -15,6 +16,8 @@ const IngredientManagement: React.FC = () => {
   const [suppliers, setSuppliers] = useState<CatalogSupplier[]>([]);
   const [units, setUnits] = useState<CatalogUnit[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingUnits, setLoadingUnits] = useState(true);
+  const [loadingSuppliers, setLoadingSuppliers] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
 
@@ -62,19 +65,25 @@ const IngredientManagement: React.FC = () => {
 
   const loadSuppliers = async () => {
     try {
+      setLoadingSuppliers(true);
       const resp = await catalogService.getSuppliers({ page: 0, size: 100, sortBy: 'name', sortDirection: 'ASC' });
       setSuppliers(resp.content);
     } catch (error) {
       console.error('Error loading suppliers:', error);
+    } finally {
+      setLoadingSuppliers(false);
     }
   };
 
   const loadUnits = async () => {
     try {
+      setLoadingUnits(true);
       const resp = await catalogService.getUnits();
       setUnits(resp);
     } catch (error) {
       console.error('Error loading units:', error);
+    } finally {
+      setLoadingUnits(false);
     }
   };
 
@@ -282,10 +291,16 @@ const IngredientManagement: React.FC = () => {
                   <div className="flex items-center justify-between mb-4">
                     <h2 className="text-lg font-medium text-gray-900">Suppliers</h2>
                   </div>
-                  <div className="bg-green-50 rounded-lg p-3">
-                    <div className="text-xl font-bold text-green-600">{suppliers.length}</div>
-                    <div className="text-xs text-green-800">Available suppliers</div>
-                  </div>
+                  {loadingSuppliers ? (
+                    <div className="animate-pulse">
+                      <div className="bg-slate-200 rounded-lg p-3 h-16"></div>
+                    </div>
+                  ) : (
+                    <div className="bg-green-50 rounded-lg p-3">
+                      <div className="text-xl font-bold text-green-600">{suppliers.length}</div>
+                      <div className="text-xs text-green-800">Available suppliers</div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -297,23 +312,38 @@ const IngredientManagement: React.FC = () => {
                     <button
                       onClick={() => setShowUnitManager(true)}
                       className="flex items-center space-x-1 text-sm bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors"
+                      disabled={loadingUnits}
                     >
                       <span>Manage Units</span>
                     </button>
                   </div>
                   {/* Unit Statistics */}
-                  <div className="grid grid-cols-2 gap-4 mb-4">
-                    <div className="bg-blue-50 rounded-lg p-3">
-                      <div className="text-xl font-bold text-blue-600">{units.length}</div>
-                      <div className="text-xs text-blue-800">Total Units</div>
-                    </div>
-                    <div className="bg-green-50 rounded-lg p-3">
-                      <div className="text-xl font-bold text-green-600">
-                        {units.filter(u => u.baseUnitCode === u.code).length}
+                  {loadingUnits ? (
+                    <div className="animate-pulse">
+                      <div className="grid grid-cols-2 gap-4 mb-4">
+                        <div className="bg-slate-200 rounded-lg p-3 h-16"></div>
+                        <div className="bg-slate-200 rounded-lg p-3 h-16"></div>
                       </div>
-                      <div className="text-xs text-green-800">Base Units</div>
+                      <div className="space-y-2">
+                        {[...Array(3)].map((_, idx) => (
+                          <div key={idx} className="h-8 bg-slate-200 rounded"></div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-2 gap-4 mb-4">
+                        <div className="bg-blue-50 rounded-lg p-3">
+                          <div className="text-xl font-bold text-blue-600">{units.length}</div>
+                          <div className="text-xs text-blue-800">Total Units</div>
+                        </div>
+                        <div className="bg-green-50 rounded-lg p-3">
+                          <div className="text-xl font-bold text-green-600">
+                            {units.filter(u => u.baseUnitCode === u.code).length}
+                          </div>
+                          <div className="text-xs text-green-800">Base Units</div>
+                        </div>
+                      </div>
                   
                   <div className="overflow-x-auto max-h-32 overflow-y-auto">
                     <table className="w-full text-sm">
@@ -362,6 +392,8 @@ const IngredientManagement: React.FC = () => {
                       </div>
                     )}
                   </div>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -380,47 +412,46 @@ const IngredientManagement: React.FC = () => {
                   </div>
                   
                    {/* Conversion Statistics */}
-                   <div className="grid grid-cols-2 gap-4 mb-4">
-                     <div className="bg-purple-50 rounded-lg p-3">
-                       <div className="text-xl font-bold text-purple-600">
-                         {conversionsLoading ? (
-                           <Loader className="w-5 h-5 animate-spin mx-auto" />
-                         ) : (
-                           conversions.length
-                         )}
+                   {conversionsLoading ? (
+                     <div className="animate-pulse">
+                       <div className="grid grid-cols-2 gap-4 mb-4">
+                         <div className="bg-slate-200 rounded-lg p-3 h-16"></div>
+                         <div className="bg-slate-200 rounded-lg p-3 h-16"></div>
                        </div>
-                       <div className="text-xs text-purple-800">Total Conversions</div>
-                     </div>
-                     <div className="bg-indigo-50 rounded-lg p-3">
-                       <div className="text-xl font-bold text-indigo-600">
-                         {conversionsLoading ? (
-                           <Loader className="w-5 h-5 animate-spin mx-auto" />
-                         ) : (
-                           conversions.filter(c => c.isActive).length
-                         )}
+                       <div className="space-y-2">
+                         {[...Array(3)].map((_, idx) => (
+                           <div key={idx} className="h-8 bg-slate-200 rounded"></div>
+                         ))}
                        </div>
-                       <div className="text-xs text-indigo-800">Active Rules</div>
                      </div>
-                   </div>
-                   
-                   <div className="overflow-x-auto max-h-32 overflow-y-auto">
-                     <table className="w-full text-sm">
-                       <thead>
-                         <tr className="border-b border-gray-200">
-                           <th className="text-left py-2 font-medium text-gray-700">Ingredient</th>
-                           <th className="text-left py-2 font-medium text-gray-700">From → To</th>
-                           <th className="text-center py-2 font-medium text-gray-700">Actions</th>
-                         </tr>
-                       </thead>
-                       <tbody>
-                         {conversionsLoading ? (
-                           <tr>
-                             <td colSpan={3} className="py-4 text-center text-gray-500">
-                               <Loader className="w-4 h-4 animate-spin mx-auto" />
-                               <span className="ml-2">Loading conversions...</span>
-                             </td>
-                           </tr>
-                         ) : conversions.length === 0 ? (
+                   ) : (
+                     <>
+                       <div className="grid grid-cols-2 gap-4 mb-4">
+                         <div className="bg-purple-50 rounded-lg p-3">
+                           <div className="text-xl font-bold text-purple-600">
+                             {conversions.length}
+                           </div>
+                           <div className="text-xs text-purple-800">Total Conversions</div>
+                         </div>
+                         <div className="bg-indigo-50 rounded-lg p-3">
+                           <div className="text-xl font-bold text-indigo-600">
+                             {conversions.filter(c => c.isActive).length}
+                           </div>
+                           <div className="text-xs text-indigo-800">Active Rules</div>
+                         </div>
+                       </div>
+                       
+                       <div className="overflow-x-auto max-h-32 overflow-y-auto">
+                         <table className="w-full text-sm">
+                           <thead>
+                             <tr className="border-b border-gray-200">
+                               <th className="text-left py-2 font-medium text-gray-700">Ingredient</th>
+                               <th className="text-left py-2 font-medium text-gray-700">From → To</th>
+                               <th className="text-center py-2 font-medium text-gray-700">Actions</th>
+                             </tr>
+                           </thead>
+                           <tbody>
+                             {conversions.length === 0 ? (
                            <tr>
                              <td colSpan={3} className="py-4 text-center text-gray-500">
                                No conversions available
@@ -474,9 +505,11 @@ const IngredientManagement: React.FC = () => {
                          </button>
                        </div>
                      )}
-                   </div>
-                 </div>
-               </div>
+                  </div>
+                    </>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* Search & Filter */}
@@ -524,11 +557,8 @@ const IngredientManagement: React.FC = () => {
               </div>
             </div>
 
-            {loading ? (
-              <div className="flex flex-col items-center justify-center py-16">
-                <Loader className="w-12 h-12 text-amber-600 animate-spin mb-4" />
-                <p className="text-gray-500">Loading data...</p>
-              </div>
+            {loading && ingredients.length === 0 ? (
+              <AdminIngredientManagementSkeleton />
             ) : (
               <>
                 <div className="mb-6 flex items-center justify-between">

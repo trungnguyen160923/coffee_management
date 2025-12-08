@@ -1,0 +1,470 @@
+# Docker Compose Production với images từ Registry
+# File này dùng images đã được build và push lên GitHub Container Registry (GHCR)
+# Sử dụng file này khi deploy qua CI/CD
+
+version: '3.8'
+
+# REGISTRY_PREFIX được set tự động bởi GitHub Actions workflow
+# Format GHCR: ghcr.io/OWNER (OWNER là GitHub username hoặc organization)
+# Ví dụ: ghcr.io/your-username hoặc ghcr.io/your-org
+# Nếu deploy thủ công, set: export REGISTRY_PREFIX=ghcr.io/YOUR_GITHUB_USERNAME
+REGISTRY_PREFIX ?= ghcr.io/YOUR_GITHUB_USERNAME
+
+services:
+  # ============================================
+  # DATABASE
+  # ============================================
+  mysql:
+    image: mysql:8.0
+    container_name: coffee-mysql
+    hostname: mysql
+    restart: always
+    ports:
+      - "127.0.0.1:3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-coffee_db}
+      TZ: Asia/Ho_Chi_Minh
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./mysql-conf:/etc/mysql/conf.d:ro
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --innodb-buffer-pool-size=1G
+      --max-connections=200
+      --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - db-net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 1.5G
+
+  # ============================================
+  # MESSAGE BROKER
+  # ============================================
+  kafka:
+    image: bitnamilegacy/kafka:3.7.0
+    container_name: coffee-kafka
+    hostname: kafka
+    restart: always
+    ports:
+      - "127.0.0.1:9094:9094"
+    environment:
+      KAFKA_CFG_NODE_ID: 0
+      KAFKA_CFG_PROCESS_ROLES: controller,broker
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 0@kafka:9093
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_HEAP_OPTS: "-Xms512m -Xmx512m"
+    volumes:
+      - kafka-data:/bitnami/kafka
+    networks:
+      - backend-net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+
+  # ============================================
+  # BACKEND SERVICES (Java Spring Boot)
+  # ============================================
+  api-gateway:
+    image: ${REGISTRY_PREFIX}/coffee-api-gateway:latest
+    pull_policy: always
+    container_name: coffee-api-gateway
+    hostname: api-gateway
+    restart: always
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      SERVER_PORT: 8000
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+      JAVA_OPTS: ${JAVA_OPTS_GATEWAY:--Xms256m -Xmx512m}
+      GATEWAY_CODEC_MAX_IN_MEMORY_SIZE: ${GATEWAY_CODEC_MAX_IN_MEMORY_SIZE:-20971520}
+      AUTH_SERVICE_URL: http://auth:8001
+      PROFILE_SERVICE_URL: http://profile:8003/profiles
+      ORDER_SERVICE_URL: http://order:8002/order-service
+      CATALOG_SERVICE_URL: http://catalog:8004/catalogs
+      NOTIFICATION_HTTP_URL: http://notification:8006/notification-service
+      AI_SERVICE_URL: http://ai-service:8005
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    depends_on:
+      - kafka
+      - auth
+      - catalog-service
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - backend-net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+
+  auth:
+    image: ${REGISTRY_PREFIX}/coffee-auth:latest
+    pull_policy: always
+    container_name: coffee-auth
+    hostname: auth
+    restart: always
+    ports:
+      - "127.0.0.1:8001:8001"
+    environment:
+      SERVER_PORT: 8001
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+      JAVA_OPTS: ${JAVA_OPTS_AUTH:--Xms256m -Xmx512m}
+      DB_URL: jdbc:mysql://mysql:3306/auth_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Ho_Chi_Minh
+      DB_USERNAME: ${DB_USERNAME:-root}
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      JWT_SIGNER_KEY: ${JWT_SIGNER_KEY}
+      PROFILE_SERVICE_URL: http://profile:8003/profiles
+    depends_on:
+      - mysql
+      - kafka
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/auth-service/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - backend-net
+      - db-net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  catalog-service:
+    image: ${REGISTRY_PREFIX}/coffee-catalog:latest
+    pull_policy: always
+    container_name: coffee-catalog
+    hostname: catalog
+    restart: always
+    ports:
+      - "127.0.0.1:8004:8004"
+    environment:
+      SERVER_PORT: 8004
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+      JAVA_OPTS: ${JAVA_OPTS_CATALOG:--Xms256m -Xmx512m}
+      DB_URL: jdbc:mysql://mysql:3306/catalog_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Ho_Chi_Minh
+      DB_USERNAME: ${DB_USERNAME:-root}
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      JWT_SIGNER_KEY: ${JWT_SIGNER_KEY}
+      ORDER_SERVICE_URL: http://order:8002/order-service
+      MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
+      ADMIN_FRONTEND_URL: ${ADMIN_FRONTEND_URL}
+    depends_on:
+      - mysql
+      - kafka
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8004/catalogs/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - backend-net
+      - db-net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  order-service:
+    image: ${REGISTRY_PREFIX}/coffee-order:latest
+    pull_policy: always
+    container_name: coffee-order
+    hostname: order
+    restart: always
+    ports:
+      - "127.0.0.1:8002:8002"
+    environment:
+      SERVER_PORT: 8002
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+      JAVA_OPTS: ${JAVA_OPTS_ORDER:--Xms256m -Xmx512m}
+      DB_URL: jdbc:mysql://mysql:3306/order_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Ho_Chi_Minh
+      DB_USERNAME: ${DB_USERNAME:-root}
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      AUTH_SERVICE_URL: http://auth:8001/auth-service
+      CATALOG_SERVICE_URL: http://catalog:8004
+      JWT_SIGNER_KEY: ${JWT_SIGNER_KEY}
+      MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
+      GEOCODING_API_KEY: ${GEOCODING_API_KEY}
+      CUSTOMER_FRONTEND_URL: ${CUSTOMER_FRONTEND_URL}
+    depends_on:
+      - mysql
+      - kafka
+      - auth
+      - catalog-service
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/order-service/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - backend-net
+      - db-net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  profile-service:
+    image: ${REGISTRY_PREFIX}/coffee-profile:latest
+    pull_policy: always
+    container_name: coffee-profile
+    hostname: profile
+    restart: always
+    ports:
+      - "127.0.0.1:8003:8003"
+    environment:
+      SERVER_PORT: 8003
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+      JAVA_OPTS: ${JAVA_OPTS_PROFILE:--Xms256m -Xmx512m}
+      DB_URL: jdbc:mysql://mysql:3306/profile_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Ho_Chi_Minh
+      DB_USERNAME: ${DB_USERNAME:-root}
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      JWT_SIGNER_KEY: ${JWT_SIGNER_KEY}
+      ORDER_SERVICE_URL: http://order:8002/order-service
+      AUTH_SERVICE_URL: http://auth:8001/auth-service
+    depends_on:
+      - mysql
+      - kafka
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/profiles/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - backend-net
+      - db-net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  notification-service:
+    image: ${REGISTRY_PREFIX}/coffee-notification:latest
+    pull_policy: always
+    container_name: coffee-notification
+    hostname: notification
+    restart: always
+    ports:
+      - "127.0.0.1:8006:8006"
+    environment:
+      SERVER_PORT: 8006
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+      JAVA_OPTS: ${JAVA_OPTS_NOTIFICATION:--Xms256m -Xmx512m}
+      SERVER_CONTEXT_PATH: ${SERVER_CONTEXT_PATH_NOTIFICATION:-/notification-service}
+      DB_URL: jdbc:mysql://mysql:3306/notification_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Ho_Chi_Minh
+      DB_USERNAME: ${DB_USERNAME:-root}
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      JWT_SIGNER_KEY: ${JWT_SIGNER_KEY}
+      MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
+    depends_on:
+      - mysql
+      - kafka
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8006/notification-service/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - backend-net
+      - db-net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  # ============================================
+  # AI SERVICE (Python FastAPI)
+  # ============================================
+  ai-service:
+    image: ${REGISTRY_PREFIX}/coffee-ai-service:latest
+    pull_policy: always
+    container_name: coffee-ai-service
+    hostname: ai-service
+    restart: always
+    ports:
+      - "127.0.0.1:8005:8005"
+    environment:
+      PORT: 8005
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USERNAME: ${DB_USERNAME:-root}
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      ORDER_DB_NAME: order_db
+      PROFILE_DB_NAME: profile_db
+      CATALOG_DB_NAME: catalog_db
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      SMTP_HOST: ${MAIL_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${MAIL_PORT:-587}
+      SMTP_USERNAME: ${MAIL_USERNAME}
+      SMTP_PASSWORD: ${MAIL_PASSWORD}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8005/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - backend-net
+      - db-net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  # ============================================
+  # FRONTEND APPLICATIONS
+  # ============================================
+  frontend-admin:
+    image: ${REGISTRY_PREFIX}/coffee-frontend-admin:latest
+    pull_policy: always
+    container_name: coffee-frontend-admin
+    restart: always
+    ports:
+      - "127.0.0.1:8081:80"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - frontend-net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  frontend-customer:
+    image: ${REGISTRY_PREFIX}/coffee-frontend-customer:latest
+    pull_policy: always
+    container_name: coffee-frontend-customer
+    restart: always
+    ports:
+      - "127.0.0.1:8082:80"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - frontend-net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+# ============================================
+# NETWORKS
+# ============================================
+networks:
+  frontend-net:
+    driver: bridge
+  backend-net:
+    driver: bridge
+  db-net:
+    driver: bridge
+
+# ============================================
+# VOLUMES
+# ============================================
+volumes:
+  mysql-data:
+    driver: local
+  kafka-data:
+    driver: local
+

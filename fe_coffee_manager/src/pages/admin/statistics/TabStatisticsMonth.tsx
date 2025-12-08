@@ -81,17 +81,17 @@ export function AdminMonthlyStatsView({ stats }: AdminMonthlyStatsViewProps) {
     return value.toFixed(0);
   };
 
-  const monthNames = ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6', 
-                      'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'];
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                      'July', 'August', 'September', 'October', 'November', 'December'];
 
   return (
     <div className="space-y-6">
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <SystemMetricCard
-          title="Tổng doanh thu"
+          title="Total Revenue"
           value={formatCurrency(stats.total_revenue)}
-          subtitle={`${stats.total_orders} đơn hàng`}
+          subtitle={`${stats.total_orders} orders`}
           icon={DollarSign}
           color="text-green-600"
           bgColor="bg-green-50"
@@ -99,9 +99,9 @@ export function AdminMonthlyStatsView({ stats }: AdminMonthlyStatsViewProps) {
           trendValue={formatCurrency(stats.avg_revenue_per_branch)}
         />
         <SystemMetricCard
-          title="Thực lời (Lợi nhuận)"
+          title="Profit"
           value={formatCurrency(stats.total_profit || 0)}
-          subtitle={`Tỷ suất: ${(stats.profit_margin || 0).toFixed(1)}%`}
+          subtitle={`Margin: ${(stats.profit_margin || 0).toFixed(1)}%`}
           icon={TrendingUp}
           color="text-emerald-600"
           bgColor="bg-emerald-50"
@@ -109,9 +109,9 @@ export function AdminMonthlyStatsView({ stats }: AdminMonthlyStatsViewProps) {
           trendValue={formatCurrency(stats.avg_profit_per_day || 0)}
         />
         <SystemMetricCard
-          title="Chi phí nguyên liệu"
+          title="Material Costs"
           value={formatCurrency(stats.total_material_cost || 0)}
-          subtitle={`${stats.branch_count} chi nhánh`}
+          subtitle={`${stats.branch_count} branches`}
           icon={Package}
           color="text-red-600"
           bgColor="bg-red-50"
@@ -119,23 +119,23 @@ export function AdminMonthlyStatsView({ stats }: AdminMonthlyStatsViewProps) {
           trendValue={formatCurrency((stats.total_material_cost || 0) / stats.branch_count)}
         />
         <SystemMetricCard
-          title="Số chi nhánh"
+          title="Branch Count"
           value={stats.branch_count.toString()}
-          subtitle={`${stats.days_with_data} ngày có dữ liệu`}
+          subtitle={`${stats.days_with_data} days with data`}
           icon={Building2}
           color="text-blue-600"
           bgColor="bg-blue-50"
           trend="stable"
-          trendValue={`${stats.total_customer_count} khách hàng`}
+          trendValue={`${stats.total_customer_count} customers`}
         />
       </div>
 
       {/* Additional Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <SystemMetricCard
-          title="TB doanh thu/ngày"
+          title="Avg Revenue/Day"
           value={formatCurrency(stats.avg_revenue_per_day)}
-          subtitle={`TB đơn hàng: ${stats.avg_orders_per_day.toFixed(1)}`}
+          subtitle={`Avg orders: ${stats.avg_orders_per_day.toFixed(1)}`}
           icon={Activity}
           color="text-purple-600"
           bgColor="bg-purple-50"
@@ -143,9 +143,9 @@ export function AdminMonthlyStatsView({ stats }: AdminMonthlyStatsViewProps) {
           trendValue={formatCurrency(stats.avg_order_value)}
         />
         <SystemMetricCard
-          title="TB lợi nhuận/ngày"
+          title="Avg Profit/Day"
           value={formatCurrency(stats.avg_profit_per_day || 0)}
-          subtitle={`TB doanh thu/chi nhánh: ${formatCurrency(stats.avg_revenue_per_branch)}`}
+          subtitle={`Avg revenue/branch: ${formatCurrency(stats.avg_revenue_per_branch)}`}
           icon={TrendingUp}
           color="text-emerald-600"
           bgColor="bg-emerald-50"
@@ -153,19 +153,19 @@ export function AdminMonthlyStatsView({ stats }: AdminMonthlyStatsViewProps) {
           trendValue={`${monthNames[stats.month - 1]} ${stats.year}`}
         />
         <SystemMetricCard
-          title="Giá trị đơn TB"
+          title="Avg Order Value"
           value={formatCurrency(stats.avg_order_value)}
-          subtitle={`Tổng khách hàng: ${stats.total_customer_count}`}
+          subtitle={`Total customers: ${stats.total_customer_count}`}
           icon={ShoppingCart}
           color="text-amber-600"
           bgColor="bg-amber-50"
           trend="stable"
-          trendValue={`${stats.days_with_data} ngày`}
+          trendValue={`${stats.days_with_data} days`}
         />
         <SystemMetricCard
-          title="Tổng đơn hàng"
+          title="Total Orders"
           value={stats.total_orders.toString()}
-          subtitle={`TB ${stats.avg_orders_per_day.toFixed(1)} đơn/ngày`}
+          subtitle={`Avg ${stats.avg_orders_per_day.toFixed(1)} orders/day`}
           icon={ShoppingCart}
           color="text-blue-600"
           bgColor="bg-blue-50"
@@ -177,25 +177,25 @@ export function AdminMonthlyStatsView({ stats }: AdminMonthlyStatsViewProps) {
       {/* Summary Card */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <h3 className="text-lg font-bold text-gray-900 mb-4">
-          Tổng hợp tháng {monthNames[stats.month - 1]} năm {stats.year} - Tất cả chi nhánh
+          Summary for {monthNames[stats.month - 1]} {stats.year} - All Branches
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-gray-50 rounded-lg p-4">
-            <p className="text-sm text-gray-600 mb-1">Tổng doanh thu</p>
+            <p className="text-sm text-gray-600 mb-1">Total Revenue</p>
             <p className="text-2xl font-bold text-gray-900">{formatCurrency(stats.total_revenue)} VNĐ</p>
           </div>
           <div className="bg-green-50 rounded-lg p-4 border border-green-200">
-            <p className="text-sm text-gray-600 mb-1">Thực lời (Lợi nhuận)</p>
+            <p className="text-sm text-gray-600 mb-1">Profit</p>
             <p className="text-2xl font-bold text-green-700">{formatCurrency(stats.total_profit || 0)} VNĐ</p>
-            <p className="text-xs text-gray-500 mt-1">Tỷ suất: {(stats.profit_margin || 0).toFixed(1)}%</p>
+            <p className="text-xs text-gray-500 mt-1">Margin: {(stats.profit_margin || 0).toFixed(1)}%</p>
           </div>
           <div className="bg-red-50 rounded-lg p-4 border border-red-200">
-            <p className="text-sm text-gray-600 mb-1">Chi phí nguyên liệu</p>
+            <p className="text-sm text-gray-600 mb-1">Material Costs</p>
             <p className="text-xl font-bold text-red-700">{formatCurrency(stats.total_material_cost || 0)} VNĐ</p>
           </div>
           <div className="bg-gray-50 rounded-lg p-4">
-            <p className="text-sm text-gray-600 mb-1">Tổng số đơn hàng</p>
-            <p className="text-2xl font-bold text-gray-900">{stats.total_orders} đơn</p>
+            <p className="text-sm text-gray-600 mb-1">Total Orders</p>
+            <p className="text-2xl font-bold text-gray-900">{stats.total_orders} orders</p>
           </div>
         </div>
       </div>
@@ -219,8 +219,8 @@ export function MonthlyStatsView({ stats, branchName }: MonthlyStatsViewProps) {
     return value.toFixed(0);
   };
 
-  const monthNames = ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6', 
-                      'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'];
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                      'July', 'August', 'September', 'October', 'November', 'December'];
 
   return (
     <div className="space-y-6">
@@ -237,7 +237,7 @@ export function MonthlyStatsView({ stats, branchName }: MonthlyStatsViewProps) {
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-xs font-medium text-gray-600">Tổng đơn hàng</p>
+            <p className="text-xs font-medium text-gray-600">Total Orders</p>
             <div className="p-1.5 rounded-lg bg-blue-50 text-blue-600">
               <ShoppingCart className="h-4 w-4" />
             </div>
@@ -246,7 +246,7 @@ export function MonthlyStatsView({ stats, branchName }: MonthlyStatsViewProps) {
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-xs font-medium text-gray-600">Thực lời</p>
+            <p className="text-xs font-medium text-gray-600">Profit</p>
             <div className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600">
               <TrendingUp className="h-4 w-4" />
             </div>
@@ -255,7 +255,7 @@ export function MonthlyStatsView({ stats, branchName }: MonthlyStatsViewProps) {
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-xs font-medium text-gray-600">Tỷ suất lợi nhuận</p>
+            <p className="text-xs font-medium text-gray-600">Profit Margin</p>
             <div className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600">
               <Activity className="h-4 w-4" />
             </div>
@@ -267,25 +267,25 @@ export function MonthlyStatsView({ stats, branchName }: MonthlyStatsViewProps) {
       {/* Summary Card */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <h3 className="text-lg font-bold text-gray-900 mb-4">
-          {branchName} - Tổng hợp tháng {monthNames[stats.month - 1]} năm {stats.year}
+          {branchName} - Summary for {monthNames[stats.month - 1]} {stats.year}
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-gray-50 rounded-lg p-4">
-            <p className="text-sm text-gray-600 mb-1">Tổng doanh thu</p>
+            <p className="text-sm text-gray-600 mb-1">Total Revenue</p>
             <p className="text-2xl font-bold text-gray-900">{formatCurrency(stats.total_revenue)} VNĐ</p>
           </div>
           <div className="bg-green-50 rounded-lg p-4 border border-green-200">
-            <p className="text-sm text-gray-600 mb-1">Thực lời (Lợi nhuận)</p>
+            <p className="text-sm text-gray-600 mb-1">Profit</p>
             <p className="text-2xl font-bold text-green-700">{formatCurrency(stats.total_profit || 0)} VNĐ</p>
-            <p className="text-xs text-gray-500 mt-1">Tỷ suất: {(stats.profit_margin || 0).toFixed(1)}%</p>
+            <p className="text-xs text-gray-500 mt-1">Margin: {(stats.profit_margin || 0).toFixed(1)}%</p>
           </div>
           <div className="bg-red-50 rounded-lg p-4 border border-red-200">
-            <p className="text-sm text-gray-600 mb-1">Chi phí nguyên liệu</p>
+            <p className="text-sm text-gray-600 mb-1">Material Costs</p>
             <p className="text-xl font-bold text-red-700">{formatCurrency(stats.total_material_cost || 0)} VNĐ</p>
           </div>
           <div className="bg-gray-50 rounded-lg p-4">
-            <p className="text-sm text-gray-600 mb-1">Tổng số đơn hàng</p>
-            <p className="text-2xl font-bold text-gray-900">{stats.total_orders} đơn</p>
+            <p className="text-sm text-gray-600 mb-1">Total Orders</p>
+            <p className="text-2xl font-bold text-gray-900">{stats.total_orders} orders</p>
           </div>
         </div>
       </div>

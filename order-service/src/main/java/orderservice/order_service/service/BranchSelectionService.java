@@ -18,8 +18,12 @@ public class BranchSelectionService {
     @Autowired
     private GeocodingService geocodingService;
 
+    @Autowired
+    private BranchClosureService branchClosureService;
+
     /**
      * Tìm chi nhánh gần nhất dựa trên địa chỉ khách hàng
+     * Chỉ trả về chi nhánh đang hoạt động (không nghỉ và có trong openDays)
      */
     public Branch findNearestBranch(String customerAddress) {
         try {
@@ -27,15 +31,20 @@ public class BranchSelectionService {
             // 1️⃣ Geocoding địa chỉ khách hàng
             GeocodingService.Coordinates customerLocation = geocodingService.geocodeAddress(customerAddress);
 
-            // 2️⃣ Lấy danh sách chi nhánh, sắp xếp theo branch_id để đảm bảo kết quả ổn
-            // định
+            // 2️⃣ Lấy danh sách chi nhánh, lọc các chi nhánh đang hoạt động
+            java.time.LocalDate today = java.time.LocalDate.now();
             List<Branch> allBranches = branchRepository.findAll()
                     .stream()
                     .filter(b -> b.getLatitude() != null && b.getLongitude() != null)
+                    // Lọc chi nhánh đang nghỉ (branch closure)
+                    .filter(b -> !branchClosureService.isBranchClosedOnDate(b.getBranchId(), today))
+                    // Lọc chi nhánh không hoạt động vào ngày hôm nay (openDays)
+                    .filter(b -> branchClosureService.isBranchOperatingOnDate(b, today))
                     .sorted((a, b) -> a.getBranchId().compareTo(b.getBranchId()))
                     .toList();
 
             if (allBranches.isEmpty()) {
+                log.warn("No active branches available for order on {}", today);
                 return null;
             }
 
@@ -53,7 +62,7 @@ public class BranchSelectionService {
                 // So sánh ổn định: khoảng cách nhỏ hơn, hoặc bằng nhưng ID nhỏ hơn
                 if (distance < minDistance - 0.05 ||
                         (Math.abs(distance - minDistance) < 0.05
-                                && branch.getBranchId() < nearestBranch.getBranchId())) {
+                                && (nearestBranch == null || branch.getBranchId() < nearestBranch.getBranchId()))) {
                     minDistance = distance;
                     nearestBranch = branch;
                 }
@@ -63,30 +72,40 @@ public class BranchSelectionService {
                 nearestBranch = allBranches.get(0);
             }
 
+            log.info("Selected nearest active branch: {} (ID: {}) for address: {}", 
+                    nearestBranch.getName(), nearestBranch.getBranchId(), customerAddress);
             return nearestBranch;
 
         } catch (Exception e) {
+            log.error("Error finding nearest branch: {}", e.getMessage(), e);
 
-            // Fallback: chọn chi nhánh đầu tiên có tọa độ (sau khi sắp xếp)
+            // Fallback: chọn chi nhánh đầu tiên có tọa độ và đang hoạt động (sau khi sắp xếp)
+            java.time.LocalDate today = java.time.LocalDate.now();
             List<Branch> allBranches = branchRepository.findAll()
                     .stream()
                     .filter(b -> b.getLatitude() != null && b.getLongitude() != null)
+                    .filter(b -> !branchClosureService.isBranchClosedOnDate(b.getBranchId(), today))
+                    .filter(b -> branchClosureService.isBranchOperatingOnDate(b, today))
                     .sorted((a, b) -> a.getBranchId().compareTo(b.getBranchId()))
                     .toList();
 
             if (!allBranches.isEmpty()) {
                 Branch fallback = allBranches.get(0);
+                log.info("Fallback: Selected first active branch: {} (ID: {})", 
+                        fallback.getName(), fallback.getBranchId());
                 return fallback;
             }
 
-            throw new RuntimeException("No branches available and geocoding failed");
+            throw new RuntimeException("No active branches available and geocoding failed");
         }
     }
 
     /**
      * Tìm chi nhánh gần nhất với giới hạn khoảng cách tối đa
+     * Chỉ trả về chi nhánh đang hoạt động (không nghỉ và có trong openDays)
      */
     public Branch findNearestBranchWithinDistance(String customerAddress, double maxDistanceKm) {
+        // findNearestBranch đã tự động lọc các chi nhánh đang hoạt động
         Branch nearestBranch = findNearestBranch(customerAddress);
 
         if (nearestBranch != null) {
@@ -99,9 +118,12 @@ public class BranchSelectionService {
                 double distance = geocodingService.calculateDistance(customerLocation, branchLocation);
 
                 if (distance > maxDistanceKm) {
+                    log.debug("Nearest active branch {} is {} km away, exceeds max distance {} km", 
+                            nearestBranch.getBranchId(), distance, maxDistanceKm);
                     return null; // Không có chi nhánh trong phạm vi
                 }
             } catch (Exception e) {
+                log.error("Error calculating distance for branch selection: {}", e.getMessage());
                 // Error calculating distance for branch selection
             }
         }
@@ -111,6 +133,7 @@ public class BranchSelectionService {
 
     /**
      * Tìm n chi nhánh gần nhất dựa trên địa chỉ khách hàng
+     * Chỉ trả về các chi nhánh đang hoạt động (không nghỉ và có trong openDays)
      * @param customerAddress - Địa chỉ khách hàng
      * @param limit - Số lượng chi nhánh cần lấy
      * @return Danh sách n chi nhánh gần nhất, sắp xếp theo khoảng cách
@@ -120,14 +143,20 @@ public class BranchSelectionService {
             // 1️⃣ Geocoding địa chỉ khách hàng
             GeocodingService.Coordinates customerLocation = geocodingService.geocodeAddress(customerAddress);
 
-            // 2️⃣ Lấy danh sách chi nhánh, sắp xếp theo branch_id để đảm bảo kết quả ổn định
+            // 2️⃣ Lấy danh sách chi nhánh, lọc các chi nhánh đang hoạt động
+            java.time.LocalDate today = java.time.LocalDate.now();
             List<Branch> allBranches = branchRepository.findAll()
                     .stream()
                     .filter(b -> b.getLatitude() != null && b.getLongitude() != null)
+                    // Lọc chi nhánh đang nghỉ (branch closure)
+                    .filter(b -> !branchClosureService.isBranchClosedOnDate(b.getBranchId(), today))
+                    // Lọc chi nhánh không hoạt động vào ngày hôm nay (openDays)
+                    .filter(b -> branchClosureService.isBranchOperatingOnDate(b, today))
                     .sorted((a, b) -> a.getBranchId().compareTo(b.getBranchId()))
                     .toList();
 
             if (allBranches.isEmpty()) {
+                log.warn("No active branches available for order on {}", today);
                 return List.of();
             }
 
@@ -157,12 +186,15 @@ public class BranchSelectionService {
                     .toList();
 
         } catch (Exception e) {
-            log.error("Error finding top nearest branches: {}", e.getMessage());
+            log.error("Error finding top nearest branches: {}", e.getMessage(), e);
             
-            // Fallback: trả về n chi nhánh đầu tiên có tọa độ
+            // Fallback: trả về n chi nhánh đầu tiên có tọa độ và đang hoạt động
+            java.time.LocalDate today = java.time.LocalDate.now();
             List<Branch> allBranches = branchRepository.findAll()
                     .stream()
                     .filter(b -> b.getLatitude() != null && b.getLongitude() != null)
+                    .filter(b -> !branchClosureService.isBranchClosedOnDate(b.getBranchId(), today))
+                    .filter(b -> branchClosureService.isBranchOperatingOnDate(b, today))
                     .sorted((a, b) -> a.getBranchId().compareTo(b.getBranchId()))
                     .limit(limit)
                     .toList();

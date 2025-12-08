@@ -5,12 +5,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.util.stream.Collectors;
 import jakarta.validation.constraints.Size;
+import feign.FeignException;
 
 @RestControllerAdvice
 @Slf4j
@@ -207,5 +209,40 @@ public class GlobalExceptionHandler {
                 .build();
         
         return ResponseEntity.status(ex.getErrorCode().getStatusCode()).body(response);
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiResponse<String>> handleAccessDeniedException(AccessDeniedException ex) {
+        log.error("Access denied: {}", ex.getMessage(), ex);
+        
+        ApiResponse<String> response = ApiResponse.<String>builder()
+                .code(ErrorCode.ACCESS_DENIED.getCode())
+                .message(ErrorCode.ACCESS_DENIED.getMessage())
+                .build();
+        
+        return ResponseEntity.status(ErrorCode.ACCESS_DENIED.getStatusCode()).body(response);
+    }
+
+    @ExceptionHandler(FeignException.class)
+    public ResponseEntity<ApiResponse<String>> handleFeignException(FeignException ex) {
+        log.error("Feign client exception: {} - Status: {}", ex.getMessage(), ex.status(), ex);
+        
+        // If it's a 403 or 401, return ACCESS_DENIED
+        if (ex.status() == 403 || ex.status() == 401) {
+            ApiResponse<String> response = ApiResponse.<String>builder()
+                    .code(ErrorCode.ACCESS_DENIED.getCode())
+                    .message("Access denied: " + ex.getMessage())
+                    .build();
+            
+            return ResponseEntity.status(ErrorCode.ACCESS_DENIED.getStatusCode()).body(response);
+        }
+        
+        // For other Feign errors, return as external service error
+        ApiResponse<String> response = ApiResponse.<String>builder()
+                .code(ErrorCode.EXTERNAL_SERVICE_ERROR.getCode())
+                .message(ErrorCode.EXTERNAL_SERVICE_ERROR.getMessage().replace("{message}", ex.getMessage()))
+                .build();
+        
+        return ResponseEntity.status(ErrorCode.EXTERNAL_SERVICE_ERROR.getStatusCode()).body(response);
     }
 }

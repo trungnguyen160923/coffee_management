@@ -8,7 +8,6 @@ import java.util.Map;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
-import org.springframework.util.CollectionUtils;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.service.notification_service.entity.Notification;
@@ -18,9 +17,7 @@ import com.service.notification_service.events.LowStockEvent;
 import com.service.notification_service.events.OutOfStockEvent;
 import com.service.notification_service.repository.NotificationRepository;
 import com.service.notification_service.service.NotificationDispatchService;
-import com.service.notification_service.websocket.dto.NotificationMessage;
 import com.service.notification_service.websocket.dto.NotificationType;
-import com.service.notification_service.websocket.service.NotificationWebSocketService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,8 +33,6 @@ public class InventoryNotificationService {
 
     private final ObjectMapper objectMapper;
     private final NotificationRepository notificationRepository;
-    private final NotificationWebSocketService notificationWebSocketService;
-    private final StaffDirectoryService staffDirectoryService;
     private final NotificationDispatchService notificationDispatchService;
 
     public void notifyLowStock(LowStockEvent event) {
@@ -109,6 +104,13 @@ public class InventoryNotificationService {
             String title,
             String content) {
 
+        // Kiểm tra xem đã gửi thông báo cho nguyên liệu này trong vòng 1 giờ qua chưa
+        if (hasRecentNotification(payload.branchId(), payload.ingredientId())) {
+            log.debug("[InventoryNotificationService] ⏭️ Skipping duplicate inventory alert for branch {} ingredient {} (already notified in last hour)", 
+                    payload.branchId(), payload.ingredientId());
+            return;
+        }
+
         Map<String, Object> metadata = new HashMap<>();
         metadata.put("branchId", payload.branchId());
         if (payload.branchName() != null) {
@@ -152,6 +154,25 @@ public class InventoryNotificationService {
                 title,
                 content
         );
+    }
+
+    /**
+     * Kiểm tra xem đã có thông báo cho nguyên liệu này trong vòng 1 giờ qua chưa
+     */
+    private boolean hasRecentNotification(Integer branchId, Integer ingredientId) {
+        if (branchId == null || ingredientId == null) {
+            return false;
+        }
+        
+        try {
+            LocalDateTime oneHourAgo = LocalDateTime.now().minusHours(1);
+            List<Notification> recentNotifications = notificationRepository.findRecentInventoryNotifications(
+                    branchId, ingredientId, oneHourAgo);
+            return !recentNotifications.isEmpty();
+        } catch (Exception e) {
+            log.warn("[InventoryNotificationService] Failed to check for recent notifications: {}", e.getMessage());
+            return false; // Nếu có lỗi, cho phép gửi thông báo để đảm bảo không bỏ sót
+        }
     }
 
     private void saveBranchNotification(

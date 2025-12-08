@@ -13,6 +13,7 @@ import SearchBar from '../../components/product/SearchBar';
 import Pagination from '../../components/product/Pagination';
 import ConfirmModal from '../../components/common/ConfirmModal';
 import RecipeDetailModal from '../../components/recipe/RecipeDetailModal';
+import { AdminProductManagementSkeleton } from '../../components/admin/skeletons';
 
 type ModalType = 'create' | 'edit' | 'view' | null;
 
@@ -22,6 +23,8 @@ const ProductManagement: React.FC = () => {
   const [sizes, setSizes] = useState<CatalogSize[]>([]);
   const [categories, setCategories] = useState<CatalogCategory[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingSizes, setLoadingSizes] = useState(true);
+  const [loadingCategories, setLoadingCategories] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
   const firstLoadRef = useRef(true);
   const [submitting, setSubmitting] = useState(false);
@@ -83,17 +86,35 @@ const ProductManagement: React.FC = () => {
   }, [currentPage, debouncedSearch, category, showDeleted]);
 
   const loadInitialData = async () => {
-    try {
-      const [sizesData, categoriesData] = await Promise.all([
-        catalogService.getSizes(),
-        catalogService.getCategories(),
-      ]);
-      setSizes(sizesData);
-      setCategories(categoriesData);
-    } catch (error) {
-      console.error('Error loading initial data:', error);
-      toast.error('Không thể tải dữ liệu. Vui lòng thử lại!');
-    }
+    // Load sizes and categories in parallel, update as soon as each completes
+    const loadSizes = async () => {
+      try {
+        setLoadingSizes(true);
+        const sizesData = await catalogService.getSizes();
+        setSizes(sizesData);
+      } catch (error) {
+        console.error('Error loading sizes:', error);
+        toast.error('Unable to load sizes!');
+      } finally {
+        setLoadingSizes(false);
+      }
+    };
+
+    const loadCategories = async () => {
+      try {
+        setLoadingCategories(true);
+        const categoriesData = await catalogService.getCategories();
+        setCategories(categoriesData);
+      } catch (error) {
+        console.error('Error loading categories:', error);
+        toast.error('Unable to load categories!');
+      } finally {
+        setLoadingCategories(false);
+      }
+    };
+
+    // Load in parallel
+    await Promise.all([loadSizes(), loadCategories()]);
   };
 
   const loadProducts = async ({ initial = false, soft = false }: { initial?: boolean; soft?: boolean } = {}) => {
@@ -117,7 +138,7 @@ const ProductManagement: React.FC = () => {
       setTotalElements(response.totalElements);
     } catch (error) {
       console.error('Error loading products:', error);
-      toast.error('Không thể tải danh sách sản phẩm!');
+      toast.error('Unable to load product list!');
     } finally {
       if (initial) setLoading(false);
       if (soft) setIsUpdating(false);
@@ -145,7 +166,7 @@ const ProductManagement: React.FC = () => {
       setModalType('edit');
     } catch (error) {
       console.error('Error loading product details:', error);
-      toast.error('Không thể tải thông tin sản phẩm!');
+      toast.error('Unable to load product information!');
     }
   };
 
@@ -155,7 +176,7 @@ const ProductManagement: React.FC = () => {
       setModalType('view');
     } catch (error) {
       console.error('Error loading product details:', error);
-      toast.error('Không thể tải thông tin sản phẩm!');
+      toast.error('Unable to load product information!');
     }
   };
 
@@ -169,7 +190,7 @@ const ProductManagement: React.FC = () => {
     
     try {
       await catalogService.deleteProduct(parseInt(productToDelete));
-      toast.success('Xóa sản phẩm thành công!');
+      toast.success('Product deleted successfully!');
       
       // Optimistic update - remove from local state
       setProducts(prevProducts => prevProducts.filter(p => p.productId !== parseInt(productToDelete)));
@@ -183,7 +204,7 @@ const ProductManagement: React.FC = () => {
       }
     } catch (error: any) {
       console.error('Error deleting product:', error);
-      toast.error(error.message || 'Không thể xóa sản phẩm!');
+      toast.error(error.message || 'Unable to delete product!');
     } finally {
       setShowDeleteConfirm(false);
       setProductToDelete(null);
@@ -200,10 +221,10 @@ const ProductManagement: React.FC = () => {
       setLoading(true);
       await loadInitialData();
       await loadProducts({ initial: true });
-      toast.success('Dữ liệu đã được làm mới!');
+      toast.success('Data refreshed!');
     } catch (error) {
       console.error('Error refreshing data:', error);
-      toast.error('Không thể làm mới dữ liệu!');
+      toast.error('Unable to refresh data!');
     } finally {
       setLoading(false);
     }
@@ -213,7 +234,7 @@ const ProductManagement: React.FC = () => {
     try {
       // Update product to set active = true
       await catalogService.updateProduct(parseInt(productId), { active: true });
-      toast.success('Khôi phục sản phẩm thành công!');
+      toast.success('Product restored successfully!');
       
       // Optimistic update - update in local state
       setProducts(prevProducts => 
@@ -221,7 +242,7 @@ const ProductManagement: React.FC = () => {
       );
     } catch (error: any) {
       console.error('Error restoring product:', error);
-      toast.error(error.message || 'Không thể khôi phục sản phẩm!');
+      toast.error(error.message || 'Unable to restore product!');
     }
   };
 
@@ -245,11 +266,11 @@ const ProductManagement: React.FC = () => {
     
     try {
       await catalogService.deleteSize(sizeToDelete.sizeId);
-      toast.success('Xóa size thành công!');
+      toast.success('Size deleted successfully!');
       await loadInitialData(); // Refresh sizes data
     } catch (error: any) {
       console.error('Error deleting size:', error);
-      toast.error(error.message || 'Không thể xóa size!');
+      toast.error(error.message || 'Unable to delete size!');
     } finally {
       setShowDeleteSizeConfirm(false);
       setSizeToDelete(null);
@@ -288,7 +309,7 @@ const ProductManagement: React.FC = () => {
       if (selectedProduct) {
         // Update existing product
         const updatedProduct = await catalogService.updateProduct(selectedProduct.productId, payload as any);
-        toast.success('Cập nhật sản phẩm thành công');
+        toast.success('Product updated successfully');
         
         // Optimistic update - replace in local state
         setProducts(prevProducts => 
@@ -297,7 +318,7 @@ const ProductManagement: React.FC = () => {
       } else {
         // Create new product
         const newProduct = await catalogService.createProduct(payload as any);
-        toast.success('Tạo sản phẩm thành công');
+        toast.success('Product created successfully');
         
         // Optimistic update - add to local state
         setTotalElements(prev => prev + 1);
@@ -320,7 +341,7 @@ const ProductManagement: React.FC = () => {
       setModalType(null);
     } catch (error: any) {
       console.error('Error saving product:', error);
-      toast.error(error.message || 'Không thể lưu sản phẩm!');
+      toast.error(error.message || 'Unable to save product!');
     } finally {
       setSubmitting(false);
     }
@@ -373,36 +394,51 @@ const ProductManagement: React.FC = () => {
                     <button
                       onClick={() => setShowSizeManager(true)}
                       className="flex items-center space-x-1 text-sm bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors"
+                      disabled={loadingSizes}
                     >
                       <span>Manage Sizes</span>
                     </button>
                   </div>
                   
                   {/* Size Statistics */}
-                  <div className="grid grid-cols-2 gap-4 mb-4">
-                    <div className="bg-blue-50 rounded-lg p-3">
-                      <div className="text-xl font-bold text-blue-600">{sizes.length}</div>
-                      <div className="text-xs text-blue-800">Total Sizes</div>
-                    </div>
-                    <div className="bg-green-50 rounded-lg p-3">
-                      <div className="text-xl font-bold text-green-600">
-                        {products.reduce((acc, product) => acc + product.productDetails.length, 0)}
+                  {loadingSizes ? (
+                    <div className="animate-pulse">
+                      <div className="grid grid-cols-2 gap-4 mb-4">
+                        <div className="bg-slate-200 rounded-lg p-3 h-16"></div>
+                        <div className="bg-slate-200 rounded-lg p-3 h-16"></div>
                       </div>
-                      <div className="text-xs text-green-800">Size Variants</div>
+                      <div className="space-y-2">
+                        {[...Array(3)].map((_, idx) => (
+                          <div key={idx} className="h-8 bg-slate-200 rounded"></div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                  
-                  <div className="overflow-x-auto max-h-32 overflow-y-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-gray-200">
-                          <th className="text-left py-2 font-medium text-gray-700">Name</th>
-                          <th className="text-left py-2 font-medium text-gray-700">Description</th>
-                          <th className="text-center py-2 font-medium text-gray-700">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {sizes.slice(0, 5).map(size => (
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-2 gap-4 mb-4">
+                        <div className="bg-blue-50 rounded-lg p-3">
+                          <div className="text-xl font-bold text-blue-600">{sizes.length}</div>
+                          <div className="text-xs text-blue-800">Total Sizes</div>
+                        </div>
+                        <div className="bg-green-50 rounded-lg p-3">
+                          <div className="text-xl font-bold text-green-600">
+                            {products.reduce((acc, product) => acc + product.productDetails.length, 0)}
+                          </div>
+                          <div className="text-xs text-green-800">Size Variants</div>
+                        </div>
+                      </div>
+                      
+                      <div className="overflow-x-auto max-h-32 overflow-y-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-gray-200">
+                              <th className="text-left py-2 font-medium text-gray-700">Name</th>
+                              <th className="text-left py-2 font-medium text-gray-700">Description</th>
+                              <th className="text-center py-2 font-medium text-gray-700">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {sizes.slice(0, 5).map(size => (
                           <tr key={size.sizeId} className="border-b border-gray-100 hover:bg-gray-50">
                             <td className="py-2 font-medium text-gray-900 max-w-[80px] truncate" title={size.name}>{size.name}</td>
                             <td className="py-2 text-gray-600 max-w-[150px] truncate" title={size.description || '—'}>{size.description || '—'}</td>
@@ -446,6 +482,8 @@ const ProductManagement: React.FC = () => {
                       </div>
                     )}
                   </div>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -457,18 +495,33 @@ const ProductManagement: React.FC = () => {
                     <button
                       onClick={() => setShowCategoryManager(true)}
                       className="flex items-center space-x-1 text-sm bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 transition-colors"
+                      disabled={loadingCategories}
                     >
                       <span>Manage Categories</span>
                     </button>
                   </div>
                   
                   {/* Category Statistics */}
-                  <div className="grid grid-cols-2 gap-4 mb-4">
-                    <div className="bg-green-50 rounded-lg p-3">
-                      <div className="text-xl font-bold text-green-600">{categories.length}</div>
-                      <div className="text-xs text-green-800">Total Categories</div>
+                  {loadingCategories ? (
+                    <div className="animate-pulse">
+                      <div className="grid grid-cols-2 gap-4 mb-4">
+                        <div className="bg-slate-200 rounded-lg p-3 h-16"></div>
+                        <div className="bg-slate-200 rounded-lg p-3 h-16"></div>
+                      </div>
+                      <div className="space-y-2">
+                        {[...Array(3)].map((_, idx) => (
+                          <div key={idx} className="h-8 bg-slate-200 rounded"></div>
+                        ))}
+                      </div>
                     </div>
-                    <div className="bg-purple-50 rounded-lg p-3">
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-2 gap-4 mb-4">
+                        <div className="bg-green-50 rounded-lg p-3">
+                          <div className="text-xl font-bold text-green-600">{categories.length}</div>
+                          <div className="text-xs text-green-800">Total Categories</div>
+                        </div>
+                        <div className="bg-purple-50 rounded-lg p-3">
                       <div className="text-xl font-bold text-purple-600">
                         {products.filter(p => p.category).length}
                       </div>
@@ -506,6 +559,8 @@ const ProductManagement: React.FC = () => {
                       </div>
                     )}
                   </div>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -561,11 +616,8 @@ const ProductManagement: React.FC = () => {
               </div>
             </div>
 
-            {loading ? (
-              <div className="flex flex-col items-center justify-center py-16">
-                <Loader className="w-12 h-12 text-amber-600 animate-spin mb-4" />
-                <p className="text-gray-500">Loading data...</p>
-              </div>
+            {loading && products.length === 0 ? (
+              <AdminProductManagementSkeleton />
             ) : (
               <>
                 {/* Search Bar - Below overview section */}
@@ -685,20 +737,20 @@ const ProductManagement: React.FC = () => {
 
       <ConfirmModal
         open={showDeleteConfirm}
-        title="Xóa sản phẩm"
-        description="Bạn có chắc chắn muốn xóa sản phẩm này? Hành động này không thể hoàn tác."
-        confirmText="Xóa"
-        cancelText="Hủy"
+        title="Delete Product"
+        description="Are you sure you want to delete this product? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
         onConfirm={confirmDelete}
         onCancel={cancelDelete}
       />
 
       <ConfirmModal
         open={showDeleteSizeConfirm}
-        title="Xóa size"
+        title="Delete Size"
         description={`Bạn có chắc chắn muốn xóa size "${sizeToDelete?.name}"? Hành động này không thể hoàn tác.`}
-        confirmText="Xóa"
-        cancelText="Hủy"
+        confirmText="Delete"
+        cancelText="Cancel"
         onConfirm={confirmDeleteSize}
         onCancel={cancelDeleteSize}
       />

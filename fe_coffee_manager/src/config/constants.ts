@@ -7,6 +7,7 @@ export const API_ENDPOINTS = {
     REFRESH: '/api/auth-service/auth/refresh',
     ME: '/api/auth-service/users/me',
     CHANGE_PASSWORD: '/api/auth-service/auth/change-password',
+    STAFF_BUSINESS_ROLES: '/api/auth-service/roles/staff-business',
   },
   PRODUCTS: {
     BASE: '/api/products',
@@ -70,6 +71,9 @@ export const API_ENDPOINTS = {
     USE: (code: string) => `/api/order-service/api/discounts/${code}/use`,
     VALIDATE: '/api/order-service/api/discounts/validate',
     AVAILABLE: '/api/order-service/api/discounts/available',
+  },
+  ORDER_BRANCH_CLOSURES: {
+    BASE: '/api/order-service/branch-closures',
   },
   AI_STATISTICS: {
     BASE: '/api/ai',

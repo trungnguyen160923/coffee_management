@@ -19,6 +19,9 @@ export interface User {
   salary?: number | null;
   adminLevel?: number | null;
   notes?: string | null;
+  // Staff business roles & proficiency (only for STAFF role)
+  staffBusinessRoleIds?: number[];
+  proficiencyLevel?: 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED' | 'EXPERT' | null;
 }
 
 export interface Branch {
@@ -29,6 +32,7 @@ export interface Branch {
   managerUserId: number;
   openHours: string;
   endHours: string;
+   openDays?: string;
   createAt: string;
   updateAt: string;
 }
@@ -51,6 +55,35 @@ export interface ManagerListResponse {
 export interface RoleDto {
   roleId: number;
   name: 'ADMIN' | 'MANAGER' | 'STAFF' | 'CUSTOMER';
+}
+
+// Full staff info (merged from auth-service User + profile-service StaffProfile)
+export interface StaffWithUserDto {
+  // From User (auth-service)
+  userId: number;
+  email: string;
+  fullname: string;
+  phoneNumber: string;
+  dob: string | null;
+  avatarUrl: string | null;
+  bio: string | null;
+  roleName: string | null;
+
+  // From StaffProfile (profile-service)
+  branch: Branch | null;
+  identityCard: string | null;
+  hireDate: string | null;
+  employmentType: 'FULL_TIME' | 'PART_TIME' | 'CASUAL' | null;
+  payType: 'MONTHLY' | 'HOURLY' | null;
+  baseSalary: number | null;
+  hourlyRate: number | null;
+  overtimeRate: number | null;
+  createAt: string | null;
+  updateAt: string | null;
+
+  // Staff business roles & proficiency
+  staffBusinessRoleIds?: number[];
+  proficiencyLevel?: 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED' | 'EXPERT' | null;
 }
 
 export interface UserResponseDto {

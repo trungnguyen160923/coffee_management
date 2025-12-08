@@ -1,0 +1,221 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch: # Cho phép chạy thủ công
+
+env:
+  # Sử dụng GitHub Container Registry (GHCR)
+  REGISTRY: ghcr.io
+  # Format: ghcr.io/OWNER/IMAGE_NAME
+  # OWNER là GitHub username hoặc organization name
+
+jobs:
+  build-and-push:
+    name: Build and Push Docker Images
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Build và push Backend Services
+      - name: Build and push API Gateway
+        uses: docker/build-push-action@v5
+        with:
+          context: ./api-gateway
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/coffee-api-gateway:latest
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/coffee-api-gateway:${{ github.sha }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ github.repository_owner }}/coffee-api-gateway:latest
+          cache-to: type=inline
+
+      - name: Build and push Auth Service
+        uses: docker/build-push-action@v5
+        with:
+          context: ./auth
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/coffee-auth:latest
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/coffee-auth:${{ github.sha }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ github.repository_owner }}/coffee-auth:latest
+          cache-to: type=inline
+
+      - name: Build and push Catalog Service
+        uses: docker/build-push-action@v5
+        with:
+          context: ./catalog-service
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/coffee-catalog:latest
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/coffee-catalog:${{ github.sha }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ github.repository_owner }}/coffee-catalog:latest
+          cache-to: type=inline
+
+      - name: Build and push Order Service
+        uses: docker/build-push-action@v5
+        with:
+          context: ./order-service
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/coffee-order:latest
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/coffee-order:${{ github.sha }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ github.repository_owner }}/coffee-order:latest
+          cache-to: type=inline
+
+      - name: Build and push Profile Service
+        uses: docker/build-push-action@v5
+        with:
+          context: ./profile-service
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/coffee-profile:latest
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/coffee-profile:${{ github.sha }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ github.repository_owner }}/coffee-profile:latest
+          cache-to: type=inline
+
+      - name: Build and push Notification Service
+        uses: docker/build-push-action@v5
+        with:
+          context: ./notification-service
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/coffee-notification:latest
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/coffee-notification:${{ github.sha }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ github.repository_owner }}/coffee-notification:latest
+          cache-to: type=inline
+
+      # Build và push AI Service
+      - name: Build and push AI Service
+        uses: docker/build-push-action@v5
+        with:
+          context: ./ai-service
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/coffee-ai-service:latest
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/coffee-ai-service:${{ github.sha }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ github.repository_owner }}/coffee-ai-service:latest
+          cache-to: type=inline
+
+      # Build và push Frontend Admin (với build args)
+      - name: Build and push Frontend Admin
+        uses: docker/build-push-action@v5
+        with:
+          context: ./fe_coffee_manager
+          push: true
+          build-args: |
+            VITE_API_BASE_URL=${{ secrets.VITE_API_BASE_URL }}
+            VITE_AI_SERVICE_URL=${{ secrets.VITE_AI_SERVICE_URL }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/coffee-frontend-admin:latest
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/coffee-frontend-admin:${{ github.sha }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ github.repository_owner }}/coffee-frontend-admin:latest
+          cache-to: type=inline
+
+      # Build và push Frontend Customer (với build args)
+      - name: Build and push Frontend Customer
+        uses: docker/build-push-action@v5
+        with:
+          context: ./web-app
+          push: true
+          build-args: |
+            REACT_APP_API_GATEWAY=${{ secrets.REACT_APP_API_GATEWAY }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/coffee-frontend-customer:latest
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/coffee-frontend-customer:${{ github.sha }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ github.repository_owner }}/coffee-frontend-customer:latest
+          cache-to: type=inline
+
+  deploy:
+    name: Deploy to Production Server
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add server to known hosts
+        run: |
+          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Copy deployment files to server
+        run: |
+          scp -r docker-compose.prod.yml ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/coffee-management/ || true
+          scp -r docker-compose.prod.registry.yml ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/coffee-management/ || true
+          scp -r scripts/deploy.sh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/coffee-management/scripts/ || true
+          scp -r mysql-conf ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/coffee-management/ || true
+
+      - name: Deploy on server
+        run: |
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << EOF
+            cd /opt/coffee-management
+            
+            # Set registry prefix (GHCR format: ghcr.io/OWNER)
+            export REGISTRY_PREFIX=${{ env.REGISTRY }}/${{ github.repository_owner }}
+            
+            # Login to GHCR if repo is private (optional - only needed for private repos)
+            # If images are public, this step can be skipped
+            if [ -n "${{ secrets.GHCR_TOKEN }}" ]; then
+              echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
+            fi
+            
+            # Use registry-based compose file (preferred for CI/CD)
+            COMPOSE_FILE="docker-compose.prod.registry.yml"
+            if [ ! -f "\$COMPOSE_FILE" ]; then
+              echo "Warning: docker-compose.prod.registry.yml not found, using docker-compose.prod.yml"
+              COMPOSE_FILE="docker-compose.prod.yml"
+            fi
+            
+            # Pull latest images
+            REGISTRY_PREFIX=\$REGISTRY_PREFIX docker compose -f \$COMPOSE_FILE --env-file .env.prod pull
+            
+            # Run database migrations if needed
+            if [ -f scripts/run-migration.sh ]; then
+              chmod +x scripts/run-migration.sh
+              # Uncomment và chạy migration nếu cần
+              # ./scripts/run-migration.sh profile-service/migrations/remove_role_id_from_shift_assignments.sql profile_db
+            fi
+            
+            # Stop old containers
+            REGISTRY_PREFIX=\$REGISTRY_PREFIX docker compose -f \$COMPOSE_FILE --env-file .env.prod down --timeout 30
+            
+            # Start new containers
+            REGISTRY_PREFIX=\$REGISTRY_PREFIX docker compose -f \$COMPOSE_FILE --env-file .env.prod up -d
+            
+            # Clean up old images
+            docker image prune -f
+            
+            # Health check
+            sleep 30
+            REGISTRY_PREFIX=\$REGISTRY_PREFIX docker compose -f \$COMPOSE_FILE ps
+          EOF
+
+      - name: Health Check
+        run: |
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
+            # Check if services are running
+            docker compose -f docker-compose.prod.yml ps
+            
+            # Check API Gateway health
+            curl -f http://localhost:8000/actuator/health || exit 1
+          EOF
+

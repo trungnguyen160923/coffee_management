@@ -7,42 +7,52 @@ import {
   DollarSign,
   Coffee,
   ShoppingBag,
-  Calendar
+  Calendar,
+  RefreshCw
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
 import { comprehensiveMetricsService, ComprehensiveMetricsResponse } from '../../services/comprehensiveMetricsService';
 import { analyticsService, TopSellingProductsResponse } from '../../services/analyticsService';
-import { LoadingSpinner } from '../../components/common/LoadingSpinner';
+import { AdminDashboardSkeleton } from '../../components/admin/skeletons';
 
 export function AdminDashboard() {
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [metrics, setMetrics] = useState<ComprehensiveMetricsResponse | null>(null);
   const [topProducts, setTopProducts] = useState<TopSellingProductsResponse | null>(null);
 
-  useEffect(() => {
-    const loadMetrics = async () => {
-      try {
+  const loadMetrics = async (isRefresh = false) => {
+    try {
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
         setLoading(true);
-        setError(null);
-        
-        // Load comprehensive metrics and top selling products in parallel
-        const [comprehensiveData, topProductsData] = await Promise.all([
-          comprehensiveMetricsService.getComprehensiveMetrics(),
-          analyticsService.getTopSellingProducts(undefined, undefined, undefined, 5, 'quantity')
-        ]);
-        
-        setMetrics(comprehensiveData);
-        setTopProducts(topProductsData);
-      } catch (err: any) {
-        console.error('Error loading metrics:', err);
-        setError(err.message || 'Failed to load metrics');
-      } finally {
+      }
+      setError(null);
+      
+      // Load comprehensive metrics and top selling products in parallel
+      const [comprehensiveData, topProductsData] = await Promise.all([
+        comprehensiveMetricsService.getComprehensiveMetrics(),
+        analyticsService.getTopSellingProducts(undefined, undefined, undefined, 5, 'quantity')
+      ]);
+      
+      setMetrics(comprehensiveData);
+      setTopProducts(topProductsData);
+    } catch (err: any) {
+      console.error('Error loading metrics:', err);
+      setError(err.message || 'Failed to load metrics');
+    } finally {
+      if (isRefresh) {
+        setRefreshing(false);
+      } else {
         setLoading(false);
       }
-    };
+    }
+  };
 
-    loadMetrics();
+  useEffect(() => {
+    loadMetrics(false);
   }, []);
 
   // Format currency
@@ -113,11 +123,7 @@ export function AdminDashboard() {
   }, [topProducts]);
 
   if (loading) {
-    return (
-      <div className="p-8 flex items-center justify-center min-h-screen">
-        <LoadingSpinner />
-      </div>
-    );
+    return <AdminDashboardSkeleton />;
   }
 
   if (error) {
@@ -201,9 +207,19 @@ export function AdminDashboard() {
               <h1 className="text-xl font-semibold text-slate-800">System Overview</h1>
               <p className="text-sm text-slate-500">Manage your entire coffee chain system</p>
             </div>
-            <div className="flex items-center space-x-3 text-slate-400 text-sm">
-              <Calendar className="h-5 w-5" />
-              <span>{new Date().toLocaleDateString('vi-VN')}</span>
+            <div className="flex items-center space-x-3">
+              <div className="flex items-center space-x-3 text-slate-400 text-sm">
+                <Calendar className="h-5 w-5" />
+                <span>{new Date().toLocaleDateString('vi-VN')}</span>
+              </div>
+              <button
+                onClick={() => loadMetrics(true)}
+                disabled={refreshing || loading}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
             </div>
           </div>
 
@@ -343,7 +359,7 @@ export function AdminDashboard() {
                     stroke="#f59e0b"
                     strokeWidth={3}
                     dot={{ fill: '#f59e0b', strokeWidth: 2, r: 6 }}
-                    name="Doanh thu (triệu VND)"
+                    name="Revenue (million VND)"
                   />
                   <Line
                     yAxisId="right"
@@ -352,7 +368,7 @@ export function AdminDashboard() {
                     stroke="#3b82f6"
                     strokeWidth={3}
                     dot={{ fill: '#3b82f6', strokeWidth: 2, r: 6 }}
-                    name="Số đơn hàng"
+                    name="Order Count"
                   />
                 </LineChart>
               </ResponsiveContainer>
@@ -361,30 +377,30 @@ export function AdminDashboard() {
             {/* Recent Activity */}
             <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">Hoạt động gần đây</h3>
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">Recent Activity</h3>
                 <div className="space-y-4">
                   {[
                     {
-                      action: 'Chi nhánh Quận 1 vượt target doanh thu tháng',
-                      time: '2 giờ trước',
+                      action: 'Branch District 1 exceeded monthly revenue target',
+                      time: '2 hours ago',
                       icon: TrendingUp,
                       color: 'text-green-600'
                     },
                     {
-                      action: 'Thêm sản phẩm mới: Cold Brew Coffee',
-                      time: '5 giờ trước',
+                      action: 'New product added: Cold Brew Coffee',
+                      time: '5 hours ago',
                       icon: Coffee,
                       color: 'text-amber-600'
                     },
                     {
-                      action: 'Quản lý mới được thêm vào chi nhánh Thủ Đức',
-                      time: '1 ngày trước',
+                      action: 'New manager added to Thu Duc branch',
+                      time: '1 day ago',
                       icon: Users,
                       color: 'text-blue-600'
                     },
                     {
-                      action: 'Cập nhật công thức cho Cappuccino',
-                      time: '2 ngày trước',
+                      action: 'Recipe updated for Cappuccino',
+                      time: '2 days ago',
                       icon: Package,
                       color: 'text-purple-600'
                     }

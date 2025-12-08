@@ -3,6 +3,7 @@ import { stockService, StockSearchParams, StockPageResponse, StockResponse, Mana
 import { useAuth } from '../../context/AuthContext';
 import { Package, AlertTriangle, RefreshCw, Search, Eye, Edit3 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { StockManagementSkeleton } from '../../components/manager/skeletons';
 
 const adjustmentReasons = [
   { value: 'RECOUNT', label: 'Inventory recount' },
@@ -141,6 +142,7 @@ const StockManagement: React.FC = () => {
       };
       
       const data = await stockService.searchStocks(params);
+      
       setStockData(data);
     } catch (err) {
       setError('Error loading stock data');
@@ -213,10 +215,8 @@ const StockManagement: React.FC = () => {
   };
 
   const getTotalStockValue = () => {
-    if (!stockData?.content) return 0;
-    return stockData.content.reduce((total, stock) => {
-      return total + (stock.quantity * stock.avgCost);
-    }, 0);
+    // Use totalStockValue from API (calculated for all matching stocks, not just current page)
+    return stockData?.totalStockValue || 0;
   };
 
   const getLowStockCount = () => {
@@ -241,6 +241,10 @@ const StockManagement: React.FC = () => {
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString('vi-VN');
   };
+
+  if (loading && !stockData) {
+    return <StockManagementSkeleton />;
+  }
 
   return (
     <div className="min-h-screen bg-slate-50">

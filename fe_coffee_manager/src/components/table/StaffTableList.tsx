@@ -4,7 +4,11 @@ import { tableService } from '../../services';
 import { Table, UpdateTableStatusRequest } from '../../types';
 import { TABLE_STATUS } from '../../config/constants';
 
-export default function StaffTableList() {
+interface StaffTableListProps {
+    refreshTrigger?: number;
+}
+
+export default function StaffTableList({ refreshTrigger }: StaffTableListProps = {}) {
     const { user } = useAuth();
     const [tables, setTables] = useState<Table[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
@@ -20,27 +24,28 @@ export default function StaffTableList() {
         return null;
     }, [user]);
 
+    const loadTables = async () => {
+        if (!branchId) {
+            setLoading(false);
+            setError('Could not determine staff branch.');
+            return;
+        }
+        try {
+            setLoading(true);
+            setError(null);
+            const data = await tableService.getTablesByBranch(branchId);
+            setTables(Array.isArray(data) ? data : []);
+        } catch (e: any) {
+            console.error('Failed to load tables', e);
+            setError(`Failed to load tables: ${e.message || 'Unknown error'}`);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     useEffect(() => {
-        const loadTables = async () => {
-            if (!branchId) {
-                setLoading(false);
-                setError('Could not determine staff branch.');
-                return;
-            }
-            try {
-                setLoading(true);
-                setError(null);
-                const data = await tableService.getTablesByBranch(branchId);
-                setTables(Array.isArray(data) ? data : []);
-            } catch (e: any) {
-                console.error('Failed to load tables', e);
-                setError(`Failed to load tables: ${e.message || 'Unknown error'}`);
-            } finally {
-                setLoading(false);
-            }
-        };
         loadTables();
-    }, [branchId]);
+    }, [branchId, refreshTrigger]);
 
     // Filter tables based on search term and status
     const filteredTables = useMemo(() => {
@@ -90,9 +95,39 @@ export default function StaffTableList() {
 
     if (loading) {
         return (
-            <div className="p-8">
-                <div className="bg-white rounded-2xl shadow p-6">
-                    <div className="text-center text-gray-600">Loading tables...</div>
+            <div className="bg-white shadow rounded-lg animate-pulse">
+                <div className="px-4 py-5 sm:p-6">
+                    <div className="h-6 bg-slate-200 rounded w-48 mb-4"></div>
+                    {/* Search and Filter Skeleton */}
+                    <div className="flex flex-col sm:flex-row gap-4 mb-6">
+                        <div className="flex-1 h-10 bg-slate-200 rounded-lg"></div>
+                        <div className="sm:w-80 h-10 bg-slate-200 rounded-lg"></div>
+                    </div>
+                    {/* Table Skeleton */}
+                    <div className="overflow-x-auto">
+                        <table className="w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
+                                <tr>
+                                    {[...Array(4)].map((_, idx) => (
+                                        <th key={idx} className="px-6 py-4">
+                                            <div className="h-4 bg-slate-200 rounded w-20"></div>
+                                        </th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                                {[...Array(5)].map((_, rowIdx) => (
+                                    <tr key={rowIdx}>
+                                        {[...Array(4)].map((_, colIdx) => (
+                                            <td key={colIdx} className="px-6 py-5">
+                                                <div className="h-4 bg-slate-200 rounded w-full"></div>
+                                            </td>
+                                        ))}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         );

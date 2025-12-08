@@ -81,7 +81,28 @@ export const orderService: OrderService = {
     const queryString = params.toString();
     const endpoint = `${API_ENDPOINTS.ORDERS.BASE}${queryString ? `?${queryString}` : ''}`;
 
-    return await apiClient.get<OrderListResponse>(endpoint);
+    const response = await apiClient.get<any>(endpoint);
+    
+    // Backend returns ApiResponse<OrderListResponse>, so we need to unwrap it
+    if (response && typeof response === 'object') {
+      // If response has 'result' property, unwrap it
+      if ('result' in response && response.result) {
+        return response.result as OrderListResponse;
+      }
+      // If response already has 'orders' property, it's already OrderListResponse
+      if ('orders' in response) {
+        return response as OrderListResponse;
+      }
+    }
+    
+    // Fallback: return empty response
+    return {
+      orders: [],
+      total: 0,
+      page: filters.page || 0,
+      limit: filters.limit || 50,
+      totalPages: 0
+    };
   },
 
   async getOrder(id: string): Promise<Order> {

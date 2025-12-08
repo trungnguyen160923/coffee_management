@@ -137,4 +137,10 @@ public class UserController {
         var result = userService.getCustomerById(userId);
         return ApiResponse.<UserResponse>builder().result(result).build();
     }
+
+    @GetMapping("/customers/search")
+    ApiResponse<UserResponse> searchCustomerByPhone(@RequestParam String phone) {
+        var result = userService.searchCustomerByPhone(phone);
+        return ApiResponse.<UserResponse>builder().result(result).build();
+    }
 }

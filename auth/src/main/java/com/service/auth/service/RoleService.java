@@ -44,4 +44,19 @@ public class RoleService {
                 .toList();
     }
 
+    /**
+     * Lấy danh sách các role đặc thù của STAFF (role nghiệp vụ),
+     * được định nghĩa bằng cách có name kết thúc bằng "_STAFF",
+     * ví dụ: "BARISTA_STAFF", "CASHIER_STAFF"...
+     * 
+     * ADMIN, MANAGER, và STAFF đều có thể gọi method này.
+     */
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER') or hasRole('STAFF')")
+    public List<RoleResponse> getStaffBusinessRoles() {
+        return roleRepository.findByNameEndingWith("_STAFF")
+                .stream()
+                .map(roleMapper::toRoleResponse)
+                .collect(Collectors.toList());
+    }
+
 }

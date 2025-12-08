@@ -10,6 +10,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
+import java.util.List;
 
 import com.service.auth.validator.RoleConstraint;
 
@@ -46,9 +47,27 @@ public class StaffProfileCreationRequest {
     @NotNull(message = "EMPTY_HIRE_DATE")
     private LocalDate hireDate;
     
-    @NotNull(message = "EMPTY_POSITION")
-    private String position;
-    
-    @NotNull(message = "EMPTY_SALARY")
+    // @NotNull(message = "EMPTY_SALARY")
     private Double salary;
+
+    // New fields for employment type & pay structure
+    // FULL_TIME / PART_TIME / CASUAL
+    @NotNull(message = "EMPTY_EMPLOYMENT_TYPE")
+    private String employmentType;
+
+    // MONTHLY / HOURLY
+    @NotNull(message = "EMPTY_PAY_TYPE")
+    private String payType;
+
+    // Hourly rate for PART_TIME / CASUAL
+    private Double hourlyRate;
+
+    // Overtime rate per hour
+    private Double overtimeRate;
+
+    // Business roles (BARISTA_STAFF, CASHIER_STAFF, ...), optional
+    private List<Integer> staffBusinessRoleIds;
+
+    // Proficiency level for assigned roles (applied to all initially)
+    private String proficiencyLevel; // BEGINNER / INTERMEDIATE / ADVANCED / EXPERT
 }

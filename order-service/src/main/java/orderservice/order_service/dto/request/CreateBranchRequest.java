@@ -30,6 +30,11 @@ public class CreateBranchRequest {
 
     private LocalTime endHours;
 
+    // Days of week the branch is normally open (1=Monday..7=Sunday), stored as comma-separated list.
+    // Example: "1,2,3,4,5,6,7" = open all week, "1,2,3,4,5" = Mon–Fri only.
+    @Size(max = 20, message = "Open days must not exceed 20 characters")
+    private String openDays;
+
     private BigDecimal latitude;
     private BigDecimal longitude;
 

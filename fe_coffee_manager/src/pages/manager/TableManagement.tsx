@@ -5,6 +5,7 @@ import { tableService } from '../../services';
 import { CreateTableRequest, UpdateTableRequest, Table } from '../../types';
 import { ManagerTableList, TableStatusSummary } from '../../components/table';
 import { TABLE_STATUS } from '../../config/constants';
+import { TableManagementSkeleton } from '../../components/manager/skeletons';
 
 export function TableManagement() {
     const { user } = useAuth();
@@ -126,13 +127,7 @@ export function TableManagement() {
     };
 
     if (loading) {
-        return (
-            <div className="p-8">
-                <div className="bg-white rounded-2xl shadow p-6">
-                    <div className="text-center text-gray-600">Loading tables...</div>
-                </div>
-            </div>
-        );
+        return <TableManagementSkeleton />;
     }
 
     if (error) {

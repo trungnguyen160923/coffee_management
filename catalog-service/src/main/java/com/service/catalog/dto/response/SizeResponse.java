@@ -14,6 +14,7 @@ public class SizeResponse {
     Integer sizeId;
     String name;
     String description;
+    Boolean active;
     LocalDateTime createAt;
     LocalDateTime updateAt;
 }

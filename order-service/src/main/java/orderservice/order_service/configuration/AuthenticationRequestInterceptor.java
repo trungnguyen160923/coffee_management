@@ -16,15 +16,12 @@ public class AuthenticationRequestInterceptor implements RequestInterceptor {
                 (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
 
         if (attributes == null) {
-            log.debug("[Feign] No request context available, skip Authorization header");
             return;
         }
 
         String authHeader = attributes.getRequest().getHeader("Authorization");
         if (StringUtils.hasText(authHeader)) {
             template.header("Authorization", authHeader);
-        } else {
-            log.debug("[Feign] Authorization header missing in current request");
         }
     }
 }

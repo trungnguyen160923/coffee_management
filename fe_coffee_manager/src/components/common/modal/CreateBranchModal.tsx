@@ -7,12 +7,15 @@ export interface CreateBranchPayload {
   phone: string;
   openHours: string; // HH:mm
   endHours: string;  // HH:mm
+  openDays: string;  // "1,2,3,4,5,6,7"
 }
 
 interface CreateBranchModalProps {
   open: boolean;
   defaultOpenHours?: string;
   defaultEndHours?: string;
+  initialData?: Partial<CreateBranchPayload>;
+  mode?: 'create' | 'edit';
   onClose: () => void;
   onSubmit: (payload: CreateBranchPayload) => Promise<void> | void;
 }
@@ -21,6 +24,8 @@ const CreateBranchModal: React.FC<CreateBranchModalProps> = ({
   open,
   defaultOpenHours = '09:00',
   defaultEndHours = '21:00',
+  initialData,
+  mode = 'create',
   onClose,
   onSubmit,
 }) => {
@@ -29,6 +34,8 @@ const CreateBranchModal: React.FC<CreateBranchModalProps> = ({
   const [phone, setPhone] = useState('');
   const [openHours, setOpenHours] = useState(defaultOpenHours);
   const [endHours, setEndHours] = useState(defaultEndHours);
+  // 1=Mon .. 7=Sun
+  const [openDaysSelected, setOpenDaysSelected] = useState<number[]>([1, 2, 3, 4, 5, 6, 7]);
   const [submitting, setSubmitting] = useState(false);
   const nameInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -37,6 +44,7 @@ const CreateBranchModal: React.FC<CreateBranchModalProps> = ({
   const [phoneTouched, setPhoneTouched] = useState(false);
   const [openTouched, setOpenTouched] = useState(false);
   const [endTouched, setEndTouched] = useState(false);
+  const [openDaysTouched, setOpenDaysTouched] = useState(false);
 
   const nameError = useMemo(() => {
     return name && name.trim().length > 0 ? '' : 'Branch name is required';
@@ -70,31 +78,45 @@ const CreateBranchModal: React.FC<CreateBranchModalProps> = ({
     return '';
   }, [openHours, endHours]);
 
+  const openDaysError = useMemo(() => {
+    if (!openDaysSelected || openDaysSelected.length === 0) return 'Select at least one open day';
+    return '';
+  }, [openDaysSelected]);
+
   useEffect(() => {
     if (open) {
       // reset when opened
-      setName('');
-      setAddress('');
-      setPhone('');
-      setOpenHours(defaultOpenHours);
-      setEndHours(defaultEndHours);
+      setName(initialData?.name ?? '');
+      setAddress(initialData?.address ?? '');
+      setPhone(initialData?.phone ?? '');
+      setOpenHours(initialData?.openHours ?? defaultOpenHours);
+      setEndHours(initialData?.endHours ?? defaultEndHours);
       setNameTouched(false);
       setAddressTouched(false);
       setPhoneTouched(false);
       setOpenTouched(false);
       setEndTouched(false);
+      if (initialData?.openDays) {
+        const parts = initialData.openDays.split(',').map((p) => parseInt(p.trim(), 10));
+        const cleaned = Array.from(new Set(parts.filter((d) => d >= 1 && d <= 7))).sort((a, b) => a - b);
+        setOpenDaysSelected(cleaned.length ? cleaned : [1, 2, 3, 4, 5, 6, 7]);
+      } else {
+        setOpenDaysSelected([1, 2, 3, 4, 5, 6, 7]);
+      }
+      setOpenDaysTouched(false);
       setTimeout(() => nameInputRef.current?.focus(), 0);
     }
-  }, [open, defaultOpenHours, defaultEndHours]);
+  }, [open, defaultOpenHours, defaultEndHours, initialData]);
 
   if (!open) return null;
 
   const handleSave = async () => {
     if (submitting) return;
-    if (nameError || addressError || phoneError || hoursError) return;
+    if (nameError || addressError || phoneError || hoursError || openDaysError) return;
+    const openDays = openDaysSelected.slice().sort((a, b) => a - b).join(',');
     setSubmitting(true);
     try {
-      await onSubmit({ name, address, phone, openHours, endHours });
+      await onSubmit({ name, address, phone, openHours, endHours, openDays });
     } finally {
       setSubmitting(false);
     }
@@ -103,7 +125,9 @@ const CreateBranchModal: React.FC<CreateBranchModalProps> = ({
   return createPortal(
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[1000]">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6">
-        <h2 className="text-lg font-semibold mb-4">Add Branch</h2>
+        <h2 className="text-lg font-semibold mb-4">
+          {mode === 'edit' ? 'Update Branch' : 'Add Branch'}
+        </h2>
         <div className="space-y-4">
           <div>
             <label className="block text-sm text-gray-600 mb-1">Branch name</label>
@@ -164,6 +188,46 @@ const CreateBranchModal: React.FC<CreateBranchModalProps> = ({
           {(openTouched || endTouched) && hoursError && (
             <p className="text-xs text-red-600">{hoursError}</p>
           )}
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">Open days</label>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { value: 1, label: 'Mon' },
+                { value: 2, label: 'Tue' },
+                { value: 3, label: 'Wed' },
+                { value: 4, label: 'Thu' },
+                { value: 5, label: 'Fri' },
+                { value: 6, label: 'Sat' },
+                { value: 7, label: 'Sun' },
+              ].map((d) => {
+                const active = openDaysSelected.includes(d.value);
+                return (
+                  <button
+                    key={d.value}
+                    type="button"
+                    onClick={() => {
+                      setOpenDaysTouched(true);
+                      setOpenDaysSelected((prev) =>
+                        prev.includes(d.value)
+                          ? prev.filter((v) => v !== d.value)
+                          : [...prev, d.value]
+                      );
+                    }}
+                    className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                      active
+                        ? 'bg-emerald-50 border-emerald-400 text-emerald-700'
+                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    {d.label}
+                  </button>
+                );
+              })}
+            </div>
+            {openDaysTouched && openDaysError && (
+              <p className="mt-1 text-xs text-red-600">{openDaysError}</p>
+            )}
+          </div>
         </div>
         <div className="mt-6 flex justify-end gap-2">
           <button
@@ -178,7 +242,7 @@ const CreateBranchModal: React.FC<CreateBranchModalProps> = ({
             className="px-4 py-2 rounded bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-60"
             disabled={submitting || !!(nameError || addressError || phoneError || hoursError)}
           >
-            {submitting ? 'Saving...' : 'Save'}
+            {submitting ? 'Saving...' : mode === 'edit' ? 'Update' : 'Save'}
           </button>
         </div>
       </div>

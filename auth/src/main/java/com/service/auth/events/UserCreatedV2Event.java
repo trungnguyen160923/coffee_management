@@ -2,6 +2,7 @@ package com.service.auth.events;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 
 public class UserCreatedV2Event {
     public String sagaId;
@@ -9,18 +10,25 @@ public class UserCreatedV2Event {
     public String email;
     public String fullname;
     public String phoneNumber;
-    public String role;           // MANAGER|STAFF
+    public String role;           // MANAGER|STAFF|CUSTOMER
 
     // Common for branch assignment
     public Integer branchId;      // required for MANAGER/STAFF
 
-    // Manager fields
+    // Manager/Staff common fields
     public LocalDate hireDate;    // required for MANAGER/STAFF
     public String identityCard;   // required for MANAGER/STAFF
 
-    // Staff fields
-    public String position;       // required for STAFF
-    public Double salary;         // required for STAFF
+    // Staff-only fields
+    public Double salary;         // base monthly salary (legacy)
+
+    // New staff employment/pay fields
+    public String employmentType; // FULL_TIME / PART_TIME / CASUAL
+    public String payType;        // MONTHLY / HOURLY
+    public Double hourlyRate;
+    public Double overtimeRate;
+    public List<Integer> staffBusinessRoleIds; // optional business roles
+    public String proficiencyLevel;            // BEGINNER / INTERMEDIATE / ADVANCED / EXPERT
 
     // Customer fields
     public LocalDate dob;         // required for CUSTOMER

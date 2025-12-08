@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { useStaffPermissions } from '../../hooks/useStaffPermissions';
 import orderService from '../../services/orderService';
 import { posService, tableService, branchService } from '../../services';
 import catalogService from '../../services/catalogService';
@@ -7,6 +8,7 @@ import { stockService } from '../../services/stockService';
 import { CatalogProduct, CatalogRecipe } from '../../types';
 import toast from 'react-hot-toast';
 import { API_BASE_URL } from '../../config/api';
+import { OrdersSkeleton } from '../../components/staff/skeletons';
 
 interface SimpleOrderItem {
     productName?: string;
@@ -29,13 +31,15 @@ interface SimpleOrder {
 }
 
 export default function StaffOrders() {
-    const { user } = useAuth();
+    const { user, loading: authLoading } = useAuth();
+    const staffPermissions = useStaffPermissions();
     const [activeTab, setActiveTab] = useState<'regular' | 'pos'>('regular');
     const [orders, setOrders] = useState<SimpleOrder[]>([]);
     const [posOrders, setPosOrders] = useState<SimpleOrder[]>([]);
     const [search, setSearch] = useState<string>('');
     const [debouncedSearch, setDebouncedSearch] = useState<string>('');
     const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'preparing' | 'ready' | 'completed' | 'cancelled'>('all');
+    const [orderTypeFilter, setOrderTypeFilter] = useState<'all' | 'dine-in' | 'takeaway'>('all');
     const [selectedDate, setSelectedDate] = useState<string>(() => {
         const today = new Date();
         const year = today.getFullYear();
@@ -66,7 +70,7 @@ export default function StaffOrders() {
         return null;
     }, [user]);
 
-    const loadOrders = async (isRefresh = false) => {
+    const loadOrders = useCallback(async (isRefresh = false) => {
         if (!branchId) {
             setLoading(false);
             setError('Could not determine staff branch.');
@@ -78,41 +82,52 @@ export default function StaffOrders() {
             } else {
                 setLoading(true);
                 setError(null);
+            }
 
-                // Load both regular orders and POS orders
-                const [regularData, posData] = await Promise.all([
-                    orderService.getOrdersByBranch(branchId),
-                    posService.getPOSOrdersByBranch(Number(branchId))
-                ]);
+            // Load regular orders (all staff with canViewOrders can see this)
+            const regularData = await orderService.getOrdersByBranch(branchId);
+            setOrders(Array.isArray(regularData) ? regularData : []);
 
-                setOrders(Array.isArray(regularData) ? regularData : []);
-                setPosOrders(Array.isArray(posData) ? posData : []);
+            // Only load POS orders if user has permission to view POS
+            // POS orders require CASHIER_STAFF role
+            let posData: any[] = [];
+            if (staffPermissions.canViewPOS && !staffPermissions.loading) {
+                try {
+                    posData = await posService.getPOSOrdersByBranch(Number(branchId));
+                    setPosOrders(Array.isArray(posData) ? posData : []);
+                } catch (posError: any) {
+                    // If user doesn't have permission for POS orders, just set empty array
+                    // Don't show error as this is expected for non-CASHIER_STAFF roles
+                    console.log('[StaffOrders] User does not have permission to view POS orders, skipping...');
+                    setPosOrders([]);
+                }
+            } else {
+                setPosOrders([]);
+            }
 
-                // Fetch table and staff details for POS orders
-                if (Array.isArray(posData) && posData.length > 0) {
-                    const allTableIds = new Set<number>();
-                    const allStaffIds = new Set<number>();
+            // Fetch table and staff details for POS orders
+            if (Array.isArray(posData) && posData.length > 0) {
+                const allTableIds = new Set<number>();
+                const allStaffIds = new Set<number>();
 
-                    posData.forEach((order: any) => {
-                        if (order.tableIds && Array.isArray(order.tableIds)) {
-                            order.tableIds.forEach((id: number) => allTableIds.add(id));
-                        }
-                        if (order.staffId) {
-                            allStaffIds.add(order.staffId);
-                        }
-                    });
-
-                    if (allTableIds.size > 0) {
-                        await fetchTableDetails(Array.from(allTableIds));
+                posData.forEach((order: any) => {
+                    if (order.tableIds && Array.isArray(order.tableIds)) {
+                        order.tableIds.forEach((id: number) => allTableIds.add(id));
                     }
-                    if (allStaffIds.size > 0) {
-                        await fetchStaffDetails(Array.from(allStaffIds));
+                    if (order.staffId) {
+                        allStaffIds.add(order.staffId);
                     }
+                });
+
+                if (allTableIds.size > 0) {
+                    await fetchTableDetails(Array.from(allTableIds));
+                }
+                if (allStaffIds.size > 0) {
+                    await fetchStaffDetails(Array.from(allStaffIds));
                 }
             }
+            
             setError(null);
-            const data = await orderService.getOrdersByBranch(branchId);
-            setOrders(Array.isArray(data) ? data : []);
         } catch (e: any) {
             console.error('Failed to load orders by branch', e);
             setError(`Failed to load orders: ${e.message || 'Unknown error'}`);
@@ -120,11 +135,15 @@ export default function StaffOrders() {
             setLoading(false);
             setRefreshing(false);
         }
-    };
+    }, [branchId, staffPermissions.canViewPOS, staffPermissions.loading]);
 
     useEffect(() => {
+        // Wait for auth to finish loading and ensure branchId is available before loading orders
+        if (authLoading || !branchId || staffPermissions.loading) {
+            return;
+        }
         loadOrders();
-    }, [branchId]);
+    }, [branchId, authLoading, staffPermissions.loading, loadOrders]);
 
     // debounce search
     useEffect(() => {
@@ -134,7 +153,7 @@ export default function StaffOrders() {
 
     // Auto refresh functionality
     useEffect(() => {
-        if (!autoRefresh) return;
+        if (!autoRefresh || authLoading || !branchId || staffPermissions.loading) return;
         
         const interval = setInterval(() => {
             // Silent auto-refresh (no toast)
@@ -142,7 +161,15 @@ export default function StaffOrders() {
         }, 30000); // Refresh every 30 seconds
 
         return () => clearInterval(interval);
-    }, [autoRefresh, branchId]);
+    }, [autoRefresh, branchId, authLoading, staffPermissions.loading, loadOrders]);
+
+    // Auto-switch to regular tab if user doesn't have POS permission and is on POS tab
+    useEffect(() => {
+        if (!staffPermissions.loading && !staffPermissions.canViewPOS && activeTab === 'pos') {
+            setActiveTab('regular');
+        }
+    }, [staffPermissions.canViewPOS, staffPermissions.loading, activeTab]);
+
     const currentOrders = useMemo(() => {
         return activeTab === 'regular' ? orders : posOrders;
     }, [activeTab, orders, posOrders]);
@@ -182,8 +209,22 @@ export default function StaffOrders() {
             }
         };
 
-        return currentOrders.filter(o => byStatus(o) && bySearch(o) && byDate(o) && isCorrectOrderType(o));
-    }, [currentOrders, statusFilter, debouncedSearch, activeTab, selectedDate]);
+        // Filter by order type (dine-in vs takeaway) - only for POS tab
+        const byOrderType = (o: SimpleOrder) => {
+            if (activeTab !== 'pos' || orderTypeFilter === 'all') return true;
+            
+            if (orderTypeFilter === 'dine-in') {
+                // Dine-in: có tableIds (orders created at POS with table selection)
+                return o.tableIds && o.tableIds.length > 0;
+            } else if (orderTypeFilter === 'takeaway') {
+                // Takeaway: delivery_address = "take-away" (orders created at POS as takeaway)
+                return o.deliveryAddress === 'take-away';
+            }
+            return true;
+        };
+
+        return currentOrders.filter(o => byStatus(o) && bySearch(o) && byDate(o) && isCorrectOrderType(o) && byOrderType(o));
+    }, [currentOrders, statusFilter, debouncedSearch, activeTab, selectedDate, orderTypeFilter]);
 
     const statusClass = (status?: string) => {
         switch ((status || '').toLowerCase()) {
@@ -484,13 +525,16 @@ export default function StaffOrders() {
                     <div className="flex items-center justify-between px-8 pt-6 pb-3">
                         <div>
                             <h1 className="text-xl font-semibold text-slate-900">Branch Orders</h1>
-                            <p className="text-sm text-slate-500">Quản lý đơn hàng trong chi nhánh</p>
+                            <p className="text-sm text-slate-500">Order Management in the Branch.</p>
                         </div>
                         <div className="flex items-center gap-4 text-slate-600"> 
                             {/* 1. Thanh điều hướng Tab (Từ pos_order) */}
                             <div className="mt-4 flex space-x-1 bg-gray-100 p-1 rounded-lg w-fit">
                                 <button
-                                    onClick={() => setActiveTab('regular')}
+                                    onClick={() => {
+                                        setActiveTab('regular');
+                                        setOrderTypeFilter('all'); // Reset filter when switching tabs
+                                    }}
                                     className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${activeTab === 'regular'
                                         ? 'bg-white text-gray-900 shadow-sm'
                                         : 'text-gray-600 hover:text-gray-900'
@@ -498,15 +542,20 @@ export default function StaffOrders() {
                                 >
                                     Regular Orders
                                 </button>
-                                <button
-                                    onClick={() => setActiveTab('pos')}
-                                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${activeTab === 'pos'
-                                        ? 'bg-white text-gray-900 shadow-sm'
-                                        : 'text-gray-600 hover:text-gray-900'
-                                        }`}
-                                >
-                                    POS Orders
-                                </button>
+                                {staffPermissions.canViewPOS && !staffPermissions.loading && (
+                                    <button
+                                        onClick={() => {
+                                            setActiveTab('pos');
+                                            setOrderTypeFilter('all'); // Reset filter when switching tabs
+                                        }}
+                                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${activeTab === 'pos'
+                                            ? 'bg-white text-gray-900 shadow-sm'
+                                            : 'text-gray-600 hover:text-gray-900'
+                                            }`}
+                                    >
+                                        POS Orders
+                                    </button>
+                                )}
                             </div>
                             
                             {/* 2. Auto/Manual Refresh (Từ HEAD) */}
@@ -559,9 +608,7 @@ export default function StaffOrders() {
                     </div>
 
                     <div className="p-6 lg:p-8">
-            {loading && (
-                <div className="bg-white rounded-2xl shadow p-6">Loading...</div>
-            )}
+            {loading && <OrdersSkeleton />}
             {error && (
                 <div className="bg-red-50 text-red-700 border border-red-200 rounded-xl p-4 mb-4">{error}</div>
             )}
@@ -585,6 +632,51 @@ export default function StaffOrders() {
                                     <option value="cancelled">Cancelled</option>
                                 </select>
                             </div>
+                            
+                            <div className="h-6 w-px bg-blue-500"></div>
+                            
+                            {activeTab === 'pos' && (
+                                <>
+                                    <div className="flex items-center gap-2">
+                                        <label className="text-sm text-gray-600">Order Type</label>
+                                        <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+                                            <button
+                                                onClick={() => setOrderTypeFilter('all')}
+                                                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
+                                                    orderTypeFilter === 'all'
+                                                        ? 'bg-white text-gray-900 shadow-sm'
+                                                        : 'text-gray-600 hover:text-gray-900'
+                                                }`}
+                                            >
+                                                All
+                                            </button>
+                                            <button
+                                                onClick={() => setOrderTypeFilter('dine-in')}
+                                                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
+                                                    orderTypeFilter === 'dine-in'
+                                                        ? 'bg-white text-gray-900 shadow-sm'
+                                                        : 'text-gray-600 hover:text-gray-900'
+                                                }`}
+                                            >
+                                                Dine-in
+                                            </button>
+                                            <button
+                                                onClick={() => setOrderTypeFilter('takeaway')}
+                                                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
+                                                    orderTypeFilter === 'takeaway'
+                                                        ? 'bg-white text-gray-900 shadow-sm'
+                                                        : 'text-gray-600 hover:text-gray-900'
+                                                }`}
+                                            >
+                                                Takeaway
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="h-6 w-px bg-blue-500"></div>
+                                </>
+                            )}
+                            
                             <div className="flex items-center gap-2">
                                 <label className="text-sm text-gray-600">Date</label>
                                 <input
@@ -594,7 +686,10 @@ export default function StaffOrders() {
                                     onChange={(e) => setSelectedDate(e.target.value)}
                                 />
                             </div>
-                            <div className="flex-1 min-w-[220px]">
+                            
+                            <div className="h-6 w-px bg-blue-500"></div>
+                            <div className="flex-1 min-w-[220px] flex items-center gap-2">
+                                <label className="text-sm text-gray-600 whitespace-nowrap">Search</label>
                                 <input
                                     type="text"
                                     value={search}

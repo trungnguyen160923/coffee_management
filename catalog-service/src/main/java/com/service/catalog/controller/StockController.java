@@ -1,6 +1,7 @@
 package com.service.catalog.controller;
 
 import com.service.catalog.dto.request.stock.StockSearchRequest;
+import com.service.catalog.dto.response.StockPageResponse;
 import com.service.catalog.dto.response.StockResponse;
 import com.service.catalog.service.StockService;
 import lombok.RequiredArgsConstructor;
@@ -45,7 +46,7 @@ public class StockController {
 
     @GetMapping("/search")
     @PreAuthorize("hasRole('STAFF') or hasRole('MANAGER') or hasRole('ADMIN')")
-    public ResponseEntity<Page<StockResponse>> searchStocks(
+    public ResponseEntity<StockPageResponse> searchStocks(
             @RequestParam(required = false) String search,
             @RequestParam(required = false) Integer branchId,
             @RequestParam(required = false) Integer ingredientId,
@@ -68,7 +69,7 @@ public class StockController {
                 .sortDirection(sortDirection)
                 .build();
 
-        Page<StockResponse> result = stockService.searchStocks(request);
+        StockPageResponse result = stockService.searchStocks(request);
         return ResponseEntity.ok(result);
     }
 
@@ -101,7 +102,7 @@ public class StockController {
 
     @GetMapping("/branch/{branchId}")
     @PreAuthorize("hasRole('STAFF') or hasRole('MANAGER') or hasRole('ADMIN')")
-    public ResponseEntity<Page<StockResponse>> getStocksByBranch(
+    public ResponseEntity<StockPageResponse> getStocksByBranch(
             @PathVariable Integer branchId,
             @RequestParam(defaultValue = "0") Integer page,
             @RequestParam(defaultValue = "10") Integer size,
@@ -114,7 +115,7 @@ public class StockController {
                 .size(size)
                 .build();
 
-        Page<StockResponse> result = stockService.searchStocks(request);
+        StockPageResponse result = stockService.searchStocks(request);
         return ResponseEntity.ok(result);
     }
 
