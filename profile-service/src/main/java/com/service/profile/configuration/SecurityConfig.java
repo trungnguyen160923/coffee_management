@@ -18,7 +18,8 @@ public class SecurityConfig {
 
     private static final String[] PUBLIC_ENDPOINTS = {
             "/customer-profiles/internal",
-            "/staff-profiles/internal/**"
+            "/staff-profiles/internal/**",
+            "/actuator/**", // Allow actuator endpoints (health checks, metrics, etc.) without authentication
     };
 
     private final CustomJwtDecoder customJwtDecoder;

@@ -35,7 +35,8 @@ public class SecurityConfig {
             "/api/analytics/metrics/revenue/all", // Allow public access to all branches revenue metrics (for admin)
             "/api/analytics/metrics/customers/all", // Allow public access to all branches customer metrics (for admin)
             "/api/analytics/metrics/products/all", // Allow public access to all branches product metrics (for admin)
-            "/api/analytics/metrics/reviews/all" // Allow public access to all branches review metrics (for admin)
+            "/api/analytics/metrics/reviews/all", // Allow public access to all branches review metrics (for admin)
+            "/actuator/**", // Allow actuator endpoints (health checks, metrics, etc.) without authentication
     };
 
     private final CustomJwtDecoder customJwtDecoder;
@@ -60,6 +61,9 @@ public class SecurityConfig {
     public SecurityFilterChain protectedFilterChain(HttpSecurity httpSecurity) throws Exception {
         httpSecurity
                 .authorizeHttpRequests(request -> request
+                        // Actuator endpoints are public (handled by publicFilterChain, but add here as fallback)
+                        .requestMatchers("/actuator/**")
+                        .permitAll()
                         // Branches: GET is public, POST/PUT/DELETE require ADMIN
                         .requestMatchers(HttpMethod.GET, "/api/branches")
                         .permitAll()

@@ -109,3 +109,8 @@ async def root():
         "status": "running"
     }
 
+@app.get("/health")
+async def health_check():
+    """Health check endpoint (for monitoring and CI/CD)"""
+    return {"status": "healthy", "service": "AI Analytics Service"}
+

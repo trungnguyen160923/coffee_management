@@ -101,3 +101,14 @@ geocoding:
   api:
     key: "${GEOCODING_API_KEY}"
   mandatory: ${GEOCODING_MANDATORY:true}  # Set to false to allow branch creation without geocoding
+
+# Actuator configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when-authorized

@@ -17,8 +17,8 @@ import org.springframework.security.web.SecurityFilterChain;
 @EnableMethodSecurity
 public class SecurityConfig {
 
-    private static final String[] PUBLIC_ENDPOINTS = {"/notifications/internal"};
-    private static final String[] PUBLIC_GET_ENDPOINTS = {"/notification-templates/test"};
+    private static final String[] PUBLIC_ENDPOINTS = {"/notifications/internal", "/actuator/**",}; // Allow actuator endpoints (health checks, metrics, etc.) without authentication
+    private static final String[] PUBLIC_GET_ENDPOINTS = {"/notification-templates/test", "/actuator/**"};
 
     private final CustomJwtDecoder customJwtDecoder;
 
@@ -60,6 +60,8 @@ public class SecurityConfig {
         httpSecurity
                 .authorizeHttpRequests(request -> {
                     request.requestMatchers(HttpMethod.POST, PUBLIC_ENDPOINTS)
+                            .permitAll()
+                            .requestMatchers(HttpMethod.GET, PUBLIC_ENDPOINTS)
                             .permitAll()
                             .requestMatchers(HttpMethod.GET, PUBLIC_GET_ENDPOINTS)
                             .permitAll()

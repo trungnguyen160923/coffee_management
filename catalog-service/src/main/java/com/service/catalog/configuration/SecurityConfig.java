@@ -18,10 +18,11 @@ public class SecurityConfig {
 
     private static final String[] PUBLIC_ENDPOINTS = { "/files/upload", "/files/cleanup", "/public/purchase-orders/**",
             "/stocks/check-and-reserve", "/stocks/check-and-reserve/**", "/stocks/update-order-id",
-            "/stocks/update-order-id-by-cart", "/stocks/hold-id/**", "/stocks/release" };
+            "/stocks/update-order-id-by-cart", "/stocks/hold-id/**", "/stocks/release",
+            "/actuator/**" }; // Allow actuator endpoints (health checks, metrics, etc.) without authentication
     private static final String[] PUBLIC_GET_ENDPOINTS = { "/sizes", "/files/images/products/**", "/products",
             "/products/**", "/categories", "/categories/**", "/public/purchase-orders/**", "/api/analytics/metrics/**",
-            "/stocks/hold-id/**" };
+            "/stocks/hold-id/**", "/actuator/**" };
 
     private final CustomJwtDecoder customJwtDecoder;
 
@@ -34,6 +35,7 @@ public class SecurityConfig {
         httpSecurity.authorizeHttpRequests(request -> request
                 .requestMatchers(HttpMethod.POST, PUBLIC_ENDPOINTS).permitAll()
                 .requestMatchers(HttpMethod.PUT, PUBLIC_ENDPOINTS).permitAll()
+                .requestMatchers(HttpMethod.GET, PUBLIC_ENDPOINTS).permitAll()
                 .requestMatchers(HttpMethod.GET, PUBLIC_GET_ENDPOINTS).permitAll()
                 .anyRequest().authenticated());
 

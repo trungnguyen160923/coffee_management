@@ -19,13 +19,15 @@ import org.springframework.security.web.SecurityFilterChain;
 public class SecurityConfig {
 
     private static final String[] PUBLIC_ENDPOINTS = {
-            "/users/registration", "/auth/token", "/auth/introspect", "/auth/logout", "/auth/refresh", "/users-v2/create-customer"
+            "/users/registration", "/auth/token", "/auth/introspect", "/auth/logout", "/auth/refresh", "/users-v2/create-customer",
+            "/actuator/**", // Allow actuator endpoints (health checks, metrics, etc.) without authentication
     };
 
     private static final String[] PUBLIC_GET_ENDPOINTS = {
             "/users/{userId}", // Allow GET /users/{userId} for internal service calls (by ID)
             "/users/staffs", "/users/customers", "/users/managers", // Allow listing endpoints
-            "/users/staffs/**", "/users/customers/**", "/users/managers/**" // Allow nested endpoints
+            "/users/staffs/**", "/users/customers/**", "/users/managers/**", // Allow nested endpoints
+            "/actuator/**", // Allow actuator endpoints (health checks, metrics, etc.) without authentication
     };
 
     private static final String[] INTERNAL_SERVICE_ENDPOINTS = {
@@ -42,6 +44,8 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity httpSecurity) throws Exception {
         httpSecurity.authorizeHttpRequests(request -> request
                 .requestMatchers(HttpMethod.POST, PUBLIC_ENDPOINTS)
+                .permitAll()
+                .requestMatchers(HttpMethod.GET, PUBLIC_ENDPOINTS)
                 .permitAll()
                 .requestMatchers(HttpMethod.GET, PUBLIC_GET_ENDPOINTS)
                 .permitAll()

@@ -87,6 +87,27 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
             "/order-service/api/analytics/metrics/.*",
             // AI Service endpoints (no authentication required for metrics)
             "/ai/.*",
+            
+            // Actuator endpoints (health checks, metrics, etc.) - all methods
+            "/profiles/actuator/.*",
+            "/notification-service/actuator/.*",
+            "/catalog-service/actuator/.*",
+            "/order-service/actuator/.*",
+            "/auth-service/actuator/.*",
+            "/ai-service/actuator/.*",
+            "/actuator/.*",
+
+    };
+
+    @NonFinal
+    private String[] publicGetEndpoints = {
+        "/profiles/actuator/.*",
+        "/notification-service/actuator/.*",
+        "/catalog-service/actuator/.*",
+        "/order-service/actuator/.*",
+        "/auth-service/actuator/.*",
+        "/ai-service/actuator/.*",
+        "/actuator/.*",
     };
 
     @Value("${app.api-prefix}")
@@ -135,12 +156,25 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
 
     private boolean isPublicEndpoint(ServerHttpRequest request) {
         String requestPath = request.getURI().getPath();
+        String method = request.getMethod().name();
         
-        return Arrays.stream(publicEndpoints)
+        // Check public endpoints (all methods)
+        boolean isPublic = Arrays.stream(publicEndpoints)
                 .anyMatch(pattern -> {
                     String fullPattern = apiPrefix + pattern;
                     return requestPath.matches(fullPattern);
                 });
+        
+        // Check public GET endpoints
+        if (!isPublic && "GET".equals(method)) {
+            isPublic = Arrays.stream(publicGetEndpoints)
+                    .anyMatch(pattern -> {
+                        String fullPattern = apiPrefix + pattern;
+                        return requestPath.matches(fullPattern);
+                    });
+        }
+        
+        return isPublic;
     }
 
     Mono<Void> unauthenticated(ServerHttpResponse response) {

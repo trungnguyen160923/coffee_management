@@ -46,3 +46,14 @@ app:
 outbox:
   publisher:
     fixedDelay: ${OUTBOX_PUBLISHER_FIXED_DELAY:1000}
+
+# Actuator configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when-authorized
