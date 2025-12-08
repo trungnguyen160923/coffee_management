@@ -164,7 +164,7 @@ jobs:
 
       - name: Prepare server directory
         run: |
-          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} 'bash -s' << 'ENDSSH'
             # Create project directory if it doesn't exist
             sudo mkdir -p /opt/coffee-management
             sudo mkdir -p /opt/coffee-management/scripts
@@ -174,7 +174,7 @@ jobs:
             sudo chown -R $USER:$USER /opt/coffee-management || sudo chown -R $(whoami):$(whoami) /opt/coffee-management
             
             echo "✅ Server directory prepared: /opt/coffee-management"
-          EOF
+          ENDSSH
 
       - name: Copy deployment files to server
         run: |
@@ -192,7 +192,7 @@ jobs:
 
       - name: Deploy on server
         run: |
-          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << EOF
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} 'bash -s' << 'ENDSSH'
             set -e  # Exit on error
             
             echo "=========================================="
@@ -200,12 +200,13 @@ jobs:
             echo "=========================================="
             
             # Navigate to project directory
-            cd /opt/coffee-management || {
+            if [ ! -d "/opt/coffee-management" ]; then
               echo "❌ ERROR: Directory /opt/coffee-management does not exist!"
               echo "Please ensure the directory was created in previous step."
               exit 1
-            }
+            fi
             
+            cd /opt/coffee-management
             echo "✅ Current directory: $(pwd)"
             
             # Check if .env.prod exists
@@ -299,18 +300,20 @@ jobs:
             echo "=========================================="
             echo "✅ Deployment completed successfully!"
             echo "=========================================="
-          EOF
+          ENDSSH
 
       - name: Health Check
         run: |
-          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << EOF
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} 'bash -s' << 'ENDSSH'
             set -e  # Exit on error
             
             # Navigate to project directory
-            cd /opt/coffee-management || {
+            if [ ! -d "/opt/coffee-management" ]; then
               echo "❌ ERROR: Directory /opt/coffee-management does not exist!"
               exit 1
-            }
+            fi
+            
+            cd /opt/coffee-management
             
             # Set registry prefix
             export REGISTRY_PREFIX=${{ env.REGISTRY }}/${{ github.repository_owner }}
@@ -410,5 +413,5 @@ jobs:
             echo "=========================================="
             echo "✅ All Critical Health Checks Passed!"
             echo "=========================================="
-          EOF
+          ENDSSH
 
