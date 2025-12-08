@@ -230,7 +230,7 @@ jobs:
             
             # Set registry prefix (GHCR format: ghcr.io/OWNER)
             export REGISTRY_PREFIX=${{ env.REGISTRY }}/${{ github.repository_owner }}
-            echo "Registry prefix: \$REGISTRY_PREFIX"
+            echo "Registry prefix: $REGISTRY_PREFIX"
             
             # Login to GHCR if repo is private (optional - only needed for private repos)
             # If images are public, this step can be skipped
@@ -244,23 +244,25 @@ jobs:
             
             # Use registry-based compose file (preferred for CI/CD)
             COMPOSE_FILE="docker-compose.prod.registry.yml"
-            if [ ! -f "\$COMPOSE_FILE" ]; then
+            if [ ! -f "$COMPOSE_FILE" ]; then
               echo "⚠️  Warning: docker-compose.prod.registry.yml not found, using docker-compose.prod.yml"
               COMPOSE_FILE="docker-compose.prod.yml"
             fi
             
-            if [ ! -f "\$COMPOSE_FILE" ]; then
+            if [ ! -f "$COMPOSE_FILE" ]; then
               echo "❌ ERROR: Neither docker-compose.prod.registry.yml nor docker-compose.prod.yml found!"
               echo "Available files:"
               ls -la *.yml *.yaml 2>/dev/null || echo "No yml/yaml files found"
+              echo "Current directory: $(pwd)"
+              echo "Looking for: $COMPOSE_FILE"
               exit 1
             fi
-            echo "✅ Using compose file: \$COMPOSE_FILE"
+            echo "✅ Using compose file: $COMPOSE_FILE"
             
             # Pull latest images
             echo ""
             echo "=== Pulling latest images ==="
-            REGISTRY_PREFIX=\$REGISTRY_PREFIX docker compose -f \$COMPOSE_FILE --env-file .env.prod pull || {
+            REGISTRY_PREFIX=$REGISTRY_PREFIX docker compose -f $COMPOSE_FILE --env-file .env.prod pull || {
               echo "❌ ERROR: Failed to pull images"
               exit 1
             }
@@ -276,15 +278,15 @@ jobs:
             # Stop old containers
             echo ""
             echo "=== Stopping old containers ==="
-            REGISTRY_PREFIX=\$REGISTRY_PREFIX docker compose -f \$COMPOSE_FILE --env-file .env.prod down --timeout 30 || true
+            REGISTRY_PREFIX=$REGISTRY_PREFIX docker compose -f $COMPOSE_FILE --env-file .env.prod down --timeout 30 || true
             
             # Start new containers
             echo ""
             echo "=== Starting new containers ==="
-            REGISTRY_PREFIX=\$REGISTRY_PREFIX docker compose -f \$COMPOSE_FILE --env-file .env.prod up -d || {
+            REGISTRY_PREFIX=$REGISTRY_PREFIX docker compose -f $COMPOSE_FILE --env-file .env.prod up -d || {
               echo "❌ ERROR: Failed to start containers"
               echo "Checking logs..."
-              REGISTRY_PREFIX=\$REGISTRY_PREFIX docker compose -f \$COMPOSE_FILE logs --tail=50
+              REGISTRY_PREFIX=$REGISTRY_PREFIX docker compose -f $COMPOSE_FILE logs --tail=50
               exit 1
             }
             echo "✅ Containers started"
@@ -302,7 +304,7 @@ jobs:
             # Show container status
             echo ""
             echo "=== Container Status ==="
-            REGISTRY_PREFIX=\$REGISTRY_PREFIX docker compose -f \$COMPOSE_FILE ps
+            REGISTRY_PREFIX=$REGISTRY_PREFIX docker compose -f $COMPOSE_FILE ps
             
             echo ""
             echo "=========================================="
@@ -330,15 +332,15 @@ jobs:
             
             # Use registry-based compose file
             COMPOSE_FILE="docker-compose.prod.registry.yml"
-            if [ ! -f "\$COMPOSE_FILE" ]; then
+            if [ ! -f "$COMPOSE_FILE" ]; then
               COMPOSE_FILE="docker-compose.prod.yml"
             fi
             
             echo "=========================================="
             echo "Starting Health Checks"
             echo "=========================================="
-            echo "Compose file: \$COMPOSE_FILE"
-            echo "Registry prefix: \$REGISTRY_PREFIX"
+            echo "Compose file: $COMPOSE_FILE"
+            echo "Registry prefix: $REGISTRY_PREFIX"
             echo "=========================================="
             
             # Wait a bit more for services to be ready
@@ -348,26 +350,26 @@ jobs:
             # Check if services are running
             echo ""
             echo "=== Container Status ==="
-            REGISTRY_PREFIX=\$REGISTRY_PREFIX docker compose -f \$COMPOSE_FILE ps
+            REGISTRY_PREFIX=$REGISTRY_PREFIX docker compose -f $COMPOSE_FILE ps
             
             # Check for failed containers
             echo ""
             echo "=== Checking for Failed Containers ==="
-            FAILED_CONTAINERS=\$(REGISTRY_PREFIX=\$REGISTRY_PREFIX docker compose -f \$COMPOSE_FILE ps --filter "status=exited" --format "{{.Name}}" || true)
-            if [ -n "\$FAILED_CONTAINERS" ]; then
+            FAILED_CONTAINERS=$(REGISTRY_PREFIX=$REGISTRY_PREFIX docker compose -f $COMPOSE_FILE ps --filter "status=exited" --format "{{.Name}}" || true)
+            if [ -n "$FAILED_CONTAINERS" ]; then
               echo "❌ ERROR: Some containers failed to start:"
-              echo "\$FAILED_CONTAINERS"
+              echo "$FAILED_CONTAINERS"
               echo ""
               echo "=== Logs of Failed Containers ==="
-              REGISTRY_PREFIX=\$REGISTRY_PREFIX docker compose -f \$COMPOSE_FILE logs --tail=50
+              REGISTRY_PREFIX=$REGISTRY_PREFIX docker compose -f $COMPOSE_FILE logs --tail=50
               exit 1
             fi
             
             # Check for restarting containers
-            RESTARTING_CONTAINERS=\$(REGISTRY_PREFIX=\$REGISTRY_PREFIX docker compose -f \$COMPOSE_FILE ps --filter "status=restarting" --format "{{.Name}}" || true)
-            if [ -n "\$RESTARTING_CONTAINERS" ]; then
+            RESTARTING_CONTAINERS=$(REGISTRY_PREFIX=$REGISTRY_PREFIX docker compose -f $COMPOSE_FILE ps --filter "status=restarting" --format "{{.Name}}" || true)
+            if [ -n "$RESTARTING_CONTAINERS" ]; then
               echo "⚠️  WARNING: Some containers are restarting:"
-              echo "\$RESTARTING_CONTAINERS"
+              echo "$RESTARTING_CONTAINERS"
             fi
             
             # Health checks
