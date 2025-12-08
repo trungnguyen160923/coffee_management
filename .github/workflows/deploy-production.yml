@@ -162,36 +162,100 @@ jobs:
         run: |
           ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
 
+      - name: Prepare server directory
+        run: |
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
+            # Create project directory if it doesn't exist
+            sudo mkdir -p /opt/coffee-management
+            sudo mkdir -p /opt/coffee-management/scripts
+            sudo mkdir -p /opt/coffee-management/mysql-conf
+            
+            # Set ownership (adjust user if needed)
+            sudo chown -R $USER:$USER /opt/coffee-management || sudo chown -R $(whoami):$(whoami) /opt/coffee-management
+            
+            echo "✅ Server directory prepared: /opt/coffee-management"
+          EOF
+
       - name: Copy deployment files to server
         run: |
-          scp -r docker-compose.prod.yml ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/coffee-management/ || true
-          scp -r docker-compose.prod.registry.yml ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/coffee-management/ || true
-          scp -r scripts/deploy.sh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/coffee-management/scripts/ || true
-          scp -r mysql-conf ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/coffee-management/ || true
+          # Copy docker-compose files
+          scp docker-compose.prod.yml ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/coffee-management/ || echo "Warning: docker-compose.prod.yml copy failed"
+          scp docker-compose.prod.registry.yml ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/coffee-management/ || echo "Warning: docker-compose.prod.registry.yml copy failed"
+          
+          # Copy scripts directory
+          scp -r scripts/ ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/coffee-management/ || echo "Warning: scripts copy failed"
+          
+          # Copy mysql-conf directory
+          scp -r mysql-conf/ ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/coffee-management/ || echo "Warning: mysql-conf copy failed"
+          
+          echo "✅ Files copied to server"
 
       - name: Deploy on server
         run: |
           ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << EOF
-            cd /opt/coffee-management
+            set -e  # Exit on error
+            
+            echo "=========================================="
+            echo "Starting Deployment"
+            echo "=========================================="
+            
+            # Navigate to project directory
+            cd /opt/coffee-management || {
+              echo "❌ ERROR: Directory /opt/coffee-management does not exist!"
+              echo "Please ensure the directory was created in previous step."
+              exit 1
+            }
+            
+            echo "✅ Current directory: $(pwd)"
+            
+            # Check if .env.prod exists
+            if [ ! -f ".env.prod" ]; then
+              echo "❌ ERROR: .env.prod file not found!"
+              echo "Please create .env.prod file on the server:"
+              echo "  cd /opt/coffee-management"
+              echo "  cp env.prod.example .env.prod"
+              echo "  nano .env.prod  # Fill in real values"
+              exit 1
+            fi
+            echo "✅ Found .env.prod file"
             
             # Set registry prefix (GHCR format: ghcr.io/OWNER)
             export REGISTRY_PREFIX=${{ env.REGISTRY }}/${{ github.repository_owner }}
+            echo "Registry prefix: \$REGISTRY_PREFIX"
             
             # Login to GHCR if repo is private (optional - only needed for private repos)
             # If images are public, this step can be skipped
             if [ -n "${{ secrets.GHCR_TOKEN }}" ]; then
+              echo "Logging in to GHCR..."
               echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
+              echo "✅ Logged in to GHCR"
+            else
+              echo "ℹ️  No GHCR_TOKEN provided, assuming public images"
             fi
             
             # Use registry-based compose file (preferred for CI/CD)
             COMPOSE_FILE="docker-compose.prod.registry.yml"
             if [ ! -f "\$COMPOSE_FILE" ]; then
-              echo "Warning: docker-compose.prod.registry.yml not found, using docker-compose.prod.yml"
+              echo "⚠️  Warning: docker-compose.prod.registry.yml not found, using docker-compose.prod.yml"
               COMPOSE_FILE="docker-compose.prod.yml"
             fi
             
+            if [ ! -f "\$COMPOSE_FILE" ]; then
+              echo "❌ ERROR: Neither docker-compose.prod.registry.yml nor docker-compose.prod.yml found!"
+              echo "Available files:"
+              ls -la *.yml *.yaml 2>/dev/null || echo "No yml/yaml files found"
+              exit 1
+            fi
+            echo "✅ Using compose file: \$COMPOSE_FILE"
+            
             # Pull latest images
-            REGISTRY_PREFIX=\$REGISTRY_PREFIX docker compose -f \$COMPOSE_FILE --env-file .env.prod pull
+            echo ""
+            echo "=== Pulling latest images ==="
+            REGISTRY_PREFIX=\$REGISTRY_PREFIX docker compose -f \$COMPOSE_FILE --env-file .env.prod pull || {
+              echo "❌ ERROR: Failed to pull images"
+              exit 1
+            }
+            echo "✅ Images pulled successfully"
             
             # Run database migrations if needed
             if [ -f scripts/run-migration.sh ]; then
@@ -201,23 +265,52 @@ jobs:
             fi
             
             # Stop old containers
-            REGISTRY_PREFIX=\$REGISTRY_PREFIX docker compose -f \$COMPOSE_FILE --env-file .env.prod down --timeout 30
+            echo ""
+            echo "=== Stopping old containers ==="
+            REGISTRY_PREFIX=\$REGISTRY_PREFIX docker compose -f \$COMPOSE_FILE --env-file .env.prod down --timeout 30 || true
             
             # Start new containers
-            REGISTRY_PREFIX=\$REGISTRY_PREFIX docker compose -f \$COMPOSE_FILE --env-file .env.prod up -d
+            echo ""
+            echo "=== Starting new containers ==="
+            REGISTRY_PREFIX=\$REGISTRY_PREFIX docker compose -f \$COMPOSE_FILE --env-file .env.prod up -d || {
+              echo "❌ ERROR: Failed to start containers"
+              echo "Checking logs..."
+              REGISTRY_PREFIX=\$REGISTRY_PREFIX docker compose -f \$COMPOSE_FILE logs --tail=50
+              exit 1
+            }
+            echo "✅ Containers started"
             
             # Clean up old images
-            docker image prune -f
+            echo ""
+            echo "=== Cleaning up old images ==="
+            docker image prune -f || true
             
-            # Health check
+            # Wait for services to initialize
+            echo ""
+            echo "=== Waiting for services to initialize (30 seconds) ==="
             sleep 30
+            
+            # Show container status
+            echo ""
+            echo "=== Container Status ==="
             REGISTRY_PREFIX=\$REGISTRY_PREFIX docker compose -f \$COMPOSE_FILE ps
+            
+            echo ""
+            echo "=========================================="
+            echo "✅ Deployment completed successfully!"
+            echo "=========================================="
           EOF
 
       - name: Health Check
         run: |
           ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << EOF
-            cd /opt/coffee-management
+            set -e  # Exit on error
+            
+            # Navigate to project directory
+            cd /opt/coffee-management || {
+              echo "❌ ERROR: Directory /opt/coffee-management does not exist!"
+              exit 1
+            }
             
             # Set registry prefix
             export REGISTRY_PREFIX=${{ env.REGISTRY }}/${{ github.repository_owner }}
@@ -228,42 +321,94 @@ jobs:
               COMPOSE_FILE="docker-compose.prod.yml"
             fi
             
+            echo "=========================================="
+            echo "Starting Health Checks"
+            echo "=========================================="
+            echo "Compose file: \$COMPOSE_FILE"
+            echo "Registry prefix: \$REGISTRY_PREFIX"
+            echo "=========================================="
+            
             # Wait a bit more for services to be ready
-            echo "Waiting for services to be ready..."
+            echo "Waiting for services to be ready (45 seconds)..."
             sleep 45
             
             # Check if services are running
-            echo "Container status:"
+            echo ""
+            echo "=== Container Status ==="
             REGISTRY_PREFIX=\$REGISTRY_PREFIX docker compose -f \$COMPOSE_FILE ps
             
             # Check for failed containers
-            FAILED_CONTAINERS=\$(REGISTRY_PREFIX=\$REGISTRY_PREFIX docker compose -f \$COMPOSE_FILE ps --filter "status=exited" --format "{{.Name}}")
+            echo ""
+            echo "=== Checking for Failed Containers ==="
+            FAILED_CONTAINERS=\$(REGISTRY_PREFIX=\$REGISTRY_PREFIX docker compose -f \$COMPOSE_FILE ps --filter "status=exited" --format "{{.Name}}" || true)
             if [ -n "\$FAILED_CONTAINERS" ]; then
-              echo "Error: Some containers failed to start:"
+              echo "❌ ERROR: Some containers failed to start:"
               echo "\$FAILED_CONTAINERS"
+              echo ""
+              echo "=== Logs of Failed Containers ==="
               REGISTRY_PREFIX=\$REGISTRY_PREFIX docker compose -f \$COMPOSE_FILE logs --tail=50
               exit 1
             fi
             
+            # Check for restarting containers
+            RESTARTING_CONTAINERS=\$(REGISTRY_PREFIX=\$REGISTRY_PREFIX docker compose -f \$COMPOSE_FILE ps --filter "status=restarting" --format "{{.Name}}" || true)
+            if [ -n "\$RESTARTING_CONTAINERS" ]; then
+              echo "⚠️  WARNING: Some containers are restarting:"
+              echo "\$RESTARTING_CONTAINERS"
+            fi
+            
             # Health checks
-            echo "Performing health checks..."
+            echo ""
+            echo "=== Performing Health Checks ==="
+            
+            # Function to check health
+            check_health() {
+              local service_name=\$1
+              local url=\$2
+              local max_retries=3
+              local retry_count=0
+              
+              while [ \$retry_count -lt \$max_retries ]; do
+                if curl -f "\$url" > /dev/null 2>&1; then
+                  echo "✅ \$service_name is healthy"
+                  return 0
+                else
+                  retry_count=\$((retry_count + 1))
+                  if [ \$retry_count -lt \$max_retries ]; then
+                    echo "⏳ \$service_name not ready yet, retrying... (\$retry_count/\$max_retries)"
+                    sleep 5
+                  fi
+                fi
+              done
+              
+              echo "❌ \$service_name health check failed after \$max_retries attempts"
+              return 1
+            }
             
             # Check API Gateway
-            if curl -f http://localhost:8000/actuator/health > /dev/null 2>&1; then
-              echo "✓ API Gateway is healthy"
-            else
-              echo "✗ API Gateway health check failed"
-              exit 1
-            fi
+            check_health "API Gateway" "http://localhost:8000/actuator/health" || exit 1
             
             # Check Auth Service
-            if curl -f http://localhost:8001/auth-service/actuator/health > /dev/null 2>&1; then
-              echo "✓ Auth Service is healthy"
-            else
-              echo "✗ Auth Service health check failed"
-              exit 1
-            fi
+            check_health "Auth Service" "http://localhost:8001/auth-service/actuator/health" || exit 1
             
-            echo "All health checks passed!"
+            # Check Profile Service
+            check_health "Profile Service" "http://localhost:8003/profiles/actuator/health" || true  # Optional
+            
+            # Check Order Service
+            check_health "Order Service" "http://localhost:8002/order-service/actuator/health" || true  # Optional
+            
+            # Check Catalog Service
+            check_health "Catalog Service" "http://localhost:8004/catalogs/actuator/health" || true  # Optional
+            
+            # Check Notification Service
+            check_health "Notification Service" "http://localhost:8006/notification-service/actuator/health" || true  # Optional
+            
+            # Check AI Service
+            check_health "AI Service" "http://localhost:8005/health" || true  # Optional
+            
+            echo ""
+            echo "=========================================="
+            echo "✅ All Critical Health Checks Passed!"
+            echo "=========================================="
           EOF
 
