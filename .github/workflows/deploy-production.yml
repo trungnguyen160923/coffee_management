@@ -350,23 +350,23 @@ jobs:
             # Check if services are running
             echo ""
             echo "=== Container Status ==="
-            REGISTRY_PREFIX=$REGISTRY_PREFIX docker compose -f $COMPOSE_FILE ps
+            REGISTRY_PREFIX=$REGISTRY_PREFIX docker compose -f $COMPOSE_FILE --env-file .env.prod ps
             
             # Check for failed containers
             echo ""
             echo "=== Checking for Failed Containers ==="
-            FAILED_CONTAINERS=$(REGISTRY_PREFIX=$REGISTRY_PREFIX docker compose -f $COMPOSE_FILE ps --filter "status=exited" --format "{{.Name}}" || true)
+            FAILED_CONTAINERS=$(REGISTRY_PREFIX=$REGISTRY_PREFIX docker compose -f $COMPOSE_FILE --env-file .env.prod ps --filter "status=exited" --format "{{.Name}}" || true)
             if [ -n "$FAILED_CONTAINERS" ]; then
               echo "❌ ERROR: Some containers failed to start:"
               echo "$FAILED_CONTAINERS"
               echo ""
               echo "=== Logs of Failed Containers ==="
-              REGISTRY_PREFIX=$REGISTRY_PREFIX docker compose -f $COMPOSE_FILE logs --tail=50
+              REGISTRY_PREFIX=$REGISTRY_PREFIX docker compose -f $COMPOSE_FILE --env-file .env.prod logs --tail=50
               exit 1
             fi
             
             # Check for restarting containers
-            RESTARTING_CONTAINERS=$(REGISTRY_PREFIX=$REGISTRY_PREFIX docker compose -f $COMPOSE_FILE ps --filter "status=restarting" --format "{{.Name}}" || true)
+            RESTARTING_CONTAINERS=$(REGISTRY_PREFIX=$REGISTRY_PREFIX docker compose -f $COMPOSE_FILE --env-file .env.prod ps --filter "status=restarting" --format "{{.Name}}" || true)
             if [ -n "$RESTARTING_CONTAINERS" ]; then
               echo "⚠️  WARNING: Some containers are restarting:"
               echo "$RESTARTING_CONTAINERS"
@@ -378,25 +378,25 @@ jobs:
             
             # Function to check health
             check_health() {
-              local service_name=\$1
-              local url=\$2
+              local service_name=$1
+              local url=$2
               local max_retries=3
               local retry_count=0
               
-              while [ \$retry_count -lt \$max_retries ]; do
-                if curl -f "\$url" > /dev/null 2>&1; then
-                  echo "✅ \$service_name is healthy"
+              while [ $retry_count -lt $max_retries ]; do
+                if curl -f "$url" > /dev/null 2>&1; then
+                  echo "✅ $service_name is healthy"
                   return 0
                 else
-                  retry_count=\$((retry_count + 1))
-                  if [ \$retry_count -lt \$max_retries ]; then
-                    echo "⏳ \$service_name not ready yet, retrying... (\$retry_count/\$max_retries)"
+                  retry_count=$((retry_count + 1))
+                  if [ $retry_count -lt $max_retries ]; then
+                    echo "⏳ $service_name not ready yet, retrying... ($retry_count/$max_retries)"
                     sleep 5
                   fi
                 fi
               done
               
-              echo "❌ \$service_name health check failed after \$max_retries attempts"
+              echo "❌ $service_name health check failed after $max_retries attempts"
               return 1
             }
             
