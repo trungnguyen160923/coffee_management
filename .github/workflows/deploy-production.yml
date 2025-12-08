@@ -6,6 +6,11 @@ on:
       - main
   workflow_dispatch: # Cho phép chạy thủ công
 
+# Permissions for GitHub Container Registry
+permissions:
+  contents: read
+  packages: write
+
 env:
   # Sử dụng GitHub Container Registry (GHCR)
   REGISTRY: ghcr.io
@@ -211,11 +216,54 @@ jobs:
 
       - name: Health Check
         run: |
-          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
-            # Check if services are running
-            docker compose -f docker-compose.prod.yml ps
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << EOF
+            cd /opt/coffee-management
             
-            # Check API Gateway health
-            curl -f http://localhost:8000/actuator/health || exit 1
+            # Set registry prefix
+            export REGISTRY_PREFIX=${{ env.REGISTRY }}/${{ github.repository_owner }}
+            
+            # Use registry-based compose file
+            COMPOSE_FILE="docker-compose.prod.registry.yml"
+            if [ ! -f "\$COMPOSE_FILE" ]; then
+              COMPOSE_FILE="docker-compose.prod.yml"
+            fi
+            
+            # Wait a bit more for services to be ready
+            echo "Waiting for services to be ready..."
+            sleep 45
+            
+            # Check if services are running
+            echo "Container status:"
+            REGISTRY_PREFIX=\$REGISTRY_PREFIX docker compose -f \$COMPOSE_FILE ps
+            
+            # Check for failed containers
+            FAILED_CONTAINERS=\$(REGISTRY_PREFIX=\$REGISTRY_PREFIX docker compose -f \$COMPOSE_FILE ps --filter "status=exited" --format "{{.Name}}")
+            if [ -n "\$FAILED_CONTAINERS" ]; then
+              echo "Error: Some containers failed to start:"
+              echo "\$FAILED_CONTAINERS"
+              REGISTRY_PREFIX=\$REGISTRY_PREFIX docker compose -f \$COMPOSE_FILE logs --tail=50
+              exit 1
+            fi
+            
+            # Health checks
+            echo "Performing health checks..."
+            
+            # Check API Gateway
+            if curl -f http://localhost:8000/actuator/health > /dev/null 2>&1; then
+              echo "✓ API Gateway is healthy"
+            else
+              echo "✗ API Gateway health check failed"
+              exit 1
+            fi
+            
+            # Check Auth Service
+            if curl -f http://localhost:8001/auth-service/actuator/health > /dev/null 2>&1; then
+              echo "✓ Auth Service is healthy"
+            else
+              echo "✗ Auth Service health check failed"
+              exit 1
+            fi
+            
+            echo "All health checks passed!"
           EOF
 
