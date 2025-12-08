@@ -288,7 +288,6 @@ CREATE TABLE shift_requests (
   staff_user_id INT NOT NULL,
   request_type ENUM('SWAP', 'PICK_UP', 'TWO_WAY_SWAP', 'LEAVE', 'OVERTIME') NOT NULL,
   target_staff_user_id INT DEFAULT NULL,
-  target_assignment_id INT DEFAULT NULL,
   overtime_hours DECIMAL(4,2) DEFAULT NULL,
   reason VARCHAR(255) NOT NULL,
   status VARCHAR(50) NOT NULL DEFAULT 'PENDING',
@@ -303,9 +302,7 @@ CREATE TABLE shift_requests (
   KEY idx_shift_requests_target_staff (target_staff_user_id),
   KEY idx_shift_requests_type_status (request_type, status),
   CONSTRAINT fk_shift_requests_assignment FOREIGN KEY (assignment_id)
-    REFERENCES shift_assignments(assignment_id) ON DELETE CASCADE,
-  CONSTRAINT fk_shift_requests_target_assignment FOREIGN KEY (target_assignment_id)
-    REFERENCES shift_assignments(assignment_id) ON DELETE SET NULL
+    REFERENCES shift_assignments(assignment_id) ON DELETE CASCADE
   -- NOTE: staff_user_id and target_staff_user_id are loose references
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

@@ -8,7 +8,7 @@ version: '3.8'
 # Format GHCR: ghcr.io/OWNER (OWNER là GitHub username hoặc organization)
 # Ví dụ: ghcr.io/your-username hoặc ghcr.io/your-org
 # Nếu deploy thủ công, set: export REGISTRY_PREFIX=ghcr.io/YOUR_GITHUB_USERNAME
-REGISTRY_PREFIX ?= ghcr.io/YOUR_GITHUB_USERNAME
+# Gợi ý đặt REGISTRY_PREFIX thủ công (nếu cần): ghcr.io/YOUR_GITHUB_USERNAME
 
 services:
   # ============================================

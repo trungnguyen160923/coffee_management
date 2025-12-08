@@ -101,6 +101,20 @@ CREATE TABLE `recipes` (
   update_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
+-- Tables (branch seating, shared with order service naming)
+DROP TABLE IF EXISTS tables;
+CREATE TABLE `tables` (
+  `table_id` INT PRIMARY KEY NOT NULL AUTO_INCREMENT,
+  `branch_id` INT NOT NULL,
+  `label` VARCHAR(50) NOT NULL,
+  `capacity` INT NOT NULL,
+  `status` VARCHAR(20) NOT NULL DEFAULT 'AVAILABLE',
+  `create_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  update_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT `ux_tables_branch_label` UNIQUE (`branch_id`, `label`)
+);
+CREATE INDEX `idx_tables_branch_id` ON `tables` (`branch_id`);
+
 DROP TABLE IF EXISTS recipe_items;
 CREATE TABLE `recipe_items` (
   `id` INT PRIMARY KEY NOT NULL AUTO_INCREMENT,
@@ -165,8 +179,6 @@ CREATE INDEX `idx_ps_size_id` ON `product_details` (`size_id`);
 CREATE INDEX `idx_ingredients_supplier_id` ON `ingredients` (`supplier_id`);
 
 CREATE INDEX `idx_recipes_product_id` ON `recipes` (`pd_id`);
-CREATE INDEX `idx_recipes_category_id` ON `recipes` (`category_id`);
-
 CREATE INDEX `idx_ri_recipe_id` ON `recipe_items` (`recipe_id`);
 
 CREATE INDEX `idx_ri_ingredient_id` ON `recipe_items` (`ingredient_id`);

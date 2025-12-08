@@ -86,13 +86,16 @@ CREATE TABLE orders (
   branch_id INT NOT NULL,
   table_id INT DEFAULT NULL,
   reservation_id INT DEFAULT NULL,
-  status VARCHAR(50) NOT NULL DEFAULT 'CREATED',
+  status VARCHAR(50) DEFAULT 'CREATED',
   payment_method VARCHAR(50) DEFAULT NULL,
   payment_status VARCHAR(50) DEFAULT 'PENDING',
   subtotal DECIMAL(12,2) NOT NULL DEFAULT 0.00,
   discount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+  vat DECIMAL(12,2) NOT NULL DEFAULT 0.00,
   total_amount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
   discount_code VARCHAR(50) DEFAULT NULL,
+  notes TEXT DEFAULT NULL,
+  order_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   create_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   update_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (order_id),
@@ -108,7 +111,7 @@ CREATE TABLE orders (
   )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ALTER TABLE orders
-ADD COLUMN delivery_address VARCHAR(255) NOT NULL AFTER phone;
+ADD COLUMN delivery_address VARCHAR(255) NULL AFTER phone;
 
 -- Thêm trường nhân viên lập hóa đơn
 ALTER TABLE orders
@@ -121,6 +124,7 @@ CREATE TABLE order_details (
   id INT NOT NULL AUTO_INCREMENT,
   order_id INT NOT NULL,
   product_id INT NOT NULL, -- loose reference to catalog_db.products
+  product_detail_id INT NOT NULL,
   size_id INT DEFAULT NULL, -- loose reference to catalog_db.sizes/product_sizes
   qty DECIMAL(12,2) NOT NULL DEFAULT 1.00,
   unit_price DECIMAL(12,2) NOT NULL DEFAULT 0.00,
