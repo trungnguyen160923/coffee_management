@@ -78,3 +78,5 @@ spring.log
 catalog-service/uploads/
 uploads/
 
+.env
+.env.prod
