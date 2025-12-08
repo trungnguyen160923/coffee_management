@@ -94,6 +94,29 @@ INSERT INTO cafe_tables (branch_id, label, capacity, status) VALUES
 
 USE catalog_db;
 
+-- Bàn (catalog_db.tables) cho 2 chi nhánh để khớp schema mới thêm
+-- Lưu ý: bảng này không có FK sang order_db.branches (cross-DB), chỉ seed dữ liệu mẫu
+DELETE FROM `tables` WHERE branch_id IN (1, 2);
+INSERT INTO `tables` (branch_id, label, capacity, status) VALUES
+(1, 'T1', 2, 'AVAILABLE'),
+(1, 'T2', 4, 'AVAILABLE'),
+(1, 'T3', 4, 'AVAILABLE'),
+(1, 'T4', 6, 'AVAILABLE'),
+(1, 'T5', 2, 'AVAILABLE'),
+(1, 'T6', 4, 'AVAILABLE'),
+(1, 'T7', 8, 'AVAILABLE'),
+(1, 'T8', 2, 'AVAILABLE'),
+(1, 'T9', 4, 'AVAILABLE'),
+(1, 'T10', 6, 'AVAILABLE'),
+(2, 'T1', 2, 'AVAILABLE'),
+(2, 'T2', 4, 'AVAILABLE'),
+(2, 'T3', 4, 'AVAILABLE'),
+(2, 'T4', 6, 'AVAILABLE'),
+(2, 'T5', 2, 'AVAILABLE'),
+(2, 'T6', 4, 'AVAILABLE'),
+(2, 'T7', 4, 'AVAILABLE'),
+(2, 'T8', 6, 'AVAILABLE');
+
 -- Categories (bổ sung thêm nếu chưa có)
 INSERT INTO categories (category_id, name, description) VALUES
 (1, 'Coffee', 'Các loại cà phê'),
