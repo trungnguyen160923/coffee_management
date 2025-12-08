@@ -165,28 +165,34 @@ jobs:
       - name: Prepare server directory
         run: |
           ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} 'bash -s' << 'ENDSSH'
+            # Project directory
+            PROJECT_DIR="/opt/coffee_management"
+            
             # Create project directory if it doesn't exist
-            sudo mkdir -p /opt/coffee-management
-            sudo mkdir -p /opt/coffee-management/scripts
-            sudo mkdir -p /opt/coffee-management/mysql-conf
+            sudo mkdir -p "$PROJECT_DIR"
+            sudo mkdir -p "$PROJECT_DIR/scripts"
+            sudo mkdir -p "$PROJECT_DIR/mysql-conf"
             
             # Set ownership (adjust user if needed)
-            sudo chown -R $USER:$USER /opt/coffee-management || sudo chown -R $(whoami):$(whoami) /opt/coffee-management
+            sudo chown -R $USER:$USER "$PROJECT_DIR" || sudo chown -R $(whoami):$(whoami) "$PROJECT_DIR"
             
-            echo "✅ Server directory prepared: /opt/coffee-management"
+            echo "✅ Server directory prepared: $PROJECT_DIR"
           ENDSSH
 
       - name: Copy deployment files to server
         run: |
+          PROJECT_DIR="/opt/coffee_management"
+          echo "Using project directory: $PROJECT_DIR"
+          
           # Copy docker-compose files
-          scp docker-compose.prod.yml ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/coffee-management/ || echo "Warning: docker-compose.prod.yml copy failed"
-          scp docker-compose.prod.registry.yml ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/coffee-management/ || echo "Warning: docker-compose.prod.registry.yml copy failed"
+          scp docker-compose.prod.yml ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:$PROJECT_DIR/ || echo "Warning: docker-compose.prod.yml copy failed"
+          scp docker-compose.prod.registry.yml ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:$PROJECT_DIR/ || echo "Warning: docker-compose.prod.registry.yml copy failed"
           
           # Copy scripts directory
-          scp -r scripts/ ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/coffee-management/ || echo "Warning: scripts copy failed"
+          scp -r scripts/ ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:$PROJECT_DIR/ || echo "Warning: scripts copy failed"
           
           # Copy mysql-conf directory
-          scp -r mysql-conf/ ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/coffee-management/ || echo "Warning: mysql-conf copy failed"
+          scp -r mysql-conf/ ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:$PROJECT_DIR/ || echo "Warning: mysql-conf copy failed"
           
           echo "✅ Files copied to server"
 
@@ -199,21 +205,23 @@ jobs:
             echo "Starting Deployment"
             echo "=========================================="
             
-            # Navigate to project directory
-            if [ ! -d "/opt/coffee-management" ]; then
-              echo "❌ ERROR: Directory /opt/coffee-management does not exist!"
+            # Project directory
+            PROJECT_DIR="/opt/coffee_management"
+            
+            if [ ! -d "$PROJECT_DIR" ]; then
+              echo "❌ ERROR: Directory $PROJECT_DIR does not exist!"
               echo "Please ensure the directory was created in previous step."
               exit 1
             fi
             
-            cd /opt/coffee-management
+            cd "$PROJECT_DIR"
             echo "✅ Current directory: $(pwd)"
             
             # Check if .env.prod exists
             if [ ! -f ".env.prod" ]; then
               echo "❌ ERROR: .env.prod file not found!"
               echo "Please create .env.prod file on the server:"
-              echo "  cd /opt/coffee-management"
+              echo "  cd $PROJECT_DIR"
               echo "  cp env.prod.example .env.prod"
               echo "  nano .env.prod  # Fill in real values"
               exit 1
@@ -307,13 +315,15 @@ jobs:
           ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} 'bash -s' << 'ENDSSH'
             set -e  # Exit on error
             
-            # Navigate to project directory
-            if [ ! -d "/opt/coffee-management" ]; then
-              echo "❌ ERROR: Directory /opt/coffee-management does not exist!"
+            # Project directory
+            PROJECT_DIR="/opt/coffee_management"
+            
+            if [ ! -d "$PROJECT_DIR" ]; then
+              echo "❌ ERROR: Directory $PROJECT_DIR does not exist!"
               exit 1
             fi
             
-            cd /opt/coffee-management
+            cd "$PROJECT_DIR"
             
             # Set registry prefix
             export REGISTRY_PREFIX=${{ env.REGISTRY }}/${{ github.repository_owner }}
