@@ -112,3 +112,15 @@ management:
   endpoint:
     health:
       show-details: when-authorized
+      probes:
+        enabled: true
+  health:
+    # Disable health checks for non-critical dependencies
+    # Only check database (critical) and basic application health
+    mail:
+      enabled: false  # Disable mail health check (not critical for service availability)
+    kafka:
+      enabled: false  # Disable kafka health check (not critical for service availability)
+    # Keep database health check enabled (default)
+    # If database is not available, service will report DOWN (503)
+    # This is correct behavior - service needs database to function
