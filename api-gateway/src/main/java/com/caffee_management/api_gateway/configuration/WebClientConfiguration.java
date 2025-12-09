@@ -60,10 +60,22 @@ public class WebClientConfiguration {
                 "https://coffeemanager.click",
                 "https://www.coffeemanager.click",
                 "https://admin.coffeemanager.click",
-                "https://api.coffeemanager.click",
-                // IP access (if needed)
-                "http://213.163.201.60"));
-        corsConfiguration.setAllowedHeaders(List.of("*"));
+                "https://api.coffeemanager.click"
+                
+                ));
+        // Allow all headers including custom headers like x-guest-id
+        // Note: When allowCredentials is true, "*" doesn't work for custom headers
+        // So we explicitly add common headers
+        corsConfiguration.addAllowedHeader("*");  // Allow all standard headers
+        corsConfiguration.addAllowedHeader("x-guest-id");  // Custom header for guest cart
+        corsConfiguration.addAllowedHeader("X-Guest-Id");
+        corsConfiguration.addAllowedHeader("Authorization");
+        corsConfiguration.addAllowedHeader("Content-Type");
+        corsConfiguration.addAllowedHeader("X-Requested-With");
+        corsConfiguration.addAllowedHeader("Accept");
+        corsConfiguration.addAllowedHeader("Origin");
+        corsConfiguration.addAllowedHeader("Access-Control-Request-Method");
+        corsConfiguration.addAllowedHeader("Access-Control-Request-Headers");
         corsConfiguration.setAllowedMethods(List.of("*"));
         corsConfiguration.setAllowCredentials(true);
         // Cache preflight requests for 1 hour
@@ -73,7 +85,9 @@ public class WebClientConfiguration {
                 "Content-Disposition",
                 "Content-Type",
                 "Content-Length",
-                "Location"
+                "Location",
+                "x-guest-id",
+                "X-Guest-Id"
         ));
 
         UrlBasedCorsConfigurationSource urlBasedCorsConfigurationSource = new UrlBasedCorsConfigurationSource();

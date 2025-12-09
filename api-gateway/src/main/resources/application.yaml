@@ -86,7 +86,9 @@ spring:
             filters:
               - RewritePath=/.*, /api/fallback
     default-filters:
-        - DedupeResponseHeader=Access-Control-Allow-Origin, Access-Control-Allow-Credentials, Access-Control-Allow-Methods, Access-Control-Allow-Headers, RETAIN_UNIQUE
+        # Dedupe CORS headers - RETAIN_FIRST keeps the first value (from API Gateway)
+        # This prevents duplicate CORS headers if any backend service adds them
+        - DedupeResponseHeader=Access-Control-Allow-Origin, Access-Control-Allow-Credentials, Access-Control-Allow-Methods, Access-Control-Allow-Headers, Access-Control-Expose-Headers, RETAIN_FIRST
   # kafka:
   #   bootstrap-servers: localhost:9094
   #   consumer:
