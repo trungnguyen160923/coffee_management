@@ -7,9 +7,12 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -28,16 +31,19 @@ public class ImageCleanupService {
     }
 
     /**
-     * Chạy cleanup mỗi ngày lúc 2:00 AM
+     * Chạy cleanup mỗi 6 giờ
      */
     @Scheduled(cron = "0 0 */6 * * ?")
     public void cleanupUnusedImages() {
         log.info("Starting image cleanup job...");
         
         try {
-            // Lấy tất cả ảnh đang được sử dụng trong database
-            Set<String> usedImages = getUsedImageUrls();
-            log.info("Found {} used images in database", usedImages.size());
+            // Lấy tất cả filename đang được sử dụng trong database
+            Set<String> usedFilenames = getUsedImageFilenames();
+            log.info("Found {} used image filenames in database", usedFilenames.size());
+            if (log.isDebugEnabled()) {
+                log.debug("Used filenames: {}", usedFilenames);
+            }
             
             // Lấy tất cả ảnh trong thư mục
             Path imagesDir = Paths.get(uploadDir, "images", "products");
@@ -53,12 +59,12 @@ public class ImageCleanupService {
             log.info("Found {} images in directory", allImages.size());
             
             int deletedCount = 0;
+            int keptCount = 0;
             for (Path imagePath : allImages) {
                 String fileName = imagePath.getFileName().toString();
-                String imageUrl = "/files/images/products/" + fileName;
                 
-                // Nếu ảnh không được sử dụng trong database
-                if (!usedImages.contains(imageUrl)) {
+                // So sánh filename thay vì so sánh toàn bộ URL
+                if (!usedFilenames.contains(fileName)) {
                     try {
                         Files.delete(imagePath);
                         deletedCount++;
@@ -66,10 +72,16 @@ public class ImageCleanupService {
                     } catch (IOException e) {
                         log.error("Failed to delete image {}: {}", fileName, e.getMessage());
                     }
+                } else {
+                    keptCount++;
+                    if (log.isDebugEnabled()) {
+                        log.debug("Keeping used image: {}", fileName);
+                    }
                 }
             }
             
-            log.info("Image cleanup completed. Deleted {} unused images", deletedCount);
+            log.info("Image cleanup completed. Deleted {} unused images, kept {} used images", 
+                    deletedCount, keptCount);
             
         } catch (Exception e) {
             log.error("Error during image cleanup: {}", e.getMessage(), e);
@@ -77,14 +89,87 @@ public class ImageCleanupService {
     }
 
     /**
-     * Lấy tất cả URL ảnh đang được sử dụng trong database
+     * Lấy tất cả filename ảnh đang được sử dụng trong database
+     * Extract filename từ URL (xử lý các trường hợp có domain, context-path, query params)
      */
-    private Set<String> getUsedImageUrls() {
-        return productRepository.findAll()
+    private Set<String> getUsedImageFilenames() {
+        Set<String> filenames = new HashSet<>();
+        
+        productRepository.findAll()
                 .stream()
                 .map(product -> product.getImageUrl())
                 .filter(imageUrl -> imageUrl != null && !imageUrl.isEmpty())
-                .collect(Collectors.toSet());
+                .forEach(imageUrl -> {
+                    String filename = extractFilenameFromUrl(imageUrl);
+                    if (filename != null && !filename.isEmpty()) {
+                        filenames.add(filename);
+                        if (log.isDebugEnabled()) {
+                            log.debug("Extracted filename '{}' from URL '{}'", filename, imageUrl);
+                        }
+                    } else {
+                        log.warn("Could not extract filename from URL: {}", imageUrl);
+                    }
+                });
+        
+        return filenames;
+    }
+
+    /**
+     * Extract filename từ URL, xử lý các trường hợp:
+     * - URL có domain: http://example.com/files/images/products/filename.jpg
+     * - URL có context-path: /catalogs/files/images/products/filename.jpg
+     * - URL đơn giản: /files/images/products/filename.jpg
+     * - URL có query params: /files/images/products/filename.jpg?version=1
+     * - Chỉ có filename: filename.jpg
+     */
+    private String extractFilenameFromUrl(String imageUrl) {
+        if (imageUrl == null || imageUrl.isEmpty()) {
+            return null;
+        }
+        
+        try {
+            // Loại bỏ query params và fragment nếu có
+            String urlWithoutQuery = imageUrl;
+            int queryIndex = imageUrl.indexOf('?');
+            if (queryIndex > 0) {
+                urlWithoutQuery = imageUrl.substring(0, queryIndex);
+            }
+            int fragmentIndex = urlWithoutQuery.indexOf('#');
+            if (fragmentIndex > 0) {
+                urlWithoutQuery = urlWithoutQuery.substring(0, fragmentIndex);
+            }
+            
+            // Nếu là URL đầy đủ (có protocol), parse bằng URI
+            if (urlWithoutQuery.contains("://")) {
+                try {
+                    URI uri = new URI(urlWithoutQuery);
+                    String path = uri.getPath();
+                    if (path != null && !path.isEmpty()) {
+                        // Lấy phần cuối cùng của path (filename)
+                        int lastSlash = path.lastIndexOf('/');
+                        if (lastSlash >= 0 && lastSlash < path.length() - 1) {
+                            return path.substring(lastSlash + 1);
+                        }
+                        return path;
+                    }
+                } catch (URISyntaxException e) {
+                    log.warn("Invalid URI format: {}", urlWithoutQuery);
+                }
+            }
+            
+            // Nếu là relative path, lấy phần cuối cùng sau dấu /
+            int lastSlash = urlWithoutQuery.lastIndexOf('/');
+            if (lastSlash >= 0 && lastSlash < urlWithoutQuery.length() - 1) {
+                return urlWithoutQuery.substring(lastSlash + 1);
+            }
+            
+            // Nếu không có dấu /, coi như đã là filename
+            return urlWithoutQuery;
+            
+        } catch (Exception e) {
+            log.warn("Error extracting filename from URL '{}': {}", imageUrl, e.getMessage());
+            return null;
+        }
     }
 
     /**
@@ -94,10 +179,14 @@ public class ImageCleanupService {
         log.info("Starting manual image cleanup...");
         
         try {
-            Set<String> usedImages = getUsedImageUrls();
+            // Lấy tất cả filename đang được sử dụng trong database
+            Set<String> usedFilenames = getUsedImageFilenames();
+            log.info("Found {} used image filenames in database", usedFilenames.size());
+            
             Path imagesDir = Paths.get(uploadDir, "images", "products");
             
             if (!Files.exists(imagesDir)) {
+                log.info("Images directory does not exist");
                 return 0;
             }
             
@@ -105,12 +194,15 @@ public class ImageCleanupService {
                     .filter(Files::isRegularFile)
                     .collect(Collectors.toList());
             
+            log.info("Found {} images in directory", allImages.size());
+            
             int deletedCount = 0;
+            int keptCount = 0;
             for (Path imagePath : allImages) {
                 String fileName = imagePath.getFileName().toString();
-                String imageUrl = "/files/images/products/" + fileName;
                 
-                if (!usedImages.contains(imageUrl)) {
+                // So sánh filename thay vì so sánh toàn bộ URL
+                if (!usedFilenames.contains(fileName)) {
                     try {
                         Files.delete(imagePath);
                         deletedCount++;
@@ -118,10 +210,16 @@ public class ImageCleanupService {
                     } catch (IOException e) {
                         log.error("Failed to delete image {}: {}", fileName, e.getMessage());
                     }
+                } else {
+                    keptCount++;
+                    if (log.isDebugEnabled()) {
+                        log.debug("Keeping used image: {}", fileName);
+                    }
                 }
             }
             
-            log.info("Manual cleanup completed. Deleted {} unused images", deletedCount);
+            log.info("Manual cleanup completed. Deleted {} unused images, kept {} used images", 
+                    deletedCount, keptCount);
             return deletedCount;
             
         } catch (Exception e) {
