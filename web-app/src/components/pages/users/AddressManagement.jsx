@@ -50,8 +50,9 @@ const AddressManagement = () => {
             const data = await addressService.getCustomerAddresses();
             setAddresses(data);
         } catch (error) {
-            setError('Unable to connect to server. Please check if Profile Service is running.');
-            showToast('Unable to connect to server. Please check if Profile Service is running.', 'error');
+            const message = error?.message || 'Unable to connect to server. Please check if Profile Service is running.';
+            setError(message);
+            showToast(message, 'error');
         } finally {
             setLoading(false);
         }
@@ -261,8 +262,9 @@ const AddressManagement = () => {
                 wardCode: ''
             });
         } catch (error) {
-            setError('Error occurred while saving address');
-            showToast('Error occurred while saving address', 'error');
+            const message = error?.message || 'Error occurred while saving address';
+            setError(message);
+            showToast(message, 'error');
         } finally {
             setSubmitting(false);
         }
@@ -345,8 +347,9 @@ const AddressManagement = () => {
                 // Silent refresh in background to ensure consistency
                 loadAddressesSilent();
             } catch (error) {
-                setError('Error occurred while deleting address');
-                showToast('Error occurred while deleting address', 'error');
+                const message = error?.message || 'Error occurred while deleting address';
+                setError(message);
+                showToast(message, 'error');
                 // On failure, reload actual list
                 loadAddressesSilent();
             } finally {
