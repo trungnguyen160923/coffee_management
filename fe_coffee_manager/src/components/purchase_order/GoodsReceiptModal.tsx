@@ -567,9 +567,6 @@ const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
       // Get current branch ID from user context
       const currentBranchId = user?.branchId ? Number(user.branchId) : null;
       
-      console.log('Creating conversion for branch ID:', currentBranchId);
-      console.log('Conversion data:', conversionData);
-
       await catalogService.createUnitConversion({
         ingredientId: conversionData.ingredientId,
         fromUnitCode: conversionData.fromUnit,
@@ -677,13 +674,6 @@ const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
         }
         const validation = validateQuantityWithDamage(detail);
         
-        console.log('Validation check:', {
-          ingredient: detail.ingredient?.name || 'Unknown Ingredient',
-          validationStatus: validation.status,
-          quantityValidationStatus: detail.quantityValidation?.status,
-          hasAction: !!detail.quantityValidation?.status
-        });
-        
         // Check if item has issues (SHORT, OVER, DAMAGE) but no action selected
         // Use selectedActions instead of quantityValidation as it might be overwritten
         const detailIndex = details.indexOf(detail);
@@ -701,8 +691,6 @@ const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
           actionValidationErrors.push(`${detail.ingredient?.name || 'Unknown Ingredient'}: Please select an action for damage (Accept Full Damage, Take Good Parts, or Return Damaged)`);
         }
       }
-      
-      console.log('Action validation errors:', actionValidationErrors);
       
       if (actionValidationErrors.length > 0) {
         // Show each error separately

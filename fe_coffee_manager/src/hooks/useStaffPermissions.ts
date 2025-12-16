@@ -20,8 +20,6 @@ export function useStaffPermissions() {
     const fetchRoleNames = async () => {
       try {
         const names = await getStaffRoleNames(user);
-        console.log('[useStaffPermissions] User roleIds:', user.staffBusinessRoleIds);
-        console.log('[useStaffPermissions] Mapped roleNames:', names);
         setRoleNames(names);
       } catch (error) {
         console.error('Failed to fetch staff role names:', error);
@@ -56,8 +54,6 @@ export function useStaffPermissions() {
       canViewTables: canViewTablesSync(user, roleNames),
       canViewStockUsage: canViewStockUsageSync(user, roleNames),
     };
-    
-    console.log('[useStaffPermissions] Calculated permissions:', perms);
     return perms;
   }, [
     user?.id, 

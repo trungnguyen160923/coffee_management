@@ -222,9 +222,6 @@ export default function StaffShiftRegistration() {
       // Error code can be in error.code or error.response.code
       const errorCode = error?.code || error?.response?.code;
       const errorMessage = error?.response?.message || error?.message || 'Failed to register for shift';
-      
-      console.log('Error details:', { errorCode, errorMessage, error });
-      
       // Check if it's a labor law violation (by code or message)
       if (isLaborLawViolation(errorCode, errorMessage)) {
         // Find the shift

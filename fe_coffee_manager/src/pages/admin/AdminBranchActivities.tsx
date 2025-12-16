@@ -50,8 +50,6 @@ export function AdminBranchActivities() {
         const resp = await apiClient.get<{ code: number; result: { data: Branch[]; total: number; page: number; size: number; totalPages: number } }>(`${API_ENDPOINTS.BRANCHES.BASE}/paged${qs}`);
         const payload = resp?.result;
         const branchesList = payload?.data || [];
-        
-        console.log('Loaded branches:', branchesList.length, branchesList);
         setBranches(branchesList);
         
         // Auto-select first branch if available

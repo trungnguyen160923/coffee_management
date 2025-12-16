@@ -56,12 +56,6 @@ public class StaffPermissionValidator {
      * @return List of role IDs, or empty list if not found or not a staff user
      */
     public static List<Integer> getStaffBusinessRoleIds(ProfileServiceClient profileServiceClient) {
-        // First, check if user is STAFF
-        String userRole = SecurityUtils.getCurrentUserRole();
-        if (userRole == null || !"STAFF".equals(userRole)) {
-            return Collections.emptyList();
-        }
-        
         // Get user ID from JWT
         Integer userId = SecurityUtils.getCurrentUserId();
         if (userId == null || profileServiceClient == null) {
@@ -101,9 +95,11 @@ public class StaffPermissionValidator {
             
             if (profileResponse != null && profileResponse.getResult() != null) {
                 StaffProfileResponse staffProfile = profileResponse.getResult();
-                return staffProfile.getStaffBusinessRoleIds() != null 
+                List<Integer> ids = staffProfile.getStaffBusinessRoleIds() != null 
                     ? staffProfile.getStaffBusinessRoleIds() 
                     : Collections.emptyList();
+                log.debug("[StaffPermissionValidator] Loaded staffBusinessRoleIds from profile-service for userId {}: {}", userId, ids);
+                return ids;
             }
         } catch (Exception e) {
             log.error("[StaffPermissionValidator] Exception when fetching staff profile: {}", e.getMessage());
@@ -177,11 +173,13 @@ public class StaffPermissionValidator {
         // First, check if user is STAFF
         String userRole = SecurityUtils.getCurrentUserRole();
         if (userRole == null || !"STAFF".equals(userRole)) {
+            log.debug("[StaffPermissionValidator] User is not STAFF when resolving role names (role={}), returning empty list", userRole);
             return Collections.emptyList();
         }
         
         // Try to get role IDs from JWT first (if available in future)
         List<Integer> roleIds = getStaffBusinessRoleIdsFromJWT();
+        log.debug("[StaffPermissionValidator] staffBusinessRoleIds from JWT claim: {}", roleIds);
         
         // If not in JWT, fetch from profile service
         if (roleIds.isEmpty() && profileServiceClient != null) {
@@ -189,13 +187,16 @@ public class StaffPermissionValidator {
         }
         
         if (roleIds.isEmpty()) {
+            log.debug("[StaffPermissionValidator] No staffBusinessRoleIds found for current user, returning empty role name list");
             return Collections.emptyList();
         }
         
         // Map role IDs to role names using auth service
         if (authServiceClient != null) {
             try {
-                return mapRoleIdsToNames(roleIds, authServiceClient);
+                List<String> names = mapRoleIdsToNames(roleIds, authServiceClient);
+                log.debug("[StaffPermissionValidator] Resolved staffBusinessRoleIds {} to roleNames {}", roleIds, names);
+                return names;
             } catch (Exception e) {
                 log.error("[StaffPermissionValidator] Failed to map roleIds to role names: {}", e.getMessage());
                 return Collections.emptyList();
@@ -203,6 +204,7 @@ public class StaffPermissionValidator {
         }
         
         // If no auth service client provided, return empty list
+        log.warn("[StaffPermissionValidator] authServiceClient is null, cannot resolve role IDs {} to names", roleIds);
         return Collections.emptyList();
     }
     
@@ -311,8 +313,11 @@ public class StaffPermissionValidator {
             AuthServiceClient authServiceClient, 
             String... requiredRoles) {
         List<String> userRoles = getStaffBusinessRoleNames(profileServiceClient, authServiceClient);
-        return Arrays.stream(requiredRoles)
+        boolean hasAny = Arrays.stream(requiredRoles)
                 .anyMatch(userRoles::contains);
+        log.debug("[StaffPermissionValidator] hasAnyStaffRole userRoles = {}, requiredAnyOf = {}, hasAny = {}",
+                userRoles, Arrays.asList(requiredRoles), hasAny);
+        return hasAny;
     }
     
     /**
@@ -331,10 +336,15 @@ public class StaffPermissionValidator {
         List<String> userRoles = getStaffBusinessRoleNames(profileServiceClient, authServiceClient);
         
         if (!userRoles.contains(requiredRole)) {
+            log.debug("[StaffPermissionValidator] requireStaffRole FAILED. requiredRole = {}, userRoles = {}",
+                    requiredRole, userRoles);
             throw new AppException(
                     ErrorCode.ACCESS_DENIED,
                     String.format("Access denied. Required role: %s", requiredRole)
             );
+        } else {
+            log.debug("[StaffPermissionValidator] requireStaffRole PASSED. requiredRole = {}, userRoles = {}",
+                    requiredRole, userRoles);
         }
     }
     
@@ -353,10 +363,14 @@ public class StaffPermissionValidator {
             String... requiredRoles) {
         if (!hasAnyStaffRole(profileServiceClient, authServiceClient, requiredRoles)) {
             String rolesStr = String.join(", ", requiredRoles);
+            log.debug("[StaffPermissionValidator] requireAnyStaffRole FAILED. requiredAnyOf = {}, currentRoles do not satisfy requirements",
+                    rolesStr);
             throw new AppException(
                     ErrorCode.ACCESS_DENIED,
                     String.format("Access denied. Required one of the following roles: %s", rolesStr)
             );
+        } else {
+            log.debug("[StaffPermissionValidator] requireAnyStaffRole PASSED. requiredAnyOf = {}", Arrays.asList(requiredRoles));
         }
     }
     
@@ -392,6 +406,20 @@ public class StaffPermissionValidator {
      * Check if user can access table management (CASHIER_STAFF or SERVER_STAFF)
      */
     public static void requireTableManagementAccess(ProfileServiceClient profileServiceClient, AuthServiceClient authServiceClient) {
+        // Resolve staff business role names first
+        List<String> roleNames = getStaffBusinessRoleNames(profileServiceClient, authServiceClient);
+        String userRole = SecurityUtils.getCurrentUserRole();
+
+        // Backward-compatibility fallback:
+        // If we cannot resolve any staff business roles BUT the user is STAFF,
+        // allow access to table management to avoid blocking existing STAFF accounts.
+        if ((roleNames == null || roleNames.isEmpty()) && "STAFF".equalsIgnoreCase(String.valueOf(userRole))) {
+            log.warn("[StaffPermissionValidator] No staff business roles resolved for STAFF user {}. " +
+                     "Allowing table management access for backward compatibility.", SecurityUtils.getCurrentUserId());
+            return;
+        }
+
+        // Normal strict check: require CASHIER_STAFF or SERVER_STAFF
         requireAnyStaffRole(profileServiceClient, authServiceClient, CASHIER_STAFF, SERVER_STAFF);
     }
     
@@ -410,5 +438,6 @@ public class StaffPermissionValidator {
             roleIdToNameCache.clear();
         }
     }
+
 }
 

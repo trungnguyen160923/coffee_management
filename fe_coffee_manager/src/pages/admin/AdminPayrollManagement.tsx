@@ -84,22 +84,13 @@ const AdminPayrollManagement: React.FC = () => {
 
   const fetchBranches = async () => {
     try {
-      console.log('Fetching branches...');
       const response = await branchService.getBranches();
-      console.log('Branches response:', response);
-      console.log('Branches array:', response.branches);
       setBranches(response.branches || []);
       if (!response.branches || response.branches.length === 0) {
         console.warn('No branches found in response');
       }
     } catch (err: any) {
       console.error('Error fetching branches:', err);
-      console.error('Error details:', {
-        message: err?.message,
-        status: err?.status,
-        code: err?.code,
-        response: err?.response,
-      });
       toast.error(err?.message || 'Failed to load branches');
     }
   };

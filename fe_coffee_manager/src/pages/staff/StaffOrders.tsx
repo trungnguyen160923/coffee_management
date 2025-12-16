@@ -98,7 +98,6 @@ export default function StaffOrders() {
                 } catch (posError: any) {
                     // If user doesn't have permission for POS orders, just set empty array
                     // Don't show error as this is expected for non-CASHIER_STAFF roles
-                    console.log('[StaffOrders] User does not have permission to view POS orders, skipping...');
                     setPosOrders([]);
                 }
             } else {

@@ -424,7 +424,8 @@ jobs:
             if ! check_health "Auth Service (Direct)" "http://localhost:8001/auth-service/actuator/health" 5 10; then
               echo ""
               echo "=== Auth Service Logs (last 30 lines) ==="
-              REGISTRY_PREFIX=$REGISTRY_PREFIX docker compose -f $COMPOSE_FILE --env-file .env.prod logs --tail=30 auth-service || true
+              # Service name in docker-compose.prod.registry.yml is 'auth', not 'auth-service'
+              REGISTRY_PREFIX=$REGISTRY_PREFIX docker compose -f $COMPOSE_FILE --env-file .env.prod logs --tail=30 auth || true
               exit 1
             fi
             sleep 2  # Small delay between checks

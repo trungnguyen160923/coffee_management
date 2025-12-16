@@ -332,12 +332,21 @@ export default function StaffPOS() {
             }
         } catch (error: any) {
             console.error('Failed to search customer:', error);
-            if (error?.response?.status === 404 || error?.response?.data?.code === 1024) {
-                setCustomerSearchError('Customer not found');
-                toast.error('Không tìm thấy khách hàng với số điện thoại này');
+
+            // Ưu tiên dùng message trả về từ BE (api.ts đã gán vào error.message và error.response.message)
+            const beMessage =
+                error?.response?.message ||
+                error?.message ||
+                'Có lỗi xảy ra khi tìm kiếm khách hàng';
+
+            if (error?.status === 404 || error?.code === 1024) {
+                // 404 hoặc code 1024: khách hàng không tồn tại
+                setCustomerSearchError(beMessage);
+                toast.error(beMessage);
             } else {
-                setCustomerSearchError('Failed to search customer. Please try again.');
-                toast.error('Lỗi khi tìm kiếm khách hàng. Vui lòng thử lại.');
+                // Các lỗi khác: vẫn hiển thị message từ BE nếu có
+                setCustomerSearchError(beMessage);
+                toast.error(beMessage);
             }
         } finally {
             setSearchingCustomer(false);
@@ -1075,15 +1084,7 @@ export default function StaffPOS() {
                                             >
                                                 Deselect
                                             </button>
-                                            <button
-                                                onClick={() => {
-                                                    // Add logic to create order for this table
-                                                    console.log('Creating order for table:', selectedTable);
-                                                }}
-                                                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
-                                            >
-                                                Create Order
-                                            </button>
+                                            {/* Future: add quick-create order for this table */}
                                         </div>
                                     </div>
                                 )}

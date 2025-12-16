@@ -37,23 +37,10 @@ export function ProtectedStaffRoute({ children, requiredPermission }: ProtectedS
 
   // Check permission
   const hasPermission = staffPermissions[requiredPermission] === true;
-  
-  console.log(`[ProtectedStaffRoute] requiredPermission: ${requiredPermission}, hasPermission: ${hasPermission}, loading: ${staffPermissions.loading}`);
-  console.log(`[ProtectedStaffRoute] roleNames: [${staffPermissions.roleNames.join(', ')}]`);
-  console.log(`[ProtectedStaffRoute] All permissions:`, {
-    canViewPOS: staffPermissions.canViewPOS,
-    canViewOrders: staffPermissions.canViewOrders,
-    canViewReservations: staffPermissions.canViewReservations,
-    canViewTables: staffPermissions.canViewTables,
-    canViewRecipes: staffPermissions.canViewRecipes,
-    canViewStockUsage: staffPermissions.canViewStockUsage,
-    canViewMenuItems: staffPermissions.canViewMenuItems,
-  });
 
   // If permissions are still loading or roleNames are empty but user has roleIds, allow access temporarily
   // This handles the case where API call might be slow or failed
   if (staffPermissions.loading || (staffPermissions.roleNames.length === 0 && user?.staffBusinessRoleIds && user.staffBusinessRoleIds.length > 0)) {
-    console.log(`[ProtectedStaffRoute] Allowing access temporarily - loading: ${staffPermissions.loading}, roleNames empty: ${staffPermissions.roleNames.length === 0}`);
     return <>{children}</>;
   }
 

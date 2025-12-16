@@ -86,11 +86,9 @@ async function getRolesMapping(): Promise<Map<number, string>> {
     try {
       const { authService } = await import('../services/authService');
       const roles = await authService.getStaffBusinessRoles();
-      console.log('[getRolesMapping] Fetched roles from API:', roles);
       const mapping = new Map<number, string>();
       roles.forEach(role => {
         mapping.set(role.roleId, role.name);
-        console.log(`[getRolesMapping] Mapped roleId ${role.roleId} -> ${role.name}`);
       });
       rolesCache = mapping;
       return mapping;
@@ -110,28 +108,18 @@ async function getRolesMapping(): Promise<Map<number, string>> {
  */
 export async function getStaffRoleNames(user: User | null): Promise<string[]> {
   if (!user || user.role !== 'staff' || !user.staffBusinessRoleIds || user.staffBusinessRoleIds.length === 0) {
-    console.log(`[getStaffRoleNames] User ${user?.id} has no roleIds, returning empty array`);
     return [];
   }
   
   try {
     const rolesMapping = await getRolesMapping();
-    console.log(`[getStaffRoleNames] Roles mapping size: ${rolesMapping.size}`);
     
     const roleNames = user.staffBusinessRoleIds
       .map(roleId => {
         const name = rolesMapping.get(roleId);
-        console.log(`[getStaffRoleNames] Mapping roleId ${roleId} -> ${name || 'NOT FOUND'}`);
         return name;
       })
       .filter((name): name is string => Boolean(name));
-    
-    console.log(`[getStaffRoleNames] Final roleNames for user ${user.id}:`, roleNames);
-    
-    // If we have roleIds but no roleNames mapped, log warning
-    if (user.staffBusinessRoleIds.length > 0 && roleNames.length === 0) {
-      console.warn(`[getStaffRoleNames] WARNING: User ${user.id} has roleIds [${user.staffBusinessRoleIds.join(', ')}] but no roleNames were mapped!`);
-    }
     
     return roleNames;
   } catch (error) {
@@ -220,9 +208,7 @@ export function canViewRecipesSync(user: User | null, roleNames: string[]): bool
   if (roleNames.length === 0 && user.staffBusinessRoleIds.length > 0) return true;
   
   // If user has at least one role that can view recipes, return true
-  const result = ROLES_CAN_VIEW_RECIPES.some(role => roleNames.includes(role));
-  console.log(`[canViewRecipesSync] User ${user.id}, roleNames: [${roleNames.join(', ')}], canViewRecipes: ${result}`);
-  return result;
+  return ROLES_CAN_VIEW_RECIPES.some(role => roleNames.includes(role));
 }
 
 export function canViewMenuItemsSync(user: User | null, roleNames: string[]): boolean {
@@ -237,9 +223,7 @@ export function canViewMenuItemsSync(user: User | null, roleNames: string[]): bo
   // If roleNames is empty but user has roleIds, might be still loading - allow temporarily
   if (roleNames.length === 0 && user.staffBusinessRoleIds.length > 0) return true;
   
-  const result = !roleNames.includes(STAFF_ROLES.SECURITY_STAFF);
-  console.log(`[canViewMenuItemsSync] User ${user.id}, roleNames: [${roleNames.join(', ')}], canViewMenuItems: ${result}`);
-  return result;
+  return !roleNames.includes(STAFF_ROLES.SECURITY_STAFF);
 }
 
 /**
@@ -335,9 +319,7 @@ export function canViewPOSSync(user: User | null, roleNames: string[]): boolean 
   if (!user.staffBusinessRoleIds || user.staffBusinessRoleIds.length === 0) return true;
   // If roleNames is empty but user has roleIds, might be still loading - allow temporarily
   if (roleNames.length === 0 && user.staffBusinessRoleIds.length > 0) return true;
-  const result = ROLES_CAN_VIEW_POS.some(role => roleNames.includes(role));
-  console.log(`[canViewPOSSync] User ${user.id}, roleNames: [${roleNames.join(', ')}], canViewPOS: ${result}`);
-  return result;
+  return ROLES_CAN_VIEW_POS.some(role => roleNames.includes(role));
 }
 
 export function canViewOrdersSync(user: User | null, roleNames: string[]): boolean {
@@ -345,9 +327,7 @@ export function canViewOrdersSync(user: User | null, roleNames: string[]): boole
   if (!user.staffBusinessRoleIds || user.staffBusinessRoleIds.length === 0) return true;
   // If roleNames is empty but user has roleIds, might be still loading - allow temporarily
   if (roleNames.length === 0 && user.staffBusinessRoleIds.length > 0) return true;
-  const result = ROLES_CAN_VIEW_ORDERS.some(role => roleNames.includes(role));
-  console.log(`[canViewOrdersSync] User ${user.id}, roleNames: [${roleNames.join(', ')}], canViewOrders: ${result}`);
-  return result;
+  return ROLES_CAN_VIEW_ORDERS.some(role => roleNames.includes(role));
 }
 
 export function canViewReservationsSync(user: User | null, roleNames: string[]): boolean {
@@ -355,9 +335,7 @@ export function canViewReservationsSync(user: User | null, roleNames: string[]):
   if (!user.staffBusinessRoleIds || user.staffBusinessRoleIds.length === 0) return true;
   // If roleNames is empty but user has roleIds, might be still loading - allow temporarily
   if (roleNames.length === 0 && user.staffBusinessRoleIds.length > 0) return true;
-  const result = ROLES_CAN_VIEW_RESERVATIONS.some(role => roleNames.includes(role));
-  console.log(`[canViewReservationsSync] User ${user.id}, roleNames: [${roleNames.join(', ')}], canViewReservations: ${result}`);
-  return result;
+  return ROLES_CAN_VIEW_RESERVATIONS.some(role => roleNames.includes(role));
 }
 
 export function canViewTablesSync(user: User | null, roleNames: string[]): boolean {
@@ -365,9 +343,7 @@ export function canViewTablesSync(user: User | null, roleNames: string[]): boole
   if (!user.staffBusinessRoleIds || user.staffBusinessRoleIds.length === 0) return true;
   // If roleNames is empty but user has roleIds, might be still loading - allow temporarily
   if (roleNames.length === 0 && user.staffBusinessRoleIds.length > 0) return true;
-  const result = ROLES_CAN_VIEW_TABLES.some(role => roleNames.includes(role));
-  console.log(`[canViewTablesSync] User ${user.id}, roleNames: [${roleNames.join(', ')}], canViewTables: ${result}`);
-  return result;
+  return ROLES_CAN_VIEW_TABLES.some(role => roleNames.includes(role));
 }
 
 export function canViewStockUsageSync(user: User | null, roleNames: string[]): boolean {
@@ -375,9 +351,7 @@ export function canViewStockUsageSync(user: User | null, roleNames: string[]): b
   if (!user.staffBusinessRoleIds || user.staffBusinessRoleIds.length === 0) return true;
   // If roleNames is empty but user has roleIds, might be still loading - allow temporarily
   if (roleNames.length === 0 && user.staffBusinessRoleIds.length > 0) return true;
-  const result = ROLES_CAN_VIEW_STOCK_USAGE.some(role => roleNames.includes(role));
-  console.log(`[canViewStockUsageSync] User ${user.id}, roleNames: [${roleNames.join(', ')}], canViewStockUsage: ${result}`);
-  return result;
+  return ROLES_CAN_VIEW_STOCK_USAGE.some(role => roleNames.includes(role));
 }
 
 /**
