@@ -2,6 +2,7 @@ package com.service.profile.controller;
 
 import com.service.profile.dto.ApiResponse;
 import com.service.profile.dto.request.CustomerProfileCreationRequest;
+import com.service.profile.dto.request.CustomerProfileUpdateRequest;
 import com.service.profile.dto.response.CustomerProfileResponse;
 import com.service.profile.service.CustomerProfileService;
 import jakarta.validation.Valid;
@@ -12,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -39,6 +41,12 @@ public class CustomerProfileController {
     @GetMapping("/{userId}")
     ApiResponse<CustomerProfileResponse> getCustomerProfile(@PathVariable Integer userId) {
         CustomerProfileResponse result = customerProfileService.getCustomerProfile(userId);
+        return ApiResponse.<CustomerProfileResponse>builder().result(result).build();
+    }
+
+    @PutMapping("/me")
+    ApiResponse<CustomerProfileResponse> updateOwnCustomerProfile(@Valid @RequestBody CustomerProfileUpdateRequest request) {
+        CustomerProfileResponse result = customerProfileService.updateOwnCustomerProfile(request);
         return ApiResponse.<CustomerProfileResponse>builder().result(result).build();
     }
 

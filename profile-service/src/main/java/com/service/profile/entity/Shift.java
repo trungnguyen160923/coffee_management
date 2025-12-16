@@ -52,6 +52,9 @@ public class Shift {
     @Column(name = "status", nullable = false, length = 20)
     String status;
 
+    @Column(name = "shift_type", nullable = false, length = 20)
+    String shiftType; // NORMAL, WEEKEND, HOLIDAY, OVERTIME
+
     @Column(name = "created_by", nullable = false)
     Integer createdBy; // manager user_id
 
@@ -74,6 +77,19 @@ public class Shift {
         // Nếu employmentType null và có template, kế thừa từ template
         if (employmentType == null && template != null && template.getEmploymentType() != null) {
             employmentType = template.getEmploymentType();
+        }
+        // Nếu shiftType null, tự động xác định dựa trên shiftDate
+        if (shiftType == null && shiftDate != null) {
+            // Kiểm tra xem có phải cuối tuần không
+            java.time.DayOfWeek dayOfWeek = shiftDate.getDayOfWeek();
+            if (dayOfWeek == java.time.DayOfWeek.SATURDAY || dayOfWeek == java.time.DayOfWeek.SUNDAY) {
+                shiftType = "WEEKEND";
+            } else {
+                shiftType = "NORMAL";
+            }
+        } else if (shiftType == null) {
+            // Fallback nếu không có shiftDate
+            shiftType = "NORMAL";
         }
     }
 

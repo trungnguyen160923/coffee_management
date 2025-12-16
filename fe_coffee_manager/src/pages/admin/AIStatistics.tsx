@@ -48,7 +48,7 @@ import {
 } from 'recharts';
 
 // Import service for single branch data
-import { aiStatisticsService } from '../../services';
+import { aiStatisticsService, branchService } from '../../services';
 import { AIAnalysisResponse, AllBranchesMonthlyStats, AllBranchesYearlyStats, BranchMonthlyStats, BranchYearlyStats } from '../../services/aiStatisticsService';
 import { exportAllBranchesToPDF } from '../../services/pdfExportService';
 import { toast } from 'react-hot-toast';
@@ -147,6 +147,8 @@ export default function MultiBranchDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [aiData, setAiData] = useState<AllBranchesAIAnalysisResponse | null>(null);
   const [branchesData, setBranchesData] = useState<BranchData[]>([]);
+  // branchOptions luôn dùng cho dropdown, độc lập với dữ liệu AI
+  const [branchOptions, setBranchOptions] = useState<Array<{ id: number; name: string }>>([]);
   const [singleBranchAiData, setSingleBranchAiData] = useState<AIAnalysisResponse | null>(null);
   const [monthlyStats, setMonthlyStats] = useState<AllBranchesMonthlyStats | null>(null);
   const [yearlyStats, setYearlyStats] = useState<AllBranchesYearlyStats | null>(null);
@@ -167,6 +169,64 @@ export default function MultiBranchDashboard() {
       checkExistingAIData();
     }
   }, [selectedDate, activeTab, viewMode]);
+
+  // Tải danh sách chi nhánh cho dropdown (độc lập với dữ liệu AI)
+  useEffect(() => {
+    const fetchBranches = async () => {
+      try {
+        const res = await branchService.getBranches({ status: 'active', limit: 100, page: 1 });
+        const rawBranches =
+          (res as any)?.branches ??
+          (res as any)?.result?.branches ??
+          (res as any)?.result ??
+          [];
+        const opts = Array.isArray(rawBranches)
+          ? rawBranches
+              .map((b: any) => {
+                const id = b.branchId ?? b.id ?? b.branch_id;
+                if (id === undefined || id === null) return null;
+                return { id: Number(id), name: b.name || `Branch ${id}` };
+              })
+              .filter(Boolean) as Array<{ id: number; name: string }>
+          : [];
+        setBranchOptions(opts);
+        if (opts.length > 0 && !opts.some(o => o.id === selectedBranch)) {
+          setSelectedBranch(opts[0].id);
+        }
+      } catch (err) {
+        // Silent fail - branch dropdown will be empty
+      }
+    };
+    fetchBranches();
+  }, [selectedBranch]);
+
+  // Khi có dữ liệu AI, hợp nhất tên chi nhánh từ AI vào danh sách dropdown (không phụ thuộc vào việc có dữ liệu hay không)
+  useEffect(() => {
+    if (branchesData.length === 0) return;
+    setBranchOptions(prev => {
+      const byId = new Map<number, string>();
+      prev.forEach(o => byId.set(o.id, o.name));
+      branchesData.forEach(b => {
+        if (!byId.has(b.id)) byId.set(b.id, b.name);
+      });
+      return Array.from(byId.entries()).map(([id, name]) => ({ id, name }));
+    });
+  }, [branchesData]);
+
+  // Khi đổi chi nhánh ở chế độ single, reset dữ liệu chi nhánh để kích hoạt skeleton/fetch lại
+  useEffect(() => {
+    if (viewMode !== 'single') return;
+    if (activeTab === 'day') {
+      setSingleBranchAiData(null);
+      setHasFetchedAIData(false);
+    }
+    if (activeTab === 'month') {
+      setSingleBranchMonthlyStats(null);
+    }
+    if (activeTab === 'year') {
+      setSingleBranchYearlyStats(null);
+    }
+  }, [selectedBranch, viewMode, activeTab]);
 
   // Check if single branch AI data exists
   useEffect(() => {
@@ -204,7 +264,7 @@ export default function MultiBranchDashboard() {
         }
       } catch (apiError: any) {
         // If 404, no data exists
-        if (apiError?.response?.status === 404) {
+        if (apiError?.response?.status === 404 || apiError?.status === 404) {
           setHasFetchedAIData(false);
         } else {
           // Other errors, don't show error, just mark as no data
@@ -434,14 +494,12 @@ export default function MultiBranchDashboard() {
         }
       } catch (apiError: any) {
         // Nếu 404, có thể là chưa có report, thử gọi với force_refresh=true
-        if (apiError?.status === 404 && !forceRefresh) {
-          console.log('No existing report found, generating new one...');
+        if ((apiError?.status === 404 || apiError?.response?.status === 404) && !forceRefresh) {
           return await fetchAllBranchesData(true);
         }
         throw apiError;
       }
     } catch (err: any) {
-      console.error('Error fetching all branches data:', err);
       const errorMessage = err?.response?.data?.detail || err?.response?.data?.message || err?.message || 'Unable to load data. Please try again.';
       setError(errorMessage);
       setBranchesData([]);
@@ -683,10 +741,11 @@ export default function MultiBranchDashboard() {
                 </button>
                 <button
                   onClick={() => {
-                    if (branchesData.length > 0) {
-                      const currentBranchExists = branchesData.some(b => b.id === selectedBranch);
+                    const list = branchesData.length > 0 ? branchesData : branchOptions;
+                    if (list.length > 0) {
+                      const currentBranchExists = list.some(b => b.id === selectedBranch);
                       if (!currentBranchExists) {
-                        setSelectedBranch(branchesData[0].id);
+                        setSelectedBranch(list[0].id);
                       }
                     }
                     setViewMode('single');
@@ -713,7 +772,7 @@ export default function MultiBranchDashboard() {
                   onChange={(e) => setSelectedBranch(Number(e.target.value))}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500"
                 >
-                  {branchesData.map((branch) => (
+                  {(branchesData.length > 0 ? branchesData : branchOptions).map((branch) => (
                     <option key={branch.id} value={branch.id}>
                       {branch.name}
                     </option>
@@ -795,7 +854,7 @@ export default function MultiBranchDashboard() {
                   onChange={(e) => setSelectedBranch(Number(e.target.value))}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500"
                 >
-                  {branchesData.map((branch) => (
+                  {(branchesData.length > 0 ? branchesData : branchOptions).map((branch) => (
                     <option key={branch.id} value={branch.id}>
                       {branch.name}
                     </option>
@@ -844,10 +903,11 @@ export default function MultiBranchDashboard() {
                 </button>
                 <button
                   onClick={() => {
-                    if (branchesData.length > 0) {
-                      const currentBranchExists = branchesData.some(b => b.id === selectedBranch);
+                    const list = branchesData.length > 0 ? branchesData : branchOptions;
+                    if (list.length > 0) {
+                      const currentBranchExists = list.some(b => b.id === selectedBranch);
                       if (!currentBranchExists) {
-                        setSelectedBranch(branchesData[0].id);
+                        setSelectedBranch(list[0].id);
                       }
                     }
                     setViewMode('single');
@@ -874,7 +934,7 @@ export default function MultiBranchDashboard() {
                   onChange={(e) => setSelectedBranch(Number(e.target.value))}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500"
                 >
-                  {branchesData.map((branch) => (
+                  {(branchesData.length > 0 ? branchesData : branchOptions).map((branch) => (
                     <option key={branch.id} value={branch.id}>
                       {branch.name}
                     </option>

@@ -194,6 +194,23 @@ public class ShiftAssignmentController {
     }
 
     /**
+     * Manager mark assignment as NO_SHOW
+     * PUT /api/shift-assignments/{assignmentId}/mark-no-show
+     */
+    @PutMapping("/{assignmentId}/mark-no-show")
+    @PreAuthorize("hasRole('MANAGER') or hasRole('ADMIN')")
+    public ApiResponse<ShiftAssignmentResponse> markAsNoShow(
+            @PathVariable Integer assignmentId
+    ) {
+        Integer managerUserId = getUserIdFromSecurityContext();
+        ShiftAssignmentResponse result = shiftAssignmentService.markAsNoShow(assignmentId, managerUserId);
+        return ApiResponse.<ShiftAssignmentResponse>builder()
+                .result(result)
+                .message("Assignment marked as NO_SHOW successfully")
+                .build();
+    }
+
+    /**
      * Manager delete assignment
      * DELETE /api/shift-assignments/{assignmentId}
      */

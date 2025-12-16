@@ -143,8 +143,8 @@ public class BranchService {
         Branch branch = branchRepository.findById(branchId)
                 .orElseThrow(() -> new AppException(ErrorCode.BRANCH_NOT_FOUND));
 
-        // Idempotent: only clear if currently assigned to the same manager
-        if (branch.getManagerUserId() != null && branch.getManagerUserId().equals(managerUserId)) {
+        // Force unassign: always clear managerUserId if branch has one assigned
+        if (branch.getManagerUserId() != null) {
             branch.setManagerUserId(null);
             return branchRepository.save(branch);
         }

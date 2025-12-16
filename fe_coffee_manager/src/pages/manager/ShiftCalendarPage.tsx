@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { addDays, eachDayOfInterval, endOfWeek, format, startOfWeek, isBefore, startOfDay, parseISO } from 'date-fns';
 import { enUS } from 'date-fns/locale';
-import { Calendar as CalendarIcon, Clock4, Plus, ChevronLeft, ChevronRight, X, RefreshCw, Send, XCircle, Trash2, Check } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock4, Plus, ChevronLeft, ChevronRight, X, RefreshCw, Send, XCircle, Trash2, Check, Gift, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
 import { shiftService, Shift, ShiftStatus, BatchOperationResult, ShiftRoleRequirement, EmploymentType } from '../../services/shiftService';
@@ -16,6 +16,9 @@ import { Users } from 'lucide-react';
 import { StaffWithUserDto, Branch } from '../../types';
 import { useShiftWebSocket, ShiftUpdatePayload } from '../../hooks/useShiftWebSocket';
 import { branchService } from '../../services/branchService';
+import { bonusService, penaltyService, payrollTemplateService } from '../../services';
+import { BonusType, PenaltyType } from '../../types/payroll';
+import { BonusTemplate, PenaltyConfig } from '../../services/payrollTemplateService';
 
 type Mode = 'create' | 'edit' | 'view';
 
@@ -141,6 +144,39 @@ export default function ShiftCalendarPage() {
     onConfirm: () => void;
   }>({ open: false, closedDates: [], onConfirm: () => {} });
 
+  // Quick create bonus/penalty modal state
+  const [quickCreateModal, setQuickCreateModal] = useState<{
+    open: boolean;
+    type: 'bonus' | 'penalty' | null;
+    staffUserIds: number[];
+    staffNames: string[];
+    shiftId: number | null;
+    shiftDate: string;
+  }>({
+    open: false,
+    type: null,
+    staffUserIds: [],
+    staffNames: [],
+    shiftId: null,
+    shiftDate: '',
+  });
+  const [quickCreateForm, setQuickCreateForm] = useState({
+    type: '',
+    amount: '',
+    description: '',
+    incidentDate: '',
+    templateId: '',
+  });
+  const [quickCreateLoading, setQuickCreateLoading] = useState(false);
+  const [bonusTemplates, setBonusTemplates] = useState<BonusTemplate[]>([]);
+  const [penaltyTemplates, setPenaltyTemplates] = useState<PenaltyConfig[]>([]);
+  const [quickCreateTemplateDefaults, setQuickCreateTemplateDefaults] = useState<{
+    type?: string;
+    amount?: string;
+    description?: string;
+  } | null>(null);
+  const [selectedAssignedStaffIds, setSelectedAssignedStaffIds] = useState<number[]>([]);
+
 
   const branchId = useMemo(() => {
     if (managerBranch?.branchId) return managerBranch.branchId;
@@ -148,6 +184,49 @@ export default function ShiftCalendarPage() {
     if (user?.branchId) return Number(user.branchId);
     return null;
   }, [user, managerBranch]);
+
+  // Load templates for quick create
+  useEffect(() => {
+    const fetchTemplates = async () => {
+      try {
+        const [bonus, penalty] = await Promise.all([
+          payrollTemplateService.getBonusTemplatesForManager(),
+          payrollTemplateService.getPenaltyConfigsForManager(),
+        ]);
+        setBonusTemplates(bonus || []);
+        setPenaltyTemplates(penalty || []);
+      } catch (err) {
+        console.error('Failed to load templates', err);
+      }
+    };
+    fetchTemplates();
+  }, []);
+
+  // Clear selected staff when closing shift modal
+  useEffect(() => {
+    if (!isShiftModalOpen) {
+      setSelectedAssignedStaffIds([]);
+    }
+  }, [isShiftModalOpen]);
+
+  // Helper: update form and clear template if user overrides template defaults
+  const updateQuickCreateField = (key: 'type' | 'amount' | 'description' | 'incidentDate', value: string) => {
+    setQuickCreateForm((prev) => {
+      const next = { ...prev, [key]: value };
+      let clearTemplate = false;
+      if (prev.templateId && quickCreateTemplateDefaults) {
+        if (key === 'type' && value !== quickCreateTemplateDefaults.type) clearTemplate = true;
+        if (key === 'amount' && value !== quickCreateTemplateDefaults.amount) clearTemplate = true;
+        if (key === 'description' && value !== quickCreateTemplateDefaults.description) clearTemplate = true;
+        if (key === 'incidentDate') clearTemplate = true; // not from template; any edit means custom
+      }
+      if (clearTemplate) {
+        next.templateId = '';
+        setQuickCreateTemplateDefaults(null);
+      }
+      return next;
+    });
+  };
 
   const today = useMemo(() => startOfDay(new Date()), []);
 
@@ -707,6 +786,127 @@ export default function ShiftCalendarPage() {
       console.error('Failed to delete shift', e);
       const errorMessage = e.response?.data?.message || e.message || 'Failed to delete shift';
       toast.error(errorMessage);
+    }
+  };
+
+  // Helper function to get period from date (YYYY-MM format)
+  const getPeriodFromDate = (dateStr: string): string => {
+    const date = parseISO(dateStr);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    return `${year}-${month}`;
+  };
+
+  // Handle quick create bonus/penalty
+  const handleQuickCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quickCreateModal.staffUserIds.length || !quickCreateModal.type) return;
+
+    // Validation
+    if (!quickCreateForm.type) {
+      toast.error(`Please select a ${quickCreateModal.type === 'bonus' ? 'bonus' : 'penalty'} type`);
+      return;
+    }
+    if (!quickCreateForm.amount || Number(quickCreateForm.amount) <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+    if (!quickCreateForm.description) {
+      toast.error('Please enter a description');
+      return;
+    }
+
+    try {
+      setQuickCreateLoading(true);
+      const period = getPeriodFromDate(quickCreateModal.shiftDate);
+
+      if (quickCreateModal.type === 'bonus') {
+        if (quickCreateForm.templateId) {
+          const templateId = Number(quickCreateForm.templateId);
+          await Promise.all(
+            quickCreateModal.staffUserIds.map((staffId) =>
+              bonusService.applyTemplate({
+                userId: staffId,
+                period,
+                templateId,
+                overrideAmount: Number(quickCreateForm.amount),
+                overrideDescription: quickCreateForm.description,
+                shiftId: quickCreateModal.shiftId ?? undefined,
+              })
+            )
+          );
+        } else {
+          await Promise.all(
+            quickCreateModal.staffUserIds.map((staffId) =>
+              bonusService.createBonus({
+                userId: staffId,
+                period,
+                bonusType: quickCreateForm.type as BonusType,
+                amount: Number(quickCreateForm.amount),
+                description: quickCreateForm.description,
+                shiftId: quickCreateModal.shiftId ?? undefined,
+              })
+            )
+          );
+        }
+        toast.success('Bonus created successfully');
+      } else {
+        if (quickCreateForm.templateId) {
+          const templateId = Number(quickCreateForm.templateId);
+          await Promise.all(
+            quickCreateModal.staffUserIds.map((staffId) =>
+              penaltyService.applyTemplate({
+                userId: staffId,
+                period,
+                templateId,
+                overrideAmount: Number(quickCreateForm.amount),
+                overrideDescription: quickCreateForm.description,
+                shiftId: quickCreateModal.shiftId ?? undefined,
+                incidentDate: quickCreateForm.incidentDate || quickCreateModal.shiftDate,
+              })
+            )
+          );
+        } else {
+          await Promise.all(
+            quickCreateModal.staffUserIds.map((staffId) =>
+              penaltyService.createPenalty({
+                userId: staffId,
+                period,
+                penaltyType: quickCreateForm.type as PenaltyType,
+                amount: Number(quickCreateForm.amount),
+                description: quickCreateForm.description,
+                shiftId: quickCreateModal.shiftId,
+                incidentDate: quickCreateForm.incidentDate || quickCreateModal.shiftDate,
+              })
+            )
+          );
+        }
+        toast.success('Penalty created successfully');
+      }
+
+      // Reset and close modal
+      setQuickCreateModal({
+        open: false,
+        type: null,
+        staffUserIds: [],
+        staffNames: [],
+        shiftId: null,
+        shiftDate: '',
+      });
+      setQuickCreateForm({
+        type: '',
+        amount: '',
+        description: '',
+        incidentDate: '',
+        templateId: '',
+      });
+      setSelectedAssignedStaffIds([]);
+    } catch (e: any) {
+      console.error(`Failed to create ${quickCreateModal.type}`, e);
+      const errorMessage = e.response?.data?.message || e.message || `Failed to create ${quickCreateModal.type}`;
+      toast.error(errorMessage);
+    } finally {
+      setQuickCreateLoading(false);
     }
   };
 
@@ -1277,6 +1477,228 @@ export default function ShiftCalendarPage() {
                         <p className="text-xs text-slate-400 mt-2">No role requirements defined.</p>
                       )}
                     </div>
+
+                    {/* Staff Assignments Section - View Mode */}
+                    {shiftForm.shiftId && (() => {
+                      const shiftAssignments = assignments.get(shiftForm.shiftId) || [];
+                      const confirmedAssignments = shiftAssignments.filter(
+                        a => a.status === 'CONFIRMED' || 
+                             a.status === 'CHECKED_IN' || 
+                             a.status === 'CHECKED_OUT'
+                      );
+                      
+                      if (confirmedAssignments.length === 0) {
+                        return null;
+                      }
+
+                      // Check conditions (PUBLISHED + shift started) for bonus/penalty buttons
+                      const bonusPenaltyCheck = (() => {
+                        if (shiftForm.status !== 'PUBLISHED') {
+                          return { canAdd: false, reason: 'Bonus/Penalty can only be added for PUBLISHED shifts' };
+                        }
+                        const now = new Date();
+                        const shiftDate = parseISO(shiftForm.date);
+                        const [hours, minutes] = shiftForm.startTime.split(':').map(Number);
+                        const shiftStartDateTime = new Date(shiftDate);
+                        shiftStartDateTime.setHours(hours, minutes, 0, 0);
+                        if (now < shiftStartDateTime) {
+                          return { canAdd: false, reason: 'Cannot add bonus/penalty before shift starts' };
+                        }
+                        return { canAdd: true };
+                      })();
+                      const canAddBonusPenalty = bonusPenaltyCheck.canAdd;
+                      const selectedCount = confirmedAssignments.filter(a => selectedAssignedStaffIds.includes(a.staffUserId)).length;
+
+                      return (
+                        <div className="space-y-2 pt-2 border-t border-slate-100">
+                          <div className="flex items-center justify-between">
+                            <label className="text-xs font-medium text-slate-700">
+                              Assigned Staff
+                            </label>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const allIds = confirmedAssignments.map(a => a.staffUserId);
+                          const selectedCount = allIds.filter(id => selectedAssignedStaffIds.includes(id)).length;
+                          if (selectedCount === allIds.length) {
+                            setSelectedAssignedStaffIds([]);
+                          } else {
+                            setSelectedAssignedStaffIds(allIds);
+                          }
+                        }}
+                        className="text-xs px-2 py-1 rounded border border-slate-200 text-slate-700 hover:bg-slate-50"
+                      >
+                        Select all ({confirmedAssignments.filter(a => selectedAssignedStaffIds.includes(a.staffUserId)).length}/{confirmedAssignments.length})
+                      </button>
+                      <span className="text-xs text-slate-500">
+                        Selected {confirmedAssignments.filter(a => selectedAssignedStaffIds.includes(a.staffUserId)).length}/{confirmedAssignments.length}
+                      </span>
+                    </div>
+                          </div>
+                          {!canAddBonusPenalty && (
+                            <div className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                              {bonusPenaltyCheck.reason || 'Bonus/Penalty cannot be added'}
+                            </div>
+                          )}
+                          {selectedCount >= 2 && (
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const names = confirmedAssignments
+                                    .filter(a => selectedAssignedStaffIds.includes(a.staffUserId))
+                                    .map(a => staffNames.get(a.staffUserId) || `Staff ${a.staffUserId}`);
+                                  setQuickCreateModal({
+                                    open: true,
+                                    type: 'bonus',
+                                    staffUserIds: selectedAssignedStaffIds,
+                                    staffNames: names,
+                                    shiftId: shiftForm.shiftId!,
+                                    shiftDate: shiftForm.date,
+                                  });
+                                  setQuickCreateForm({
+                                    type: '',
+                                    amount: '',
+                                    description: '',
+                                    incidentDate: shiftForm.date,
+                                    templateId: '',
+                                  });
+                                }}
+                                className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium rounded border transition-colors text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100"
+                                title="Add bonus for selected staff"
+                              >
+                                <Gift className="w-3 h-3" />
+                                Bonus (selected)
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const names = confirmedAssignments
+                                    .filter(a => selectedAssignedStaffIds.includes(a.staffUserId))
+                                    .map(a => staffNames.get(a.staffUserId) || `Staff ${a.staffUserId}`);
+                                  setQuickCreateModal({
+                                    open: true,
+                                    type: 'penalty',
+                                    staffUserIds: selectedAssignedStaffIds,
+                                    staffNames: names,
+                                    shiftId: shiftForm.shiftId!,
+                                    shiftDate: shiftForm.date,
+                                  });
+                                  setQuickCreateForm({
+                                    type: '',
+                                    amount: '',
+                                    description: '',
+                                    incidentDate: shiftForm.date,
+                                    templateId: '',
+                                  });
+                                }}
+                                className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium rounded border transition-colors text-red-700 bg-red-50 border-red-200 hover:bg-red-100"
+                                title="Add penalty for selected staff"
+                              >
+                                <AlertTriangle className="w-3 h-3" />
+                                Penalty (selected)
+                              </button>
+                            </div>
+                          )}
+                          <div className="space-y-2 mt-3">
+                            {confirmedAssignments.map((assignment) => {
+                              const staffName = staffNames.get(assignment.staffUserId) || `Staff ${assignment.staffUserId}`;
+                              const isSelected = selectedAssignedStaffIds.includes(assignment.staffUserId);
+                              return (
+                                <div
+                                  key={assignment.assignmentId}
+                                  onClick={() => {
+                                    setSelectedAssignedStaffIds((prev) =>
+                                      prev.includes(assignment.staffUserId)
+                                        ? prev.filter((id) => id !== assignment.staffUserId)
+                                        : [...prev, assignment.staffUserId]
+                                    );
+                                  }}
+                                  className={`flex items-center justify-between gap-2 p-2.5 rounded-lg border bg-white hover:bg-slate-50 cursor-pointer ${
+                                    isSelected ? 'border-emerald-300 ring-1 ring-emerald-200' : 'border-slate-200'
+                                  }`}
+                                >
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-sm font-medium text-slate-900">
+                                        {staffName}
+                                      </span>
+                                      <span className={`text-xs px-1.5 py-0.5 rounded ${
+                                        assignment.status === 'CHECKED_OUT'
+                                          ? 'bg-green-100 text-green-700'
+                                          : assignment.status === 'CHECKED_IN'
+                                          ? 'bg-blue-100 text-blue-700'
+                                          : 'bg-slate-100 text-slate-700'
+                                      }`}>
+                                        {assignment.status.replace('_', ' ')}
+                                      </span>
+                                    </div>
+                                    {assignment.notes && (
+                                      <p className="text-xs text-slate-500 mt-1">{assignment.notes}</p>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setQuickCreateModal({
+                                          open: true,
+                                          type: 'bonus',
+                                          staffUserIds: [assignment.staffUserId],
+                                          staffNames: [staffName],
+                                          shiftId: shiftForm.shiftId!,
+                                          shiftDate: shiftForm.date,
+                                        });
+                                        setQuickCreateForm({
+                                          type: '',
+                                          amount: '',
+                                          description: '',
+                                          incidentDate: shiftForm.date,
+                                          templateId: '',
+                                        });
+                                      }}
+                                      className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded transition-colors hover:bg-emerald-100"
+                                      title={bonusPenaltyCheck.reason || 'Add bonus for this staff'}
+                                    >
+                                      <Gift className="w-3 h-3" />
+                                      Bonus
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setQuickCreateModal({
+                                          open: true,
+                                          type: 'penalty',
+                                          staffUserIds: [assignment.staffUserId],
+                                          staffNames: [staffName],
+                                          shiftId: shiftForm.shiftId!,
+                                          shiftDate: shiftForm.date,
+                                        });
+                                        setQuickCreateForm({
+                                          type: '',
+                                          amount: '',
+                                          description: '',
+                                          incidentDate: shiftForm.date,
+                                          templateId: '',
+                                        });
+                                      }}
+                                      className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded transition-colors hover:bg-red-100"
+                                      title={bonusPenaltyCheck.reason || 'Add penalty for this staff'}
+                                    >
+                                      <AlertTriangle className="w-3 h-3" />
+                                      Penalty
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 ) : (
                 <form onSubmit={handleSaveShift} className="space-y-4 px-6 py-4">
@@ -2280,6 +2702,228 @@ export default function ShiftCalendarPage() {
           onCancel={() => setShiftToDelete(null)}
         />
 
+        {/* Quick Create Bonus/Penalty Modal */}
+        {quickCreateModal.open && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+                <h2 className="text-lg font-semibold text-slate-900">
+                  Add {quickCreateModal.type === 'bonus' ? 'Bonus' : 'Penalty'}
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQuickCreateModal({
+                      open: false,
+                      type: null,
+                      staffUserIds: [],
+                      staffNames: [],
+                      shiftId: null,
+                      shiftDate: '',
+                    });
+                    setQuickCreateForm({
+                      type: '',
+                      amount: '',
+                      description: '',
+                      incidentDate: '',
+                      templateId: '',
+                    });
+                  }}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+                  aria-label="Close"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <form onSubmit={handleQuickCreate} className="px-6 py-4 space-y-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-slate-700">Staff</label>
+                  <div className="text-sm font-medium text-slate-900 bg-slate-50 px-3 py-2 rounded-lg border border-slate-200">
+                    {quickCreateModal.staffNames.length > 0
+                      ? quickCreateModal.staffNames.join(', ')
+                      : 'No staff selected'}
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-slate-700">Shift Date</label>
+                  <div className="text-sm font-medium text-slate-900 bg-slate-50 px-3 py-2 rounded-lg border border-slate-200">
+                    {format(parseISO(quickCreateModal.shiftDate), 'EEEE, dd/MM/yyyy')}
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-slate-700">
+                    {quickCreateModal.type === 'bonus' ? 'Bonus' : 'Penalty'} Type <span className="text-red-500">*</span>
+                  </label>
+                  <div className="space-y-2">
+                    <select
+                      value={quickCreateForm.templateId}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setQuickCreateForm(prev => ({ ...prev, templateId: val }));
+                        if (quickCreateModal.type === 'bonus' && val) {
+                          const tpl = bonusTemplates.find(t => t.templateId === Number(val));
+                          if (tpl) {
+                            setQuickCreateForm({
+                              templateId: val,
+                              type: tpl.bonusType,
+                              amount: String(tpl.amount),
+                              description: tpl.description || tpl.name,
+                              incidentDate: quickCreateForm.incidentDate,
+                            });
+                            setQuickCreateTemplateDefaults({
+                              type: tpl.bonusType,
+                              amount: String(tpl.amount),
+                              description: tpl.description || tpl.name,
+                            });
+                          }
+                        }
+                        if (quickCreateModal.type === 'penalty' && val) {
+                          const tpl = penaltyTemplates.find(t => t.configId === Number(val));
+                          if (tpl) {
+                            setQuickCreateForm({
+                              templateId: val,
+                              type: tpl.penaltyType,
+                              amount: String(tpl.amount),
+                              description: tpl.description || tpl.name,
+                              incidentDate: quickCreateForm.incidentDate,
+                            });
+                            setQuickCreateTemplateDefaults({
+                              type: tpl.penaltyType,
+                              amount: String(tpl.amount),
+                              description: tpl.description || tpl.name,
+                            });
+                          }
+                        }
+                        if (!val) {
+                          setQuickCreateForm(prev => ({
+                            ...prev,
+                            templateId: '',
+                            type: '',
+                            amount: '',
+                            description: '',
+                          }));
+                          setQuickCreateTemplateDefaults(null);
+                        }
+                      }}
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
+                    >
+                      <option value="">-- Select template (optional) --</option>
+                      {quickCreateModal.type === 'bonus'
+                        ? bonusTemplates.filter(t => t.isActive !== false).map(t => (
+                            <option key={t.templateId} value={t.templateId}>
+                              {t.name} · {t.bonusType} · {t.amount}
+                            </option>
+                          ))
+                        : penaltyTemplates.filter(t => t.isActive !== false).map(t => (
+                            <option key={t.configId} value={t.configId}>
+                              {t.name} · {t.penaltyType} · {t.amount}
+                            </option>
+                          ))}
+                    </select>
+                  </div>
+                  <select
+                    value={quickCreateForm.type}
+                  onChange={(e) => updateQuickCreateField('type', e.target.value)}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
+                    required
+                  >
+                    <option value="">Select type...</option>
+                    {quickCreateModal.type === 'bonus' ? (
+                      <>
+                        <option value="PERFORMANCE">Performance</option>
+                        <option value="ATTENDANCE">Attendance</option>
+                        <option value="SPECIAL">Special</option>
+                        <option value="HOLIDAY">Holiday</option>
+                        <option value="OTHER">Other</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="NO_SHOW">No Show</option>
+                        <option value="LATE">Late</option>
+                        <option value="EARLY_LEAVE">Early Leave</option>
+                        <option value="MISTAKE">Mistake</option>
+                        <option value="VIOLATION">Violation</option>
+                        <option value="OTHER">Other</option>
+                      </>
+                    )}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-slate-700">
+                    Amount <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={quickCreateForm.amount}
+                  onChange={(e) => updateQuickCreateField('amount', e.target.value)}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
+                    placeholder="Enter amount"
+                    required
+                  />
+                </div>
+                {quickCreateModal.type === 'penalty' && (
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-slate-700">Incident Date</label>
+                    <input
+                      type="date"
+                      value={quickCreateForm.incidentDate}
+                    onChange={(e) => updateQuickCreateField('incidentDate', e.target.value)}
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
+                    />
+                  </div>
+                )}
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-slate-700">
+                    Description <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    value={quickCreateForm.description}
+                  onChange={(e) => updateQuickCreateField('description', e.target.value)}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
+                    rows={3}
+                    placeholder="Enter description"
+                    required
+                  />
+                </div>
+                <div className="flex items-center gap-2 justify-end pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuickCreateModal({
+                        open: false,
+                        type: null,
+                        staffUserIds: [],
+                        staffNames: [],
+                        shiftId: null,
+                        shiftDate: '',
+                      });
+                      setQuickCreateForm({
+                        type: '',
+                        amount: '',
+                        description: '',
+                        incidentDate: '',
+                      templateId: '',
+                      });
+                    }}
+                    className="px-4 py-2 rounded-lg border border-slate-200 text-sm text-slate-700 hover:bg-slate-50"
+                    disabled={quickCreateLoading}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 rounded-lg bg-sky-600 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={quickCreateLoading}
+                  >
+                    {quickCreateLoading ? 'Creating...' : `Create ${quickCreateModal.type === 'bonus' ? 'Bonus' : 'Penalty'}`}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
         </div>
       </div>
     </div>

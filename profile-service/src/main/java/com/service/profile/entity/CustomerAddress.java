@@ -27,6 +27,7 @@ public class CustomerAddress {
     Address address;
 
     @Column(name = "is_default", nullable = false)
+    @Builder.Default
     Boolean isDefault = false;
 
     @Column(name = "create_at", nullable = false, updatable = false,

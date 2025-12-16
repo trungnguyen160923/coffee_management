@@ -17,6 +17,10 @@ export { default as SuppliersSkeleton } from './SuppliersSkeleton';
 export { default as GoodsReceiptsSkeleton } from './GoodsReceiptsSkeleton';
 export { default as ReturnGoodsSkeleton } from './ReturnGoodsSkeleton';
 export { default as DiscountsSkeleton } from './DiscountsSkeleton';
+export { default as ManagerPayrollManagementSkeleton } from './ManagerPayrollManagementSkeleton';
+export { default as ManagerPayrollTemplatesSkeleton } from './ManagerPayrollTemplatesSkeleton';
+export { default as RewardsPenaltiesManagementSkeleton } from './RewardsPenaltiesManagementSkeleton';
+export { default as QuickRewardsPenaltiesSkeleton } from './QuickRewardsPenaltiesSkeleton';
 
 // Modal Skeletons
 export { default as StaffModalSkeleton } from './modals/StaffModalSkeleton';

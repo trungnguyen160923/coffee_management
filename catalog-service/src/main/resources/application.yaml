@@ -97,3 +97,18 @@ management:
   endpoint:
     health:
       show-details: when-authorized
+
+# Swagger/OpenAPI configuration
+swagger:
+  enabled: ${SWAGGER_ENABLED:true}  # Set to false in production
+
+springdoc:
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:true}
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:true}
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+    try-it-out-enabled: true

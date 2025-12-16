@@ -21,6 +21,8 @@ public class SecurityConfig {
     private static final String[] PUBLIC_ENDPOINTS = {
             "/users/registration", "/auth/token", "/auth/introspect", "/auth/logout", "/auth/refresh", "/users-v2/create-customer",
             "/actuator/**", // Allow actuator endpoints (health checks, metrics, etc.) without authentication
+            "/v3/api-docs/**", "/v3/api-docs", // Allow OpenAPI endpoints
+            "/swagger-ui/**", "/swagger-ui.html" // Allow Swagger UI endpoints
     };
 
     private static final String[] PUBLIC_GET_ENDPOINTS = {

@@ -90,6 +90,22 @@
 			<groupId>org.springframework.kafka</groupId>
 			<artifactId>spring-kafka</artifactId>
 		</dependency>
+		
+		<!-- SpringDoc OpenAPI for WebFlux (Swagger UI) -->
+		<!-- Note: Dependency included in build but disabled at runtime via application-prod.yaml -->
+		<!-- Using version 2.7.0 for better compatibility with Spring Boot 3.5.6 -->
+		<dependency>
+			<groupId>org.springdoc</groupId>
+			<artifactId>springdoc-openapi-starter-webflux-ui</artifactId>
+			<version>2.7.0</version>
+			<exclusions>
+				<!-- Exclude WebMVC dependencies to avoid conflicts with WebFlux -->
+				<exclusion>
+					<groupId>org.springframework</groupId>
+					<artifactId>spring-webmvc</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
 	</dependencies>
 
 	<dependencyManagement>

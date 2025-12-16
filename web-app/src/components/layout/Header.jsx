@@ -151,9 +151,14 @@ const Header = () => {
                                     onClick={toggleDropdown}
                                     aria-expanded={showDropdown}
                                 >
-                                    {user?.username || 'User'}
+                                    {user?.fullname || user?.username || 'User'}
                                 </a>
                                 <ul className={`dropdown-menu ${showDropdown ? 'show' : ''}`}>
+                                    <li>
+                                        <Link className="dropdown-item" to="/users/account" onClick={() => setShowDropdown(false)}>
+                                            Account Settings
+                                        </Link>
+                                    </li>
                                     <li>
                                         <Link className="dropdown-item" to="/users/bookings" onClick={() => setShowDropdown(false)}>
                                             My Bookings

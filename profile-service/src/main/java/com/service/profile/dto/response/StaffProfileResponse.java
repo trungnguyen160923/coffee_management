@@ -21,7 +21,9 @@ public class StaffProfileResponse {
     String payType;        // MONTHLY / HOURLY
     java.math.BigDecimal baseSalary;
     java.math.BigDecimal hourlyRate;
+    java.math.BigDecimal insuranceSalary;
     java.math.BigDecimal overtimeRate;
+    Integer numberOfDependents;
     LocalDateTime createAt;
     LocalDateTime updateAt;
     

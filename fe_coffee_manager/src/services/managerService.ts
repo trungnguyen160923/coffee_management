@@ -59,6 +59,7 @@ class ManagerService {
     branchId: number;
     hireDate: string; // YYYY-MM-DD
     identityCard: string;
+    baseSalary?: number;
   }): Promise<any> {
     const response = await apiClient.post<{ code: number; message?: string; result?: any }>(`${this.v2Url}/create-manager`, payload);
     if (response.code && response.code !== 1000 && response.code !== 200 && response.code !== 201 && response.code !== 202) {
@@ -83,12 +84,63 @@ class ManagerService {
   async updateManagerProfile(userId: number, payload: {
     identityCard?: string;
     hireDate?: string;
+    baseSalary?: number;
+    branchId?: number;
   }): Promise<any> {
     const resp = await apiClient.put<{ code: number; result: any }>(`/api/profiles/manager-profiles/${userId}`, payload);
     if (resp.code && resp.code !== 1000 && resp.code !== 200) {
       throw new Error((resp as any).message || 'Update manager profile failed');
     }
     return resp.result;
+  }
+
+  async updateManager(userId: number, payload: {
+    email?: string;
+    fullname?: string;
+    phoneNumber?: string;
+    identityCard?: string;
+    hireDate?: string;
+    baseSalary?: number;
+    branchId?: number;
+    currentBranchId?: number; // To check if branch actually changed
+  }): Promise<any> {
+    // Update user info (email, fullname, phoneNumber)
+    const userUpdates: any = {};
+    if (payload.email !== undefined) userUpdates.email = payload.email;
+    if (payload.fullname !== undefined) userUpdates.fullname = payload.fullname;
+    if (payload.phoneNumber !== undefined) userUpdates.phone_number = payload.phoneNumber;
+
+    if (Object.keys(userUpdates).length > 0) {
+      await this.updateUser(userId, userUpdates);
+    }
+
+    // Update manager profile (identityCard, hireDate, baseSalary)
+    const profileUpdates: any = {};
+    if (payload.identityCard !== undefined) profileUpdates.identityCard = payload.identityCard;
+    if (payload.hireDate !== undefined) profileUpdates.hireDate = payload.hireDate;
+    if (payload.baseSalary !== undefined) profileUpdates.baseSalary = payload.baseSalary;
+
+    if (Object.keys(profileUpdates).length > 0) {
+      await this.updateManagerProfile(userId, profileUpdates);
+    }
+
+    // Handle branch assignment only if branchId is provided and different from current
+    if (payload.branchId !== undefined) {
+      const currentBranchId = payload.currentBranchId ?? null;
+      const newBranchId = payload.branchId === -1 || payload.branchId === null ? null : payload.branchId;
+      
+      // Only update if branch actually changed
+      if (currentBranchId !== newBranchId) {
+        if (newBranchId === null) {
+          await this.unassignManager(userId);
+        } else {
+          await this.assignManagerToBranch(userId, newBranchId);
+        }
+      }
+    }
+
+    // Fetch updated manager
+    return await this.getManagerProfile(userId);
   }
 
   async unassignManager(userId: number): Promise<any> {

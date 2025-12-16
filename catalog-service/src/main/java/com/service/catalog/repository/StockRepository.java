@@ -4,9 +4,11 @@ import com.service.catalog.entity.Stock;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import jakarta.persistence.LockModeType;
 
 import org.springframework.data.domain.Pageable;
 import java.math.BigDecimal;
@@ -20,6 +22,13 @@ public interface StockRepository extends JpaRepository<Stock, Integer> {
      * Tìm stock theo branch ID và ingredient ID
      */
     Optional<Stock> findByBranchIdAndIngredientIngredientId(Integer branchId, Integer ingredientId);
+    
+    /**
+     * Tìm stock theo branch ID và ingredient ID với pessimistic lock để tránh race condition
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT s FROM Stock s WHERE s.branchId = :branchId AND s.ingredient.ingredientId = :ingredientId")
+    Optional<Stock> findByBranchIdAndIngredientIngredientIdWithLock(@Param("branchId") Integer branchId, @Param("ingredientId") Integer ingredientId);
     
     /**
      * Tìm tất cả stocks theo branch ID

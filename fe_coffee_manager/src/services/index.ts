@@ -16,6 +16,11 @@ export { exportAIStatisticsToPDF } from './pdfExportService';
 export { shiftTemplateService } from './shiftTemplateService';
 export { shiftService } from './shiftService';
 export { branchClosureService } from './branchClosureService';
+export { default as payrollService } from './payrollService';
+export { default as bonusService } from './bonusService';
+export { default as penaltyService } from './penaltyService';
+export { default as allowanceService } from './allowanceService';
+export { default as payrollTemplateService } from './payrollTemplateService';
 
 // Export API client
 export { default as apiClient } from '../config/api';
@@ -55,3 +60,44 @@ export type {
   DiscountApplicationResponse,
   DiscountPageResponse
 } from '../types/discount';
+export type {
+  Payroll,
+  PayrollStatus,
+  PayrollCalculationRequest,
+  BatchCalculateRequest,
+  BatchApproveRequest,
+  PayrollFilters
+} from './payrollService';
+export type {
+  Bonus,
+  BonusType,
+  BonusStatus,
+  BonusCreationRequest,
+  BonusFilters
+} from './bonusService';
+export type {
+  Penalty,
+  PenaltyType,
+  PenaltyStatus,
+  PenaltyCreationRequest,
+  PenaltyFilters
+} from './penaltyService';
+export type {
+  Allowance,
+  AllowanceType,
+  AllowanceStatus,
+  AllowanceCreationRequest,
+  AllowanceFilters
+} from './allowanceService';
+export type {
+  AllowanceTemplate,
+  BonusTemplate,
+  PenaltyConfig,
+  AllowanceTemplateCreationRequest,
+  AllowanceTemplateUpdateRequest,
+  BonusTemplateCreationRequest,
+  BonusTemplateUpdateRequest,
+  PenaltyConfigCreationRequest,
+  PenaltyConfigUpdateRequest,
+  TemplateFilters
+} from './payrollTemplateService';

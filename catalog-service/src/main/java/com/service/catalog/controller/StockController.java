@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.HashMap;
 
 import com.service.catalog.dto.request.stock.CheckAndReserveRequest;
+import com.service.catalog.dto.request.stock.CommitPosStockRequest;
 import com.service.catalog.dto.request.stock.CommitReservationRequest;
 import com.service.catalog.dto.request.stock.DailyStockReconciliationRequest;
 import com.service.catalog.dto.request.stock.ManagerStockAdjustmentRequest;
@@ -322,6 +323,43 @@ public class StockController {
             
         } catch (Exception e) {
             log.error("Error during reservation commit: ", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponse.<Map<String, Object>>builder()
+                    .code(500)
+                    .message("Internal server error: " + e.getMessage())
+                    .build());
+        }
+    }
+
+    /**
+     * POST /api/stocks/commit-pos
+     * Trừ kho trực tiếp cho POS order (không qua reservation)
+     */
+    @PostMapping("/commit-pos")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> commitPos(@Valid @RequestBody CommitPosStockRequest request) {
+        log.info("Received commit POS stock request: {}", request);
+
+        try {
+            stockReservationService.commitPosOrder(request);
+            Map<String, Object> result = Map.of(
+                "message", "POS stock committed successfully",
+                "orderId", request.getOrderId(),
+                "branchId", request.getBranchId()
+            );
+            return ResponseEntity.ok(ApiResponse.<Map<String, Object>>builder()
+                .code(200)
+                .message("POS stock committed successfully")
+                .result(result)
+                .build());
+        } catch (IllegalArgumentException e) {
+            log.warn("Invalid POS commit request: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.<Map<String, Object>>builder()
+                    .code(400)
+                    .message("Invalid request: " + e.getMessage())
+                    .build());
+        } catch (Exception e) {
+            log.error("Error during POS stock commit: ", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ApiResponse.<Map<String, Object>>builder()
                     .code(500)

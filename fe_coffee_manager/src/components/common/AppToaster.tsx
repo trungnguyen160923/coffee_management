@@ -8,7 +8,7 @@ export const AppToaster: React.FC = () => {
       reverseOrder={false}
       gutter={8}
       containerClassName=""
-      containerStyle={{ top: 'var(--app-header-offset)' }}
+      containerStyle={{ top: 'var(--app-header-offset)', zIndex: 999999 }}
       toasterId="default"
       toastOptions={{
         className: '',

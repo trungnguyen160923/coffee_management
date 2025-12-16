@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
 import { shiftService, Shift } from '../../services/shiftService';
 import { shiftAssignmentService, ShiftAssignment } from '../../services/shiftAssignmentService';
+import { authService } from '../../services/authService';
 import staffService from '../../services/staffService';
 import { StaffScheduleSkeleton } from '../../components/manager/skeletons';
 import { StaffWithUserDto } from '../../types';
@@ -23,6 +24,7 @@ export default function ManagerStaffSchedule() {
   const [currentMonth, setCurrentMonth] = useState<Date>(() =>
     startOfMonth(new Date())
   );
+  const [businessRoleMap, setBusinessRoleMap] = useState<Record<number, string>>({});
 
   const branchId = useMemo(() => {
     if (managerBranch?.branchId) return managerBranch.branchId;
@@ -39,6 +41,25 @@ export default function ManagerStaffSchedule() {
     const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
     return eachDayOfInterval({ start: calendarStart, end: calendarEnd });
   }, [currentMonth]);
+
+  // Fetch business role names once
+  useEffect(() => {
+    const loadBusinessRoles = async () => {
+      try {
+        const roles = await authService.getStaffBusinessRoles();
+        const map: Record<number, string> = {};
+        roles?.forEach((role) => {
+          // Prefer backend-provided roleName; fallback to name if missing
+          map[role.roleId] = role.roleName || role.name;
+        });
+        setBusinessRoleMap(map);
+      } catch (error) {
+        console.error('Failed to load staff business roles', error);
+      }
+    };
+
+    loadBusinessRoles();
+  }, []);
 
   // Week day headers (only 7 days)
   const weekDayHeaders = useMemo(() => {
@@ -176,6 +197,35 @@ export default function ManagerStaffSchedule() {
     }
   };
 
+  const formatEmploymentType = (type: StaffWithUserDto['employmentType']) => {
+    switch (type) {
+      case 'FULL_TIME':
+        return 'Full Time';
+      case 'PART_TIME':
+        return 'Part Time';
+      case 'CASUAL':
+        return 'Casual';
+      default:
+        return 'N/A';
+    }
+  };
+
+  const formatPayType = (type: StaffWithUserDto['payType']) => {
+    switch (type) {
+      case 'MONTHLY':
+        return 'Monthly';
+      case 'HOURLY':
+        return 'Hourly';
+      default:
+        return 'N/A';
+    }
+  };
+
+  const formatBusinessRoles = (roleIds?: number[]) => {
+    if (!roleIds || roleIds.length === 0) return null;
+    return roleIds.map((id) => businessRoleMap[id] || `Role #${id}`);
+  };
+
 
   const goToPreviousMonth = () => {
     setCurrentMonth(subMonths(currentMonth, 1));
@@ -222,28 +272,94 @@ export default function ManagerStaffSchedule() {
           </div>
         </div>
 
-        {/* Staff Selector */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-6">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
+        {/* Staff Selector + Staff Info */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+            <div className="flex items-center gap-3 mb-3">
               <Users className="w-5 h-5 text-slate-400" />
               <label className="text-sm font-medium text-slate-700">Select Staff:</label>
             </div>
-            <select
-              value={selectedStaffId ? String(selectedStaffId) : ''}
-              onChange={(e) => {
-                const value = e.target.value;
-                setSelectedStaffId(value ? Number(value) : null);
-              }}
-              className="flex-1 px-3 py-2 text-sm rounded-lg border border-slate-200 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500"
-            >
-              <option key="select-placeholder" value="">-- Select a staff member --</option>
-              {staffList.map((staff, index) => (
-                <option key={`staff-${staff.userId || index}`} value={String(staff.userId)}>
-                  {staff.fullname || staff.email || `Staff #${staff.userId}`}
-                </option>
-              ))}
-            </select>
+            <div className="flex items-center">
+              <select
+                value={selectedStaffId ? String(selectedStaffId) : ''}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setSelectedStaffId(value ? Number(value) : null);
+                }}
+                className="w-full max-w-sm px-3 py-2 text-sm rounded-lg border border-slate-200 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500"
+              >
+                <option key="select-placeholder" value="">-- Select a staff member --</option>
+                {staffList.map((staff, index) => (
+                  <option key={`staff-${staff.userId || index}`} value={String(staff.userId)}>
+                    {staff.fullname || staff.email || `Staff #${staff.userId}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+            {selectedStaff ? (
+              <div className="flex items-start gap-3">
+                <div className="w-12 h-12 rounded-full bg-sky-100 flex items-center justify-center">
+                  <User className="w-5 h-5 text-sky-600" />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-semibold text-slate-900">
+                      {selectedStaff.fullname || selectedStaff.email || 'Unknown'}
+                    </h3>
+                    {selectedStaff.roleName && (
+                      <span className="px-2 py-0.5 text-[11px] rounded-full bg-slate-100 text-slate-700">
+                        {selectedStaff.roleName}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-500">{selectedStaff.email || ''}</p>
+                  <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-600">
+                    <div>
+                      <span className="font-medium text-slate-700">Phone:</span>{' '}
+                      {selectedStaff.phoneNumber || '—'}
+                    </div>
+                    <div>
+                      <span className="font-medium text-slate-700">Role:</span>{' '}
+                      {formatEmploymentType(selectedStaff.employmentType)}
+                    </div>
+                    <div>
+                      <span className="font-medium text-slate-700">Pay Type:</span>{' '}
+                      {formatPayType(selectedStaff.payType)}
+                    </div>
+                    <div>
+                      <span className="font-medium text-slate-700">Branch:</span>{' '}
+                      {selectedStaff.branch?.name || '—'}
+                    </div>
+                    {selectedStaff.staffBusinessRoleIds && selectedStaff.staffBusinessRoleIds.length > 0 && (
+                      <div className="col-span-2 flex items-center flex-wrap gap-1">
+                        <span className="font-medium text-slate-700">Business Roles:</span>
+                        {formatBusinessRoles(selectedStaff.staffBusinessRoleIds)?.map((role, idx) => (
+                          <span
+                            key={`${role}-${idx}`}
+                            className="px-2 py-0.5 text-[11px] rounded-full bg-slate-100 text-slate-700"
+                          >
+                            {role}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center">
+                  <User className="w-5 h-5 text-slate-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-slate-800">No staff selected</p>
+                  <p className="text-xs text-slate-500">Choose a staff member to see details</p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -254,21 +370,6 @@ export default function ManagerStaffSchedule() {
           </div>
         ) : (
           <>
-            {/* Selected Staff Info */}
-            {selectedStaff && (
-              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-sky-100 flex items-center justify-center">
-                    <User className="w-5 h-5 text-sky-600" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-semibold text-slate-900">{selectedStaff.fullname || selectedStaff.email || 'Unknown'}</h3>
-                    <p className="text-xs text-slate-500">{selectedStaff.email || ''}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-
             {/* Month Navigation */}
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-6">
               <div className="flex items-center justify-between">

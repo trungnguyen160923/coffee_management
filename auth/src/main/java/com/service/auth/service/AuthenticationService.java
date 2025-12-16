@@ -9,8 +9,8 @@ import java.util.StringJoiner;
 import java.util.UUID;
 
 import com.service.auth.dto.request.AuthenticationRequest;
+import com.service.auth.dto.request.ChangePasswordRequest;
 import com.service.auth.dto.request.IntrospectRequest;
-import com.service.auth.dto.request.LogoutRequest;
 import com.service.auth.dto.request.RefreshRequest;
 import com.service.auth.dto.response.AuthenticationResponse;
 import com.service.auth.dto.response.IntrospectResponse;
@@ -21,9 +21,13 @@ import com.service.auth.exception.ErrorCode;
 import com.service.auth.repository.InvalidatedTokenRepository;
 import com.service.auth.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.nimbusds.jose.*;
 import com.nimbusds.jose.crypto.MACSigner;
@@ -128,6 +132,55 @@ public class AuthenticationService {
                 .build();
     }
 
+    @Transactional
+    public void changePassword(ChangePasswordRequest request) {
+        // Get current user from SecurityContext
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+
+        if (auth == null || auth.getPrincipal() == null) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED);
+        }
+
+        // Extract userId from JWT token claims
+        Integer userId;
+        if (auth.getPrincipal() instanceof Jwt jwt) {
+            // Get user_id from JWT claims (it's stored as Long, convert to Integer)
+            Long userIdLong = jwt.getClaim("user_id");
+
+            if (userIdLong != null) {
+                userId = userIdLong.intValue();
+            } else {
+                throw new AppException(ErrorCode.UNAUTHENTICATED);
+            }
+        } else {
+            throw new AppException(ErrorCode.UNAUTHENTICATED);
+        }
+
+        // Get user from database
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+
+        // Verify old password
+        PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(10);
+        boolean isOldPasswordCorrect = passwordEncoder.matches(request.getOldPassword(), user.getPassword());
+
+        if (!isOldPasswordCorrect) {
+            throw new AppException(ErrorCode.INCORRECT_PASSWORD);
+        }
+
+        // Check if new password is different from old password
+        if (passwordEncoder.matches(request.getNewPassword(), user.getPassword())) {
+            throw new AppException(ErrorCode.INVALID_PASSWORD, "New password must be different from old password");
+        }
+
+        // Encode and update password
+        String encodedNewPassword = passwordEncoder.encode(request.getNewPassword());
+        user.setPassword(encodedNewPassword);
+        userRepository.save(user);
+
+        log.info("Password changed successfully for user: {}", user.getEmail());
+    }
+
     private TokenInfo generateToken(User user) {
         JWSHeader header = new JWSHeader(JWSAlgorithm.HS512);
 
@@ -141,6 +194,8 @@ public class AuthenticationService {
                 .expirationTime(expiresAt)
                 .jwtID(UUID.randomUUID().toString())
                 .claim("scope", buildScope(user))
+                // Thêm role để các service downstream (profile-service) đọc trực tiếp
+                .claim("role", user.getRole() != null ? user.getRole().getName() : null)
                 .claim("user_id", user.getUserId())
                 .build();
 

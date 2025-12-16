@@ -136,6 +136,13 @@
 			<artifactId>spring-dotenv</artifactId>
 			<version>${spring-dotenv.version}</version>
 		</dependency>
+		<!-- SpringDoc OpenAPI với Swagger UI -->
+		<!-- Note: Dependency included in build but disabled at runtime via application-prod.yaml -->
+		<dependency>
+			<groupId>org.springdoc</groupId>
+			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+			<version>2.7.0</version>
+		</dependency>
 	</dependencies>
 
 	<dependencyManagement>

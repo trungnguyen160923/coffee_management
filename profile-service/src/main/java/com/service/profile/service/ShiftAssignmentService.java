@@ -33,11 +33,15 @@ public class ShiftAssignmentService {
     StaffProfileRepository staffProfileRepository;
     ShiftRoleRequirementRepository shiftRoleRequirementRepository;
     StaffRoleAssignmentRepository staffRoleAssignmentRepository;
+    ShiftRequestRepository shiftRequestRepository;
     ShiftService shiftService; // Reuse toShiftResponse method
     StaffProfileService staffProfileService; // For getting staff with user info
     ShiftValidationService shiftValidationService; // Centralized validation service
     AuthClient authClient; // For fetching user info from auth-service
     ShiftNotificationService shiftNotificationService; // For sending real-time notifications
+    org.springframework.context.ApplicationEventPublisher eventPublisher; // For publishing events
+    com.service.profile.service.PenaltyService penaltyService; // For canceling auto penalty
+    com.service.profile.repository.PayrollRepository payrollRepository; // For checking payroll status
 
     /**
      * Get available shifts for staff to register
@@ -809,6 +813,13 @@ public class ShiftAssignmentService {
         Integer staffUserId = assignment.getStaffUserId();
         Integer branchId = shift.getBranchId();
         
+        // Cleanup related shift requests to avoid FK violations
+        List<ShiftRequest> relatedRequests = shiftRequestRepository.findByAssignment(assignment);
+        if (!relatedRequests.isEmpty()) {
+            shiftRequestRepository.deleteAll(relatedRequests);
+            log.info("Deleted {} shift requests for assignment {}", relatedRequests.size(), assignmentId);
+        }
+        
         assignmentRepository.delete(assignment);
         log.info("Manager {} deleted assignment {} for shift {} (status: {})", 
                 managerUserId, assignmentId, shift.getShiftId(), status);
@@ -1120,6 +1131,18 @@ public class ShiftAssignmentService {
             // Still allow but log warning
         }
 
+        // 7.5. Nếu assignment đang là NO_SHOW, tự động hủy penalty tương ứng
+        String oldStatus = assignment.getStatus();
+        if ("NO_SHOW".equals(oldStatus)) {
+            try {
+                penaltyService.cancelAutoPenalty(staffUserId, shift.getShiftId());
+                log.info("Cancelled auto penalty for assignment {} (NO_SHOW → CHECKED_OUT)", assignmentId);
+            } catch (Exception e) {
+                log.warn("Failed to cancel auto penalty for assignment {}: {}", assignmentId, e.getMessage());
+                // Không throw exception, tiếp tục với check-out
+            }
+        }
+
         // 8. Update assignment
         assignment.setStatus("CHECKED_OUT");
         assignment.setCheckedOutAt(now);
@@ -1137,6 +1160,83 @@ public class ShiftAssignmentService {
         }
 
         return toAssignmentResponse(assignment);
+    }
+
+    /**
+     * Manager manually mark assignment as NO_SHOW
+     */
+    @Transactional
+    public ShiftAssignmentResponse markAsNoShow(Integer assignmentId, Integer managerUserId) {
+        ShiftAssignment assignment = assignmentRepository.findById(assignmentId)
+                .orElseThrow(() -> new AppException(ErrorCode.SHIFT_ASSIGNMENT_NOT_FOUND));
+
+        // Validate assignment is in CONFIRMED or CHECKED_IN status
+        String currentStatus = assignment.getStatus();
+        if (!"CONFIRMED".equals(currentStatus) && !"CHECKED_IN".equals(currentStatus)) {
+            throw new AppException(ErrorCode.VALIDATION_FAILED, 
+                "Cannot mark as NO_SHOW. Assignment must be in CONFIRMED or CHECKED_IN status");
+        }
+
+        // Validate payroll chưa được APPROVED
+        Shift shift = assignment.getShift();
+        if (shift == null) {
+            throw new AppException(ErrorCode.SHIFT_NOT_FOUND);
+        }
+
+        String period = java.time.YearMonth.from(shift.getShiftDate()).toString();
+        // Check if payroll đã APPROVED
+        java.util.Optional<com.service.profile.entity.Payroll> payrollOpt = 
+            payrollRepository.findByUserIdAndPeriod(assignment.getStaffUserId(), period);
+        
+        if (payrollOpt.isPresent()) {
+            com.service.profile.entity.Payroll payroll = payrollOpt.get();
+            if (payroll.getStatus() == com.service.profile.entity.Payroll.PayrollStatus.APPROVED ||
+                payroll.getStatus() == com.service.profile.entity.Payroll.PayrollStatus.PAID) {
+                throw new AppException(ErrorCode.PAYROLL_ALREADY_APPROVED, 
+                    "Cannot mark as NO_SHOW. Payroll for this period has already been approved");
+            }
+        }
+
+        // Update status to NO_SHOW
+        assignment.setStatus("NO_SHOW");
+        String existingNotes = assignment.getNotes() != null ? assignment.getNotes() : "";
+        assignment.setNotes(existingNotes + (existingNotes.isEmpty() ? "" : "\n") +
+                "Marked as NO_SHOW by manager " + managerUserId + " at " + java.time.LocalDateTime.now());
+        assignment = assignmentRepository.save(assignment);
+
+        log.info("Manager {} marked assignment {} as NO_SHOW for shift {}", 
+                managerUserId, assignmentId, shift.getShiftId());
+
+        // Publish StaffAbsentEvent để tự động tạo penalty
+        publishStaffAbsentEvent(assignment, shift, managerUserId);
+
+        return toAssignmentResponse(assignment);
+    }
+
+    /**
+     * Publish StaffAbsentEvent khi set NO_SHOW
+     */
+    private void publishStaffAbsentEvent(ShiftAssignment assignment, Shift shift, Integer managerUserId) {
+        try {
+            String period = java.time.YearMonth.from(shift.getShiftDate()).toString(); // Format: YYYY-MM
+            
+            com.service.profile.event.StaffAbsentEvent event = com.service.profile.event.StaffAbsentEvent.builder()
+                .userId(assignment.getStaffUserId())
+                .shiftId(shift.getShiftId())
+                .branchId(shift.getBranchId())
+                .shiftDate(shift.getShiftDate())
+                .period(period)
+                .managerUserId(managerUserId)
+                .build();
+            
+            eventPublisher.publishEvent(event);
+            log.info("Published StaffAbsentEvent for userId={}, shiftId={}", 
+                assignment.getStaffUserId(), shift.getShiftId());
+        } catch (Exception e) {
+            log.error("Failed to publish StaffAbsentEvent for assignmentId={}", 
+                assignment.getAssignmentId(), e);
+            // Không throw exception để không ảnh hưởng đến flow chính
+        }
     }
 }
 

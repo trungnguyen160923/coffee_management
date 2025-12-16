@@ -17,6 +17,9 @@ import RecipeManagement from './pages/admin/RecipeManagement';
 import AdminDiscountManagementPage from './pages/admin/DiscountManagement';
 import AIStatistics from './pages/admin/AIStatistics';
 import { AdminBranchActivities } from './pages/admin/AdminBranchActivities';
+import AdminPayrollManagement from './pages/admin/AdminPayrollManagement';
+import AdminPayrollTemplates from './pages/admin/AdminPayrollTemplates';
+import AdminPayrollReports from './pages/admin/AdminPayrollReports';
 import { ManagerDashboard } from './pages/manager/ManagerDashboard';
 import StaffManagement from './pages/manager/StaffManagement';
 import ManagerSupplierManagement from './pages/manager/SupplierManagement';
@@ -36,6 +39,9 @@ import ShiftCalendarPage from './pages/manager/ShiftCalendarPage';
 import ShiftAssignmentsManagement from './pages/manager/ShiftAssignmentsManagement';
 import BranchClosureManagement from './pages/manager/BranchClosureManagement';
 import ManagerShiftRequests from './pages/manager/ManagerShiftRequests';
+import ManagerPayrollManagement from './pages/manager/ManagerPayrollManagement';
+import ManagerBonusPenaltyAllowanceManagement from './pages/manager/ManagerBonusPenaltyAllowanceManagement';
+import ManagerPayrollTemplates from './pages/manager/ManagerPayrollTemplates';
 import { StaffDashboard } from './pages/staff/StaffDashboard';
 import SupplierConfirmPage from './pages/supplier/SupplierConfirmPage';
 import SupplierSuccessPage from './pages/supplier/SupplierSuccessPage';
@@ -49,6 +55,7 @@ import StaffStockUsage from './pages/staff/StaffStockUsage';
 import StaffShiftRegistration from './pages/staff/StaffShiftRegistration';
 import StaffMyShifts from './pages/staff/StaffMyShifts';
 import StaffMyRequests from './pages/staff/StaffMyRequests';
+import AccountSettingsPage from './pages/common/AccountSettingsPage';
 
 function AppRoutes() {
   const { user, loading } = useAuth();
@@ -113,6 +120,10 @@ function AppRoutes() {
             <Route path="managers" element={<Layout><ManagerManagement /></Layout>} />
             <Route path="discounts" element={<Layout><AdminDiscountManagementPage /></Layout>} />
             <Route path="statistics" element={<Layout><AIStatistics /></Layout>} />
+            <Route path="payroll" element={<Layout><AdminPayrollManagement /></Layout>} />
+            <Route path="payroll-templates" element={<Layout><AdminPayrollTemplates /></Layout>} />
+            <Route path="payroll-reports" element={<Layout><AdminPayrollReports /></Layout>} />
+            <Route path="account" element={<Layout><AccountSettingsPage /></Layout>} />
             {/* Unknown admin subroute: show 404 without Layout */}
             <Route path="*" element={<NotFoundPage showLoginButton={false} />} />
           </Routes>
@@ -140,6 +151,9 @@ function AppRoutes() {
             <Route path="branch-closures" element={<Layout><BranchClosureManagement /></Layout>} />
             <Route path="tables" element={<Layout><TableManagement /></Layout>} />
             <Route path="discounts" element={<Layout><DiscountManagementPage /></Layout>} />
+            <Route path="payroll" element={<Layout><ManagerPayrollManagement /></Layout>} />
+            <Route path="bonus-penalty-allowance" element={<Layout><ManagerBonusPenaltyAllowanceManagement /></Layout>} />
+            <Route path="payroll-templates" element={<Layout><ManagerPayrollTemplates /></Layout>} />
             <Route path="procurement" element={<Layout><IngredientProcurement /></Layout>} />
             <Route path="suppliers" element={<Layout><ManagerSupplierManagement /></Layout>} />
             <Route path="purchase-orders" element={<Layout><PurchaseOrders /></Layout>} />
@@ -148,6 +162,7 @@ function AppRoutes() {
             <Route path="goods-receipts" element={<Layout><GoodsReceipts /></Layout>} />
             <Route path="return-goods" element={<Layout><ReturnGoods /></Layout>} />
             <Route path="statistics" element={<Layout><ManagerAIStatistics /></Layout>} />
+            <Route path="account" element={<Layout><AccountSettingsPage /></Layout>} />
             <Route path="*" element={<NotFoundPage showLoginButton={false} />} />
           </Routes>
         </ProtectedRoute>
@@ -174,6 +189,7 @@ function AppRoutes() {
             <Route path="my-shifts" element={<Layout><StaffMyShifts /></Layout>} />
             <Route path="my-requests" element={<Layout><StaffMyRequests /></Layout>} />
             <Route path="pending-requests" element={<Layout><StaffMyRequests /></Layout>} />
+            <Route path="account" element={<Layout><AccountSettingsPage /></Layout>} />
             <Route path="*" element={<NotFoundPage showLoginButton={false} />} />
           </Routes>
         </ProtectedRoute>

@@ -29,6 +29,18 @@ public class ManagerProfile {
     @Column(name = "identity_card", nullable = false, length = 50)
     String identityCard;
 
+    @Column(name = "base_salary", nullable = false, precision = 12, scale = 2)
+    java.math.BigDecimal baseSalary;
+
+    @Column(name = "insurance_salary", precision = 12, scale = 2)
+    java.math.BigDecimal insuranceSalary;
+
+    @Column(name = "overtime_rate", precision = 12, scale = 2)
+    java.math.BigDecimal overtimeRate;
+
+    @Column(name = "number_of_dependents")
+    Integer numberOfDependents;
+
     @Column(name = "create_at", nullable = false, updatable = false,
             columnDefinition = "DATETIME DEFAULT CURRENT_TIMESTAMP")
     java.time.LocalDateTime createAt;

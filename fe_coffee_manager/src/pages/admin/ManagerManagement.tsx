@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Pencil, Trash2, X, Check } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, Check, Eye } from 'lucide-react';
 import { managerService } from '../../services';
 import { UserResponseDto } from '../../types';
 import CreateManagerModal from '../../components/common/modal/CreateManagerModal';
@@ -37,6 +37,10 @@ const ManagerManagement: React.FC = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [deletingManager, setDeletingManager] = useState<UserResponseDto | null>(null);
   const [deletingLoading, setDeletingLoading] = useState(false);
+  const [viewingManager, setViewingManager] = useState<UserResponseDto | null>(null);
+  const [isViewing, setIsViewing] = useState(false);
+  const [updatingManager, setUpdatingManager] = useState<UserResponseDto | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
     fetchManagers();
@@ -93,6 +97,22 @@ const ManagerManagement: React.FC = () => {
     setIsAssigning(true);
     setLoadingBranches(true);
     try {
+      const branches = await branchService.getUnassignedBranches();
+      setUnassignedBranches(branches);
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to load branches');
+    } finally {
+      setLoadingBranches(false);
+    }
+  };
+
+  const openUpdateModal = async (manager: UserResponseDto) => {
+    setUpdatingManager(manager);
+    setIsUpdating(true);
+    setLoadingBranches(true);
+    try {
+      // Get only unassigned branches (same as create mode)
       const branches = await branchService.getUnassignedBranches();
       setUnassignedBranches(branches);
     } catch (e) {
@@ -428,24 +448,21 @@ const ManagerManagement: React.FC = () => {
       <div className="bg-white shadow rounded-lg">
           <div className="px-4 py-5 sm:p-6">
           <h2 className="text-lg font-medium text-gray-900 mb-4">Managers</h2>
+          </div>
           
           {/* Top horizontal scrollbar */}
-          <div ref={topScrollRef} className="overflow-x-auto overflow-y-hidden h-5 mb-2">
+          <div ref={topScrollRef} className="overflow-x-auto overflow-y-hidden h-5 mb-2 px-4">
             <div ref={topInnerRef} style={{ height: 1 }} />
           </div>
-          <div ref={bottomScrollRef} className="overflow-x-auto">
-            <table ref={tableRef} className="min-w-max divide-y divide-gray-200">
+          <div ref={bottomScrollRef} className="overflow-x-auto px-4">
+            <table ref={tableRef} className="w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     ID
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Full name</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID Card</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Branch</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Hire date</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
@@ -455,47 +472,16 @@ const ManagerManagement: React.FC = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                       {manager.user_id}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {manager.fullname}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {editing && editing.id === manager.user_id && editing.field === 'email' ? (
-                        <div className="flex items-center gap-2">
-                          <input className="border rounded px-2 py-1 text-sm" value={editValue} onChange={(e) => setEditValue(e.target.value)} />
-                          <button onClick={() => saveInlineEdit(manager)} className="text-emerald-600 hover:text-emerald-700" title="Save"><Check className="w-4 h-4" /></button>
-                          <button onClick={cancelInlineEdit} className="text-gray-500 hover:text-gray-700" title="Cancel"><X className="w-4 h-4" /></button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <span>{manager.email}</span>
-                          <button onClick={() => startInlineEdit(manager, 'email')} className="text-blue-600 hover:text-blue-700" title="Edit email"><Pencil className="w-4 h-4" /></button>
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {manager.phoneNumber}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {editing && editing.id === manager.user_id && editing.field === 'identityCard' ? (
-                        <div className="flex items-center gap-2">
-                          <input className="border rounded px-2 py-1 text-sm" value={editValue} onChange={(e) => setEditValue(e.target.value.replace(/\D/g, ''))} />
-                          <button onClick={() => saveInlineEdit(manager)} className="text-emerald-600 hover:text-emerald-700" title="Save"><Check className="w-4 h-4" /></button>
-                          <button onClick={cancelInlineEdit} className="text-gray-500 hover:text-gray-700" title="Cancel"><X className="w-4 h-4" /></button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <span>{manager.identityCard ?? '-'}</span>
-                          <button onClick={() => startInlineEdit(manager, 'identityCard')} className="text-blue-600 hover:text-blue-700" title="Edit ID card"><Pencil className="w-4 h-4" /></button>
-                        </div>
-                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {manager.branch ? (
                         <div className="flex items-center gap-2">
                           <div>
                             <div className="font-medium text-gray-900">{manager.branch.name}</div>
-                            <div className="text-gray-500">{manager.branch.address}</div>
-                            <div className="text-gray-500">{manager.branch.phone}</div>
+                            <div className="text-gray-500 text-xs">{manager.branch.address}</div>
+                            <div className="text-gray-500 text-xs">{manager.branch.phone}</div>
                           </div>
                           <button
                             className="p-2 rounded hover:bg-gray-100 text-red-600"
@@ -519,21 +505,21 @@ const ManagerManagement: React.FC = () => {
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {editing && editing.id === manager.user_id && editing.field === 'hireDate' ? (
-                        <div className="flex items-center gap-2">
-                          <input type="date" className="border rounded px-2 py-1 text-sm" value={editValue} onChange={(e) => setEditValue(e.target.value)} />
-                          <button onClick={() => saveInlineEdit(manager)} className="text-emerald-600 hover:text-emerald-700" title="Save"><Check className="w-4 h-4" /></button>
-                          <button onClick={cancelInlineEdit} className="text-gray-500 hover:text-gray-700" title="Cancel"><X className="w-4 h-4" /></button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <span>{manager.hireDate ? new Date(manager.hireDate).toLocaleDateString('en-GB') : '-'}</span>
-                          <button onClick={() => startInlineEdit(manager, 'hireDate')} className="text-blue-600 hover:text-blue-700" title="Edit hire date"><Pencil className="w-4 h-4" /></button>
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => { setViewingManager(manager); setIsViewing(true); }}
+                          className="p-2 rounded hover:bg-gray-100 text-blue-600"
+                          title="View details"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => openUpdateModal(manager)}
+                          className="p-2 rounded hover:bg-gray-100 text-emerald-600"
+                          title="Update"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
                         <button
                           onClick={() => { setDeletingManager(manager); setIsDeleting(true); }}
                           className="p-2 rounded hover:bg-gray-100 text-red-600"
@@ -549,18 +535,18 @@ const ManagerManagement: React.FC = () => {
             </table>
           </div>
 
-          {managers.length === 0 && (
-            <div className="text-center py-12">
-              <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
-              <h3 className="mt-2 text-sm font-medium text-gray-900">No managers</h3>
-              <p className="mt-1 text-sm text-gray-500">There are no managers in the system.</p>
-            </div>
-          )}
+            {managers.length === 0 && (
+              <div className="text-center py-12 px-4">
+                <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+                <h3 className="mt-2 text-sm font-medium text-gray-900">No managers</h3>
+                <p className="mt-1 text-sm text-gray-500">There are no managers in the system.</p>
+              </div>
+            )}
 
-          {/* Pagination Controls */}
-          <div className="mt-6 flex items-center justify-between">
+            {/* Pagination Controls */}
+            <div className="mt-6 flex items-center justify-between px-4 pb-4">
             <div className="text-sm text-gray-600">Total: {total} • Page {page + 1} / {Math.max(totalPages, 1)}</div>
             <div className="flex items-center gap-2">
               <button
@@ -588,10 +574,10 @@ const ManagerManagement: React.FC = () => {
               </select>
             </div>
           </div>
-          </div>
         </div>
       </div>
 
+      {/* Modals */}
       <CreateManagerModal
         open={isCreating}
         branches={unassignedBranches}
@@ -602,7 +588,10 @@ const ManagerManagement: React.FC = () => {
         }}
         onSubmit={async (payload) => {
           try {
-            const resp = await managerService.createManager(payload);
+            const resp = await managerService.createManager({
+              ...payload,
+              baseSalary: payload.baseSalary,
+            });
             if ((resp as any).code === 400) {
               toast.error((resp as any).message || 'Failed to create manager');
               return;
@@ -708,6 +697,143 @@ const ManagerManagement: React.FC = () => {
         onCancel={() => { setIsDeleting(false); setDeletingManager(null); }}
         loading={deletingLoading}
       />
+
+      {/* View Manager Modal */}
+      {isViewing && viewingManager && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[1300]">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Manager Details</h3>
+              <button
+                onClick={() => {
+                  setIsViewing(false);
+                  setViewingManager(null);
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-700">ID</label>
+                  <p className="text-sm text-gray-900 mt-1">{viewingManager.user_id}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700">Full Name</label>
+                  <p className="text-sm text-gray-900 mt-1">{viewingManager.fullname}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700">Email</label>
+                  <p className="text-sm text-gray-900 mt-1">{viewingManager.email}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700">Phone Number</label>
+                  <p className="text-sm text-gray-900 mt-1">{viewingManager.phoneNumber || '-'}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700">Identity Card</label>
+                  <p className="text-sm text-gray-900 mt-1">{viewingManager.identityCard || '-'}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700">Hire Date</label>
+                  <p className="text-sm text-gray-900 mt-1">
+                    {viewingManager.hireDate ? new Date(viewingManager.hireDate).toLocaleDateString('en-GB') : '-'}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700">Salary</label>
+                  <p className="text-sm text-gray-900 mt-1">
+                    {viewingManager.salary 
+                      ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(viewingManager.salary)
+                      : '-'}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700">Position</label>
+                  <p className="text-sm text-gray-900 mt-1">{viewingManager.position || '-'}</p>
+                </div>
+                <div className="col-span-2">
+                  <label className="text-sm font-medium text-gray-700">Branch</label>
+                  {viewingManager.branch ? (
+                    <div className="mt-1 p-3 bg-gray-50 rounded-lg">
+                      <p className="text-sm font-medium text-gray-900">{viewingManager.branch.name}</p>
+                      <p className="text-sm text-gray-600">{viewingManager.branch.address}</p>
+                      <p className="text-sm text-gray-600">{viewingManager.branch.phone}</p>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500 mt-1">No branch assigned</p>
+                  )}
+                </div>
+                {viewingManager.dob && (
+                  <div>
+                    <label className="text-sm font-medium text-gray-700">Date of Birth</label>
+                    <p className="text-sm text-gray-900 mt-1">
+                      {new Date(viewingManager.dob).toLocaleDateString('en-GB')}
+                    </p>
+                  </div>
+                )}
+                {viewingManager.bio && (
+                  <div className="col-span-2">
+                    <label className="text-sm font-medium text-gray-700">Bio</label>
+                    <p className="text-sm text-gray-900 mt-1">{viewingManager.bio}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={() => {
+                  setIsViewing(false);
+                  setViewingManager(null);
+                }}
+                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Update Manager Modal - Reuse CreateManagerModal with update mode */}
+      {isUpdating && (
+        <CreateManagerModal
+          open={isUpdating}
+          branches={unassignedBranches}
+          loadingBranches={loadingBranches}
+          managerToUpdate={updatingManager}
+          onClose={() => {
+            setIsUpdating(false);
+            setUpdatingManager(null);
+            setUnassignedBranches([]);
+          }}
+            onSubmit={async (payload) => {
+              if (!updatingManager) return;
+              try {
+                await managerService.updateManager(updatingManager.user_id, {
+                  email: payload.email,
+                  fullname: payload.fullname,
+                  phoneNumber: payload.phoneNumber,
+                  identityCard: payload.identityCard,
+                  hireDate: payload.hireDate,
+                  baseSalary: payload.baseSalary,
+                  branchId: payload.branchId,
+                  currentBranchId: updatingManager.branch?.branchId || null,
+                });
+                toast.success('Manager updated successfully');
+                setIsUpdating(false);
+                setUpdatingManager(null);
+                await fetchManagers();
+                await fetchManagerStats();
+              } catch (e: any) {
+                const msg = e?.response?.message || e?.message || 'Failed to update manager';
+                toast.error(msg);
+              }
+            }}
+        />
+      )}
         </div>
       </div>
     </div>

@@ -66,8 +66,13 @@ public class ShiftRequestService {
                     .findFirst()
                     .orElse(null);
             
-            // If no assignment exists, create a temporary one for OVERTIME request
+            // If no assignment exists, validate before creating temporary assignment
             if (assignment == null) {
+                // Validate overtime limits early so staff knows immediately if request is invalid
+                // This uses the same validation as manager approval (12h/day, 52h/week)
+                shiftValidationService.validateStaffForOvertimeShift(staffUserId, shift);
+                
+                // Create temporary assignment for OVERTIME request
                 assignment = ShiftAssignment.builder()
                         .shift(shift)
                         .staffUserId(staffUserId)

@@ -1,6 +1,7 @@
 package com.service.catalog.service;
 
 import com.service.catalog.dto.request.stock.CheckAndReserveRequest;
+import com.service.catalog.dto.request.stock.CommitPosStockRequest;
 import com.service.catalog.dto.request.stock.CommitReservationRequest;
 import com.service.catalog.dto.request.stock.ReleaseReservationRequest;
 import com.service.catalog.dto.response.stock.CheckAndReserveResponse;
@@ -16,6 +17,7 @@ import com.service.catalog.dto.response.ApiResponse;
 import com.service.catalog.repository.http_client.OrderClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -134,6 +136,68 @@ public class StockReservationService {
     }
     
     /**
+     * Trừ kho trực tiếp cho POS order (không qua reservation)
+     */
+    @Transactional
+    public void commitPosOrder(CommitPosStockRequest request) {
+        log.info("Committing POS stock for branch {}, orderId {}", request.getBranchId(), request.getOrderId());
+
+        if (request.getBranchId() == null || request.getItems() == null || request.getItems().isEmpty()) {
+            throw new IllegalArgumentException("BranchId and items are required for POS stock commit");
+        }
+
+        // Chuyển đổi items sang định dạng CheckAndReserve để tái sử dụng tính toán recipe
+        List<CheckAndReserveRequest.OrderItem> items = request.getItems().stream()
+                .map(it -> CheckAndReserveRequest.OrderItem.builder()
+                        .productDetailId(it.getProductDetailId())
+                        .quantity(it.getQuantity() == null ? 0 : it.getQuantity().intValue())
+                        .build())
+                .toList();
+
+        Map<Integer, BigDecimal> requiredIngredients = calculateRequiredIngredientsWithUnitConversion(items, request.getBranchId());
+
+        if (requiredIngredients.isEmpty()) {
+            log.warn("No ingredients required for POS commit. Skipping.");
+            return;
+        }
+
+        for (Map.Entry<Integer, BigDecimal> entry : requiredIngredients.entrySet()) {
+            Integer ingredientId = entry.getKey();
+            BigDecimal quantityNeeded = entry.getValue();
+
+            Optional<Stock> stockOpt = stockRepository.findByBranchIdAndIngredientIngredientIdWithLock(
+                    request.getBranchId(), ingredientId);
+
+            if (stockOpt.isEmpty()) {
+                log.error("Stock not found for ingredient {} in branch {}", ingredientId, request.getBranchId());
+                throw new IllegalStateException("Stock not found for ingredient " + ingredientId);
+            }
+
+            Stock stock = stockOpt.get();
+            BigDecimal currentQuantity = stock.getQuantity();
+            BigDecimal reservedQuantity = stock.getReservedQuantity();
+            BigDecimal availableQuantity = currentQuantity.subtract(reservedQuantity);
+
+            if (availableQuantity.compareTo(quantityNeeded) < 0) {
+                log.error("Insufficient available stock for ingredient {}: available={}, required={}, current={}, reserved={}",
+                        ingredientId, availableQuantity, quantityNeeded, currentQuantity, reservedQuantity);
+                throw new IllegalStateException("Insufficient available stock for ingredient " + ingredientId);
+            }
+
+            BigDecimal newQuantity = currentQuantity.subtract(quantityNeeded);
+            stock.setQuantity(newQuantity);
+            stock.setLastUpdated(LocalDateTime.now());
+            stockRepository.save(stock);
+            inventoryAlertService.evaluateAndPublish(stock);
+
+            log.info("[POS Commit] Deducted ingredient {}: {} -> {} (reserved unchanged: {})",
+                    ingredientId, currentQuantity, newQuantity, reservedQuantity);
+        }
+
+        log.info("POS stock commit completed for order {}", request.getOrderId());
+    }
+
+    /**
      * Commit reservation (trừ kho thật)
      */
     @Transactional
@@ -148,11 +212,21 @@ public class StockReservationService {
             throw new IllegalArgumentException("No active reservations found for hold ID: " + request.getHoldId());
         }
         
+        // 1.1. Check if any reservation has expired
+        LocalDateTime currentTime = LocalDateTime.now();
+        for (StockReservation reservation : reservations) {
+            if (reservation.getExpiresAt() != null && reservation.getExpiresAt().isBefore(currentTime)) {
+                log.warn("Attempting to commit expired reservation: holdId={}, expiresAt={}, now={}", 
+                        request.getHoldId(), reservation.getExpiresAt(), currentTime);
+                throw new IllegalStateException("Cannot commit expired reservation. Reservation expired at " + reservation.getExpiresAt());
+            }
+        }
+        
         // 2. Trừ kho thật cho từng reservation
         for (StockReservation reservation : reservations) {
             try {
-                // Lấy stock hiện tại
-                Optional<Stock> stockOpt = stockRepository.findByBranchIdAndIngredientIngredientId(
+                // Lấy stock hiện tại với pessimistic lock để tránh race condition
+                Optional<Stock> stockOpt = stockRepository.findByBranchIdAndIngredientIngredientIdWithLock(
                     reservation.getBranchId(), reservation.getIngredientId());
                 
                 if (stockOpt.isEmpty()) {
@@ -166,7 +240,18 @@ public class StockReservationService {
                 BigDecimal reservedQuantity = stock.getReservedQuantity();
                 BigDecimal quantityToDeduct = reservation.getQuantityReserved();
                 
-                // Kiểm tra có đủ kho không
+                // Calculate available quantity (current - reserved)
+                BigDecimal availableQuantity = currentQuantity.subtract(reservedQuantity);
+                
+                // Kiểm tra có đủ kho khả dụng không (available = quantity - reservedQuantity)
+                if (availableQuantity.compareTo(quantityToDeduct) < 0) {
+                    log.error("Insufficient available stock for ingredient {}: available={}, required={}, current={}, reserved={}", 
+                            reservation.getIngredientId(), availableQuantity, quantityToDeduct, currentQuantity, reservedQuantity);
+                    throw new IllegalStateException("Insufficient available stock for ingredient " + reservation.getIngredientId() + 
+                            ". Available: " + availableQuantity + ", Required: " + quantityToDeduct);
+                }
+                
+                // Double check: currentQuantity must be >= quantityToDeduct (safety check)
                 if (currentQuantity.compareTo(quantityToDeduct) < 0) {
                     log.error("Insufficient stock for ingredient {}: current={}, required={}", 
                             reservation.getIngredientId(), currentQuantity, quantityToDeduct);
@@ -228,7 +313,21 @@ public class StockReservationService {
     public void releaseReservation(ReleaseReservationRequest request) {
         log.info("Releasing reservation: {}", request.getHoldId());
         
-        // 1. Tìm reservations theo group ID
+        // 1. Tìm tất cả reservations theo group ID (không chỉ ACTIVE) để check status
+        List<StockReservation> allReservations = stockReservationRepository.findByReservationGroupId(request.getHoldId());
+        
+        // Check if any reservation is already COMMITTED
+        boolean hasCommitted = allReservations.stream()
+                .anyMatch(r -> StockReservation.ReservationStatus.COMMITTED.equals(r.getStatus()));
+        
+        if (hasCommitted) {
+            log.warn("Cannot release reservation {}: Some reservations are already COMMITTED (stock already deducted)", 
+                    request.getHoldId());
+            throw new IllegalStateException("Cannot release reservation: Some reservations are already COMMITTED. " +
+                    "Stock has already been deducted and cannot be released.");
+        }
+        
+        // 2. Tìm chỉ ACTIVE reservations để release
         List<StockReservation> reservations = stockReservationRepository.findByReservationGroupIdAndStatus(
             request.getHoldId(), StockReservation.ReservationStatus.ACTIVE);
         
@@ -388,6 +487,21 @@ public class StockReservationService {
     }
 
     /**
+     * Scheduled job to cleanup expired reservations every 5 minutes
+     */
+    @Scheduled(fixedRate = 300000) // 5 minutes = 300000 milliseconds
+    @Transactional
+    public void scheduledCleanupExpiredReservations() {
+        log.info("Running scheduled cleanup for expired reservations");
+        try {
+            int cleanedCount = cleanupExpiredReservations();
+            log.info("Scheduled cleanup completed: {} expired reservations cleaned", cleanedCount);
+        } catch (Exception e) {
+            log.error("Error during scheduled cleanup of expired reservations: {}", e.getMessage(), e);
+        }
+    }
+    
+    /**
      * Cleanup expired reservations
      */
     @Transactional
@@ -415,7 +529,15 @@ public class StockReservationService {
             // Giảm reservedQuantity trong Stock cho từng reservation trong nhóm
             for (StockReservation reservation : groupReservations) {
                 try {
-                    Optional<Stock> stockOpt = stockRepository.findByBranchIdAndIngredientIngredientId(
+                    // Recheck status to avoid race with commit
+                    Optional<StockReservation> latestOpt = stockReservationRepository.findById(reservation.getReservationId());
+                    if (latestOpt.isEmpty() || latestOpt.get().getStatus() != StockReservation.ReservationStatus.ACTIVE) {
+                        log.debug("Skip cleanup for reservation {} because status changed to {}", reservation.getReservationId(),
+                                latestOpt.map(r -> r.getStatus().name()).orElse("UNKNOWN"));
+                        continue;
+                    }
+
+                    Optional<Stock> stockOpt = stockRepository.findByBranchIdAndIngredientIngredientIdWithLock(
                         reservation.getBranchId(), reservation.getIngredientId());
                     
                     if (stockOpt.isPresent()) {

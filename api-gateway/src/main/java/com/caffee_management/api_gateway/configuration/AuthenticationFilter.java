@@ -88,6 +88,12 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
             // AI Service endpoints (no authentication required for metrics)
             "/ai/.*",
             
+            // Swagger UI endpoints (public for development)
+            "/swagger-ui/.*",
+            "/swagger-ui.html",
+            "/v3/api-docs/.*",
+            "/v3/api-docs",
+            
             // Actuator endpoints (health checks, metrics, etc.) - all methods
             "/profiles/actuator/.*",
             "/notification-service/actuator/.*",
@@ -160,14 +166,14 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
         String requestPath = request.getURI().getPath();
         String method = request.getMethod().name();
         
-        // Check public endpoints (all methods)
+        // Check public endpoints (all methods) - with apiPrefix
         boolean isPublic = Arrays.stream(publicEndpoints)
                 .anyMatch(pattern -> {
                     String fullPattern = apiPrefix + pattern;
                     return requestPath.matches(fullPattern);
                 });
         
-        // Check public GET endpoints
+        // Check public GET endpoints - with apiPrefix
         if (!isPublic && "GET".equals(method)) {
             isPublic = Arrays.stream(publicGetEndpoints)
                     .anyMatch(pattern -> {

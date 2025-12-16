@@ -1,6 +1,7 @@
 package com.service.profile.service;
 
 import com.service.profile.dto.request.CustomerProfileCreationRequest;
+import com.service.profile.dto.request.CustomerProfileUpdateRequest;
 import com.service.profile.dto.response.CustomerProfileResponse;
 import com.service.profile.entity.CustomerProfile;
 import com.service.profile.exception.AppException;
@@ -111,6 +112,41 @@ public class CustomerProfileService {
 
         log.error("Could not extract user_id from JWT token");
         throw new AppException(ErrorCode.ACCESS_DENIED);
+    }
+
+    @PreAuthorize("hasRole('CUSTOMER')")
+    @Transactional
+    public CustomerProfileResponse updateOwnCustomerProfile(CustomerProfileUpdateRequest request) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || auth.getName() == null) {
+            throw new AppException(ErrorCode.ACCESS_DENIED);
+        }
+        
+        // Get user ID from JWT token claims
+        Integer userId = getUserIdFromToken(auth);
+        log.info("Updating profile for user ID: {}", userId);
+        
+        // Find customer profile by user ID
+        CustomerProfile customerProfile = customerProfileRepository.findById(userId)
+                .orElseThrow(() -> new AppException(ErrorCode.EMAIL_NOT_EXISTED));
+        
+        // Update fields if provided
+        if (request.getDob() != null) {
+            customerProfile.setDob(request.getDob());
+        }
+        if (request.getAvatarUrl() != null) {
+            customerProfile.setAvatarUrl(request.getAvatarUrl());
+        }
+        if (request.getBio() != null) {
+            customerProfile.setBio(request.getBio());
+        }
+        
+        // Update timestamp
+        customerProfile.setUpdateAt(LocalDateTime.now());
+        
+        customerProfileRepository.save(customerProfile);
+        
+        return customerProfileMapper.toCustomerProfileResponse(customerProfile);
     }
     
 }

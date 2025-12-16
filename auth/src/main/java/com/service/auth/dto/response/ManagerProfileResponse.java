@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 
 import com.service.auth.entity.Role;
@@ -22,4 +23,8 @@ public class ManagerProfileResponse {
     private String identityCard;
     private BranchResponse branch;
     private LocalDate hireDate;
+    private BigDecimal baseSalary;
+    private BigDecimal insuranceSalary;
+    private BigDecimal overtimeRate;
+    private Integer numberOfDependents;
 }

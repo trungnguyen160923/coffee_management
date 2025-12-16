@@ -44,6 +44,35 @@ app:
     order: ${ORDER_SERVICE_URL:http://localhost:8002/order-service}
     auth: ${AUTH_SERVICE_URL:http://localhost:8001/auth-service}
     notification: ${NOTIFICATION_SERVICE_URL:http://localhost:8006/notification-service}
+  
+  # Payroll Configuration
+  payroll:
+    max-daily-hours: ${PAYROLL_MAX_DAILY_HOURS:8}
+    personal-deduction: ${PAYROLL_PERSONAL_DEDUCTION:11000000}  # 11tr VNĐ/tháng
+    dependent-deduction: ${PAYROLL_DEPENDENT_DEDUCTION:4400000}   # 4.4tr VNĐ/người/tháng
+    insurance-rate: ${PAYROLL_INSURANCE_RATE:0.105}              # 10.5% (BHXH 8% + BHYT 1.5% + BHTN 1%)
+    default-overtime-rate: ${PAYROLL_DEFAULT_OT_RATE:1.5}        # 1.5x cho ngày thường
+    weekend-overtime-multiplier: ${PAYROLL_WEEKEND_OT_MULTIPLIER:1.33}  # 1.5 × 1.33 ≈ 2.0x
+    holiday-overtime-multiplier: ${PAYROLL_HOLIDAY_OT_MULTIPLIER:2.0}   # 1.5 × 2.0 = 3.0x
+    standard-working-days-per-month: ${PAYROLL_STANDARD_DAYS:26}
+    standard-working-hours-per-day: ${PAYROLL_STANDARD_HOURS:8}
+  
+  # Shift Validation Rules
+  shift:
+    validation:
+      max-daily-hours: ${SHIFT_MAX_DAILY_HOURS:8}
+      max-weekly-hours: ${SHIFT_MAX_WEEKLY_HOURS:40}
+      min-rest-hours-night-shift: ${SHIFT_MIN_REST_NIGHT:12}
+      min-rest-hours-day-shift: ${SHIFT_MIN_REST_DAY:10}
+      max-shifts-per-day: ${SHIFT_MAX_PER_DAY:2}
+      max-shifts-per-week: ${SHIFT_MAX_PER_WEEK:6}
+      max-consecutive-days: ${SHIFT_MAX_CONSECUTIVE:6}
+      max-shift-duration: ${SHIFT_MAX_DURATION:10}
+      min-shift-duration: ${SHIFT_MIN_DURATION:2}
+      max-overtime-per-week: ${SHIFT_MAX_OT_WEEK:12}
+      max-overtime-per-day: ${SHIFT_MAX_OT_DAY:4}  # 8h + 4h = 12h/ngày
+      max-weekend-days-per-week: ${SHIFT_MAX_WEEKEND_DAYS:1}
+      max-months-in-advance: ${SHIFT_MAX_MONTHS_ADVANCE:3}
 
 # Actuator configuration
 management:
@@ -55,3 +84,18 @@ management:
   endpoint:
     health:
       show-details: when-authorized
+
+# Swagger/OpenAPI configuration
+swagger:
+  enabled: ${SWAGGER_ENABLED:true}  # Set to false in production
+
+springdoc:
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:true}
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:true}
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+    try-it-out-enabled: true

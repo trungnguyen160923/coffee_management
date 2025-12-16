@@ -23,6 +23,17 @@ export interface RegisterRequest {
   branchId?: string;
 }
 
+export interface UpdateProfileRequest {
+  email?: string;
+  fullname?: string;
+  phone_number?: string;
+}
+
+export interface UpdateOwnProfileRequest {
+  fullname?: string;
+  phone_number?: string;
+}
+
 export interface AuthService {
   login: (credentials: LoginRequest) => Promise<LoginResponse>;
   logout: () => Promise<void>;
@@ -30,6 +41,9 @@ export interface AuthService {
   refreshToken: () => Promise<LoginResponse>;
   getCurrentUser: () => Promise<User>;
   changePassword: (oldPassword: string, newPassword: string) => Promise<void>;
+  updateProfile: (userId: number, data: UpdateProfileRequest) => Promise<User>;
+  updateOwnProfile: (data: UpdateOwnProfileRequest) => Promise<User>;
+  updateManagerProfile: (userId: number, identityCard: string) => Promise<void>;
   getStaffBusinessRoles: () => Promise<StaffBusinessRole[]>;
 }
 
@@ -148,6 +162,14 @@ export const authService: AuthService = {
         salary: number | null;
         adminLevel: number | null;
         notes: string | null;
+        insuranceSalary?: number | null;
+        overtimeRate?: number | null;
+        numberOfDependents?: number | null;
+        // Staff profile fields
+        employmentType?: string | null;
+        payType?: string | null;
+        hourlyRate?: number | null;
+        baseSalary?: number | null;
         staffBusinessRoleIds?: number[];
         proficiencyLevel?: string | null;
       };
@@ -179,7 +201,15 @@ export const authService: AuthService = {
       salary: userData.salary || undefined,
       adminLevel: userData.adminLevel || undefined,
       notes: userData.notes || undefined,
-      // Staff business roles & proficiency
+      // Manager profile fields
+      insuranceSalary: userData.insuranceSalary || undefined,
+      overtimeRate: userData.overtimeRate || undefined,
+      numberOfDependents: userData.numberOfDependents || undefined,
+      // Staff profile fields
+      employmentType: userData.employmentType || undefined,
+      payType: userData.payType || undefined,
+      hourlyRate: userData.hourlyRate || undefined,
+      baseSalary: userData.baseSalary || undefined,
       staffBusinessRoleIds: userData.staffBusinessRoleIds || undefined,
       proficiencyLevel: userData.proficiencyLevel as 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED' | 'EXPERT' | null | undefined
     };
@@ -189,6 +219,53 @@ export const authService: AuthService = {
     await apiClient.post(API_ENDPOINTS.AUTH.CHANGE_PASSWORD, {
       oldPassword,
       newPassword,
+    });
+  },
+
+  async updateProfile(userId: number, data: UpdateProfileRequest): Promise<User> {
+    const response = await apiClient.put<{
+      code: number;
+      result: {
+        user_id: number;
+        email: string;
+        fullname: string;
+        phoneNumber: string;
+        role: {
+          roleId: number;
+          name: string;
+        };
+      };
+    }>(`/api/auth-service/users/${userId}`, data);
+    
+    const userData = response.result;
+    const roleName = userData.role.name.toLowerCase();
+    
+    // Fetch updated user with full profile data
+    return await this.getCurrentUser();
+  },
+
+  async updateOwnProfile(data: UpdateOwnProfileRequest): Promise<User> {
+    const response = await apiClient.put<{
+      code: number;
+      result: {
+        user_id: number;
+        email: string;
+        fullname: string;
+        phoneNumber: string;
+        role: {
+          roleId: number;
+          name: string;
+        };
+      };
+    }>(`/api/auth-service/users/me`, data);
+    
+    // Fetch updated user with full profile data
+    return await this.getCurrentUser();
+  },
+
+  async updateManagerProfile(userId: number, identityCard: string): Promise<void> {
+    await apiClient.put(`/api/profiles/manager-profiles/${userId}/own`, {
+      identityCard,
     });
   },
 

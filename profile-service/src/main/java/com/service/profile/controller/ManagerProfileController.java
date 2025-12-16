@@ -57,6 +57,12 @@ public class ManagerProfileController {
         return ApiResponse.<ManagerProfileResponse>builder().result(result).build();
     }
 
+    @PutMapping("/{userId}/own")
+    ApiResponse<ManagerProfileResponse> updateOwnManagerProfile(@PathVariable Integer userId, @Valid @RequestBody ManagerProfileUpdateRequest request) {
+        ManagerProfileResponse result = managerProfileService.updateOwnManagerProfile(userId, request);
+        return ApiResponse.<ManagerProfileResponse>builder().result(result).build();
+    }
+
     @PutMapping("/unassign-manager/{userId}")
     ApiResponse<Void> unassignManager(@PathVariable Integer userId) {
          managerProfileService.unassignManager(userId);

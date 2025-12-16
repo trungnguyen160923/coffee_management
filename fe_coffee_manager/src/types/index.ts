@@ -19,7 +19,15 @@ export interface User {
   salary?: number | null;
   adminLevel?: number | null;
   notes?: string | null;
-  // Staff business roles & proficiency (only for STAFF role)
+  // Manager profile fields (only for MANAGER role)
+  insuranceSalary?: number | null;
+  overtimeRate?: number | null;
+  numberOfDependents?: number | null;
+  // Staff profile fields (only for STAFF role)
+  employmentType?: 'FULL_TIME' | 'PART_TIME' | 'CASUAL' | null;
+  payType?: 'MONTHLY' | 'HOURLY' | null;
+  hourlyRate?: number | null;
+  baseSalary?: number | null;
   staffBusinessRoleIds?: number[];
   proficiencyLevel?: 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED' | 'EXPERT' | null;
 }
@@ -442,3 +450,6 @@ export interface InventoryItem {
 
 // Table Management Types
 export * from './table';
+
+// Payroll Types
+export * from './payroll';

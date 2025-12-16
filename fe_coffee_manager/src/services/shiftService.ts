@@ -2,6 +2,7 @@ import apiClient from '../config/api';
 
 export type ShiftStatus = 'DRAFT' | 'PUBLISHED' | 'CANCELLED';
 export type EmploymentType = 'FULL_TIME' | 'PART_TIME' | 'CASUAL' | 'ANY';
+export type ShiftType = 'NORMAL' | 'WEEKEND' | 'HOLIDAY' | 'OVERTIME';
 
 export interface Shift {
   shiftId: number;
@@ -14,6 +15,7 @@ export interface Shift {
   maxStaffAllowed: number | null;
   employmentType?: EmploymentType | null; // NULL = kế thừa từ template
   status: ShiftStatus;
+  shiftType?: ShiftType; // NORMAL, WEEKEND, HOLIDAY, OVERTIME
   notes: string | null;
   roleRequirements?: ShiftRoleRequirement[];
   // Availability info for staff self-service
@@ -197,6 +199,20 @@ export const shiftService = {
     await apiClient.delete<ApiResponse<null>>(
       `/api/profiles/shift-assignments/${assignmentId}/unregister`
     );
+  },
+
+  /**
+   * Lấy danh sách shifts mà staff được assign trong period
+   */
+  async getShiftsByStaffAndPeriod(userId: number, period: string): Promise<Shift[]> {
+    const query = new URLSearchParams({
+      userId: userId.toString(),
+      period: period,
+    }).toString();
+    const res = await apiClient.get<ApiResponse<Shift[]>>(
+      `/api/profiles/shifts/staff/${userId}?${query}`
+    );
+    return res.result || [];
   },
 };
 

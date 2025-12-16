@@ -1,5 +1,6 @@
 package com.service.profile.dto.request;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 
 import jakarta.validation.constraints.Pattern;
@@ -22,4 +23,6 @@ public class ManagerProfileUpdateRequest {
     String identityCard;
 
     LocalDate hireDate;
+
+    BigDecimal baseSalary;
 }

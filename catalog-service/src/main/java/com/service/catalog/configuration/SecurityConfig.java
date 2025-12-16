@@ -19,7 +19,7 @@ public class SecurityConfig {
     private static final String[] PUBLIC_ENDPOINTS = { "/files/upload", "/files/cleanup", "/public/purchase-orders/**",
             "/stocks/check-and-reserve", "/stocks/check-and-reserve/**", "/stocks/update-order-id",
             "/stocks/update-order-id-by-cart", "/stocks/hold-id/**", "/stocks/release",
-            "/actuator/**" }; // Allow actuator endpoints (health checks, metrics, etc.) without authentication
+            "/actuator/**", "/v3/api-docs/**", "/v3/api-docs", "/swagger-ui/**", "/swagger-ui.html" }; // Allow actuator, OpenAPI and Swagger UI endpoints
     private static final String[] PUBLIC_GET_ENDPOINTS = { "/sizes", "/files/images/products/**", "/products",
             "/products/**", "/categories", "/categories/**", "/public/purchase-orders/**", "/api/analytics/metrics/**",
             "/stocks/hold-id/**", "/actuator/**" };

@@ -1,5 +1,6 @@
 package com.service.profile.service;
 
+import com.service.profile.configuration.ShiftValidationProperties;
 import com.service.profile.entity.*;
 import com.service.profile.exception.AppException;
 import com.service.profile.exception.ErrorCode;
@@ -39,22 +40,7 @@ public class ShiftValidationService {
     StaffRoleAssignmentRepository staffRoleAssignmentRepository;
     BranchClient branchClient;
     BranchClosureClient branchClosureClient;
-
-    // ========== Configuration Constants ==========
-    // Có thể move sang application.properties nếu cần configurable
-    private static final BigDecimal MAX_DAILY_HOURS = BigDecimal.valueOf(8);
-    private static final BigDecimal MAX_WEEKLY_HOURS = BigDecimal.valueOf(40);
-    private static final BigDecimal MIN_REST_HOURS_NIGHT_SHIFT = BigDecimal.valueOf(12);
-    private static final BigDecimal MIN_REST_HOURS_DAY_SHIFT = BigDecimal.valueOf(10);
-    private static final int MAX_SHIFTS_PER_DAY = 2;
-    private static final int MAX_SHIFTS_PER_WEEK = 6;
-    private static final int MAX_CONSECUTIVE_DAYS = 6;
-    private static final BigDecimal MAX_SHIFT_DURATION = BigDecimal.valueOf(10);
-    private static final BigDecimal MIN_SHIFT_DURATION = BigDecimal.valueOf(2);
-    private static final BigDecimal MAX_OVERTIME_PER_WEEK = BigDecimal.valueOf(12);
-    private static final BigDecimal MAX_OVERTIME_PER_DAY = BigDecimal.valueOf(2);
-    private static final int MAX_WEEKEND_DAYS_PER_WEEK = 1;
-    private static final int MAX_MONTHS_IN_ADVANCE = 3;
+    ShiftValidationProperties validationProperties;
 
     // ========== Main Validation Method ==========
 
@@ -164,14 +150,30 @@ public class ShiftValidationService {
                     "Staff is already assigned to this shift");
         }
 
-        // Assignment-based validations (OVERTIME: skip rest period, skip daily overtime)
+        // Assignment-based validations (OVERTIME: skip rest period, but check daily limit)
         validateTimeConflictWithData(staffUserId, shiftDate, shiftStartTime, shiftEndTime, existingAssignmentData);
-        // Skip: validateDailyHoursWithData (no daily limit for overtime)
         // Skip: validateRestPeriodWithData (no rest period requirement for overtime)
-        // Skip: validateDailyOvertime (no daily overtime limit for overtime)
         
-        // Only check weekly hours: total <= 52h (40 + 12)
-        BigDecimal MAX_WEEKLY_HOURS_OVERTIME = MAX_WEEKLY_HOURS.add(MAX_OVERTIME_PER_WEEK); // 40 + 12 = 52
+        // Check daily hours: total <= 12h/ngày (8h + 4h OT) - theo quy định lao động VN
+        BigDecimal MAX_DAILY_HOURS_OVERTIME = validationProperties.getMaxDailyHours()
+            .add(validationProperties.getMaxOvertimePerDay()); // 8 + 4 = 12h/ngày
+        BigDecimal totalDailyHours = shiftDuration;
+        for (java.util.Map<String, Object> data : existingAssignmentData) {
+            LocalDate existingDate = (LocalDate) data.get("shiftDate");
+            if (existingDate.equals(shiftDate)) {
+                BigDecimal existingDuration = (BigDecimal) data.get("durationHours");
+                totalDailyHours = totalDailyHours.add(existingDuration);
+            }
+        }
+        
+        if (totalDailyHours.compareTo(MAX_DAILY_HOURS_OVERTIME) > 0) {
+            throw new AppException(ErrorCode.SHIFT_EXCEEDS_DAILY_HOURS,
+                    "Maximum " + MAX_DAILY_HOURS_OVERTIME + " hours per day allowed (8 base + 4 overtime)");
+        }
+        
+        // Check weekly hours: total <= 52h (40 + 12)
+        BigDecimal MAX_WEEKLY_HOURS_OVERTIME = validationProperties.getMaxWeeklyHours()
+            .add(validationProperties.getMaxOvertimePerWeek()); // 40 + 12 = 52
         LocalDate weekStart = shiftDate.minusDays(shiftDate.getDayOfWeek().getValue() - 1);
         LocalDate weekEnd = weekStart.plusDays(6);
         
@@ -389,7 +391,7 @@ public class ShiftValidationService {
      */
     public void validateShiftDate(LocalDate shiftDate, boolean allowToday) {
         LocalDate today = LocalDate.now();
-        LocalDate maxFutureDate = today.plusMonths(MAX_MONTHS_IN_ADVANCE);
+        LocalDate maxFutureDate = today.plusMonths(validationProperties.getMaxMonthsInAdvance());
 
         if (shiftDate.isBefore(today)) {
             throw new AppException(ErrorCode.SHIFT_DATE_IN_PAST,
@@ -403,7 +405,7 @@ public class ShiftValidationService {
 
         if (shiftDate.isAfter(maxFutureDate)) {
             throw new AppException(ErrorCode.SHIFT_DATE_TOO_FAR,
-                    "Cannot assign to shifts more than " + MAX_MONTHS_IN_ADVANCE + " months in advance");
+                    "Cannot assign to shifts more than " + validationProperties.getMaxMonthsInAdvance() + " months in advance");
         }
     }
 
@@ -428,14 +430,14 @@ public class ShiftValidationService {
      * 3. Validate shift duration (min và max)
      */
     public void validateShiftDuration(BigDecimal duration) {
-        if (duration.compareTo(MIN_SHIFT_DURATION) < 0) {
+        if (duration.compareTo(validationProperties.getMinShiftDuration()) < 0) {
             throw new AppException(ErrorCode.SHIFT_BELOW_MIN_DURATION,
-                    "Minimum shift duration is " + MIN_SHIFT_DURATION + " hours");
+                    "Minimum shift duration is " + validationProperties.getMinShiftDuration() + " hours");
         }
 
-        if (duration.compareTo(MAX_SHIFT_DURATION) > 0) {
+        if (duration.compareTo(validationProperties.getMaxShiftDuration()) > 0) {
             throw new AppException(ErrorCode.SHIFT_EXCEEDS_MAX_DURATION,
-                    "Maximum shift duration is " + MAX_SHIFT_DURATION + " hours");
+                    "Maximum shift duration is " + validationProperties.getMaxShiftDuration() + " hours");
         }
     }
 
@@ -500,9 +502,9 @@ public class ShiftValidationService {
             }
         }
 
-        if (totalDailyHours.compareTo(MAX_DAILY_HOURS) > 0) {
+        if (totalDailyHours.compareTo(validationProperties.getMaxDailyHours()) > 0) {
             throw new AppException(ErrorCode.SHIFT_EXCEEDS_DAILY_HOURS,
-                    "Would exceed " + MAX_DAILY_HOURS + " hours per day limit");
+                    "Would exceed " + validationProperties.getMaxDailyHours() + " hours per day limit");
         }
     }
 
@@ -537,9 +539,9 @@ public class ShiftValidationService {
             }
         }
 
-        if (totalWeeklyHours.compareTo(MAX_WEEKLY_HOURS) > 0) {
+        if (totalWeeklyHours.compareTo(validationProperties.getMaxWeeklyHours()) > 0) {
             throw new AppException(ErrorCode.SHIFT_EXCEEDS_WEEKLY_HOURS,
-                    "Would exceed " + MAX_WEEKLY_HOURS + " hours per week limit");
+                    "Would exceed " + validationProperties.getMaxWeeklyHours() + " hours per week limit");
         }
     }
 
@@ -565,9 +567,9 @@ public class ShiftValidationService {
                 .filter(data -> shiftDate.equals((LocalDate) data.get("shiftDate")))
                 .count();
 
-        if (shiftsOnSameDate >= MAX_SHIFTS_PER_DAY) {
+        if (shiftsOnSameDate >= validationProperties.getMaxShiftsPerDay()) {
             throw new AppException(ErrorCode.SHIFT_EXCEEDS_DAILY_SHIFTS,
-                    "Maximum " + MAX_SHIFTS_PER_DAY + " shifts per day allowed");
+                    "Maximum " + validationProperties.getMaxShiftsPerDay() + " shifts per day allowed");
         }
     }
 
@@ -599,9 +601,9 @@ public class ShiftValidationService {
                 })
                 .count();
 
-        if (shiftsInWeek >= MAX_SHIFTS_PER_WEEK) {
+        if (shiftsInWeek >= validationProperties.getMaxShiftsPerWeek()) {
             throw new AppException(ErrorCode.SHIFT_EXCEEDS_WEEKLY_SHIFTS,
-                    "Maximum " + MAX_SHIFTS_PER_WEEK + " shifts per week allowed");
+                    "Maximum " + validationProperties.getMaxShiftsPerWeek() + " shifts per week allowed");
         }
     }
 
@@ -627,7 +629,7 @@ public class ShiftValidationService {
 
         // Count backward
         LocalDate checkDateBackward = shiftDate.minusDays(1);
-        while (consecutiveDays < MAX_CONSECUTIVE_DAYS) {
+        while (consecutiveDays < validationProperties.getMaxConsecutiveDays()) {
             final LocalDate checkDate = checkDateBackward;
             boolean hasShiftOnDate = existingAssignmentData.stream()
                     .anyMatch(data -> checkDate.equals((LocalDate) data.get("shiftDate")));
@@ -638,7 +640,7 @@ public class ShiftValidationService {
 
         // Count forward
         LocalDate checkDateForward = shiftDate.plusDays(1);
-        while (consecutiveDays < MAX_CONSECUTIVE_DAYS) {
+        while (consecutiveDays < validationProperties.getMaxConsecutiveDays()) {
             final LocalDate checkDate = checkDateForward;
             boolean hasShiftOnDate = existingAssignmentData.stream()
                     .anyMatch(data -> checkDate.equals((LocalDate) data.get("shiftDate")));
@@ -647,9 +649,9 @@ public class ShiftValidationService {
             checkDateForward = checkDateForward.plusDays(1);
         }
 
-        if (consecutiveDays >= MAX_CONSECUTIVE_DAYS) {
+        if (consecutiveDays >= validationProperties.getMaxConsecutiveDays()) {
             throw new AppException(ErrorCode.SHIFT_EXCEEDS_CONSECUTIVE_DAYS,
-                    "Maximum " + MAX_CONSECUTIVE_DAYS + " consecutive days allowed");
+                    "Maximum " + validationProperties.getMaxConsecutiveDays() + " consecutive days allowed");
         }
     }
 
@@ -688,7 +690,8 @@ public class ShiftValidationService {
             boolean existingIsNight = (existingStartTime.isAfter(LocalTime.of(22, 0)) || existingEndTime.isBefore(LocalTime.of(6, 0)));
             boolean newIsNight = (startTime.isAfter(LocalTime.of(22, 0)) || endTime.isBefore(LocalTime.of(6, 0)));
             boolean isNightShift = existingIsNight || newIsNight;
-            BigDecimal requiredRest = isNightShift ? MIN_REST_HOURS_NIGHT_SHIFT : MIN_REST_HOURS_DAY_SHIFT;
+            BigDecimal requiredRest = isNightShift ? validationProperties.getMinRestHoursNightShift() 
+                : validationProperties.getMinRestHoursDayShift();
 
             // Check if new shift starts after existing shift
             if (newShiftStart.isAfter(existingShiftEnd)) {
@@ -742,11 +745,11 @@ public class ShiftValidationService {
             }
         }
 
-        BigDecimal overtimeHours = totalWeeklyHours.subtract(MAX_WEEKLY_HOURS);
+        BigDecimal overtimeHours = totalWeeklyHours.subtract(validationProperties.getMaxWeeklyHours());
         if (overtimeHours.compareTo(BigDecimal.ZERO) > 0) {
-            if (overtimeHours.compareTo(MAX_OVERTIME_PER_WEEK) > 0) {
+            if (overtimeHours.compareTo(validationProperties.getMaxOvertimePerWeek()) > 0) {
                 throw new AppException(ErrorCode.SHIFT_EXCEEDS_OVERTIME_LIMIT,
-                        "Maximum " + MAX_OVERTIME_PER_WEEK + " hours overtime per week allowed");
+                        "Maximum " + validationProperties.getMaxOvertimePerWeek() + " hours overtime per week allowed");
             }
 
             // Check daily overtime
@@ -759,10 +762,10 @@ public class ShiftValidationService {
                 }
             }
 
-            BigDecimal dailyOvertime = totalDailyHours.subtract(MAX_DAILY_HOURS);
-            if (dailyOvertime.compareTo(MAX_OVERTIME_PER_DAY) > 0) {
+            BigDecimal dailyOvertime = totalDailyHours.subtract(validationProperties.getMaxDailyHours());
+            if (dailyOvertime.compareTo(validationProperties.getMaxOvertimePerDay()) > 0) {
                 throw new AppException(ErrorCode.SHIFT_EXCEEDS_DAILY_OVERTIME,
-                        "Maximum " + MAX_OVERTIME_PER_DAY + " hours overtime per day allowed");
+                        "Maximum " + validationProperties.getMaxOvertimePerDay() + " hours overtime per day allowed");
             }
         }
     }
@@ -913,9 +916,9 @@ public class ShiftValidationService {
                 })
                 .count();
 
-        if (weekendShifts >= MAX_WEEKEND_DAYS_PER_WEEK) {
+        if (weekendShifts >= validationProperties.getMaxWeekendDaysPerWeek()) {
             throw new AppException(ErrorCode.SHIFT_EXCEEDS_WEEKEND_LIMIT,
-                    "Maximum " + MAX_WEEKEND_DAYS_PER_WEEK + " weekend day per week allowed");
+                    "Maximum " + validationProperties.getMaxWeekendDaysPerWeek() + " weekend day per week allowed");
         }
     }
 

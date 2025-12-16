@@ -2,6 +2,7 @@ package com.service.auth.controller;
 
 import com.nimbusds.jose.JOSEException;
 import com.service.auth.dto.request.AuthenticationRequest;
+import com.service.auth.dto.request.ChangePasswordRequest;
 import com.service.auth.dto.request.IntrospectRequest;
 import com.service.auth.dto.request.LogoutRequest;
 import com.service.auth.dto.request.RefreshRequest;
@@ -56,6 +57,12 @@ public class AuthenticationController {
         }
         String token = authHeader.replace("Bearer ", "");
         authenticationService.logout(token);
+        return ApiResponse.<Void>builder().build();
+    }
+
+    @PostMapping("/change-password")
+    ApiResponse<Void> changePassword(@Valid @RequestBody ChangePasswordRequest request) {
+        authenticationService.changePassword(request);
         return ApiResponse.<Void>builder().build();
     }
 }

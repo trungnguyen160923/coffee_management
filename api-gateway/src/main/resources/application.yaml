@@ -1,5 +1,10 @@
 server:
   port: ${SERVER_PORT:8000}
+  # Netty configuration for handling large headers (for Swagger UI with large OpenAPI specs)
+  netty:
+    connection-timeout: 45000
+    # Increase max header size to handle large OpenAPI specs (default is 8192 bytes)
+    max-header-size: ${SERVER_NETTY_MAX_HEADER_SIZE:32768} # 32KB (32 * 1024)
 
 app:
   api-prefix: ${API_PREFIX:/api}
@@ -114,3 +119,14 @@ management:
   endpoint:
     health:
       show-details: when-authorized
+
+# Swagger/OpenAPI configuration - Disabled in Gateway
+# Each service has its own Swagger UI
+swagger:
+  enabled: false
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false

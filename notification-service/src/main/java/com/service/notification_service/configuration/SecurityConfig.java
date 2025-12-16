@@ -17,8 +17,8 @@ import org.springframework.security.web.SecurityFilterChain;
 @EnableMethodSecurity
 public class SecurityConfig {
 
-    private static final String[] PUBLIC_ENDPOINTS = {"/notifications/internal", "/actuator/**",}; // Allow actuator endpoints (health checks, metrics, etc.) without authentication
-    private static final String[] PUBLIC_GET_ENDPOINTS = {"/notification-templates/test", "/actuator/**"};
+    private static final String[] PUBLIC_ENDPOINTS = {"/notifications/internal", "/actuator/**", "/v3/api-docs/**", "/v3/api-docs", "/swagger-ui/**", "/swagger-ui.html"}; // Allow actuator, OpenAPI and Swagger UI endpoints
+    private static final String[] PUBLIC_GET_ENDPOINTS = {"/notification-templates/test", "/actuator/**", "/v3/api-docs/**", "/v3/api-docs", "/swagger-ui/**", "/swagger-ui.html"};
 
     private final CustomJwtDecoder customJwtDecoder;
 

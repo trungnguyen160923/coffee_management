@@ -90,18 +90,52 @@ public class ManagerProfileService {
     @PreAuthorize("hasRole('ADMIN')")
     public ManagerProfileResponse updateManagerProfile(Integer userId, ManagerProfileUpdateRequest request){
         ManagerProfile managerProfile = managerProfileRepository.findById(userId).orElseThrow(() -> new AppException(ErrorCode.USER_ID_NOT_FOUND));
-        if (managerProfileRepository.existsByIdentityCard(request.getIdentityCard()) && !managerProfile.getIdentityCard().equals(request.getIdentityCard())) {
-            throw new AppException(ErrorCode.IDENTITY_CARD_EXISTED);
-        }
-        if(request.getIdentityCard() != null){
+        if (request.getIdentityCard() != null) {
+            if (managerProfileRepository.existsByIdentityCard(request.getIdentityCard()) && !managerProfile.getIdentityCard().equals(request.getIdentityCard())) {
+                throw new AppException(ErrorCode.IDENTITY_CARD_EXISTED);
+            }
             managerProfile.setIdentityCard(request.getIdentityCard());
         }
         if(request.getHireDate() != null){
             managerProfile.setHireDate(request.getHireDate());
         }
+        if(request.getBaseSalary() != null){
+            managerProfile.setBaseSalary(request.getBaseSalary());
+        }
         managerProfile.setUpdateAt(LocalDateTime.now());
         managerProfileRepository.save(managerProfile);
         return managerProfileMapper.toManagerProfileResponse(managerProfile);
+    }
+
+    @PreAuthorize("hasRole('ADMIN') or @managerProfileService.canUpdateOwnProfile(#userId, authentication)")
+    public ManagerProfileResponse updateOwnManagerProfile(Integer userId, ManagerProfileUpdateRequest request){
+        ManagerProfile managerProfile = managerProfileRepository.findById(userId).orElseThrow(() -> new AppException(ErrorCode.USER_ID_NOT_FOUND));
+        
+        // Manager can only update identityCard, not hireDate or baseSalary
+        if (request.getIdentityCard() != null) {
+            if (managerProfileRepository.existsByIdentityCard(request.getIdentityCard()) && !managerProfile.getIdentityCard().equals(request.getIdentityCard())) {
+                throw new AppException(ErrorCode.IDENTITY_CARD_EXISTED);
+            }
+            managerProfile.setIdentityCard(request.getIdentityCard());
+        }
+        
+        managerProfile.setUpdateAt(LocalDateTime.now());
+        managerProfileRepository.save(managerProfile);
+        return managerProfileMapper.toManagerProfileResponse(managerProfile);
+    }
+
+    public boolean canUpdateOwnProfile(Integer userId, org.springframework.security.core.Authentication authentication) {
+        if (authentication == null) return false;
+        
+        // Get current user ID from JWT
+        if (authentication.getPrincipal() instanceof org.springframework.security.oauth2.jwt.Jwt jwt) {
+            Long currentUserIdLong = jwt.getClaim("user_id");
+            if (currentUserIdLong != null) {
+                Integer currentUserId = currentUserIdLong.intValue();
+                return currentUserId.equals(userId);
+            }
+        }
+        return false;
     }
 
     @PreAuthorize("hasRole('ADMIN')")
@@ -127,16 +161,35 @@ public class ManagerProfileService {
     @Transactional
     public void assignManager(AssignManagerRequest_ request){
         ManagerProfile managerProfile = managerProfileRepository.findById(request.getManagerUserId()).orElseThrow(() -> new AppException(ErrorCode.USER_ID_NOT_FOUND));
-        managerProfile.setBranchId(request.getBranchId());
-        managerProfileRepository.save(managerProfile);
+        
+        Integer oldBranchId = managerProfile.getBranchId();
+        Integer newBranchId = request.getBranchId();
+        
+        // If manager already has a branch and it's different from the new one, unassign from old branch first
+        if (oldBranchId != null && oldBranchId != -1 && !oldBranchId.equals(newBranchId)) {
+            try {
+                AssignManagerRequest unassignRequest = new AssignManagerRequest();
+                unassignRequest.setManagerUserId(request.getManagerUserId());
+                branchClient.unassignManager(oldBranchId, unassignRequest).getResult();
+                log.info("Unassigned manager {} from old branch {}", request.getManagerUserId(), oldBranchId);
+            } catch (Exception e) {
+                log.warn("Failed to unassign manager {} from old branch {}: {}", request.getManagerUserId(), oldBranchId, e.getMessage());
+                // Continue anyway - might be already unassigned or branch doesn't exist
+            }
+        }
+        
+        // Assign manager to new branch
         try {
-            AssignManagerRequest request_ = new AssignManagerRequest();
-            request_.setManagerUserId(request.getManagerUserId());
-            branchClient.assignManager(managerProfile.getBranchId(), request_).getResult();
-            managerProfile.setBranchId(managerProfile.getBranchId());
+            AssignManagerRequest assignRequest = new AssignManagerRequest();
+            assignRequest.setManagerUserId(request.getManagerUserId());
+            branchClient.assignManager(newBranchId, assignRequest).getResult();
+            
+            // Update branchId in manager_profiles table
+            managerProfile.setBranchId(newBranchId);
             managerProfileRepository.save(managerProfile);
+            log.info("Assigned manager {} to branch {}", request.getManagerUserId(), newBranchId);
         } catch (Exception e) {
-            log.error("Failed to assign manager to branch: {}", e.getMessage());
+            log.error("Failed to assign manager {} to branch {}: {}", request.getManagerUserId(), newBranchId, e.getMessage());
             throw new AppException(ErrorCode.BRANCH_NOT_FOUND);
         }
     }

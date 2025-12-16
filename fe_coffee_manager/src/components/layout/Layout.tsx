@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Link, NavLink, useLocation } from 'react-router-dom';
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useStaffPermissions } from '../../hooks/useStaffPermissions';
 import {
@@ -30,6 +30,8 @@ import {
   Clock,
   AlertCircle,
   Inbox,
+  DollarSign,
+  Settings,
 } from 'lucide-react';
 
 import { NotificationBell } from '../notifications/NotificationBell';
@@ -43,6 +45,7 @@ export function Layout({ children }: LayoutProps) {
   const { user, managerBranch, logout } = useAuth();
   const staffPermissions = useStaffPermissions();
   const location = useLocation();
+  const navigate = useNavigate();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [showMoreNav, setShowMoreNav] = useState(false);
   const [maxVisibleItems, setMaxVisibleItems] = useState(6);
@@ -65,6 +68,9 @@ export function Layout({ children }: LayoutProps) {
         { icon: Eye, label: 'Branch Activities', path: '/admin/branch-activities' },
         { icon: Users, label: 'Managers', path: '/admin/managers' },
         { icon: Tag, label: 'Discounts', path: '/admin/discounts' },
+        { icon: DollarSign, label: 'Payroll', path: '/admin/payroll' },
+        { icon: Settings, label: 'Payroll Templates', path: '/admin/payroll-templates' },
+        { icon: FileText, label: 'Payroll Reports', path: '/admin/payroll-reports' },
         { icon: BarChart3, label: 'Statistics', path: '/admin/statistics' },
       ];
     } else if (user?.role === 'manager') {
@@ -80,6 +86,9 @@ export function Layout({ children }: LayoutProps) {
         { icon: Store, label: 'Branch Closures', path: '/manager/branch-closures' },
         { icon: Square, label: 'Tables', path: '/manager/tables' },
         { icon: Tag, label: 'Discounts', path: '/manager/discounts' },
+        { icon: DollarSign, label: 'Payroll', path: '/manager/payroll' },
+        { icon: DollarSign, label: 'Rewards & Penalties', path: '/manager/bonus-penalty-allowance' },
+        { icon: Settings, label: 'Payroll Templates', path: '/manager/payroll-templates' },
         { icon: Truck, label: 'Procurement', path: '/manager/procurement' },
         { icon: FileText, label: 'Purchase Orders', path: '/manager/purchase-orders' },
         { icon: Truck, label: 'Suppliers', path: '/manager/suppliers' },
@@ -148,6 +157,14 @@ export function Layout({ children }: LayoutProps) {
           items: pick(['/manager/products', '/manager/ingredients', '/manager/discounts']),
         },
         {
+          title: 'Payroll',
+          items: pick([
+            '/manager/payroll',
+            '/manager/bonus-penalty-allowance',
+            '/manager/payroll-templates',
+          ]),
+        },
+        {
           title: 'Inventory & Purchasing',
           items: pick([
             '/manager/inventory',
@@ -176,6 +193,14 @@ export function Layout({ children }: LayoutProps) {
             '/admin/managers',
             '/admin/branch-activities',
             '/admin/suppliers',
+          ]),
+        },
+        {
+          title: 'Payroll',
+          items: pick([
+            '/admin/payroll',
+            '/admin/payroll-templates',
+            '/admin/payroll-reports',
           ]),
         },
         { title: 'Analytics', items: pick(['/admin/statistics']) },
@@ -296,6 +321,12 @@ export function Layout({ children }: LayoutProps) {
     const parts = user.name.trim().split(/\s+/);
     if (parts.length === 1) return parts[0][0]?.toUpperCase() || 'U';
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  };
+
+  const handleOpenAccountSettings = () => {
+    const basePath = getBasePath();
+    setAvatarMenuOpen(false);
+    navigate(`${basePath}/account`);
   };
 
   // Close avatar dropdown on outside click
@@ -702,15 +733,24 @@ export function Layout({ children }: LayoutProps) {
                       />
                     </div>
                     {avatarMenuOpen && (
-                      <div className="absolute right-0 mt-2 w-40 rounded-xl bg-white border border-slate-100 shadow-lg z-40 py-1">
-            <button
-              onClick={handleLogout}
-              disabled={isLoggingOut}
+                      <div className="absolute right-0 mt-2 w-44 rounded-xl bg-white border border-slate-100 shadow-lg z-40 py-1">
+                        <button
+                          type="button"
+                          onClick={handleOpenAccountSettings}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
+                        >
+                          <Settings className="h-4 w-4 text-slate-400" />
+                          <span>Account settings</span>
+                        </button>
+                        <div className="my-1 h-px bg-slate-100" />
+                        <button
+                          onClick={handleLogout}
+                          disabled={isLoggingOut}
                           className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
-            >
+                        >
                           <LogOut className="h-4 w-4 text-slate-400" />
                           <span>{isLoggingOut ? 'Signing out...' : 'Sign Out'}</span>
-            </button>
+                        </button>
                       </div>
                     )}
                   </div>

@@ -31,8 +31,14 @@ public class WebClientConfiguration {
 
     @Bean
     WebClient.Builder webClientBuilder() {
+        // Configure HttpClient with increased max header size to handle large OpenAPI specs
+        // Default is 8192 bytes, increase to 32KB to handle aggregated specs
         HttpClient httpClient = HttpClient.create()
-                .followRedirect(true);
+                .followRedirect(true)
+                .httpResponseDecoder(httpResponseDecoderSpec -> {
+                    httpResponseDecoderSpec.maxHeaderSize(32768); // 32KB
+                    return httpResponseDecoderSpec;
+                });
 
         return WebClient.builder()
                 .clientConnector(new ReactorClientHttpConnector(httpClient));

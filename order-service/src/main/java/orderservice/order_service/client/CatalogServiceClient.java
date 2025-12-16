@@ -38,4 +38,10 @@ public interface CatalogServiceClient {
 
     @PostMapping("/stocks/release")
     ApiResponse<Map<String, Object>> releaseReservation(@RequestBody Map<String, Object> request);
+
+    @PostMapping("/stocks/commit")
+    ApiResponse<Map<String, Object>> commitReservation(@RequestBody Map<String, Object> request);
+
+    @PostMapping("/stocks/commit-pos")
+    ApiResponse<Map<String, Object>> commitPosStock(@RequestBody Map<String, Object> request);
 }

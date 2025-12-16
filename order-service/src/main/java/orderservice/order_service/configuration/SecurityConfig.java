@@ -37,6 +37,8 @@ public class SecurityConfig {
             "/api/analytics/metrics/products/all", // Allow public access to all branches product metrics (for admin)
             "/api/analytics/metrics/reviews/all", // Allow public access to all branches review metrics (for admin)
             "/actuator/**", // Allow actuator endpoints (health checks, metrics, etc.) without authentication
+            "/v3/api-docs/**", "/v3/api-docs", // Allow OpenAPI endpoints
+            "/swagger-ui/**", "/swagger-ui.html" // Allow Swagger UI endpoints
     };
 
     private final CustomJwtDecoder customJwtDecoder;

@@ -14,6 +14,7 @@ import ForgotPasswordPage from "../components/pages/auth/ForgotPasswordPage";
 import OrdersPage from "../components/pages/users/OrdersPage";
 import BookingsPage from "../components/pages/users/BookingsPage";
 import AddressManagement from "../components/pages/users/AddressManagement";
+import AccountSettingsPage from "../components/pages/users/AccountSettingsPage";
 import ProtectedRoute from "../components/common/ProtectedRoute";
 
 
@@ -62,6 +63,11 @@ const AppRoutes = () => {
       <Route path="/users/addresses" element={
         <ProtectedRoute>
           <AddressManagement />
+        </ProtectedRoute>
+      } />
+      <Route path="/users/account" element={
+        <ProtectedRoute>
+          <AccountSettingsPage />
         </ProtectedRoute>
       } />
     </Routes>

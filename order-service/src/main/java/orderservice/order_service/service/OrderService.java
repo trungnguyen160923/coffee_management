@@ -45,6 +45,16 @@ public class OrderService {
         BranchClosureService branchClosureService;
 
         private static final Set<String> CANCEL_ALLOWED_STATUSES = Set.of("PENDING", "PREPARING");
+        
+        // Valid order status transitions
+        private static final Map<String, Set<String>> VALID_STATUS_TRANSITIONS = Map.of(
+                "CREATED", Set.of("PENDING", "CANCELLED"),
+                "PENDING", Set.of("PREPARING", "CANCELLED"),
+                "PREPARING", Set.of("READY", "CANCELLED"),
+                "READY", Set.of("COMPLETED", "CANCELLED"),
+                "COMPLETED", Set.of(), // Terminal state
+                "CANCELLED", Set.of()  // Terminal state
+        );
 
         @Transactional
         public OrderResponse createOrder(CreateOrderRequest request, String token) {
@@ -53,6 +63,12 @@ public class OrderService {
                         BigDecimal subtotal = BigDecimal.ZERO;
 
                         for (CreateOrderRequest.OrderItemRequest itemRequest : request.getOrderItems()) {
+                                // Validate quantity
+                                if (itemRequest.getQuantity() == null || itemRequest.getQuantity().compareTo(BigDecimal.ZERO) <= 0) {
+                                        throw new AppException(ErrorCode.VALIDATION_FAILED,
+                                                        "Order item quantity must be greater than 0");
+                                }
+                                
                                 ApiResponse<ProductDetailResponse> productDetailResponse = catalogServiceClient
                                                 .getProductDetailById(itemRequest.getProductDetailId());
 
@@ -61,6 +77,13 @@ public class OrderService {
                                 }
 
                                 ProductDetailResponse productDetail = productDetailResponse.getResult();
+                                
+                                // Validate price
+                                if (productDetail.getPrice() == null || productDetail.getPrice().compareTo(BigDecimal.ZERO) <= 0) {
+                                        throw new AppException(ErrorCode.VALIDATION_FAILED,
+                                                        "Product price must be greater than 0");
+                                }
+                                
                                 BigDecimal itemTotal = productDetail.getPrice().multiply(itemRequest.getQuantity());
                                 subtotal = subtotal.add(itemTotal);
                         }
@@ -152,8 +175,8 @@ public class OrderService {
 
                                 if (discountResponse.getIsValid()) {
                                         discount = discountResponse.getDiscountAmount();
-                                        // Sử dụng mã giảm giá
-                                        discountService.useDiscount(request.getDiscountCode());
+                                        // Note: useDiscount() will be called AFTER order is successfully created
+                                        // to avoid discount being used if order creation fails
                                 } else {
                                         throw new AppException(ErrorCode.VALIDATION_FAILED,
                                                         discountResponse.getMessage());
@@ -162,11 +185,24 @@ public class OrderService {
                                 discount = request.getDiscount() != null ? request.getDiscount() : BigDecimal.ZERO;
                         }
 
-                        // Compute VAT (10%) on products subtotal
-                        BigDecimal vat = subtotal.multiply(new BigDecimal("0.10"));
+                        // Compute subtotal after discount
+                        BigDecimal afterDiscount = subtotal.subtract(discount);
+                        // Ensure afterDiscount is not negative
+                        if (afterDiscount.compareTo(BigDecimal.ZERO) < 0) {
+                                afterDiscount = BigDecimal.ZERO;
+                        }
+
+                        // Compute VAT (10%) on subtotal AFTER discount
+                        BigDecimal vat = afterDiscount.multiply(new BigDecimal("0.10"));
                         vat = vat.setScale(2, java.math.RoundingMode.HALF_UP);
 
-                        BigDecimal totalAmount = subtotal.subtract(discount).add(vat);
+                        BigDecimal totalAmount = afterDiscount.add(vat);
+                        
+                        // Validate total amount is not negative
+                        if (totalAmount.compareTo(BigDecimal.ZERO) < 0) {
+                                throw new AppException(ErrorCode.VALIDATION_FAILED,
+                                                "Total amount cannot be negative. Please check discount amount.");
+                        }
 
                         // Create order
                         Order order = Order.builder()
@@ -191,6 +227,18 @@ public class OrderService {
                                         .build();
 
                         order = orderRepository.save(order);
+                        
+                        // Use discount AFTER order is successfully created
+                        if (request.getDiscountCode() != null && !request.getDiscountCode().trim().isEmpty() && discount.compareTo(BigDecimal.ZERO) > 0) {
+                                try {
+                                        discountService.useDiscount(request.getDiscountCode());
+                                        log.info("Discount {} used for order {}", request.getDiscountCode(), order.getOrderId());
+                                } catch (Exception e) {
+                                        log.error("Failed to use discount {} for order {}: {}", 
+                                                request.getDiscountCode(), order.getOrderId(), e.getMessage());
+                                        // Don't fail order creation if discount usage fails, but log the error
+                                }
+                        }
 
                         // Cập nhật order_id vào stock_reservations
                         try {
@@ -386,11 +434,21 @@ public class OrderService {
                 Order order = orderRepository.findById(orderId)
                                 .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
 
-                if ("CANCELLED".equalsIgnoreCase(status) && !isCancelableStatus(order.getStatus())) {
-                        throw new AppException(ErrorCode.ORDER_CANNOT_BE_CANCELLED);
+                String currentStatus = order.getStatus();
+                String newStatus = status.toUpperCase();
+                
+                // Validate status transition
+                if (!isValidStatusTransition(currentStatus, newStatus)) {
+                        throw new AppException(ErrorCode.VALIDATION_FAILED,
+                                        String.format("Invalid status transition from %s to %s", currentStatus, newStatus));
                 }
 
-                order.setStatus(status);
+                // Tự động commit reservation khi chuyển sang READY
+                if ("READY".equals(newStatus)) {
+                        commitReservationForOrder(order);
+                }
+
+                order.setStatus(newStatus);
                 order = orderRepository.save(order);
 
                 // Publish event when order is completed
@@ -690,8 +748,7 @@ public class OrderService {
 
                                 if (discountResponse.getIsValid()) {
                                         discount = discountResponse.getDiscountAmount();
-                                        // Sử dụng mã giảm giá
-                                        discountService.useDiscount(request.getDiscountCode());
+                                        // Note: useDiscount() will be called AFTER order is successfully created
                                 } else {
                                         throw new AppException(ErrorCode.VALIDATION_FAILED,
                                                         discountResponse.getMessage());
@@ -700,11 +757,24 @@ public class OrderService {
                                 discount = request.getDiscount() != null ? request.getDiscount() : BigDecimal.ZERO;
                         }
 
-                        // Compute VAT (10%) on products subtotal
-                        BigDecimal vat = subtotal.multiply(new BigDecimal("0.10"));
+                        // Compute subtotal after discount
+                        BigDecimal afterDiscount = subtotal.subtract(discount);
+                        // Ensure afterDiscount is not negative
+                        if (afterDiscount.compareTo(BigDecimal.ZERO) < 0) {
+                                afterDiscount = BigDecimal.ZERO;
+                        }
+
+                        // Compute VAT (10%) on subtotal AFTER discount
+                        BigDecimal vat = afterDiscount.multiply(new BigDecimal("0.10"));
                         vat = vat.setScale(2, java.math.RoundingMode.HALF_UP);
 
-                        BigDecimal totalAmount = subtotal.subtract(discount).add(vat);
+                        BigDecimal totalAmount = afterDiscount.add(vat);
+                        
+                        // Validate total amount is not negative
+                        if (totalAmount.compareTo(BigDecimal.ZERO) < 0) {
+                                throw new AppException(ErrorCode.VALIDATION_FAILED,
+                                                "Total amount cannot be negative. Please check discount amount.");
+                        }
 
                         // Create order (customerId = null for guest)
                         Order order = Order.builder()
@@ -729,12 +799,39 @@ public class OrderService {
                                         .build();
 
                         order = orderRepository.save(order);
+                        
+                        // Use discount AFTER order is successfully created
+                        if (request.getDiscountCode() != null && !request.getDiscountCode().trim().isEmpty() && discount.compareTo(BigDecimal.ZERO) > 0) {
+                                try {
+                                        discountService.useDiscount(request.getDiscountCode());
+                                        log.info("Discount {} used for guest order {}", request.getDiscountCode(), order.getOrderId());
+                                } catch (Exception e) {
+                                        log.error("Failed to use discount {} for guest order {}: {}", 
+                                                request.getDiscountCode(), order.getOrderId(), e.getMessage());
+                                }
+                        }
 
                         // Create order items
                         for (CreateGuestOrderRequest.OrderItemRequest itemRequest : request.getOrderItems()) {
+                                // Validate quantity
+                                if (itemRequest.getQuantity() == null || itemRequest.getQuantity().compareTo(BigDecimal.ZERO) <= 0) {
+                                        throw new AppException(ErrorCode.VALIDATION_FAILED,
+                                                        "Order item quantity must be greater than 0");
+                                }
                                 ApiResponse<ProductDetailResponse> productDetailResponse = catalogServiceClient
                                                 .getProductDetailById(itemRequest.getProductDetailId());
+                                
+                                if (productDetailResponse == null || productDetailResponse.getResult() == null) {
+                                        throw new AppException(ErrorCode.PRODUCT_NOT_FOUND);
+                                }
+                                
                                 ProductDetailResponse productDetail = productDetailResponse.getResult();
+                                
+                                // Validate price
+                                if (productDetail.getPrice() == null || productDetail.getPrice().compareTo(BigDecimal.ZERO) <= 0) {
+                                        throw new AppException(ErrorCode.VALIDATION_FAILED,
+                                                        "Product price must be greater than 0");
+                                }
 
                                 OrderItem orderItem = OrderItem.builder()
                                                 .order(order)
@@ -791,6 +888,61 @@ public class OrderService {
 
         private boolean isCancelableStatus(String status) {
                 return status != null && CANCEL_ALLOWED_STATUSES.contains(status.toUpperCase());
+        }
+        
+        /**
+         * Validate order status transition
+         */
+        private boolean isValidStatusTransition(String currentStatus, String newStatus) {
+                if (currentStatus == null || newStatus == null) {
+                        return false;
+                }
+                
+                String currentUpper = currentStatus.toUpperCase();
+                String newUpper = newStatus.toUpperCase();
+                
+                // Same status is always valid (idempotent)
+                if (currentUpper.equals(newUpper)) {
+                        return true;
+                }
+                
+                // Check if transition is allowed
+                Set<String> allowedTransitions = VALID_STATUS_TRANSITIONS.get(currentUpper);
+                if (allowedTransitions == null) {
+                        // Unknown current status
+                        return false;
+                }
+                
+                return allowedTransitions.contains(newUpper);
+        }
+
+        /**
+         * Commit stock reservation for an order (if exists) when moving to READY/PREPARING flow.
+         */
+        private void commitReservationForOrder(Order order) {
+                try {
+                        ApiResponse<Map<String, Object>> holdIdResponse = catalogServiceClient.getHoldIdByOrderId(order.getOrderId());
+                        if (holdIdResponse == null || holdIdResponse.getResult() == null || holdIdResponse.getResult().get("holdId") == null) {
+                                log.info("No reservation linked to order {}. Skip commit.", order.getOrderId());
+                                return;
+                        }
+
+                        Object holdIdObj = holdIdResponse.getResult().get("holdId");
+                        String holdId = holdIdObj.toString();
+
+                        Map<String, Object> request = new HashMap<>();
+                        request.put("holdId", holdId);
+                        request.put("orderId", order.getOrderId());
+
+                        catalogServiceClient.commitReservation(request);
+                        log.info("Committed reservation for order {} with holdId {}", order.getOrderId(), holdId);
+                } catch (FeignException.NotFound e) {
+                        log.info("No reservation found for order {} during commit. Nothing to do.", order.getOrderId());
+                } catch (Exception e) {
+                        log.error("Failed to commit reservation for order {}: {}", order.getOrderId(), e.getMessage(), e);
+                        throw new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION,
+                                        "Failed to commit reservation. Please try again later.");
+                }
         }
 
         private void releaseActiveReservationsForOrder(Integer orderId) {

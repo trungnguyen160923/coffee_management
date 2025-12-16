@@ -5,6 +5,7 @@ import com.service.auth.dto.request.ManagerProfileCreationRequest;
 import com.service.auth.dto.request.ManagerProfileRequest;
 import com.service.auth.dto.request.StaffProfileCreationRequest;
 import com.service.auth.dto.request.StaffProfileRequest;
+import com.service.auth.dto.request.UpdateOwnProfileRequest;
 import com.service.auth.dto.request.UserCreationRequest;
 import com.service.auth.dto.request.UserUpdateRequest;
 import com.service.auth.dto.response.AdminProfileResponse;
@@ -255,6 +256,10 @@ public class UserService {
             userResponse.setIdentityCard(managerProfile.getIdentityCard());
             userResponse.setBranch(managerProfile.getBranch());
             userResponse.setHireDate(managerProfile.getHireDate());
+            // Map baseSalary to salary
+            if (managerProfile.getBaseSalary() != null) {
+                userResponse.setSalary(managerProfile.getBaseSalary().doubleValue());
+            }
             return userResponse;
         } catch (Exception e) {
             throw new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION);
@@ -341,6 +346,10 @@ public class UserService {
                         ur.setIdentityCard(mgr.getIdentityCard());
                         ur.setBranch(mgr.getBranch());
                         ur.setHireDate(mgr.getHireDate());
+                        // Map baseSalary to salary
+                        if (mgr.getBaseSalary() != null) {
+                            ur.setSalary(mgr.getBaseSalary().doubleValue());
+                        }
                     }
                 })
                 .toList();
@@ -458,6 +467,27 @@ public class UserService {
         return currentUser.isPresent() && currentUser.get().getUserId().equals(userId);
     }
 
+    @PreAuthorize("isAuthenticated()")
+    @Transactional
+    public UserResponse updateOwnProfile(UpdateOwnProfileRequest request) {
+        // Get current user from JWT
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String currentUserEmail = auth.getName();
+        var user = userRepository.findByEmail(currentUserEmail)
+                .orElseThrow(() -> new AppException(ErrorCode.EMAIL_NOT_EXISTED));
+
+        // Update user fields (only fullname and phone_number, not email)
+        if (request.getFullname() != null) {
+            user.setFullname(request.getFullname());
+        }
+        if (request.getPhone_number() != null) {
+            user.setPhoneNumber(request.getPhone_number());
+        }
+
+        userRepository.save(user);
+        return userMapper.toUserResponse(user);
+    }
+
     @Transactional(readOnly = true)
     public UserResponse getUserById(Integer userId) {
         var user = userRepository.findById(userId)
@@ -573,6 +603,14 @@ public class UserService {
             user.setIdentityCard(managerProfile.getIdentityCard());
             user.setBranch(managerProfile.getBranch());
             user.setHireDate(managerProfile.getHireDate());
+            // Map baseSalary to salary
+            if (managerProfile.getBaseSalary() != null) {
+                user.setSalary(managerProfile.getBaseSalary().doubleValue());
+            }
+            // Map additional manager profile fields
+            user.setInsuranceSalary(managerProfile.getInsuranceSalary());
+            user.setOvertimeRate(managerProfile.getOvertimeRate());
+            user.setNumberOfDependents(managerProfile.getNumberOfDependents());
         }
         else if(user.getRole().getName().equals(PredefinedRole.STAFF_ROLE)) {
             StaffProfileResponse staffProfile = profileClient.getStaffProfile(userId).getResult();
@@ -580,7 +618,18 @@ public class UserService {
             user.setBranch(staffProfile.getBranch());
             user.setHireDate(staffProfile.getHireDate());
             user.setPosition(staffProfile.getPosition());
-            user.setSalary(staffProfile.getSalary());
+            // Map salary from baseSalary or hourlyRate based on payType
+            if (staffProfile.getBaseSalary() != null) {
+                user.setSalary(staffProfile.getBaseSalary().doubleValue());
+            }
+            // Set staff profile specific fields
+            user.setEmploymentType(staffProfile.getEmploymentType());
+            user.setPayType(staffProfile.getPayType());
+            user.setHourlyRate(staffProfile.getHourlyRate());
+            user.setBaseSalary(staffProfile.getBaseSalary());
+            user.setInsuranceSalary(staffProfile.getInsuranceSalary());
+            user.setOvertimeRate(staffProfile.getOvertimeRate());
+            user.setNumberOfDependents(staffProfile.getNumberOfDependents());
             // Set staff business roles
             user.setStaffBusinessRoleIds(staffProfile.getStaffBusinessRoleIds());
             user.setProficiencyLevel(staffProfile.getProficiencyLevel());

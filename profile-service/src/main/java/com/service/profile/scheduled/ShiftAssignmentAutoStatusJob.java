@@ -2,16 +2,19 @@ package com.service.profile.scheduled;
 
 import com.service.profile.entity.Shift;
 import com.service.profile.entity.ShiftAssignment;
+import com.service.profile.event.StaffAbsentEvent;
 import com.service.profile.repository.ShiftAssignmentRepository;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.util.List;
 
 /**
@@ -27,6 +30,7 @@ import java.util.List;
 public class ShiftAssignmentAutoStatusJob {
 
     ShiftAssignmentRepository assignmentRepository;
+    ApplicationEventPublisher eventPublisher;
 
     /**
      * Process assignments for completed shifts
@@ -67,6 +71,9 @@ public class ShiftAssignmentAutoStatusJob {
                                 "Auto-updated to NO_SHOW: Shift ended without check-in (shift ended at " + shiftEnd + ")");
                         assignmentRepository.save(assignment);
                         noShowCount++;
+                        
+                        // Publish StaffAbsentEvent để tự động tạo penalty
+                        publishStaffAbsentEvent(assignment, shift, 0); // 0 = System tự động
                     }
                     // Case 2: CHECKED_IN assignment, shift ended more than 5 minutes ago → auto checkout
                     else if ("CHECKED_IN".equals(assignment.getStatus())) {
@@ -103,6 +110,32 @@ public class ShiftAssignmentAutoStatusJob {
                     noShowCount, autoCheckoutCount);
         } catch (Exception e) {
             log.error("Auto status update job failed: {}", e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Publish StaffAbsentEvent khi set NO_SHOW
+     */
+    private void publishStaffAbsentEvent(ShiftAssignment assignment, Shift shift, Integer managerUserId) {
+        try {
+            String period = YearMonth.from(shift.getShiftDate()).toString(); // Format: YYYY-MM
+            
+            StaffAbsentEvent event = StaffAbsentEvent.builder()
+                .userId(assignment.getStaffUserId())
+                .shiftId(shift.getShiftId())
+                .branchId(shift.getBranchId())
+                .shiftDate(shift.getShiftDate())
+                .period(period)
+                .managerUserId(managerUserId)
+                .build();
+            
+            eventPublisher.publishEvent(event);
+            log.info("Published StaffAbsentEvent for userId={}, shiftId={}", 
+                assignment.getStaffUserId(), shift.getShiftId());
+        } catch (Exception e) {
+            log.error("Failed to publish StaffAbsentEvent for assignmentId={}", 
+                assignment.getAssignmentId(), e);
+            // Không throw exception để không ảnh hưởng đến flow chính
         }
     }
 }

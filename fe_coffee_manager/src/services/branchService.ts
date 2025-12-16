@@ -82,7 +82,18 @@ export const branchService: BranchService = {
     const queryString = params.toString();
     const endpoint = `${API_ENDPOINTS.BRANCHES.BASE}${queryString ? `?${queryString}` : ''}`;
     
-    return await apiClient.get<BranchListResponse>(endpoint);
+    // API trả về ApiResponse<List<Branch>>, không phải BranchListResponse
+    const response = await apiClient.get<{ code: number; result: Branch[] }>(endpoint);
+    const branches = response.result || [];
+    
+    // Convert sang BranchListResponse format
+    return {
+      branches,
+      total: branches.length,
+      page: filters.page || 1,
+      limit: filters.limit || branches.length,
+      totalPages: 1,
+    };
   },
 
   async getBranch(id: string): Promise<Branch> {

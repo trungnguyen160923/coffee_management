@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.*;
 
 import com.service.auth.dto.request.ManagerProfileCreationRequest;
 import com.service.auth.dto.request.StaffProfileCreationRequest;
+import com.service.auth.dto.request.UpdateOwnProfileRequest;
 import com.service.auth.dto.request.UserCreationRequest;
 import com.service.auth.dto.request.UserUpdateRequest;
 import com.service.auth.dto.response.ApiResponse;
@@ -129,6 +130,12 @@ public class UserController {
     @GetMapping("/me")
     ApiResponse<UserResponse> getMe(@RequestHeader(value = "Authorization", required = false) String authHeader) {
         var result = userService.getMe();
+        return ApiResponse.<UserResponse>builder().result(result).build();
+    }
+
+    @PutMapping("/me")
+    ApiResponse<UserResponse> updateOwnProfile(@Valid @RequestBody UpdateOwnProfileRequest request) {
+        var result = userService.updateOwnProfile(request);
         return ApiResponse.<UserResponse>builder().result(result).build();
     }
 

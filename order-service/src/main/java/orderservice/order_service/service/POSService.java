@@ -24,7 +24,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -50,6 +52,12 @@ public class POSService {
             BigDecimal subtotal = BigDecimal.ZERO;
 
             for (CreatePOSOrderRequest.OrderItemRequest itemRequest : request.getOrderItems()) {
+                // Validate quantity
+                if (itemRequest.getQuantity() == null || itemRequest.getQuantity().compareTo(BigDecimal.ZERO) <= 0) {
+                    throw new AppException(ErrorCode.VALIDATION_FAILED,
+                            "Order item quantity must be greater than 0");
+                }
+                
                 ApiResponse<ProductDetailResponse> productDetailResponse = catalogServiceClient
                         .getProductDetailById(itemRequest.getProductDetailId());
 
@@ -58,6 +66,13 @@ public class POSService {
                 }
 
                 ProductDetailResponse productDetail = productDetailResponse.getResult();
+                
+                // Validate price
+                if (productDetail.getPrice() == null || productDetail.getPrice().compareTo(BigDecimal.ZERO) <= 0) {
+                    throw new AppException(ErrorCode.VALIDATION_FAILED,
+                            "Product price must be greater than 0");
+                }
+                
                 BigDecimal itemTotal = productDetail.getPrice().multiply(itemRequest.getQuantity());
                 subtotal = subtotal.add(itemTotal);
             }
@@ -79,8 +94,7 @@ public class POSService {
 
                     if (discountResponse.getIsValid()) {
                         discount = discountResponse.getDiscountAmount();
-                        // Sử dụng mã giảm giá
-                        discountService.useDiscount(request.getDiscountCode());
+                        // Note: useDiscount() will be called AFTER order is successfully created
                     } else {
                         throw new AppException(ErrorCode.VALIDATION_FAILED, discountResponse.getMessage());
                     }
@@ -93,11 +107,24 @@ public class POSService {
                 discount = request.getDiscount() != null ? request.getDiscount() : BigDecimal.ZERO;
             }
 
-            // Compute VAT (10%) on products subtotal
-            BigDecimal vat = subtotal.multiply(new BigDecimal("0.10"));
+            // Compute subtotal after discount
+            BigDecimal afterDiscount = subtotal.subtract(discount);
+            // Ensure afterDiscount is not negative
+            if (afterDiscount.compareTo(BigDecimal.ZERO) < 0) {
+                afterDiscount = BigDecimal.ZERO;
+            }
+
+            // Compute VAT (10%) on subtotal AFTER discount
+            BigDecimal vat = afterDiscount.multiply(new BigDecimal("0.10"));
             vat = vat.setScale(2, java.math.RoundingMode.HALF_UP);
 
-            BigDecimal totalAmount = subtotal.subtract(discount).add(vat);
+            BigDecimal totalAmount = afterDiscount.add(vat);
+            
+            // Validate total amount is not negative
+            if (totalAmount.compareTo(BigDecimal.ZERO) < 0) {
+                throw new AppException(ErrorCode.VALIDATION_FAILED,
+                        "Total amount cannot be negative. Please check discount amount.");
+            }
 
             // Kiểm tra xem chi nhánh có đang nghỉ vào ngày hôm nay không
             java.time.LocalDate today = java.time.LocalDate.now();
@@ -163,6 +190,35 @@ public class POSService {
                     .build();
 
             order = orderRepository.save(order);
+            
+            // Trừ kho trực tiếp cho POS order
+            try {
+                Map<String, Object> commitPayload = new HashMap<>();
+                commitPayload.put("branchId", request.getBranchId());
+                commitPayload.put("orderId", order.getOrderId());
+                List<Map<String, Object>> items = request.getOrderItems().stream().map(it -> {
+                    Map<String, Object> item = new HashMap<>();
+                    item.put("productDetailId", it.getProductDetailId());
+                    item.put("quantity", it.getQuantity());
+                    return item;
+                }).collect(Collectors.toList());
+                commitPayload.put("items", items);
+                catalogServiceClient.commitPosStock(commitPayload);
+            } catch (Exception e) {
+                log.error("Failed to commit POS stock for order {}: {}", order.getOrderId(), e.getMessage(), e);
+                throw new AppException(ErrorCode.VALIDATION_FAILED, "Cannot commit stock for POS order: " + e.getMessage());
+            }
+            
+            // Use discount AFTER order is successfully created
+            if (request.getDiscountCode() != null && !request.getDiscountCode().trim().isEmpty() && discount.compareTo(BigDecimal.ZERO) > 0) {
+                try {
+                    discountService.useDiscount(request.getDiscountCode());
+                    log.info("Discount {} used for POS order {}", request.getDiscountCode(), order.getOrderId());
+                } catch (Exception e) {
+                    log.error("Failed to use discount {} for POS order {}: {}", 
+                            request.getDiscountCode(), order.getOrderId(), e.getMessage());
+                }
+            }
 
             // Create order tables mapping and update table status
             for (Integer tableId : request.getTableIds()) {
@@ -190,6 +246,12 @@ public class POSService {
             // Create order items
             for (CreatePOSOrderRequest.OrderItemRequest itemRequest : request.getOrderItems()) {
                 try {
+                    // Validate quantity
+                    if (itemRequest.getQuantity() == null || itemRequest.getQuantity().compareTo(BigDecimal.ZERO) <= 0) {
+                        throw new AppException(ErrorCode.VALIDATION_FAILED,
+                                "Order item quantity must be greater than 0");
+                    }
+                    
                     ApiResponse<ProductDetailResponse> productDetailResponse = catalogServiceClient
                             .getProductDetailById(itemRequest.getProductDetailId());
 
@@ -199,6 +261,12 @@ public class POSService {
                     }
 
                     ProductDetailResponse productDetail = productDetailResponse.getResult();
+                    
+                    // Validate price
+                    if (productDetail.getPrice() == null || productDetail.getPrice().compareTo(BigDecimal.ZERO) <= 0) {
+                        throw new AppException(ErrorCode.VALIDATION_FAILED,
+                                "Product price must be greater than 0");
+                    }
 
                     OrderItem orderItem = OrderItem.builder()
                             .order(order)

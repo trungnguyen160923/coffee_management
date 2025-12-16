@@ -29,7 +29,16 @@ public class UserResponse {
     Byte adminLevel;
     String notes;
     
-    // Staff business roles & proficiency (only for STAFF role)
+    // Shared profile fields (for both MANAGER and STAFF roles)
+    java.math.BigDecimal insuranceSalary;
+    java.math.BigDecimal overtimeRate;
+    Integer numberOfDependents;
+    
+    // Staff profile fields (only for STAFF role)
+    String employmentType; // FULL_TIME / PART_TIME / CASUAL
+    String payType;        // MONTHLY / HOURLY
+    java.math.BigDecimal hourlyRate;
+    java.math.BigDecimal baseSalary;
     List<Integer> staffBusinessRoleIds;
     String proficiencyLevel;
 }

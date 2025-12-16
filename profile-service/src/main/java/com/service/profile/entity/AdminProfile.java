@@ -19,6 +19,7 @@ public class AdminProfile {
     Integer userId; // loose reference -> auth_db.users
 
     @Column(name = "admin_level", nullable = false)
+    @Builder.Default
     Byte adminLevel = 1;
 
     @Column(columnDefinition = "TEXT")

@@ -20,6 +20,8 @@ public class SecurityConfig {
             "/customer-profiles/internal",
             "/staff-profiles/internal/**",
             "/actuator/**", // Allow actuator endpoints (health checks, metrics, etc.) without authentication
+            "/v3/api-docs/**", "/v3/api-docs", // Allow OpenAPI endpoints
+            "/swagger-ui/**", "/swagger-ui.html" // Allow Swagger UI endpoints
     };
 
     private final CustomJwtDecoder customJwtDecoder;

@@ -19,6 +19,7 @@ public class ShiftResponse {
     Integer maxStaffAllowed;
     String employmentType; // FULL_TIME, PART_TIME, CASUAL, ANY. NULL = kế thừa từ template
     String status;
+    String shiftType; // NORMAL, WEEKEND, HOLIDAY, OVERTIME
     String notes;
     List<ShiftRoleRequirementResponse> roleRequirements;
     // Availability info for staff self-service

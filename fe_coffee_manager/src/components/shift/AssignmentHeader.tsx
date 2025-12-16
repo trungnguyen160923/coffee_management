@@ -18,43 +18,13 @@ export default function AssignmentHeader({
   loading,
 }: AssignmentHeaderProps) {
   return (
-    <div className="flex items-center justify-between mb-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Shift Assignment Management</h1>
-        <p className="text-sm text-slate-500 mt-1">
-          View and manage staff shift registrations
-        </p>
-      </div>
-      <div className="flex items-center gap-4">
-        {/* Status Color Legend */}
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-lg border border-slate-200">
-          <span className="text-xs font-medium text-slate-600 mr-1">Status:</span>
-          <div className="flex items-center gap-1.5">
-            <div className="flex items-center gap-1">
-              <div className="w-3 h-3 rounded bg-amber-50 border border-amber-200"></div>
-              <span className="text-xs text-slate-600">Pending</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-3 h-3 rounded bg-blue-50 border border-blue-200"></div>
-              <span className="text-xs text-slate-600">Confirmed</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-3 h-3 rounded bg-green-50 border border-green-200"></div>
-              <span className="text-xs text-slate-600">Checked In</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-3 h-3 rounded bg-slate-50 border border-slate-200"></div>
-              <span className="text-xs text-slate-600">Checked Out</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-3 h-3 rounded bg-red-50 border border-red-200"></div>
-              <span className="text-xs text-slate-600">Cancelled</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-3 h-3 rounded bg-orange-50 border border-orange-200"></div>
-              <span className="text-xs text-slate-600">Rejected</span>
-            </div>
-          </div>
+    <div className="mb-6 space-y-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Shift Assignment Management</h1>
+          <p className="text-sm text-slate-500 mt-1">
+            View and manage staff shift registrations
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <select
@@ -89,6 +59,37 @@ export default function AssignmentHeader({
             <Plus className="w-4 h-4" />
             Assign Staff
           </button>
+        </div>
+      </div>
+
+      {/* Status Color Legend under filters */}
+      <div className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-lg border border-slate-200">
+        <span className="text-xs font-medium text-slate-600 mr-1">Status:</span>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 rounded bg-amber-50 border border-amber-200"></div>
+            <span className="text-xs text-slate-600">Pending</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 rounded bg-blue-50 border border-blue-200"></div>
+            <span className="text-xs text-slate-600">Confirmed</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 rounded bg-green-50 border border-green-200"></div>
+            <span className="text-xs text-slate-600">Checked In</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 rounded bg-slate-50 border border-slate-200"></div>
+            <span className="text-xs text-slate-600">Checked Out</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 rounded bg-red-50 border border-red-200"></div>
+            <span className="text-xs text-slate-600">Cancelled</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 rounded bg-orange-50 border border-orange-200"></div>
+            <span className="text-xs text-slate-600">Rejected</span>
+          </div>
         </div>
       </div>
     </div>

@@ -43,8 +43,14 @@ public class StaffProfile {
     @Column(name = "hourly_rate", nullable = false, precision = 12, scale = 2)
     BigDecimal hourlyRate;
 
+    @Column(name = "insurance_salary", precision = 12, scale = 2)
+    BigDecimal insuranceSalary;
+
     @Column(name = "overtime_rate", precision = 12, scale = 2)
     BigDecimal overtimeRate;
+
+    @Column(name = "number_of_dependents")
+    Integer numberOfDependents;
 
     @Column(name = "create_at", nullable = false, updatable = false,
             columnDefinition = "DATETIME DEFAULT CURRENT_TIMESTAMP")

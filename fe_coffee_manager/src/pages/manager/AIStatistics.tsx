@@ -120,7 +120,7 @@ export default function AIStatistics() {
         }
       } catch (checkError: any) {
         // If 404, no data exists
-        if (checkError?.response?.status === 404) {
+        if (checkError?.response?.status === 404 || checkError?.status === 404) {
           setHasFetchedAIData(false);
         } else {
           // Other errors, don't show error, just mark as no data

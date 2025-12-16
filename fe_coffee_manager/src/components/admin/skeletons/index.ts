@@ -7,4 +7,7 @@ export { default as AdminIngredientManagementSkeleton } from './IngredientManage
 export { default as AdminSupplierManagementSkeleton } from './SupplierManagementSkeleton';
 export { default as ManagerManagementSkeleton } from './ManagerManagementSkeleton';
 export { default as RecipeManagementSkeleton } from './RecipeManagementSkeleton';
+export { default as PayrollManagementSkeleton } from './PayrollManagementSkeleton';
+export { default as PayrollTemplatesSkeleton } from './PayrollTemplatesSkeleton';
+export { default as PayrollReportsSkeleton } from './PayrollReportsSkeleton';
 

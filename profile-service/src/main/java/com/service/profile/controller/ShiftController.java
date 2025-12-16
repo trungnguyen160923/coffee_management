@@ -204,6 +204,23 @@ public class ShiftController {
                 .build();
     }
 
+    /**
+     * Lấy danh sách shifts mà staff được assign trong period
+     * GET /api/shifts/staff/{userId}?period={YYYY-MM}
+     * Dùng cho form tạo penalty để chọn shift
+     */
+    @GetMapping("/staff/{userId}")
+    @PreAuthorize("hasRole('MANAGER') or hasRole('ADMIN')")
+    public ApiResponse<List<ShiftResponse>> getShiftsByStaffAndPeriod(
+            @PathVariable Integer userId,
+            @RequestParam String period
+    ) {
+        List<ShiftResponse> result = shiftService.getShiftsByStaffAndPeriod(userId, period);
+        return ApiResponse.<List<ShiftResponse>>builder()
+                .result(result)
+                .build();
+    }
+
     private Integer getUserIdFromSecurityContext() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth != null && auth.getPrincipal() instanceof Jwt jwt) {

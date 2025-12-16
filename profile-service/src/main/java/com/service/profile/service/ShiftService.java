@@ -13,6 +13,7 @@ import com.service.profile.entity.ShiftTemplate;
 import com.service.profile.entity.ShiftTemplateRoleRequirement;
 import com.service.profile.exception.AppException;
 import com.service.profile.exception.ErrorCode;
+import com.service.profile.repository.HolidayRepository;
 import com.service.profile.repository.ShiftAssignmentRepository;
 import com.service.profile.repository.ShiftRepository;
 import com.service.profile.repository.ShiftRoleRequirementRepository;
@@ -28,8 +29,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -47,6 +50,7 @@ public class ShiftService {
     ShiftRoleRequirementRepository shiftRoleRequirementRepository;
     BranchClosureClient branchClosureClient;
     ShiftValidationService shiftValidationService;
+    HolidayRepository holidayRepository;
     StaffProfileService staffProfileService; // For getting staff list to notify
     ShiftNotificationService shiftNotificationService; // For sending notifications
 
@@ -79,6 +83,8 @@ public class ShiftService {
             // Validate duration
             BigDecimal duration = calculateDurationHours(request.getStartTime(), request.getEndTime());
             shiftValidationService.validateShiftDuration(duration);
+            // Validate working hours (giờ làm việc hợp pháp)
+            validateWorkingHours(request.getStartTime(), request.getEndTime());
         }
         
         // Check for time overlap with existing shifts
@@ -86,6 +92,11 @@ public class ShiftService {
                 && request.getStartTime() != null && request.getEndTime() != null) {
             validateShiftTimeOverlap(request.getBranchId(), request.getShiftDate(), 
                     request.getStartTime(), request.getEndTime(), null);
+        }
+        
+        // Validate maximum shifts per day/week for branch (prevent creating too many shifts)
+        if (request.getBranchId() != null && request.getShiftDate() != null) {
+            validateBranchShiftLimits(request.getBranchId(), request.getShiftDate());
         }
         
         Shift shift = buildShiftFromRequest(null, request, managerUserId);
@@ -137,6 +148,10 @@ public class ShiftService {
             }
             
             existing.setShiftDate(request.getShiftDate());
+            
+            // Tự động cập nhật shiftType khi shiftDate thay đổi
+            String shiftType = determineShiftType(request.getShiftDate());
+            existing.setShiftType(shiftType);
         }
         if (request.getStartTime() != null) {
             existing.setStartTime(request.getStartTime());
@@ -621,6 +636,15 @@ public class ShiftService {
         // employmentType: nếu request có thì dùng, nếu null thì sẽ kế thừa từ template trong @PrePersist
         shift.setEmploymentType(request.getEmploymentType());
         shift.setNotes(request.getNotes());
+        
+        // Tự động xác định shiftType (NORMAL/WEEKEND/HOLIDAY/OVERTIME) dựa trên shift_date
+        if (request.getShiftDate() != null) {
+            String shiftType = determineShiftType(request.getShiftDate());
+            shift.setShiftType(shiftType);
+        } else {
+            // Fallback nếu không có shiftDate
+            shift.setShiftType("NORMAL");
+        }
 
         return shift;
     }
@@ -636,6 +660,12 @@ public class ShiftService {
             throw new AppException(ErrorCode.SHIFT_TEMPLATE_NOT_FOUND);
         }
 
+        // Tự động xác định shiftType (NORMAL/WEEKEND/HOLIDAY/OVERTIME) dựa trên shift_date
+        String shiftType = "NORMAL";
+        if (request.getShiftDate() != null) {
+            shiftType = determineShiftType(request.getShiftDate());
+        }
+        
         Shift shift = Shift.builder()
                 .branchId(request.getBranchId())
                 .template(template)
@@ -648,6 +678,7 @@ public class ShiftService {
                 .createdBy(managerUserId)
                 .notes(notes)
                 .status("DRAFT")
+                .shiftType(shiftType)
                 .build();
 
         return shift;
@@ -716,6 +747,78 @@ public class ShiftService {
         }
     }
     
+    /**
+     * Validate working hours (giờ làm việc hợp pháp)
+     * - Không cho phép ca đêm (22:00-06:00) trừ khi có flag đặc biệt
+     * - Không cho phép ca quá 12 giờ liên tiếp
+     */
+    private void validateWorkingHours(java.time.LocalTime start, java.time.LocalTime end) {
+        // Check if this is a night shift (starts after 22:00 or ends before 06:00)
+        boolean isNightShift = start.isAfter(java.time.LocalTime.of(22, 0)) || 
+                               end.isBefore(java.time.LocalTime.of(6, 0));
+        
+        if (isNightShift) {
+            // Night shifts require special approval/flag
+            // For now, we'll allow it but log a warning
+            // In the future, can add a flag in ShiftCreationRequest to explicitly allow night shifts
+            log.warn("Night shift detected: {} - {}. Ensure this is intentional and complies with labor regulations.", 
+                    start, end);
+        }
+        
+        // Calculate duration in hours
+        long minutes = java.time.Duration.between(start, end).toMinutes();
+        BigDecimal durationHours = BigDecimal.valueOf(minutes)
+                .divide(BigDecimal.valueOf(60), 2, java.math.RoundingMode.HALF_UP);
+        
+        // Check if shift exceeds maximum allowed duration (12 hours for safety)
+        BigDecimal MAX_ALLOWED_DURATION = BigDecimal.valueOf(12);
+        if (durationHours.compareTo(MAX_ALLOWED_DURATION) > 0) {
+            throw new AppException(ErrorCode.SHIFT_INVALID_WORKING_HOURS,
+                    String.format("Shift duration (%.2f hours) exceeds maximum allowed duration (%s hours). " +
+                            "Please split into multiple shifts or use overtime approval.", 
+                            durationHours, MAX_ALLOWED_DURATION));
+        }
+    }
+    
+    /**
+     * Validate maximum shifts per day/week for branch (prevent creating too many shifts)
+     * Note: This is a soft limit to prevent accidental creation of excessive shifts
+     */
+    private void validateBranchShiftLimits(Integer branchId, LocalDate shiftDate) {
+        // Constants for branch shift limits (higher than staff assignment limits)
+        final int MAX_SHIFTS_PER_DAY_FOR_BRANCH = 20; // Allow multiple shifts for different staff
+        final int MAX_SHIFTS_PER_WEEK_FOR_BRANCH = 100;
+        
+        // Count existing shifts for the same date (excluding CANCELLED)
+        List<Shift> existingShiftsOnDate = shiftRepository.findByBranchIdAndShiftDateAndStatusNot(
+                branchId, shiftDate, "CANCELLED");
+        
+        if (existingShiftsOnDate.size() >= MAX_SHIFTS_PER_DAY_FOR_BRANCH) {
+            throw new AppException(ErrorCode.VALIDATION_FAILED,
+                    String.format("Maximum %d shifts per day allowed for branch. " +
+                            "Please consider consolidating shifts or contact system administrator.",
+                            MAX_SHIFTS_PER_DAY_FOR_BRANCH));
+        }
+        
+        // Count existing shifts for the week
+        LocalDate weekStart = shiftDate.minusDays(shiftDate.getDayOfWeek().getValue() - 1);
+        LocalDate weekEnd = weekStart.plusDays(6);
+        List<Shift> existingShiftsInWeek = shiftRepository.findByBranchIdAndShiftDateBetween(
+                branchId, weekStart, weekEnd);
+        
+        // Filter out CANCELLED shifts
+        long activeShiftsInWeek = existingShiftsInWeek.stream()
+                .filter(s -> !"CANCELLED".equals(s.getStatus()))
+                .count();
+        
+        if (activeShiftsInWeek >= MAX_SHIFTS_PER_WEEK_FOR_BRANCH) {
+            throw new AppException(ErrorCode.VALIDATION_FAILED,
+                    String.format("Maximum %d shifts per week allowed for branch. " +
+                            "Please consider consolidating shifts or contact system administrator.",
+                            MAX_SHIFTS_PER_WEEK_FOR_BRANCH));
+        }
+    }
+    
     private void validateShiftTimeOverlap(Integer branchId, LocalDate shiftDate, 
             java.time.LocalTime startTime, java.time.LocalTime endTime, Integer excludeShiftId) {
         // Find all active shifts (not CANCELLED) for the same branch and date
@@ -760,6 +863,34 @@ public class ShiftService {
                 .divide(BigDecimal.valueOf(60), 2, RoundingMode.HALF_UP);
     }
 
+    /**
+     * Xác định shiftType (NORMAL/WEEKEND/HOLIDAY/OVERTIME) dựa trên shift_date
+     * HOLIDAY: nếu là ngày lễ (từ bảng holidays)
+     * WEEKEND: nếu là thứ 7 hoặc chủ nhật (và không phải ngày lễ)
+     * NORMAL: các ngày còn lại
+     * OVERTIME: có thể được set thủ công hoặc dựa trên logic khác (hiện tại chưa implement)
+     */
+    private String determineShiftType(LocalDate shiftDate) {
+        if (shiftDate == null) {
+            return "NORMAL";
+        }
+        
+        // Kiểm tra xem có phải ngày lễ không
+        boolean isHoliday = holidayRepository.findByHolidayDateAndIsActiveTrue(shiftDate).isPresent();
+        if (isHoliday) {
+            return "HOLIDAY";
+        }
+        
+        // Kiểm tra xem có phải cuối tuần không
+        DayOfWeek dayOfWeek = shiftDate.getDayOfWeek();
+        if (dayOfWeek == DayOfWeek.SATURDAY || dayOfWeek == DayOfWeek.SUNDAY) {
+            return "WEEKEND";
+        }
+        
+        // Mặc định là NORMAL
+        return "NORMAL";
+    }
+
     private ShiftResponse toShiftResponse(Shift shift) {
         ShiftResponse resp = new ShiftResponse();
         resp.setShiftId(shift.getShiftId());
@@ -777,6 +908,7 @@ public class ShiftService {
             resp.setEmploymentType(shift.getTemplate().getEmploymentType());
         }
         resp.setStatus(shift.getStatus());
+        resp.setShiftType(shift.getShiftType());
         resp.setNotes(shift.getNotes());
         
         // Load role requirements
@@ -798,6 +930,33 @@ public class ShiftService {
         resp.setRequired(req.getRequired());
         resp.setNotes(req.getNotes());
         return resp;
+    }
+
+    /**
+     * Lấy danh sách shifts mà staff được assign trong period (YYYY-MM)
+     * Dùng cho form tạo penalty để chọn shift
+     */
+    public List<ShiftResponse> getShiftsByStaffAndPeriod(Integer staffUserId, String period) {
+        // Parse period (YYYY-MM) thành startDate và endDate
+        java.time.YearMonth yearMonth = java.time.YearMonth.parse(period);
+        LocalDate startDate = yearMonth.atDay(1);
+        LocalDate endDate = yearMonth.atEndOfMonth();
+
+        // Lấy tất cả assignments của staff trong period
+        List<ShiftAssignment> assignments = shiftAssignmentRepository
+                .findByStaffUserIdAndShift_ShiftDateBetween(staffUserId, startDate, endDate);
+
+        // Lấy unique shifts từ assignments
+        List<Shift> shifts = assignments.stream()
+                .map(ShiftAssignment::getShift)
+                .filter(shift -> shift != null)
+                .distinct()
+                .collect(Collectors.toList());
+
+        // Convert sang ShiftResponse
+        return shifts.stream()
+                .map(this::toShiftResponse)
+                .collect(Collectors.toList());
     }
 }
 

@@ -181,7 +181,9 @@ const OrdersPage = () => {
     };
 
     const handleSubmitReview = async (e) => {
-        e.preventDefault();
+        if (e) {
+            e.preventDefault();
+        }
         if (!selectedOrder) return;
 
         try {
@@ -425,6 +427,22 @@ const OrdersPage = () => {
 
     return (
         <>
+            <style>{`
+                .review-modal-body::-webkit-scrollbar {
+                    width: 8px;
+                }
+                .review-modal-body::-webkit-scrollbar-track {
+                    background: #1a1a1a;
+                    border-radius: 4px;
+                }
+                .review-modal-body::-webkit-scrollbar-thumb {
+                    background: #c49b63;
+                    border-radius: 4px;
+                }
+                .review-modal-body::-webkit-scrollbar-thumb:hover {
+                    background: #a0824f;
+                }
+            `}</style>
             {/* Hero Section */}
             <section className="home-slider owl-carousel">
                 <div className="slider-item" style={{ backgroundImage: 'url(/images/bg_1.jpg)' }} data-stellar-background-ratio="0.5">
@@ -528,55 +546,71 @@ const OrdersPage = () => {
                     <div style={{
                         backgroundColor: '#2a2a2a',
                         borderRadius: '10px',
-                        padding: '30px',
                         width: '90%',
                         maxWidth: '500px',
+                        maxHeight: '90vh',
                         border: '1px solid #c49b63',
-                        color: 'white'
+                        color: 'white',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        overflow: 'hidden'
                     }}>
+                        {/* Header - Fixed */}
                         <div style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            marginBottom: '20px'
+                            padding: '20px 30px',
+                            borderBottom: '1px solid #444',
+                            flexShrink: 0
                         }}>
+                            <div style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center'
+                            }}>
                                 <h4 style={{ color: 'white', margin: 0 }}>
                                     <Star size={20} style={{ marginRight: '8px' }} />
                                     Add Review
                                 </h4>
-                            <button
-                                onClick={() => setShowReviewModal(false)}
-                                style={{
-                                    background: 'none',
-                                    border: 'none',
-                                    color: 'white',
-                                    fontSize: '20px',
-                                    cursor: 'pointer'
-                                }}
-                            >
-                                <X size={20} />
-                            </button>
+                                <button
+                                    onClick={() => setShowReviewModal(false)}
+                                    style={{
+                                        background: 'none',
+                                        border: 'none',
+                                        color: 'white',
+                                        fontSize: '20px',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    <X size={20} />
+                                </button>
+                            </div>
                         </div>
 
-                        {selectedOrder && (
-                            <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#1a1a1a', borderRadius: '5px' }}>
-                                <h6 style={{ color: '#c49b63', marginBottom: '10px' }}>Order Details:</h6>
-                                <p style={{ margin: '5px 0', fontSize: '14px' }}>
-                                    <strong>Order ID:</strong> {selectedOrder.orderId}
-                                </p>
-                                <p style={{ margin: '5px 0', fontSize: '14px' }}>
-                                    <strong>Branch:</strong> {selectedOrder.branchName || 'N/A'}
-                                </p>
-                                <p style={{ margin: '5px 0', fontSize: '14px' }}>
-                                    <strong>Items:</strong> {selectedOrder.orderItems?.length || 0} items
-                                </p>
-                                <p style={{ margin: '5px 0', fontSize: '14px' }}>
-                                    <strong>Total:</strong> {formatPrice(selectedOrder.totalAmount)}
-                                </p>
-                            </div>
-                        )}
+                        {/* Body - Scrollable */}
+                        <div className="review-modal-body" style={{
+                            padding: '20px 30px',
+                            overflowY: 'auto',
+                            flex: 1,
+                            minHeight: 0
+                        }}>
+                            {selectedOrder && (
+                                <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#1a1a1a', borderRadius: '5px' }}>
+                                    <h6 style={{ color: '#c49b63', marginBottom: '10px' }}>Order Details:</h6>
+                                    <p style={{ margin: '5px 0', fontSize: '14px' }}>
+                                        <strong>Order ID:</strong> {selectedOrder.orderId}
+                                    </p>
+                                    <p style={{ margin: '5px 0', fontSize: '14px' }}>
+                                        <strong>Branch:</strong> {selectedOrder.branchName || 'N/A'}
+                                    </p>
+                                    <p style={{ margin: '5px 0', fontSize: '14px' }}>
+                                        <strong>Items:</strong> {selectedOrder.orderItems?.length || 0} items
+                                    </p>
+                                    <p style={{ margin: '5px 0', fontSize: '14px' }}>
+                                        <strong>Total:</strong> {formatPrice(selectedOrder.totalAmount)}
+                                    </p>
+                                </div>
+                            )}
 
-                        <form onSubmit={handleSubmitReview}>
+                            <form onSubmit={handleSubmitReview}>
                             {/* Branch info - read only */}
                             <div style={{ marginBottom: '20px' }}>
                                 <label style={{ display: 'block', marginBottom: '8px', color: 'white' }}>
@@ -731,6 +765,16 @@ const OrdersPage = () => {
                                 />
                             </div>
 
+                            </form>
+                        </div>
+
+                        {/* Footer - Fixed */}
+                        <div style={{
+                            padding: '20px 30px',
+                            borderTop: '1px solid #444',
+                            flexShrink: 0,
+                            backgroundColor: '#2a2a2a'
+                        }}>
                             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
                                 <button
                                     type="button"
@@ -747,7 +791,8 @@ const OrdersPage = () => {
                                     Cancel
                                 </button>
                                 <button
-                                    type="submit"
+                                    type="button"
+                                    onClick={handleSubmitReview}
                                     disabled={submittingReview || !newReview.selectedProductId}
                                     style={{
                                         padding: '10px 20px',
@@ -776,7 +821,7 @@ const OrdersPage = () => {
                                     )}
                                 </button>
                             </div>
-                        </form>
+                        </div>
                     </div>
                 </div>
             )}

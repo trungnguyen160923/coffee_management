@@ -122,6 +122,29 @@ public enum ErrorCode {
     SHIFT_CHECKOUT_MISSING_CHECKIN_TIME(4080, "Cannot check out. Check-in time is missing", HttpStatus.BAD_REQUEST),
     SHIFT_CHECKOUT_INVALID_TIME_RANGE(4081, "Invalid time range. Check-out time must be after check-in time", HttpStatus.BAD_REQUEST),
     SHIFT_CHECKOUT_INVALID_HOURS(4082, "Invalid hours calculated. Please contact manager", HttpStatus.BAD_REQUEST),
+    SHIFT_INVALID_WORKING_HOURS(4083, "Shift time violates working hours regulations. Night shifts (22:00-06:00) require special approval", HttpStatus.BAD_REQUEST),
+    // Payroll errors
+    PAYROLL_ALREADY_EXISTS(5000, "Payroll already exists for this user and period", HttpStatus.BAD_REQUEST),
+    PAYROLL_NOT_FOUND(5001, "Payroll not found", HttpStatus.NOT_FOUND),
+    PAYROLL_ALREADY_APPROVED(5002, "Payroll already approved, cannot be modified", HttpStatus.BAD_REQUEST),
+    PAYROLL_ALREADY_PAID(5003, "Payroll already paid, cannot be modified", HttpStatus.BAD_REQUEST),
+    INVALID_PERIOD_FORMAT(5004, "Period must be in format YYYY-MM", HttpStatus.BAD_REQUEST),
+    EMPTY_PERIOD(5005, "Period is required", HttpStatus.BAD_REQUEST),
+    BONUS_NOT_FOUND(5010, "Bonus not found", HttpStatus.NOT_FOUND),
+    PENALTY_NOT_FOUND(5020, "Penalty not found", HttpStatus.NOT_FOUND),
+    ALLOWANCE_NOT_FOUND(5030, "Allowance not found", HttpStatus.NOT_FOUND),
+    // Template errors
+    TEMPLATE_NOT_FOUND(5040, "Template not found", HttpStatus.NOT_FOUND),
+    ALLOWANCE_TEMPLATE_NOT_FOUND(5041, "Allowance template not found", HttpStatus.NOT_FOUND),
+    BONUS_TEMPLATE_NOT_FOUND(5042, "Bonus template not found", HttpStatus.NOT_FOUND),
+    PENALTY_CONFIG_NOT_FOUND(5043, "Penalty config not found", HttpStatus.NOT_FOUND),
+    TEMPLATE_ACCESS_DENIED(5044, "You do not have access to this template", HttpStatus.FORBIDDEN),
+    EMPTY_NAME(5045, "Name is required", HttpStatus.BAD_REQUEST),
+    EMPTY_ALLOWANCE_TYPE(5046, "Allowance type is required", HttpStatus.BAD_REQUEST),
+    EMPTY_BONUS_TYPE(5047, "Bonus type is required", HttpStatus.BAD_REQUEST),
+    EMPTY_PENALTY_TYPE(5048, "Penalty type is required", HttpStatus.BAD_REQUEST),
+    INVALID_AMOUNT(5049, "Amount must be positive", HttpStatus.BAD_REQUEST),
+    DUPLICATE_ENTITY(5050, "Duplicate entity already exists", HttpStatus.BAD_REQUEST),
     ;
 
     ErrorCode(int code, String message, HttpStatusCode statusCode) {

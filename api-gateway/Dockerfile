@@ -19,6 +19,8 @@ RUN ./mvnw dependency:go-offline -B
 COPY src ./src
 
 # Build application
+# Note: Swagger is disabled at runtime via application-prod.yaml, not excluded from build
+# This ensures code compiles correctly while keeping JAR size reasonable
 RUN ./mvnw clean package -DskipTests -B
 
 # Stage 2: Runtime
