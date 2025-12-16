@@ -545,7 +545,7 @@ const StockManagement: React.FC = () => {
         {/* Adjust Stock Modal */}
         {showAdjustModal && adjustingStock && (
           <div className="fixed inset-0 bg-gray-900/60 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
               <div className="p-5 border-b border-gray-100 flex items-center justify-between">
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900">Adjust Stock Quantity</h3>

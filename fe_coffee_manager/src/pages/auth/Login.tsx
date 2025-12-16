@@ -127,7 +127,7 @@ export function Login() {
                     CoffeeLink
                   </p>
                   <p className="text-xs text-white font-medium">
-                    Quản lý chuỗi cà phê thông minh
+                    Smart coffee chain management
                   </p>
                 </div>
               </div>
@@ -137,12 +137,12 @@ export function Login() {
             <div className="hidden md:flex flex-1 items-center px-10">
               <div className="space-y-4">
                 <h2 className="text-3xl font-bold leading-snug text-[var(--off-white)]">
-                  Chào mừng trở lại,
+                  Welcome back,
                   <br />
-                  sẵn sàng cho một ngày mới?
+                  ready for a new day?
                 </h2>
                 <p className="text-sm text-white/95 font-medium max-w-sm">
-                  Theo dõi đơn hàng, quản lý chi nhánh và tối ưu vận hành chỉ với vài cú click.
+                  Track orders, manage branches, and optimize operations with just a few clicks.
                 </p>
               </div>
             </div>
@@ -157,14 +157,14 @@ export function Login() {
                 <Coffee className="h-6 w-6 text-[var(--coffee-brown)]" />
               </div>
               <h1 className="text-2xl md:text-3xl font-bold text-[var(--coffee-brown)] mb-2">
-                Đăng nhập
+                Sign in
               </h1>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-5" noValidate>
               <div>
                 <label className="block text-sm font-medium text-[var(--coffee-brown)] mb-2">
-                  Tên đăng nhập
+                  Username
                 </label>
                 <div className="relative">
                   <div className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted-brown)]">
@@ -182,7 +182,7 @@ export function Login() {
                     className={`w-full pl-11 pr-4 py-3 rounded-xl border bg-white text-[var(--coffee-brown)] placeholder:text-[var(--muted-brown)] focus:outline-none focus:ring-2 focus:ring-[var(--soft-green)] focus:border-transparent transition-all duration-200 ${
                       emailError ? 'border-red-300' : 'border-[var(--light-brown)]'
                     }`}
-                    placeholder="Nhập tên đăng nhập hoặc email"
+                    placeholder="Enter your username or email"
                     autoFocus
                     tabIndex={1}
                   />
@@ -195,7 +195,7 @@ export function Login() {
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="block text-sm font-medium text-[var(--coffee-brown)]">
-                    Mật khẩu
+                    Password
                   </label>
                   <a
                     href="#"
@@ -206,7 +206,7 @@ export function Login() {
                     }}
                     tabIndex={3}
                   >
-                    Quên mật khẩu?
+                    Forgot password?
                   </a>
                 </div>
                 <div className="relative">
@@ -224,7 +224,7 @@ export function Login() {
                     className={`w-full pl-11 pr-11 py-3 rounded-xl border bg-white text-[var(--coffee-brown)] placeholder:text-[var(--muted-brown)] focus:outline-none focus:ring-2 focus:ring-[var(--soft-green)] focus:border-transparent transition-all duration-200 ${
                       passwordError ? 'border-red-300' : 'border-[var(--light-brown)]'
                     }`}
-                    placeholder="Nhập mật khẩu của bạn"
+                    placeholder="Enter your password"
                     tabIndex={2}
                   />
                   <button
@@ -252,7 +252,7 @@ export function Login() {
                 className="w-full py-3 px-4 rounded-xl font-semibold text-[var(--off-white)] bg-[var(--earthy-orange)] hover:bg-[var(--darker-orange)] shadow-[0_14px_30px_var(--shadow-button)] hover:shadow-[0_18px_36px_var(--shadow-button-hover)] active:shadow-[0_8px_20px_var(--shadow-button-active)] focus:outline-none focus:ring-2 focus:ring-[var(--soft-green)] focus:ring-offset-2 focus:ring-offset-[var(--light-beige)] transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
                 tabIndex={4}
               >
-                {submitting ? 'Đang đăng nhập...' : 'ĐĂNG NHẬP'}
+                {submitting ? 'Signing in...' : 'SIGN IN'}
               </button>
             </form>
 
@@ -264,7 +264,7 @@ export function Login() {
                 </div>
                 <div className="relative flex justify-center text-sm">
                   <span className="px-2 bg-[var(--light-beige)] text-[var(--medium-brown)]">
-                    Hoặc đăng nhập bằng
+                    Or continue with
                   </span>
                 </div>
               </div>
