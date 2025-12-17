@@ -25,4 +25,8 @@ public class ManagerProfileUpdateRequest {
     LocalDate hireDate;
 
     BigDecimal baseSalary;
+
+    BigDecimal insuranceSalary;
+
+    Integer numberOfDependents;
 }

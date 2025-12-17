@@ -158,8 +158,6 @@ const ManagerBonusPenaltyAllowanceManagement: React.FC = () => {
       const loadQuickTemplates = async () => {
         try {
           setLoadingTemplates(true);
-          // Delay 2s for testing skeleton
-          await new Promise(resolve => setTimeout(resolve, 2000));
           const [bonusTs, allowanceTs, penaltyCs] = await Promise.all([
             payrollTemplateService.getBonusTemplatesForManager(),
             payrollTemplateService.getAllowanceTemplatesForManager(),
@@ -195,8 +193,6 @@ const ManagerBonusPenaltyAllowanceManagement: React.FC = () => {
     if (!managerBranch?.branchId) return;
     try {
       setLoading(true);
-      // Delay 2s for testing skeleton
-      await new Promise(resolve => setTimeout(resolve, 2000));
       const branchId = managerBranch.branchId;
       
       const [bonusData, penaltyData, allowanceData] = await Promise.all([

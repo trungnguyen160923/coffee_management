@@ -65,6 +65,22 @@ public class UserV2Service {
         evt.branchId = req.getBranchId();
         evt.hireDate = req.getHireDate();
         evt.identityCard = req.getIdentityCard();
+
+        // Map manager payroll fields from request (optional)
+        if (req.getBaseSalary() != null) {
+            evt.baseSalary = req.getBaseSalary().doubleValue();
+            // Simple rule: insurance salary = base salary (can be refined later)
+            evt.insuranceSalary = evt.baseSalary;
+        } else {
+            evt.baseSalary = 0.0;
+            evt.insuranceSalary = 0.0;
+        }
+        if (req.getNumberOfDependents() != null) {
+            evt.numberOfDependents = req.getNumberOfDependents();
+        } else {
+            evt.numberOfDependents = 0;
+        }
+
         evt.occurredAt = Instant.now();
 
         OutboxEvent ob = new OutboxEvent();
@@ -305,5 +321,3 @@ public class UserV2Service {
         return java.util.Map.of("userId", user.getUserId(), "sagaId", evt.sagaId);
     }
 }
-
-

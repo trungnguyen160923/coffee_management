@@ -100,7 +100,7 @@ export default function RecipeDetailModal({ open, onClose, recipe, productImageU
           </div>
 
         {/* Content area - Scrollable */}
-        <div className="flex-1 overflow-y-auto px-6 pb-4">
+        <div className="flex-1 overflow-y-auto px-6 pb-4 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 hover:scrollbar-thumb-gray-400">
             {/* Summary badges */}
             <div className="mb-4 flex flex-wrap gap-2 items-center">
               <span className={`px-2 py-1 rounded text-xs ${recipe.status === 'ACTIVE' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>{recipe.status}</span>
@@ -189,21 +189,21 @@ export default function RecipeDetailModal({ open, onClose, recipe, productImageU
                 </table>
               </div>
             </div>
-          </div>
 
-           {/* Timestamps */}
-           <div className="mt-6 pt-4 border-t border-gray-200 px-6 pb-4">
-             <div className="flex items-center gap-6 text-xs text-gray-500">
-               <div className="flex items-center gap-1">
-                 <Clock className="w-4 h-4" />
-                 <span>Created: {new Date(recipe.createAt).toLocaleString()}</span>
-               </div>
-               <div className="flex items-center gap-1">
-                 <Clock className="w-4 h-4" />
-                 <span>Updated: {new Date(recipe.updateAt).toLocaleString()}</span>
-               </div>
-             </div>
-           </div>
+            {/* Timestamps */}
+            <div className="mt-6 pt-4 border-t border-gray-200 pb-4">
+              <div className="flex items-center gap-6 text-xs text-gray-500">
+                <div className="flex items-center gap-1">
+                  <Clock className="w-4 h-4" />
+                  <span>Created: {new Date(recipe.createAt).toLocaleString()}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Clock className="w-4 h-4" />
+                  <span>Updated: {new Date(recipe.updateAt).toLocaleString()}</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
     </div>
   );

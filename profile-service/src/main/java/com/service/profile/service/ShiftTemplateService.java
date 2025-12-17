@@ -11,12 +11,14 @@ import com.service.profile.exception.AppException;
 import com.service.profile.exception.ErrorCode;
 import com.service.profile.repository.ShiftTemplateRepository;
 import com.service.profile.repository.ShiftTemplateRoleRequirementRepository;
+import com.service.profile.service.ShiftValidationService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import jakarta.persistence.EntityManager;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -34,6 +36,8 @@ public class ShiftTemplateService {
 
     ShiftTemplateRepository shiftTemplateRepository;
     ShiftTemplateRoleRequirementRepository templateRoleRequirementRepository;
+    ShiftValidationService shiftValidationService;
+    EntityManager entityManager;
 
     public List<ShiftTemplateResponse> getActiveTemplatesByBranch(Integer branchId) {
         List<ShiftTemplate> templates = shiftTemplateRepository.findByBranchIdAndIsActiveTrue(branchId);
@@ -54,9 +58,53 @@ public class ShiftTemplateService {
 
     @Transactional
     public ShiftTemplateResponse createTemplate(ShiftTemplateCreationRequest request) {
+        // Basic time validation
         validateTimeRange(request.getStartTime(), request.getEndTime());
 
+        // Calculate and validate duration using centralized rules
         BigDecimal duration = calculateDurationHours(request.getStartTime(), request.getEndTime());
+        shiftValidationService.validateShiftDuration(duration);
+
+        // Validate branch existence (soft-fail if branch-service unavailable)
+        shiftValidationService.validateBranchExists(request.getBranchId());
+
+        // Normalize and validate employment type (server-side guard even if Bean Validation already runs)
+        String employmentType = request.getEmploymentType();
+        if (employmentType != null) {
+            employmentType = employmentType.trim().toUpperCase();
+            if (!java.util.List.of("FULL_TIME", "PART_TIME", "CASUAL", "ANY").contains(employmentType)) {
+                throw new AppException(ErrorCode.VALIDATION_FAILED,
+                        "Invalid employmentType. Must be one of FULL_TIME, PART_TIME, CASUAL, ANY");
+            }
+        } else {
+            employmentType = "ANY";
+        }
+
+        // Validate role requirements against maxStaffAllowed (if provided)
+        // Because one staff can have multiple roles, the strict lower bound
+        // on number of staff needed is the maximum quantity required for any single role.
+        if (request.getRoleRequirements() != null && !request.getRoleRequirements().isEmpty()
+                && request.getMaxStaffAllowed() != null) {
+            int maxRoleQuantity = request.getRoleRequirements().stream()
+                    .filter(req -> req.getQuantity() != null)
+                    .mapToInt(TemplateRoleRequirementRequest::getQuantity)
+                    .max()
+                    .orElse(0);
+
+            if (maxRoleQuantity > request.getMaxStaffAllowed()) {
+                throw new AppException(ErrorCode.VALIDATION_FAILED,
+                        "Max staff must be at least the maximum required quantity for a single role. "
+                                + "Current maxStaffAllowed = " + request.getMaxStaffAllowed()
+                                + ", but at least one role requires " + maxRoleQuantity + " staff.");
+            }
+        }
+
+        // Validate duplicate template name within branch (case-insensitive)
+        shiftTemplateRepository.findByBranchIdAndNameIgnoreCase(request.getBranchId(), request.getName())
+                .ifPresent(existing -> {
+                    throw new AppException(ErrorCode.DUPLICATE_ENTITY,
+                            "Shift template name already exists in this branch");
+                });
 
         ShiftTemplate template = ShiftTemplate.builder()
                 .branchId(request.getBranchId())
@@ -65,7 +113,7 @@ public class ShiftTemplateService {
                 .endTime(request.getEndTime())
                 .durationHours(duration)
                 .maxStaffAllowed(request.getMaxStaffAllowed())
-                .employmentType(request.getEmploymentType() != null ? request.getEmploymentType() : "ANY")
+                .employmentType(employmentType)
                 .isActive(Boolean.TRUE)
                 .description(request.getDescription())
                 .build();
@@ -119,6 +167,8 @@ public class ShiftTemplateService {
         if (request.getRoleRequirements() != null) {
             // Delete existing requirements
             templateRoleRequirementRepository.deleteByTemplate_TemplateId(templateId);
+            // Flush to ensure delete is committed before insert (prevents unique constraint violation)
+            entityManager.flush();
             // Save new requirements
             if (!request.getRoleRequirements().isEmpty()) {
                 saveRoleRequirements(template, request.getRoleRequirements());
@@ -152,9 +202,17 @@ public class ShiftTemplateService {
 
     private void saveRoleRequirements(ShiftTemplate template, List<TemplateRoleRequirementRequest> requirements) {
         List<ShiftTemplateRoleRequirement> roleRequirements = new ArrayList<>();
+        java.util.Set<Integer> seenRoleIds = new java.util.HashSet<>();
         for (TemplateRoleRequirementRequest req : requirements) {
             if (req.getRoleId() == null || req.getQuantity() == null || req.getQuantity() < 1) {
                 throw new AppException(ErrorCode.VALIDATION_FAILED);
+            }
+            // Prevent duplicate role per template to avoid DB unique constraint violation
+            if (!seenRoleIds.add(req.getRoleId())) {
+                throw new AppException(
+                        ErrorCode.VALIDATION_FAILED,
+                        "Duplicate role in role requirements. Each role can only appear once per template."
+                );
             }
             ShiftTemplateRoleRequirement roleReq = ShiftTemplateRoleRequirement.builder()
                     .template(template)

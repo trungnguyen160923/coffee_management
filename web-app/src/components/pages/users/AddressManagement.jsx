@@ -12,6 +12,7 @@ const AddressManagement = () => {
     const [editingAddress, setEditingAddress] = useState(null);
     const [formData, setFormData] = useState({
         label: '',
+        streetAddress: '',
         fullAddress: '',
         province: '',
         provinceCode: '',
@@ -128,8 +129,9 @@ const AddressManagement = () => {
                 wardCode: ''
             };
 
-            // Auto-generate full address
+            // Auto-generate full address: streetAddress + ward + district + province
             const fullAddress = [
+                newData.streetAddress,
                 newData.ward,
                 newData.district,
                 newData.province
@@ -163,8 +165,9 @@ const AddressManagement = () => {
                 wardCode: ''
             };
 
-            // Auto-generate full address
+            // Auto-generate full address: streetAddress + ward + district + province
             const fullAddress = [
+                newData.streetAddress,
                 newData.ward,
                 newData.district,
                 newData.province
@@ -195,8 +198,9 @@ const AddressManagement = () => {
                 wardCode: wardCode
             };
 
-            // Auto-generate full address
+            // Auto-generate full address: streetAddress + ward + district + province
             const fullAddress = [
+                newData.streetAddress,
                 newData.ward,
                 newData.district,
                 newData.province
@@ -217,14 +221,20 @@ const AddressManagement = () => {
         setSuccess('');
         setSubmitting(true);
 
-        // Build full address from selected location
-        const fullAddress = [
-            formData.ward,
-            formData.district,
-            formData.province
-        ].filter(a => a && a.trim()).join(', ');
+        // Use the fullAddress value directly from the form (user can edit it)
+        // If empty, build from components as fallback
+        let fullAddress = formData.fullAddress?.trim();
+        if (!fullAddress) {
+            // Fallback: build from components if fullAddress is empty
+            fullAddress = [
+                formData.streetAddress,
+                formData.ward,
+                formData.district,
+                formData.province
+            ].filter(a => a && a.trim()).join(', ');
+        }
 
-        // Update formData with built address
+        // Update formData with the address to save
         const updatedFormData = {
             ...formData,
             fullAddress: fullAddress
@@ -253,6 +263,7 @@ const AddressManagement = () => {
             setEditingAddress(null);
             setFormData({
                 label: '',
+                streetAddress: '',
                 fullAddress: '',
                 province: '',
                 provinceCode: '',
@@ -276,11 +287,13 @@ const AddressManagement = () => {
         setEditingAddress(address);
         setShowModal(true);
 
-        // Parse fullAddress into ward, district, province (assuming format: "Ward, District, Province")
+        // Parse fullAddress into streetAddress, ward, district, province
+        // Format: "Street Address, Ward, District, Province"
         const parts = (address.fullAddress || '').split(',').map(p => p.trim());
         const provinceName = parts[parts.length - 1] || '';
         const districtName = parts.length >= 2 ? parts[parts.length - 2] : '';
         const wardName = parts.length >= 3 ? parts[parts.length - 3] : '';
+        const streetAddress = parts.length >= 4 ? parts.slice(0, parts.length - 3).join(', ') : '';
 
         // Ensure provinces list is available
         let provinceList = provinces;
@@ -295,6 +308,7 @@ const AddressManagement = () => {
         setFormData(prev => ({
             ...prev,
             label: address.label || '',
+            streetAddress: streetAddress,
             fullAddress: address.fullAddress || '',
             province: provinceName,
             provinceCode: provinceCode,
@@ -655,16 +669,20 @@ const AddressManagement = () => {
             {/* Modal for Add/Edit Address */}
             {showModal && (
                 <div className="modal fade show" style={{ display: 'block' }} tabIndex="-1">
-                    <div className="modal-dialog">
+                    <div className="modal-dialog" style={{ maxHeight: '90vh' }}>
                         <div className="modal-content" style={{
                             backgroundColor: '#2c2c2c',
                             color: '#ffffff',
-                            border: '1px solid #444'
+                            border: '1px solid #444',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            maxHeight: '90vh'
                         }}>
                             <div className="modal-header" style={{
                                 backgroundColor: '#c49b63',
                                 color: '#ffffff',
-                                borderBottom: '1px solid #444'
+                                borderBottom: '1px solid #444',
+                                flexShrink: 0
                             }}>
                                 <h5 className="modal-title" style={{ color: '#ffffff', fontWeight: 'bold' }}>
                                     {editingAddress ? 'Edit Address' : 'Add New Address'}
@@ -683,8 +701,13 @@ const AddressManagement = () => {
                                     <span>&times;</span>
                                 </button>
                             </div>
-                            <form onSubmit={handleSubmit} noValidate>
-                                <div className="modal-body" style={{ backgroundColor: '#2c2c2c' }}>
+                            <form onSubmit={handleSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+                                <div className="modal-body" style={{ 
+                                    backgroundColor: '#2c2c2c',
+                                    overflowY: 'auto',
+                                    flex: 1,
+                                    minHeight: 0
+                                }}>
                                     <div className="form-group">
                                         <label htmlFor="label" style={{ color: '#ffffff', fontWeight: 'bold', marginBottom: '8px' }}>
                                             Address Label *
@@ -814,8 +837,47 @@ const AddressManagement = () => {
                                     </div>
 
                                     <div className="form-group">
+                                        <label htmlFor="streetAddress" style={{ color: '#ffffff', fontWeight: 'bold', marginBottom: '8px' }}>
+                                            Street Address (House number, Street name) *
+                                        </label>
+                                        <input
+                                            type="text"
+                                            className="form-control"
+                                            id="streetAddress"
+                                            name="streetAddress"
+                                            value={formData.streetAddress}
+                                            onChange={(e) => {
+                                                handleInputChange(e);
+                                                // Auto-update fullAddress when streetAddress changes
+                                                const newStreetAddress = e.target.value;
+                                                const fullAddress = [
+                                                    newStreetAddress,
+                                                    formData.ward,
+                                                    formData.district,
+                                                    formData.province
+                                                ].filter(a => a && a.trim()).join(', ');
+                                                setFormData(prev => ({
+                                                    ...prev,
+                                                    streetAddress: newStreetAddress,
+                                                    fullAddress: fullAddress
+                                                }));
+                                            }}
+                                            placeholder="e.g., 123 ABC Street"
+                                            required
+                                            style={{
+                                                backgroundColor: '#3c3c3c',
+                                                color: '#ffffff',
+                                                border: '1px solid #555',
+                                                borderRadius: '4px',
+                                                padding: '10px 12px',
+                                                fontSize: '14px'
+                                            }}
+                                        />
+                                    </div>
+
+                                    <div className="form-group">
                                         <label htmlFor="fullAddress" style={{ color: '#ffffff', fontWeight: 'bold', marginBottom: '8px' }}>
-                                            Full Address (Auto-generated)
+                                            Full Address *
                                         </label>
                                         <textarea
                                             className="form-control"
@@ -823,10 +885,12 @@ const AddressManagement = () => {
                                             name="fullAddress"
                                             rows="3"
                                             value={formData.fullAddress}
-                                            readOnly
+                                            onChange={handleInputChange}
+                                            placeholder="e.g., 123 ABC Street, Ward 1, District 1, Ho Chi Minh City"
+                                            required
                                             style={{
-                                                backgroundColor: '#2a2a2a',
-                                                color: '#cccccc',
+                                                backgroundColor: '#3c3c3c',
+                                                color: '#ffffff',
                                                 border: '1px solid #555',
                                                 borderRadius: '4px',
                                                 padding: '10px 12px',
@@ -838,7 +902,8 @@ const AddressManagement = () => {
                                 </div>
                                 <div className="modal-footer" style={{
                                     backgroundColor: '#2c2c2c',
-                                    borderTop: '1px solid #444'
+                                    borderTop: '1px solid #444',
+                                    flexShrink: 0
                                 }}>
                                     <button
                                         type="button"

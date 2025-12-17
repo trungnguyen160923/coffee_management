@@ -89,24 +89,50 @@ public class StaffPermissionValidator {
             try {
                 profileResponse = profileServiceClient.getStaffProfile(userId, token);
             } catch (FeignException e) {
-                log.error("[StaffPermissionValidator] Failed to fetch staff profile: status={}", e.status());
+                // Log ERROR only for non-200 status codes
+                // Status 200 with FeignException usually means response parsing issue
+                if (e.status() != 200) {
+                    log.error("[StaffPermissionValidator] Failed to fetch staff profile: status={}, message={}", 
+                            e.status(), e.getMessage());
+                } else {
+                    log.warn("[StaffPermissionValidator] Response parsing issue for staff profile (status=200): {}", 
+                            e.getMessage());
+                }
+                return Collections.emptyList();
+            } catch (Exception e) {
+                // Catch other exceptions (not FeignException)
+                log.error("[StaffPermissionValidator] Unexpected exception when fetching staff profile: {}", 
+                        e.getMessage(), e);
                 return Collections.emptyList();
             }
             
-            if (profileResponse != null && profileResponse.getResult() != null) {
-                StaffProfileResponse staffProfile = profileResponse.getResult();
-                List<Integer> ids = staffProfile.getStaffBusinessRoleIds() != null 
-                    ? staffProfile.getStaffBusinessRoleIds() 
-                    : Collections.emptyList();
-                log.debug("[StaffPermissionValidator] Loaded staffBusinessRoleIds from profile-service for userId {}: {}", userId, ids);
-                return ids;
+            if (profileResponse == null) {
+                log.warn("[StaffPermissionValidator] Profile response is null for userId {}", userId);
+                return Collections.emptyList();
             }
+            
+            if (profileResponse.getResult() == null) {
+                log.warn("[StaffPermissionValidator] Profile response result is null for userId {}. Response code: {}, message: {}", 
+                        userId, profileResponse.getCode(), profileResponse.getMessage());
+                return Collections.emptyList();
+            }
+            
+            StaffProfileResponse staffProfile = profileResponse.getResult();
+            List<Integer> ids = staffProfile.getStaffBusinessRoleIds() != null 
+                ? staffProfile.getStaffBusinessRoleIds() 
+                : Collections.emptyList();
+            
+            if (ids.isEmpty()) {
+                log.warn("[StaffPermissionValidator] No staffBusinessRoleIds found for userId {} in staff profile", userId);
+            } else {
+                log.debug("[StaffPermissionValidator] Loaded staffBusinessRoleIds from profile-service for userId {}: {}", userId, ids);
+            }
+            return ids;
         } catch (Exception e) {
-            log.error("[StaffPermissionValidator] Exception when fetching staff profile: {}", e.getMessage());
+            // Catch any unexpected exceptions from SecurityUtils or RequestContextHolder
+            log.error("[StaffPermissionValidator] Exception when fetching staff profile: {}", e.getMessage(), e);
             return Collections.emptyList();
         }
-        
-        return Collections.emptyList();
     }
     
     /**

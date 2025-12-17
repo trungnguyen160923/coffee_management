@@ -108,22 +108,24 @@ public class UserCreatedV2Listener {
             }
             var systemAuth = new UsernamePasswordAuthenticationToken("system", null, authorities);
             SecurityContextHolder.getContext().setAuthentication(systemAuth);
-            // Assign manager first (idempotent). For STAFF we do not assign manager to
-            // branch. - DISABLED FOR NOW
-            // if (Objects.equals(evt.role, "MANAGER")) {
-            //     AssignManagerRequest req = new AssignManagerRequest();
-            //     req.setManagerUserId(evt.userId);
-            //     branchClient.assignManager(evt.branchId, req);
-            // }
 
             switch (evt.role) {
-                case "MANAGER" -> managerProfileService.createManagerProfile(
-                        ManagerProfileCreationRequest.builder()
-                                .userId(evt.userId)
-                                .branchId(evt.branchId)
-                                .hireDate(evt.hireDate)
-                                .identityCard(evt.identityCard)
-                                .build());
+                case "MANAGER" -> {
+                    BigDecimal baseSalary = evt.baseSalary != null ? BigDecimal.valueOf(evt.baseSalary) : BigDecimal.ZERO;
+                    BigDecimal insuranceSalary = evt.insuranceSalary != null ? BigDecimal.valueOf(evt.insuranceSalary) : BigDecimal.ZERO;
+                    Integer numberOfDependents = evt.numberOfDependents != null ? evt.numberOfDependents : 0;
+
+                    managerProfileService.createManagerProfile(
+                            ManagerProfileCreationRequest.builder()
+                                    .userId(evt.userId)
+                                    .branchId(evt.branchId)
+                                    .hireDate(evt.hireDate)
+                                    .identityCard(evt.identityCard)
+                                    .baseSalary(baseSalary)
+                                    .insuranceSalary(insuranceSalary)
+                                    .numberOfDependents(numberOfDependents)
+                                    .build());
+                }
                 case "STAFF" -> {
                     // Defaults if not provided
                     String employmentType = evt.employmentType != null ? evt.employmentType : "FULL_TIME";
@@ -187,9 +189,6 @@ public class UserCreatedV2Listener {
             // Compensation and failure notification - DISABLED FOR NOW
             try {
                 if (Objects.equals(evt.role, "MANAGER")) {
-                    // AssignManagerRequest undo = new AssignManagerRequest();
-                    // undo.setManagerUserId(evt.userId);
-                    // branchClient.unassignManager(evt.branchId, undo);
                     // delete manager profile if created
                     try {
                         managerProfileRepository.deleteById(evt.userId);

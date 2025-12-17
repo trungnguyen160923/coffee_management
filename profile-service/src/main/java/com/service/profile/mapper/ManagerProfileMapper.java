@@ -9,9 +9,9 @@ import com.service.profile.entity.ManagerProfile;
 
 @Mapper(componentModel = "spring")
 public interface ManagerProfileMapper {
-    @Mapping(target = "insuranceSalary", ignore = true)
-    @Mapping(target = "overtimeRate", ignore = true)
-    @Mapping(target = "numberOfDependents", ignore = true)
+    @Mapping(target = "baseSalary", source = "baseSalary")
+    @Mapping(target = "insuranceSalary", source = "insuranceSalary")
+    @Mapping(target = "numberOfDependents", source = "numberOfDependents")
     @Mapping(target = "createAt", ignore = true)
     @Mapping(target = "updateAt", ignore = true)
     ManagerProfile toManagerProfile(ManagerProfileCreationRequest request);

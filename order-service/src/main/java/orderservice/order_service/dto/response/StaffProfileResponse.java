@@ -1,5 +1,6 @@
 package orderservice.order_service.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
@@ -10,6 +11,7 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class StaffProfileResponse {
     Integer userId;
     BranchResponse branch;
@@ -19,7 +21,9 @@ public class StaffProfileResponse {
     String payType;        // MONTHLY / HOURLY
     java.math.BigDecimal baseSalary;
     java.math.BigDecimal hourlyRate;
+    java.math.BigDecimal insuranceSalary;
     java.math.BigDecimal overtimeRate;
+    Integer numberOfDependents;
     java.time.LocalDateTime createAt;
     java.time.LocalDateTime updateAt;
     

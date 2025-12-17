@@ -102,6 +102,10 @@ geocoding:
     key: "${GEOCODING_API_KEY}"
   mandatory: ${GEOCODING_MANDATORY:true}  # Set to false to allow branch creation without geocoding
 
+# Delivery configuration
+delivery:
+  max-distance-km: ${DELIVERY_MAX_DISTANCE_KM:10}  # Maximum delivery distance in kilometers (default: 10km)
+
 # Actuator configuration
 management:
   endpoints:

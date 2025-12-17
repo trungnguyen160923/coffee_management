@@ -1,9 +1,11 @@
 package orderservice.order_service.controller;
 
 import jakarta.validation.Valid;
+import lombok.extern.slf4j.Slf4j;
 import orderservice.order_service.dto.request.AssignManagerRequest;
 import orderservice.order_service.dto.ApiResponse;
 import orderservice.order_service.dto.request.CreateBranchRequest;
+import orderservice.order_service.dto.request.FindBranchesWithDistanceRequest;
 import orderservice.order_service.dto.response.*;
 import orderservice.order_service.entity.Branch;
 import orderservice.order_service.service.AnalyticsService;
@@ -26,6 +28,7 @@ import orderservice.order_service.dto.response.PagedResponse;
 
 @RestController
 @RequestMapping("/api/branches")
+@Slf4j
 public class BranchController {
 
     private final BranchService branchService;
@@ -410,9 +413,11 @@ public class BranchController {
         try {
             Branch nearestBranch = branchSelectionService.findNearestBranch(address);
             if (nearestBranch == null) {
+                String errorMessage = String.format("Không tìm thấy chi nhánh nào phù hợp cho địa chỉ '%s'. Có thể do: (1) Tất cả chi nhánh đang nghỉ, (2) Không có chi nhánh hoạt động vào ngày hôm nay, (3) Tất cả chi nhánh đang ngoài giờ làm việc, hoặc (4) Địa chỉ không hợp lệ. Vui lòng thử lại sau hoặc liên hệ hỗ trợ.", 
+                        address);
                 ApiResponse<Branch> response = ApiResponse.<Branch>builder()
                         .code(404)
-                        .message("No branch found for the given address")
+                        .message(errorMessage)
                         .result(null)
                         .build();
                 return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
@@ -468,6 +473,56 @@ public class BranchController {
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             ApiResponse<List<Branch>> response = ApiResponse.<List<Branch>>builder()
+                    .code(500)
+                    .message("Failed to find nearest branches: " + e.getMessage())
+                    .result(null)
+                    .build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    /**
+     * Lấy n chi nhánh gần nhất với khoảng cách và thời gian giao hàng
+     * Sử dụng POST với JSON body để tránh lỗi encode địa chỉ tiếng Việt trong URL
+     * @param request - Request chứa address và limit
+     * @return Danh sách chi nhánh với khoảng cách
+     */
+    @PostMapping("/nearest/with-distance")
+    public ResponseEntity<ApiResponse<List<BranchWithDistanceResponse>>> findTopNearestBranchesWithDistance(
+            @Valid @RequestBody FindBranchesWithDistanceRequest request) {
+        try {
+            String address = request.getAddress();
+            int limit = request.getLimit() != null ? request.getLimit() : 10;
+            
+            int maxLimit = Math.min(limit, 20);
+            int minLimit = Math.max(maxLimit, 1);
+            
+            List<BranchWithDistanceResponse> branches = 
+                branchSelectionService.findTopNearestBranchesWithDistance(address, minLimit);
+            
+            if (branches == null || branches.isEmpty()) {
+                String errorMessage = String.format("Không tìm thấy chi nhánh nào phù hợp cho địa chỉ '%s'. Có thể do: (1) Tất cả chi nhánh đang nghỉ, (2) Không có chi nhánh hoạt động vào ngày hôm nay, (3) Tất cả chi nhánh đang ngoài giờ làm việc, hoặc (4) Địa chỉ không hợp lệ. Vui lòng thử lại sau hoặc liên hệ hỗ trợ.", 
+                        address);
+                ApiResponse<List<BranchWithDistanceResponse>> response = 
+                    ApiResponse.<List<BranchWithDistanceResponse>>builder()
+                        .code(404)
+                        .message(errorMessage)
+                        .result(null)
+                        .build();
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+            }
+
+            ApiResponse<List<BranchWithDistanceResponse>> response = 
+                ApiResponse.<List<BranchWithDistanceResponse>>builder()
+                    .code(200)
+                    .message("Top " + branches.size() + " nearest branches found successfully")
+                    .result(branches)
+                    .build();
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("Error finding top nearest branches with distance: {}", e.getMessage(), e);
+            ApiResponse<List<BranchWithDistanceResponse>> response = 
+                ApiResponse.<List<BranchWithDistanceResponse>>builder()
                     .code(500)
                     .message("Failed to find nearest branches: " + e.getMessage())
                     .result(null)

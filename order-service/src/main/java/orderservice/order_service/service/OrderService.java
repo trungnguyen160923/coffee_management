@@ -3,6 +3,7 @@ package orderservice.order_service.service;
 import feign.FeignException;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import lombok.experimental.NonFinal;
 import lombok.extern.slf4j.Slf4j;
 import orderservice.order_service.client.CatalogServiceClient;
 import orderservice.order_service.dto.ApiResponse;
@@ -19,6 +20,7 @@ import orderservice.order_service.exception.ErrorCode;
 import orderservice.order_service.repository.BranchRepository;
 import orderservice.order_service.repository.OrderItemRepository;
 import orderservice.order_service.repository.OrderRepository;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,6 +45,10 @@ public class OrderService {
         DiscountService discountService;
         OrderEventProducer orderEventProducer;
         BranchClosureService branchClosureService;
+
+        @Value("${delivery.max-distance-km:10}")
+        @NonFinal
+        private double maxDeliveryDistanceKm; // Not final to allow @Value injection
 
         private static final Set<String> CANCEL_ALLOWED_STATUSES = Set.of("PENDING", "PREPARING");
         
@@ -102,11 +108,18 @@ public class OrderService {
                                 String addressForBranchSelection = request.getBranchSelectionAddress() != null
                                                 ? request.getBranchSelectionAddress()
                                                 : request.getDeliveryAddress();
-                                selectedBranch = branchSelectionService.findNearestBranch(addressForBranchSelection);
+                                
+                                // Kiểm tra khoảng cách tối đa khi tự động chọn chi nhánh
+                                selectedBranch = branchSelectionService.findNearestBranchWithinDistance(
+                                                addressForBranchSelection, maxDeliveryDistanceKm);
                                 if (selectedBranch == null) {
-                                        throw new AppException(ErrorCode.BRANCH_NOT_FOUND);
+                                        String errorMessage = String.format("Không tìm thấy chi nhánh nào trong phạm vi %s km từ địa chỉ '%s'. Vui lòng chọn địa chỉ giao hàng gần hơn hoặc liên hệ hỗ trợ.", 
+                                                maxDeliveryDistanceKm, addressForBranchSelection);
+                                        log.warn("Order creation rejected: {}", errorMessage);
+                                        throw new AppException(ErrorCode.DELIVERY_DISTANCE_TOO_FAR, errorMessage);
                                 }
-                                log.info("Auto-selected branch: {} for address: {}", selectedBranch.getName(), addressForBranchSelection);
+                                log.info("Auto-selected branch: {} for address: {} (within {} km)", 
+                                        selectedBranch.getName(), addressForBranchSelection, maxDeliveryDistanceKm);
                         }
 
                         // Xác định order type: ưu tiên từ request, nếu không có thì suy luận
@@ -126,38 +139,8 @@ public class OrderService {
                                 request.setDeliveryAddress("take-away");
                         }
 
-                        // Kiểm tra xem chi nhánh có đang nghỉ vào ngày hôm nay không
-                        java.time.LocalDate today = java.time.LocalDate.now();
-                        if (branchClosureService.isBranchClosedOnDate(selectedBranch.getBranchId(), today)) {
-                                log.warn("Order creation rejected: Branch {} is closed on {}", selectedBranch.getBranchId(), today);
-                                throw new AppException(ErrorCode.BRANCH_CLOSED_ON_DATE);
-                        }
-
-                        // Kiểm tra xem chi nhánh có hoạt động vào ngày hôm nay không (dựa trên openDays)
-                        if (!branchClosureService.isBranchOperatingOnDate(selectedBranch, today)) {
-                                log.warn("Order creation rejected: Branch {} is not operating on {} (not in openDays)", selectedBranch.getBranchId(), today);
-                                throw new AppException(ErrorCode.BRANCH_NOT_OPERATING_ON_DAY);
-                        }
-
-                        // Kiểm tra business hours cho takeaway order
-                        if ("takeaway".equalsIgnoreCase(orderType) && selectedBranch.getOpenHours() != null && selectedBranch.getEndHours() != null) {
-                                java.time.LocalTime currentTime = java.time.LocalTime.now();
-                                boolean withinHours;
-                                if (selectedBranch.getEndHours().isAfter(selectedBranch.getOpenHours())) {
-                                        // Normal same-day window
-                                        withinHours = !currentTime.isBefore(selectedBranch.getOpenHours())
-                                                        && !currentTime.isAfter(selectedBranch.getEndHours());
-                                } else {
-                                        // Overnight window
-                                        withinHours = !currentTime.isBefore(selectedBranch.getOpenHours())
-                                                        || !currentTime.isAfter(selectedBranch.getEndHours());
-                                }
-                                if (!withinHours) {
-                                        log.warn("Takeaway order creation rejected: Branch {} business hours are {} - {}, current time is {}", 
-                                                selectedBranch.getBranchId(), selectedBranch.getOpenHours(), selectedBranch.getEndHours(), currentTime);
-                                        throw new AppException(ErrorCode.POS_ORDER_OUTSIDE_BUSINESS_HOURS);
-                                }
-                        }
+                        // Validate branch với thông tin chi tiết
+                        validateBranchForOrder(selectedBranch, orderType);
 
                         // Xử lý discount nếu có mã giảm giá
                         BigDecimal discount = BigDecimal.ZERO;
@@ -597,6 +580,59 @@ public class OrderService {
         }
 
         /**
+         * Validate branch với thông tin chi tiết về lý do không thỏa mãn
+         * @param branch - Chi nhánh cần validate
+         * @param orderType - Loại đơn hàng (delivery, takeaway, dine-in)
+         * @throws AppException với thông tin chi tiết nếu branch không thỏa mãn
+         */
+        private void validateBranchForOrder(Branch branch, String orderType) {
+                java.time.LocalDate today = java.time.LocalDate.now();
+                String branchName = branch.getName() != null ? branch.getName() : "Chi nhánh #" + branch.getBranchId();
+                
+                // 1. Kiểm tra chi nhánh có đang nghỉ (branch closure)
+                if (branchClosureService.isBranchClosedOnDate(branch.getBranchId(), today)) {
+                        String errorMessage = String.format("Chi nhánh '%s' đang nghỉ vào ngày %s. Vui lòng chọn ngày khác hoặc chi nhánh khác.", 
+                                branchName, today.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")));
+                        log.warn("Order creation rejected: {}", errorMessage);
+                        throw new AppException(ErrorCode.BRANCH_CLOSED_ON_DATE, errorMessage);
+                }
+                
+                // 2. Kiểm tra chi nhánh có hoạt động vào ngày hôm nay (openDays)
+                if (!branchClosureService.isBranchOperatingOnDate(branch, today)) {
+                        String dayOfWeek = today.getDayOfWeek().toString();
+                        String errorMessage = String.format("Chi nhánh '%s' không hoạt động vào %s (%s). Vui lòng chọn ngày khác hoặc chi nhánh khác.", 
+                                branchName, today.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")), dayOfWeek);
+                        log.warn("Order creation rejected: {}", errorMessage);
+                        throw new AppException(ErrorCode.BRANCH_NOT_OPERATING_ON_DAY, errorMessage);
+                }
+                
+                // 3. Kiểm tra giờ làm việc cho tất cả loại đơn hàng
+                if (branch.getOpenHours() != null && branch.getEndHours() != null) {
+                        java.time.LocalTime currentTime = java.time.LocalTime.now();
+                        boolean withinHours;
+                        if (branch.getEndHours().isAfter(branch.getOpenHours())) {
+                                // Normal same-day window (e.g., 08:00 - 22:00)
+                                withinHours = !currentTime.isBefore(branch.getOpenHours())
+                                                && !currentTime.isAfter(branch.getEndHours());
+                        } else {
+                                // Overnight window (e.g., 22:00 - 06:00)
+                                withinHours = !currentTime.isBefore(branch.getOpenHours())
+                                                || !currentTime.isAfter(branch.getEndHours());
+                        }
+                        
+                        if (!withinHours) {
+                                String openHoursStr = branch.getOpenHours().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"));
+                                String endHoursStr = branch.getEndHours().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"));
+                                String currentTimeStr = currentTime.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"));
+                                String errorMessage = String.format("Chi nhánh '%s' hiện đang ngoài giờ làm việc. Giờ làm việc: %s - %s. Giờ hiện tại: %s. Vui lòng đặt hàng trong giờ làm việc hoặc chọn chi nhánh khác.", 
+                                        branchName, openHoursStr, endHoursStr, currentTimeStr);
+                                log.warn("Order creation rejected: {}", errorMessage);
+                                throw new AppException(ErrorCode.POS_ORDER_OUTSIDE_BUSINESS_HOURS, errorMessage);
+                        }
+                }
+        }
+
+        /**
          * Suy luận order type từ CreateGuestOrderRequest
          */
         private String determineOrderTypeFromGuestRequest(CreateGuestOrderRequest request) {
@@ -676,10 +712,18 @@ public class OrderService {
                                 String addressForBranchSelection = request.getBranchSelectionAddress() != null
                                                 ? request.getBranchSelectionAddress()
                                                 : request.getDeliveryAddress();
-                                selectedBranch = branchSelectionService.findNearestBranch(addressForBranchSelection);
+                                
+                                // Kiểm tra khoảng cách tối đa khi tự động chọn chi nhánh
+                                selectedBranch = branchSelectionService.findNearestBranchWithinDistance(
+                                                addressForBranchSelection, maxDeliveryDistanceKm);
                                 if (selectedBranch == null) {
-                                        throw new AppException(ErrorCode.BRANCH_NOT_FOUND);
+                                        String errorMessage = String.format("Không tìm thấy chi nhánh nào trong phạm vi %s km từ địa chỉ '%s'. Vui lòng chọn địa chỉ giao hàng gần hơn hoặc liên hệ hỗ trợ.", 
+                                                maxDeliveryDistanceKm, addressForBranchSelection);
+                                        log.warn("Guest order creation rejected: {}", errorMessage);
+                                        throw new AppException(ErrorCode.DELIVERY_DISTANCE_TOO_FAR, errorMessage);
                                 }
+                                log.info("Auto-selected branch: {} for guest order address: {} (within {} km)", 
+                                        selectedBranch.getName(), addressForBranchSelection, maxDeliveryDistanceKm);
                         }
 
                         // Xác định order type: ưu tiên từ request, nếu không có thì suy luận
@@ -699,38 +743,8 @@ public class OrderService {
                                 request.setDeliveryAddress("take-away");
                         }
 
-                        // Kiểm tra xem chi nhánh có đang nghỉ vào ngày hôm nay không
-                        java.time.LocalDate today = java.time.LocalDate.now();
-                        if (branchClosureService.isBranchClosedOnDate(selectedBranch.getBranchId(), today)) {
-                                log.warn("Guest order creation rejected: Branch {} is closed on {}", selectedBranch.getBranchId(), today);
-                                throw new AppException(ErrorCode.BRANCH_CLOSED_ON_DATE);
-                        }
-
-                        // Kiểm tra xem chi nhánh có hoạt động vào ngày hôm nay không (dựa trên openDays)
-                        if (!branchClosureService.isBranchOperatingOnDate(selectedBranch, today)) {
-                                log.warn("Guest order creation rejected: Branch {} is not operating on {} (not in openDays)", selectedBranch.getBranchId(), today);
-                                throw new AppException(ErrorCode.BRANCH_NOT_OPERATING_ON_DAY);
-                        }
-
-                        // Kiểm tra business hours cho takeaway order
-                        if ("takeaway".equalsIgnoreCase(orderType) && selectedBranch.getOpenHours() != null && selectedBranch.getEndHours() != null) {
-                                java.time.LocalTime currentTime = java.time.LocalTime.now();
-                                boolean withinHours;
-                                if (selectedBranch.getEndHours().isAfter(selectedBranch.getOpenHours())) {
-                                        // Normal same-day window
-                                        withinHours = !currentTime.isBefore(selectedBranch.getOpenHours())
-                                                        && !currentTime.isAfter(selectedBranch.getEndHours());
-                                } else {
-                                        // Overnight window
-                                        withinHours = !currentTime.isBefore(selectedBranch.getOpenHours())
-                                                        || !currentTime.isAfter(selectedBranch.getEndHours());
-                                }
-                                if (!withinHours) {
-                                        log.warn("Takeaway order creation rejected: Branch {} business hours are {} - {}, current time is {}", 
-                                                selectedBranch.getBranchId(), selectedBranch.getOpenHours(), selectedBranch.getEndHours(), currentTime);
-                                        throw new AppException(ErrorCode.POS_ORDER_OUTSIDE_BUSINESS_HOURS);
-                                }
-                        }
+                        // Validate branch với thông tin chi tiết
+                        validateBranchForOrder(selectedBranch, orderType);
 
                         // Xử lý discount nếu có mã giảm giá
                         BigDecimal discount = BigDecimal.ZERO;

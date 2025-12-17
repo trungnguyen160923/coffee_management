@@ -44,6 +44,22 @@ public class ManagerProfileService {
         managerProfile.setCreateAt(LocalDateTime.now());
         managerProfile.setUpdateAt(LocalDateTime.now());
         managerProfileRepository.save(managerProfile);
+
+        // Nếu có branchId hợp lệ thì gán manager cho chi nhánh ngay lúc tạo
+        if (managerProfile.getBranchId() != null && managerProfile.getBranchId() != -1) {
+            try {
+                AssignManagerRequest assignRequest = new AssignManagerRequest();
+                assignRequest.setManagerUserId(managerProfile.getUserId());
+                branchClient.assignManager(managerProfile.getBranchId(), assignRequest).getResult();
+                log.info("Assigned manager {} to branch {} during createManagerProfile",
+                        managerProfile.getUserId(), managerProfile.getBranchId());
+            } catch (Exception e) {
+                log.error("Failed to assign manager {} to branch {} during createManagerProfile: {}",
+                        managerProfile.getUserId(), managerProfile.getBranchId(), e.getMessage());
+                throw new AppException(ErrorCode.BRANCH_NOT_FOUND);
+            }
+        }
+
         return managerProfileMapper.toManagerProfileResponse(managerProfile);
     }
 
@@ -101,6 +117,14 @@ public class ManagerProfileService {
         }
         if(request.getBaseSalary() != null){
             managerProfile.setBaseSalary(request.getBaseSalary());
+            // Auto-update insurance salary when base salary changes (simple rule: equal)
+            managerProfile.setInsuranceSalary(request.getBaseSalary());
+        } else if (request.getInsuranceSalary() != null){
+            // Allow explicit override if only insuranceSalary is sent
+            managerProfile.setInsuranceSalary(request.getInsuranceSalary());
+        }
+        if(request.getNumberOfDependents() != null){
+            managerProfile.setNumberOfDependents(request.getNumberOfDependents());
         }
         managerProfile.setUpdateAt(LocalDateTime.now());
         managerProfileRepository.save(managerProfile);

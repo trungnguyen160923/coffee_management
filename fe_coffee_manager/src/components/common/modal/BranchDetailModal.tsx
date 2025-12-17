@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Branch } from '../../../types';
+import { managerService } from '../../../services';
 
 interface BranchDetailModalProps {
   open: boolean;
@@ -25,6 +26,39 @@ function parseOpenDays(openDays?: string | null): number[] {
 }
 
 const BranchDetailModal: React.FC<BranchDetailModalProps> = ({ open, branch, onClose }) => {
+  const [managerName, setManagerName] = useState<string | null>(null);
+  const [loadingManager, setLoadingManager] = useState(false);
+
+  useEffect(() => {
+    const managerUserId = branch ? (branch as any).managerUserId as number | undefined : undefined;
+    if (!open || !branch || !managerUserId || managerUserId <= 0) {
+      setManagerName(null);
+      return;
+    }
+    let cancelled = false;
+    setLoadingManager(true);
+    managerService
+      .getManagerProfile(managerUserId)
+      .then((mgr) => {
+        if (!cancelled) {
+          setManagerName(mgr.fullname || mgr.email || String(managerUserId));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setManagerName(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoadingManager(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, branch]);
+
   if (!open || !branch) return null;
 
   const days = parseOpenDays((branch as any).openDays);
@@ -102,8 +136,16 @@ const BranchDetailModal: React.FC<BranchDetailModalProps> = ({ open, branch, onC
               <p className="text-sm text-slate-900">{branch.phone || '-'}</p>
             </div>
             <div>
-              <p className="text-xs font-semibold text-slate-500 uppercase mb1">Manager user ID</p>
-              <p className="text-sm text-slate-900">{(branch as any).managerUserId ?? '-'}</p>
+              <p className="text-xs font-semibold text-slate-500 uppercase mb1">Manager</p>
+              <p className="text-sm text-slate-900">
+                {loadingManager
+                  ? 'Loading...'
+                  : managerName
+                  ? `${managerName} (ID: ${(branch as any).managerUserId})`
+                  : (branch as any).managerUserId
+                  ? `ID: ${(branch as any).managerUserId}`
+                  : '-'}
+              </p>
             </div>
           </div>
         </div>

@@ -26,12 +26,17 @@ export function showToast(message, type = 'info', durationMs = 2500) {
     toast.style.padding = '10px 14px';
     toast.style.borderRadius = '6px';
     toast.style.minWidth = '220px';
+    toast.style.maxWidth = '400px';
     toast.style.color = '#fff';
     toast.style.boxShadow = '0 4px 12px rgba(0,0,0,0.25)';
     toast.style.fontSize = '14px';
     toast.style.opacity = '0';
     toast.style.transform = 'translateY(-6px)';
     toast.style.transition = 'opacity 150ms ease, transform 150ms ease';
+    toast.style.wordWrap = 'break-word';
+    toast.style.overflowWrap = 'break-word';
+    toast.style.whiteSpace = 'normal';
+    toast.style.lineHeight = '1.5';
 
     const bgByType = {
         success: '#16a34a',

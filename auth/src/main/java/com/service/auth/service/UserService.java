@@ -234,6 +234,14 @@ public class UserService {
                         ur.setIdentityCard(mgr.getIdentityCard());
                         ur.setBranch(mgr.getBranch());
                         ur.setHireDate(mgr.getHireDate());
+                        // Map payroll fields from manager profile
+                        if (mgr.getBaseSalary() != null) {
+                            ur.setBaseSalary(mgr.getBaseSalary());
+                            ur.setSalary(mgr.getBaseSalary().doubleValue());
+                        }
+                        ur.setInsuranceSalary(mgr.getInsuranceSalary());
+                        ur.setOvertimeRate(mgr.getOvertimeRate());
+                        ur.setNumberOfDependents(mgr.getNumberOfDependents());
                     }
                 })
                 .toList();
@@ -256,10 +264,14 @@ public class UserService {
             userResponse.setIdentityCard(managerProfile.getIdentityCard());
             userResponse.setBranch(managerProfile.getBranch());
             userResponse.setHireDate(managerProfile.getHireDate());
-            // Map baseSalary to salary
+            // Map payroll fields
             if (managerProfile.getBaseSalary() != null) {
+                userResponse.setBaseSalary(managerProfile.getBaseSalary());
                 userResponse.setSalary(managerProfile.getBaseSalary().doubleValue());
             }
+            userResponse.setInsuranceSalary(managerProfile.getInsuranceSalary());
+            userResponse.setOvertimeRate(managerProfile.getOvertimeRate());
+            userResponse.setNumberOfDependents(managerProfile.getNumberOfDependents());
             return userResponse;
         } catch (Exception e) {
             throw new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION);
@@ -346,10 +358,14 @@ public class UserService {
                         ur.setIdentityCard(mgr.getIdentityCard());
                         ur.setBranch(mgr.getBranch());
                         ur.setHireDate(mgr.getHireDate());
-                        // Map baseSalary to salary
+                        // Map payroll fields
                         if (mgr.getBaseSalary() != null) {
+                            ur.setBaseSalary(mgr.getBaseSalary());
                             ur.setSalary(mgr.getBaseSalary().doubleValue());
                         }
+                        ur.setInsuranceSalary(mgr.getInsuranceSalary());
+                        ur.setOvertimeRate(mgr.getOvertimeRate());
+                        ur.setNumberOfDependents(mgr.getNumberOfDependents());
                     }
                 })
                 .toList();

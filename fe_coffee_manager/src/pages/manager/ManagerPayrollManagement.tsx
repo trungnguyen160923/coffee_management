@@ -70,8 +70,6 @@ const ManagerPayrollManagement: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      // Delay 2s for testing skeleton
-      await new Promise(resolve => setTimeout(resolve, 2000));
       // Manager chỉ xem payroll của Staff trong branch của mình
       const data = await payrollService.getPayrolls({
         ...filters,

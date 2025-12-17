@@ -10,6 +10,7 @@ import { branchService } from '../../services/branchService';
 import { stockService } from '../../services/stockService';
 import BranchSuggestionModal from '../common/BranchSuggestionModal';
 import BranchSettings from '../common/BranchSettings';
+import BranchMapSelector from '../common/BranchMapSelector';
 import MomoPaymentPage from './MomoPaymentPage';
 import { getCurrentUserSession, getCurrentUserSessionAsync, createGuestSession } from '../../utils/userSession';
 import axios from 'axios';
@@ -44,6 +45,7 @@ const CheckoutPage = () => {
     const [maxBranchesToCheck, setMaxBranchesToCheck] = useState(5); // Có thể thay đổi số lượng chi nhánh
     const [showBranchSettings, setShowBranchSettings] = useState(false);
     const [branchStockStatus, setBranchStockStatus] = useState(null); // Trạng thái stock của chi nhánh
+    const [showBranchMap, setShowBranchMap] = useState(false); // Hiển thị modal chọn chi nhánh trên bản đồ
 
     // Fetch user info, addresses and cart items on mount
     useEffect(() => {
@@ -144,7 +146,13 @@ const CheckoutPage = () => {
             const branchResult = await branchService.findNearestBranch(selectedAddress.fullAddress);
 
             if (!branchResult.success) {
-                showToast('Failed to find nearest branch. Please check your address.', 'error');
+                const errorMessage = branchResult.message || 'Không tìm thấy chi nhánh phù hợp. Có thể do chi nhánh đang nghỉ, ngoài giờ làm việc, hoặc không hoạt động.';
+                setBranchStockStatus({ 
+                    available: false, 
+                    message: errorMessage,
+                    showMapButton: true
+                });
+                showToast(errorMessage + ' Vui lòng chọn trên bản đồ.', 'warning');
                 return;
             }
 
@@ -215,7 +223,13 @@ const CheckoutPage = () => {
             // Tìm các chi nhánh khác gần địa chỉ
             const branchesResult = await branchService.findTopNearestBranches(deliveryAddress, 10);
             if (!branchesResult.success || branchesResult.branches.length === 0) {
-                setBranchStockStatus({ available: false, message: 'Không tìm thấy chi nhánh nào khác gần địa chỉ này' });
+                const errorMessage = branchesResult.message || 'Không tìm thấy chi nhánh nào khác gần địa chỉ này. Có thể do tất cả chi nhánh đang nghỉ, ngoài giờ làm việc, hoặc không hoạt động.';
+                setBranchStockStatus({ 
+                    available: false, 
+                    message: errorMessage,
+                    showMapButton: true
+                });
+                showToast(errorMessage + ' Vui lòng chọn trên bản đồ.', 'warning');
                 return;
             }
             
@@ -314,13 +328,25 @@ const CheckoutPage = () => {
                         }
                     } else {
                         setSelectedBranch(null);
-                        showToast('Không tìm thấy chi nhánh gần địa chỉ này', 'error');
+                        const errorMessage = branchResult.message || 'Không tìm thấy chi nhánh phù hợp. Có thể do chi nhánh đang nghỉ, ngoài giờ làm việc, hoặc không hoạt động vào ngày hôm nay.';
+                        setBranchStockStatus({ 
+                            available: false, 
+                            message: errorMessage,
+                            showMapButton: true
+                        });
+                        showToast(errorMessage + ' Vui lòng chọn trên bản đồ.', 'warning');
                     }
                 }
             } catch (error) {
                 console.error('Error finding nearest branch:', error);
                 setSelectedBranch(null);
-                showToast('Lỗi khi tìm chi nhánh', 'error');
+                const errorMessage = error?.response?.data?.message || error?.message || 'Lỗi khi tìm chi nhánh. Vui lòng thử lại sau.';
+                setBranchStockStatus({ 
+                    available: false, 
+                    message: errorMessage,
+                    showMapButton: true
+                });
+                showToast(errorMessage + ' Vui lòng chọn trên bản đồ.', 'error');
             }
         } else {
             setSelectedBranch(null);
@@ -722,37 +748,80 @@ const CheckoutPage = () => {
                                                     </div>
                                                     
                                                     {/* Hiển thị thông tin chi nhánh và trạng thái stock */}
-                                                    {selectedBranch && (
-                                                        <div className="mt-3 p-3 border rounded" style={{ backgroundColor: '#2a2a2a', borderColor: '#444' }}>
-                                                            <div className="d-flex align-items-center mb-2">
-                                                                <i className="fa fa-store me-2" style={{ color: '#C39C5E' }}></i>
-                                                                <strong>Chi nhánh phục vụ:</strong>
-                                                            </div>
-                                                            <div className="mb-2">
-                                                                <span className="text-light">{selectedBranch.name}</span>
-                                                            </div>
-                                                            <div className="mb-2">
-                                                                <small className="text-muted">
-                                                                    <i className="fa fa-map-marker-alt me-1"></i>
-                                                                    {selectedBranch.address}
-                                                                </small>
-                                                            </div>
-                                                            {branchStockStatus && (
-                                                                <div className={`alert ${branchStockStatus.available ? 'alert-success' : 'alert-warning'} mb-0 py-2`}>
-                                                                    <i className={`fa ${branchStockStatus.available ? 'fa-check-circle' : 'fa-exclamation-triangle'} me-2`}></i>
-                                                                    <small>{branchStockStatus.message}</small>
-                                                                    {branchStockStatus.available && branchStockStatus.message.includes('tự động chọn') && (
-                                                                        <div className="mt-1">
-                                                                            <small className="text-success">
-                                                                                <i className="fa fa-info-circle me-1"></i>
-                                                                                Chi nhánh gần nhất hết hàng, đã tự động chọn chi nhánh khác có hàng
-                                                                            </small>
-                                                                        </div>
-                                                                    )}
+                                                    <div className="mt-3 p-3 border rounded" style={{ backgroundColor: '#2a2a2a', borderColor: '#444' }}>
+                                                        {selectedBranch ? (
+                                                            <>
+                                                                <div className="d-flex align-items-center justify-content-between mb-2">
+                                                                    <div className="d-flex align-items-center">
+                                                                        <i className="fa fa-store me-2" style={{ color: '#C39C5E' }}></i>
+                                                                        <strong>Chi nhánh phục vụ:</strong>
+                                                                    </div>
+                                                                    <button
+                                                                        type="button"
+                                                                        className="btn btn-sm btn-outline-primary"
+                                                                        onClick={() => {
+                                                                            const selectedAddress = addresses.find(addr => 
+                                                                                addr.addressId.toString() === formData.selectedAddressId
+                                                                            );
+                                                                            if (selectedAddress) {
+                                                                                setShowBranchMap(true);
+                                                                            } else {
+                                                                                showToast('Vui lòng chọn địa chỉ giao hàng trước', 'warning');
+                                                                            }
+                                                                        }}
+                                                                        disabled={!formData.selectedAddressId}
+                                                                        title="Chọn chi nhánh trên bản đồ"
+                                                                    >
+                                                                        <i className="fa fa-map me-1"></i>
+                                                                        Chọn trên bản đồ
+                                                                    </button>
                                                                 </div>
-                                                            )}
-                                                        </div>
-                                                    )}
+                                                                <div className="mb-2">
+                                                                    <span className="text-light">{selectedBranch.name}</span>
+                                                                </div>
+                                                                <div className="mb-2">
+                                                                    <small className="text-muted">
+                                                                        <i className="fa fa-map-marker-alt me-1"></i>
+                                                                        {selectedBranch.address}
+                                                                    </small>
+                                                                </div>
+                                                            </>
+                                                        ) : (
+                                                            <div className="d-flex align-items-center justify-content-between mb-2">
+                                                                <div className="d-flex align-items-center">
+                                                                    <i className="fa fa-store me-2" style={{ color: '#C39C5E' }}></i>
+                                                                    <strong>Chi nhánh phục vụ:</strong>
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                        
+                                                        {branchStockStatus && (
+                                                            <div className={`alert ${branchStockStatus.available ? 'alert-success' : 'alert-warning'} mb-0 py-2`}>
+                                                                <i className={`fa ${branchStockStatus.available ? 'fa-check-circle' : 'fa-exclamation-triangle'} me-2`}></i>
+                                                                <small>{branchStockStatus.message}</small>
+                                                                {branchStockStatus.available && branchStockStatus.message.includes('tự động chọn') && (
+                                                                    <div className="mt-1">
+                                                                        <small className="text-success">
+                                                                            <i className="fa fa-info-circle me-1"></i>
+                                                                            Chi nhánh gần nhất hết hàng, đã tự động chọn chi nhánh khác có hàng
+                                                                        </small>
+                                                                    </div>
+                                                                )}
+                                                                {!branchStockStatus.available && branchStockStatus.showMapButton && formData.selectedAddressId && (
+                                                                    <div className="mt-2">
+                                                                        <button
+                                                                            className="btn btn-sm btn-primary"
+                                                                            onClick={() => setShowBranchMap(true)}
+                                                                            style={{ fontSize: '12px' }}
+                                                                        >
+                                                                            <i className="fa fa-map-marker-alt me-1"></i>
+                                                                            Chọn chi nhánh trên bản đồ
+                                                                        </button>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </>
                                             )}
                                         </div>
@@ -1045,6 +1114,52 @@ const CheckoutPage = () => {
                 isVisible={showBranchSettings}
                 onToggle={handleToggleBranchSettings}
             />
+
+            {/* Branch Map Selector Modal */}
+            {formData.selectedAddressId && (
+                <BranchMapSelector
+                    isOpen={showBranchMap}
+                    onClose={() => setShowBranchMap(false)}
+                    onSelectBranch={async (branch) => {
+                        setSelectedBranch(branch);
+                        setShowBranchMap(false);
+                        
+                        // Kiểm tra stock lại
+                        try {
+                            let userSession = await getCurrentUserSessionAsync();
+                            if (!userSession) {
+                                userSession = createGuestSession();
+                            }
+                            
+                            const stockResult = await stockService.checkStockAvailability(
+                                cartItems,
+                                branch.branchId,
+                                userSession
+                            );
+                            
+                            if (stockResult.success && stockResult.available) {
+                                setBranchStockStatus({ available: true, message: 'Chi nhánh có đủ hàng' });
+                                showToast('Đã chọn chi nhánh và kiểm tra tồn kho thành công', 'success');
+                            } else {
+                                setBranchStockStatus({ 
+                                    available: false, 
+                                    message: 'Chi nhánh không có đủ hàng' 
+                                });
+                                showToast('Chi nhánh này không có đủ hàng. Vui lòng chọn chi nhánh khác.', 'warning');
+                            }
+                        } catch (error) {
+                            console.error('Error checking stock:', error);
+                            showToast('Lỗi khi kiểm tra tồn kho', 'error');
+                        }
+                    }}
+                    deliveryAddress={addresses.find(addr => 
+                        addr.addressId.toString() === formData.selectedAddressId
+                    )?.fullAddress}
+                    cartItems={cartItems}
+                    userSession={getCurrentUserSession()}
+                    selectedBranch={selectedBranch}
+                />
+            )}
 
             {/* Loading overlay for stock checking */}
             {isCheckingStock && (

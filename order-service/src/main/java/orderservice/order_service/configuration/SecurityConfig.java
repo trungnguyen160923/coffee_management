@@ -19,8 +19,11 @@ public class SecurityConfig {
 
     private static final String[] PUBLIC_ENDPOINTS = {
             "/customer-profiles/internal",
-            // Note: /api/branches GET is public, but POST/PUT/DELETE require ADMIN role
-            // So we don't add /api/branches to PUBLIC_ENDPOINTS - let it go through protectedFilterChain
+            // Internal branch endpoints used by Kafka listeners / other services
+            // Must be accessible without authentication to avoid 401 between services
+            "/api/branches/internal/**",
+            // Note: /api/branches GET is public, but POST/PUT/DELETE (non-internal) require ADMIN role
+            // So we don't add generic /api/branches here - let it go through protectedFilterChain
             "/api/cart",
             "/api/cart/**",
             "/api/orders/guest", // Allow guest checkout without authentication
@@ -67,10 +70,13 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/**")
                         .permitAll()
                         // Branches: GET is public, POST/PUT/DELETE require ADMIN
+                        // Exception: POST /api/branches/nearest/** is public for branch selection
                         .requestMatchers(HttpMethod.GET, "/api/branches")
                         .permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/branches/**")
                         .permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/branches/nearest/**")
+                        .permitAll() // Allow public access to branch selection endpoints
                         .requestMatchers(HttpMethod.POST, "/api/branches")
                         .hasRole("ADMIN")
                         .requestMatchers(HttpMethod.PUT, "/api/branches/**")

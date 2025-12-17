@@ -1,5 +1,6 @@
 package com.service.profile.dto.request;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -34,4 +35,11 @@ public class ManagerProfileCreationRequest {
     @JsonProperty(required = true)
     @NotNull(message = "EMPTY_IDENTITY_CARD")
     String identityCard;
+
+    // Optional payroll-related fields for manager
+    BigDecimal baseSalary;
+
+    BigDecimal insuranceSalary;
+
+    Integer numberOfDependents;
 }

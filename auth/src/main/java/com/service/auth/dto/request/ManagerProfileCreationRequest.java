@@ -9,6 +9,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 
 import com.service.auth.validator.RoleConstraint;
@@ -45,5 +46,9 @@ public class ManagerProfileCreationRequest {
     
     @NotNull(message = "EMPTY_HIRE_DATE")
     private LocalDate hireDate;
-    
+
+    // Optional payroll-related fields for manager
+    private BigDecimal baseSalary;
+
+    private Integer numberOfDependents;
 }

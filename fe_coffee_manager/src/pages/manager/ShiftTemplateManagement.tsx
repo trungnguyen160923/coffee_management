@@ -27,6 +27,7 @@ export default function ShiftTemplateManagement() {
     startTime?: string;
     endTime?: string;
     maxStaffAllowed?: string;
+    roleRequirements?: string;
   }>({});
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -55,30 +56,51 @@ export default function ShiftTemplateManagement() {
     notes: '',
   });
 
-  // Calculate total role requirements quantity
+  // Calculate total role requirements quantity (for UI only)
   const totalRoleQuantity = useMemo(() => {
     return form.roleRequirements?.reduce((sum, req) => sum + req.quantity, 0) || 0;
   }, [form.roleRequirements]);
 
-  // Check if role requirements might exceed maxStaffAllowed
+  // Calculate maximum quantity per single role - this is the strict lower bound
+  // on number of staff needed, because one staff can cover multiple roles but
+  // cannot fill multiple positions of the same role at once.
+  const maxRoleQuantity = useMemo(() => {
+    if (!form.roleRequirements || form.roleRequirements.length === 0) return 0;
+    return form.roleRequirements.reduce((max, req) => Math.max(max, req.quantity || 0), 0);
+  }, [form.roleRequirements]);
+
+  // Check mismatches between role requirements and maxStaffAllowed
   const roleRequirementWarning = useMemo(() => {
     if (!form.maxStaffAllowed || !form.roleRequirements || form.roleRequirements.length === 0) {
       return null;
     }
+
+    // Hard invalid case: at least one role requires more staff than maxStaffAllowed
+    if (maxRoleQuantity > form.maxStaffAllowed) {
+      return {
+        type: 'error' as const,
+        message: `Invalid configuration: at least one role requires ${maxRoleQuantity} staff, `
+          + `but max staff allowed is only ${form.maxStaffAllowed}. Increase max staff or reduce that role's quantity.`,
+      };
+    }
+
+    // Soft warning/info: total positions vs max staff (since one staff can have multiple roles)
     if (totalRoleQuantity > form.maxStaffAllowed) {
       return {
         type: 'warning' as const,
-        message: `Total role requirements (${totalRoleQuantity}) exceeds max staff allowed (${form.maxStaffAllowed}). Note: One person can have multiple roles, so this might still be valid if staff can cover multiple positions.`,
+        message: `Total role requirements (${totalRoleQuantity}) exceeds max staff allowed (${form.maxStaffAllowed}). `
+          + `Note: One person can have multiple roles, so this might still be valid if staff can cover multiple positions.`,
       };
     }
     if (totalRoleQuantity === form.maxStaffAllowed) {
       return {
         type: 'info' as const,
-        message: `Total role requirements (${totalRoleQuantity}) equals max staff allowed. Each staff member would need to cover exactly one role.`,
+        message: `Total role requirements (${totalRoleQuantity}) equals max staff allowed. `
+          + `Each staff member would need to cover exactly one position.`,
       };
     }
     return null;
-  }, [totalRoleQuantity, form.maxStaffAllowed, form.roleRequirements]);
+  }, [totalRoleQuantity, maxRoleQuantity, form.maxStaffAllowed, form.roleRequirements]);
 
   const branchId = useMemo(() => {
     if (managerBranch?.branchId) return managerBranch.branchId;
@@ -88,6 +110,10 @@ export default function ShiftTemplateManagement() {
   }, [user, managerBranch]);
 
   const branchName = managerBranch?.name || user?.branch?.name || 'Branch';
+  const branchOpenHours =
+    managerBranch?.openHours && managerBranch?.endHours
+      ? `${managerBranch.openHours?.slice(0, 5)} – ${managerBranch.endHours?.slice(0, 5)}`
+      : null;
 
   const loadTemplates = async () => {
     if (!branchId) {
@@ -259,6 +285,21 @@ export default function ShiftTemplateManagement() {
     if (form.maxStaffAllowed !== undefined && form.maxStaffAllowed !== null && form.maxStaffAllowed < 1) {
       errors.maxStaffAllowed = 'Max staff must be at least 1';
       isValid = false;
+    }
+
+    // Validate that no single role requires more staff than maxStaffAllowed
+    if (
+      form.maxStaffAllowed !== undefined &&
+      form.maxStaffAllowed !== null &&
+      form.roleRequirements &&
+      form.roleRequirements.length > 0
+    ) {
+      const maxQty = form.roleRequirements.reduce((max, req) => Math.max(max, req.quantity || 0), 0);
+      if (maxQty > form.maxStaffAllowed) {
+        errors.roleRequirements = `At least one role requires ${maxQty} staff, `
+          + `but max staff allowed is only ${form.maxStaffAllowed}.`;
+        isValid = false;
+      }
     }
 
     setFormErrors(errors);
@@ -506,15 +547,45 @@ export default function ShiftTemplateManagement() {
                   </div>
                 </div>
               )}
-              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
-                <div>
+              <div className="px-6 py-4 border-b border-slate-100 flex items-start justify-between flex-shrink-0">
+                <div className="space-y-1">
                   <h2 className="text-lg font-semibold text-slate-900">
                     {mode === 'create' ? 'Create new shift template' : 'Edit shift template'}
                   </h2>
-                  <p className="text-xs text-slate-500 mt-0.5">
+                  <p className="text-xs text-slate-500">
                     Define standard time blocks and capacity for shifts.
                   </p>
+                  {branchOpenHours && (
+                    <p className="text-xs text-slate-500">
+                      Branch hours:{' '}
+                      <span className="font-medium text-slate-700">{branchOpenHours}</span>
+                    </p>
+                  )}
                 </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!saving) {
+                      setIsModalOpen(false);
+                      setFormErrors({});
+                    }
+                  }}
+                  className="ml-4 inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-white"
+                  aria-label="Close"
+                >
+                  <span className="sr-only">Close</span>
+                  <svg
+                    className="h-4 w-4"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M4.22 4.22a.75.75 0 0 1 1.06 0L8 6.94l2.72-2.72a.75.75 0 1 1 1.06 1.06L9.06 8l2.72 2.72a.75.75 0 1 1-1.06 1.06L8 9.06l-2.72 2.72a.75.75 0 1 1-1.06-1.06L6.94 8 4.22 5.28a.75.75 0 0 1 0-1.06Z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                </button>
               </div>
 
               <div className={`flex-1 min-h-0 overflow-y-auto ${saving ? 'pointer-events-none opacity-60' : ''}`}>
@@ -715,23 +786,34 @@ export default function ShiftTemplateManagement() {
                       )}
                     </div>
                   </div>
-                  <p className="text-xs text-slate-500">
-                    Define how many staff of each role are needed for shifts created from this template.
-                    <span className="block mt-0.5 text-slate-400">
-                      Note: One person can have multiple roles, so total positions may exceed max staff.
-                    </span>
-                  </p>
+                  <div className="space-y-0.5">
+                    <p className="text-xs text-slate-500">
+                      Define how many staff of each role are needed for shifts created from this template.
+                      <span className="block mt-0.5 text-slate-400">
+                        Note: One person can have multiple roles, so total positions may exceed max staff.
+                      </span>
+                    </p>
+                    {formErrors.roleRequirements && (
+                      <p className="text-xs text-red-600">{formErrors.roleRequirements}</p>
+                    )}
+                  </div>
 
                   {/* Warning/Info message */}
                   {roleRequirementWarning && (
                     <div className={`rounded-lg border px-3 py-2 text-xs ${
-                      roleRequirementWarning.type === 'warning'
+                      roleRequirementWarning.type === 'error'
+                        ? 'border-red-200 bg-red-50 text-red-800'
+                        : roleRequirementWarning.type === 'warning'
                         ? 'border-amber-200 bg-amber-50 text-amber-800'
                         : 'border-blue-200 bg-blue-50 text-blue-800'
                     }`}>
                       <div className="flex items-start gap-2">
                         <span className="font-semibold">
-                          {roleRequirementWarning.type === 'warning' ? '⚠️ Warning:' : 'ℹ️ Info:'}
+                          {roleRequirementWarning.type === 'error'
+                            ? '⛔ Error:'
+                            : roleRequirementWarning.type === 'warning'
+                            ? '⚠️ Warning:'
+                            : 'ℹ️ Info:'}
                         </span>
                         <span>{roleRequirementWarning.message}</span>
                       </div>

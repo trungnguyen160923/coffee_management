@@ -53,9 +53,6 @@ const BranchManagement: React.FC = () => {
       const qs = `?page=${page}&size=${limit}`;
       const resp = await apiClient.get<{ code: number; result: { data: Branch[]; total: number; page: number; size: number; totalPages: number } }>(`${API_ENDPOINTS.BRANCHES.BASE}/paged${qs}`);
       const payload = resp?.result;
-      // Delay to show skeleton (for demo purposes)
-      await new Promise(resolve => setTimeout(resolve, 2500));
-      
       setAllBranches(payload?.data || []);
       setTotal(payload?.total || 0);
       setTotalPages(payload?.totalPages || 1);

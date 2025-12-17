@@ -63,8 +63,6 @@ const ManagerPayrollTemplates: React.FC = () => {
   const fetchTemplates = async () => {
     try {
       setLoading(true);
-      // Delay 2s for testing skeleton
-      await new Promise(resolve => setTimeout(resolve, 2000));
       switch (activeTab) {
         case 'allowance':
           const allowances = await payrollTemplateService.getAllowanceTemplatesForManager();

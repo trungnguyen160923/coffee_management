@@ -442,6 +442,30 @@ public class ShiftValidationService {
     }
 
     /**
+     * Validate branch existence (used by template creation and other flows).
+     * Throws BRANCH_NOT_FOUND if branch does not exist.
+     * Does NOT fail hard if external service is unavailable (logs error and continues),
+     * similar to other branch-related validations in this service.
+     */
+    public void validateBranchExists(Integer branchId) {
+        if (branchId == null) {
+            throw new AppException(ErrorCode.EMPTY_BRANCH_ID);
+        }
+
+        try {
+            var branchResponse = branchClient.getBranchById(branchId);
+            if (branchResponse == null || branchResponse.getResult() == null) {
+                throw new AppException(ErrorCode.BRANCH_NOT_FOUND);
+            }
+        } catch (AppException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Failed to validate branch existence from order-service: {}", e.getMessage(), e);
+            // Do not block flow if external service is down
+        }
+    }
+
+    /**
      * 4. Validate time conflict (không overlap với ca khác)
      */
     public void validateTimeConflict(Integer staffUserId, Shift newShift, List<ShiftAssignment> existingAssignments) {

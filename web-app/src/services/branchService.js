@@ -95,6 +95,43 @@ export const branchService = {
             console.error('Failed to get all branches:', error);
             throw error;
         }
+    },
+
+    /**
+     * Lấy n chi nhánh gần nhất với khoảng cách và thời gian giao hàng
+     * Sử dụng POST với JSON body để tránh lỗi encode địa chỉ tiếng Việt trong URL
+     * @param {string} address - Địa chỉ để tìm chi nhánh gần nhất
+     * @param {number} limit - Số lượng chi nhánh cần lấy (mặc định 10)
+     * @returns {Promise<Object>} - Danh sách chi nhánh với khoảng cách
+     */
+    async findTopNearestBranchesWithDistance(address, limit = 10) {
+        try {
+            const response = await httpClient.post(`${API.GET_BRANCHES}/nearest/with-distance`, {
+                address: address,
+                limit: limit
+            });
+
+            if (response.data && response.data.result) {
+                return {
+                    success: true,
+                    branches: response.data.result,
+                    message: response.data.message
+                };
+            } else {
+                return {
+                    success: false,
+                    message: 'No branches found',
+                    branches: []
+                };
+            }
+        } catch (error) {
+            console.error('Error finding top nearest branches with distance:', error);
+            return {
+                success: false,
+                message: error.response?.data?.message || 'Failed to find nearest branches',
+                branches: []
+            };
+        }
     }
 };
 

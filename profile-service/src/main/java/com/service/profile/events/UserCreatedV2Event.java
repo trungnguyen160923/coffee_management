@@ -14,7 +14,13 @@ public class UserCreatedV2Event {
     public Integer branchId;
     public LocalDate hireDate;
     public String identityCard;
-    public Double salary;
+
+    // Manager-only payroll fields
+    public Double baseSalary;           // base monthly salary for MANAGER
+    public Double insuranceSalary;      // insurance salary for MANAGER
+    public Integer numberOfDependents;  // dependents for MANAGER
+
+    public Double salary;               // legacy base salary for STAFF
 
     // New staff employment & pay fields
     public String employmentType; // FULL_TIME / PART_TIME / CASUAL
@@ -31,5 +37,3 @@ public class UserCreatedV2Event {
     
     public Instant occurredAt;
 }
-
-

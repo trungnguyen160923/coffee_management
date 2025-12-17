@@ -93,9 +93,10 @@ public enum ErrorCode {
     BRANCH_CLOSURE_NOT_FOUND(4100, "Branch closure not found", HttpStatus.NOT_FOUND),
     BRANCH_CLOSURE_INVALID_DATE(4101, "End date must be on or after start date", HttpStatus.BAD_REQUEST),
     BRANCH_CLOSURE_CANNOT_DELETE(4102, "Cannot delete closures that have already started or are starting today. Only future closures can be deleted", HttpStatus.BAD_REQUEST),
-    BRANCH_CLOSED_ON_DATE(4103, "Chi nhánh đang nghỉ vào ngày này. Vui lòng chọn ngày khác", HttpStatus.BAD_REQUEST),
-    BRANCH_NOT_OPERATING_ON_DAY(4104, "Chi nhánh không hoạt động vào ngày này. Vui lòng chọn ngày khác", HttpStatus.BAD_REQUEST),
-    POS_ORDER_OUTSIDE_BUSINESS_HOURS(4105, "Không thể tạo đơn ngoài giờ làm việc của chi nhánh", HttpStatus.BAD_REQUEST),
+    BRANCH_CLOSED_ON_DATE(4103, "Chi nhánh {branchName} đang nghỉ vào ngày này. Vui lòng chọn ngày khác", HttpStatus.BAD_REQUEST),
+    BRANCH_NOT_OPERATING_ON_DAY(4104, "Chi nhánh {branchName} không hoạt động vào ngày này. Vui lòng chọn ngày khác", HttpStatus.BAD_REQUEST),
+    POS_ORDER_OUTSIDE_BUSINESS_HOURS(4105, "Chi nhánh {branchName} hiện đang ngoài giờ làm việc ({openHours} - {endHours}). Giờ hiện tại: {currentTime}", HttpStatus.BAD_REQUEST),
+    DELIVERY_DISTANCE_TOO_FAR(4106, "Địa chỉ giao hàng quá xa chi nhánh {branchName} ({distance} km, tối đa {maxDistance} km). Vui lòng chọn chi nhánh khác hoặc đổi địa chỉ giao hàng", HttpStatus.BAD_REQUEST),
     ;
 
     ErrorCode(int code, String message, HttpStatusCode statusCode) {

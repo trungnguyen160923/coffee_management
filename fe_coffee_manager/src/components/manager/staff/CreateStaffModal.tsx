@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { X } from 'lucide-react';
+import { Eye, EyeOff, X } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { authService, staffService } from '../../../services';
 import { useAuth } from '../../../context/AuthContext';
@@ -31,6 +31,9 @@ const CreateStaffModal: React.FC<Props> = ({ open, mode, staff, onClose, onSucce
   const [loading, setLoading] = useState(false);
   const { managerBranch } = useAuth();
 
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const reset = () => {
@@ -45,6 +48,7 @@ const CreateStaffModal: React.FC<Props> = ({ open, mode, staff, onClose, onSucce
     setOvertimeRate('');
     setSelectedRoleIds([]);
     setProficiencyLevel('INTERMEDIATE');
+    setPassword('');
     setErrors({});
   };
 
@@ -106,6 +110,14 @@ const CreateStaffModal: React.FC<Props> = ({ open, mode, staff, onClose, onSucce
       if (!identityCard.trim()) newErrors.identityCard = 'ID Card is required';
       if (!hireDate.trim()) newErrors.hireDate = 'Hire date is required';
 
+      if (mode === 'create') {
+        if (!password.trim()) {
+          newErrors.password = 'Password is required';
+        } else if (password.length < 6) {
+          newErrors.password = 'Password must be at least 6 characters';
+        }
+      }
+
       if (availableRoles.length > 0 && selectedRoleIds.length === 0) {
         newErrors.roles = 'Please select at least one staff role';
       }
@@ -135,7 +147,7 @@ const CreateStaffModal: React.FC<Props> = ({ open, mode, staff, onClose, onSucce
         setLoading(true);
         const payload: any = {
           email,
-          password: '123456',
+          password,
           fullname,
           phoneNumber,
           role: 'STAFF',
@@ -195,8 +207,8 @@ const CreateStaffModal: React.FC<Props> = ({ open, mode, staff, onClose, onSucce
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-lg p-6">
-        <div className="flex items-center justify-between mb-4">
+      <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b">
           <h3 className="text-lg font-semibold text-gray-900">
             {mode === 'create' ? 'Create Staff' : 'Edit Staff'}
           </h3>
@@ -204,33 +216,56 @@ const CreateStaffModal: React.FC<Props> = ({ open, mode, staff, onClose, onSucce
             <X className="w-5 h-5" />
           </button>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Full name</label>
-            <input value={fullname} onChange={(e) => setFullname(e.target.value)} className="mt-1 w-full border rounded-md px-3 py-2 text-sm" placeholder="Nguyễn Văn A" />
-            {errors.fullname && <p className="mt-1 text-xs text-red-600">{errors.fullname}</p>}
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Email</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1 w-full border rounded-md px-3 py-2 text-sm" placeholder="email@example.com" />
-            {errors.email && <p className="mt-1 text-xs text-red-600">{errors.email}</p>}
-          </div>
-          <div>
+        <div className="px-6 pt-4 pb-4 overflow-y-auto flex-1">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Full name</label>
+              <input value={fullname} onChange={(e) => setFullname(e.target.value)} className="mt-1 w-full border rounded-md px-3 py-2 text-sm" placeholder="Nguyễn Văn A" />
+              {errors.fullname && <p className="mt-1 text-xs text-red-600">{errors.fullname}</p>}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Email</label>
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1 w-full border rounded-md px-3 py-2 text-sm" placeholder="email@example.com" />
+              {errors.email && <p className="mt-1 text-xs text-red-600">{errors.email}</p>}
+            </div>
+            {mode === 'create' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Password</label>
+                <div className="mt-1 relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full border rounded-md px-3 py-2 text-sm pr-10"
+                    placeholder="At least 6 characters"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    className="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500 hover:text-gray-700"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                {errors.password && <p className="mt-1 text-xs text-red-600">{errors.password}</p>}
+              </div>
+            )}
+            <div>
             <label className="block text-sm font-medium text-gray-700">Phone</label>
             <input value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value.replace(/[^0-9+]/g, ''))} className="mt-1 w-full border rounded-md px-3 py-2 text-sm" placeholder="0324xxxxxx" />
             {errors.phoneNumber && <p className="mt-1 text-xs text-red-600">{errors.phoneNumber}</p>}
           </div>
-          <div>
+            <div>
             <label className="block text-sm font-medium text-gray-700">ID Card</label>
             <input value={identityCard} onChange={(e) => setIdentityCard(e.target.value.replace(/\D/g, ''))} className="mt-1 w-full border rounded-md px-3 py-2 text-sm" placeholder="CCCD" />
             {errors.identityCard && <p className="mt-1 text-xs text-red-600">{errors.identityCard}</p>}
           </div>
-          <div>
+            <div>
             <label className="block text-sm font-medium text-gray-700">Hire date</label>
             <input type="date" value={hireDate} onChange={(e) => setHireDate(e.target.value)} className="mt-1 w-full border rounded-md px-3 py-2 text-sm" />
             {errors.hireDate && <p className="mt-1 text-xs text-red-600">{errors.hireDate}</p>}
           </div>
-          <div>
+            <div>
             <label className="block text-sm font-medium text-gray-700">Employment Type</label>
             <select
               value={employmentType}
@@ -241,7 +276,7 @@ const CreateStaffModal: React.FC<Props> = ({ open, mode, staff, onClose, onSucce
               <option value="PART_TIME">Part time</option>
             </select>
           </div>
-          <div className="md:col-span-2">
+            <div className="md:col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Staff roles (F&B positions)
             </label>
@@ -282,8 +317,8 @@ const CreateStaffModal: React.FC<Props> = ({ open, mode, staff, onClose, onSucce
               You can select one or multiple roles for this staff member (e.g. vừa Pha chế, vừa Phục vụ).
             </p>
             {errors.roles && <p className="mt-1 text-xs text-red-600">{errors.roles}</p>}
-          </div>
-          <div>
+            </div>
+            <div>
             <label className="block text-sm font-medium text-gray-700">Proficiency level</label>
             <select
               value={proficiencyLevel}
@@ -298,8 +333,8 @@ const CreateStaffModal: React.FC<Props> = ({ open, mode, staff, onClose, onSucce
               <option value="EXPERT">Expert</option>
             </select>
           </div>
-          {employmentType === 'FULL_TIME' && (
-            <div>
+            {employmentType === 'FULL_TIME' && (
+              <div>
               <label className="block text-sm font-medium text-gray-700">Monthly salary</label>
               <input
                 type="number"
@@ -309,10 +344,10 @@ const CreateStaffModal: React.FC<Props> = ({ open, mode, staff, onClose, onSucce
                 placeholder="e.g. 8000000"
               />
               {errors.salary && <p className="mt-1 text-xs text-red-600">{errors.salary}</p>}
-            </div>
-          )}
-          {employmentType === 'PART_TIME' && (
-            <div>
+              </div>
+            )}
+            {employmentType === 'PART_TIME' && (
+              <div>
               <label className="block text-sm font-medium text-gray-700">Hourly rate</label>
               <input
                 type="number"
@@ -322,9 +357,9 @@ const CreateStaffModal: React.FC<Props> = ({ open, mode, staff, onClose, onSucce
                 placeholder="e.g. 35000"
               />
               {errors.hourlyRate && <p className="mt-1 text-xs text-red-600">{errors.hourlyRate}</p>}
-            </div>
-          )}
-          <div>
+              </div>
+            )}
+            <div>
             <label className="block text-sm font-medium text-gray-700">Overtime rate (optional)</label>
             <input
               type="number"
@@ -333,9 +368,10 @@ const CreateStaffModal: React.FC<Props> = ({ open, mode, staff, onClose, onSucce
               className="mt-1 w-full border rounded-md px-3 py-2 text-sm"
               placeholder="e.g. 60000"
             />
+            </div>
           </div>
         </div>
-        <div className="mt-6 flex items-center justify-end gap-3">
+        <div className="px-6 pb-4 pt-2 flex items-center justify-end gap-3 border-t">
           <button onClick={onClose} className="px-4 py-2 rounded-md border text-gray-700 hover:bg-gray-50">
             Cancel
           </button>

@@ -1018,12 +1018,12 @@ export default function StaffOrders() {
             {/* Recipe Modal (Không có xung đột, giữ nguyên) */}
             {recipeModalOpen && selectedRecipe && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl">
-                        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col">
+                        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
                             <h3 className="text-lg font-semibold text-gray-800">Recipe Details</h3>
                             <button onClick={closeRecipeModal} className="text-gray-500 hover:text-gray-700">✕</button>
                         </div>
-                        <div className="p-6 text-sm text-gray-800 space-y-4">
+                        <div className="flex-1 overflow-y-auto p-6 text-sm text-gray-800 space-y-4">
                             <div className="grid grid-cols-2 gap-4">
                                 <div><span className="text-gray-500">Name:</span> <span className="font-semibold">{selectedRecipe.name}</span></div>
                                 <div><span className="text-gray-500">Version:</span> <span className="font-semibold">{selectedRecipe.version}</span></div>
@@ -1088,7 +1088,7 @@ export default function StaffOrders() {
                                 )}
                             </div>
                         </div>
-                        <div className="px-6 py-4 border-t border-gray-100 flex justify-end">
+                        <div className="px-6 py-4 border-t border-gray-100 flex justify-end flex-shrink-0">
                             <button onClick={closeRecipeModal} className="px-4 py-2 text-sm rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50">Close</button>
                         </div>
                     </div>

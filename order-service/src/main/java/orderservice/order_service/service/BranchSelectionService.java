@@ -3,6 +3,9 @@ package orderservice.order_service.service;
 import lombok.extern.slf4j.Slf4j;
 import orderservice.order_service.entity.Branch;
 import orderservice.order_service.repository.BranchRepository;
+import orderservice.order_service.mapper.BranchMapper;
+import orderservice.order_service.dto.response.BranchResponse;
+import orderservice.order_service.dto.response.BranchWithDistanceResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -21,9 +24,36 @@ public class BranchSelectionService {
     @Autowired
     private BranchClosureService branchClosureService;
 
+    @Autowired
+    private BranchMapper branchMapper;
+
+    /**
+     * Kiểm tra chi nhánh có đang trong giờ làm việc không
+     * @param branch - Chi nhánh cần kiểm tra
+     * @return true nếu đang trong giờ làm việc, false nếu không
+     */
+    private boolean isBranchWithinWorkingHours(Branch branch) {
+        if (branch.getOpenHours() == null || branch.getEndHours() == null) {
+            // Nếu không có giờ làm việc, coi như luôn mở
+            return true;
+        }
+        
+        java.time.LocalTime currentTime = java.time.LocalTime.now();
+        
+        if (branch.getEndHours().isAfter(branch.getOpenHours())) {
+            // Normal same-day window (e.g., 08:00 - 22:00)
+            return !currentTime.isBefore(branch.getOpenHours()) 
+                    && !currentTime.isAfter(branch.getEndHours());
+        } else {
+            // Overnight window (e.g., 22:00 - 06:00)
+            return !currentTime.isBefore(branch.getOpenHours()) 
+                    || !currentTime.isAfter(branch.getEndHours());
+        }
+    }
+
     /**
      * Tìm chi nhánh gần nhất dựa trên địa chỉ khách hàng
-     * Chỉ trả về chi nhánh đang hoạt động (không nghỉ và có trong openDays)
+     * Chỉ trả về chi nhánh đang hoạt động (không nghỉ, có trong openDays, và trong giờ làm việc)
      */
     public Branch findNearestBranch(String customerAddress) {
         try {
@@ -40,6 +70,7 @@ public class BranchSelectionService {
                     .filter(b -> !branchClosureService.isBranchClosedOnDate(b.getBranchId(), today))
                     // Lọc chi nhánh không hoạt động vào ngày hôm nay (openDays)
                     .filter(b -> branchClosureService.isBranchOperatingOnDate(b, today))
+                    .filter(b -> isBranchWithinWorkingHours(b))
                     .sorted((a, b) -> a.getBranchId().compareTo(b.getBranchId()))
                     .toList();
 
@@ -86,6 +117,7 @@ public class BranchSelectionService {
                     .filter(b -> b.getLatitude() != null && b.getLongitude() != null)
                     .filter(b -> !branchClosureService.isBranchClosedOnDate(b.getBranchId(), today))
                     .filter(b -> branchClosureService.isBranchOperatingOnDate(b, today))
+                    .filter(b -> isBranchWithinWorkingHours(b))
                     .sorted((a, b) -> a.getBranchId().compareTo(b.getBranchId()))
                     .toList();
 
@@ -152,6 +184,7 @@ public class BranchSelectionService {
                     .filter(b -> !branchClosureService.isBranchClosedOnDate(b.getBranchId(), today))
                     // Lọc chi nhánh không hoạt động vào ngày hôm nay (openDays)
                     .filter(b -> branchClosureService.isBranchOperatingOnDate(b, today))
+                    .filter(b -> isBranchWithinWorkingHours(b))
                     .sorted((a, b) -> a.getBranchId().compareTo(b.getBranchId()))
                     .toList();
 
@@ -195,11 +228,64 @@ public class BranchSelectionService {
                     .filter(b -> b.getLatitude() != null && b.getLongitude() != null)
                     .filter(b -> !branchClosureService.isBranchClosedOnDate(b.getBranchId(), today))
                     .filter(b -> branchClosureService.isBranchOperatingOnDate(b, today))
+                    .filter(b -> isBranchWithinWorkingHours(b))
                     .sorted((a, b) -> a.getBranchId().compareTo(b.getBranchId()))
                     .limit(limit)
                     .toList();
 
             return allBranches;
+        }
+    }
+
+    /**
+     * Tìm n chi nhánh gần nhất với khoảng cách và thời gian giao hàng ước tính
+     * Tận dụng method findTopNearestBranches() có sẵn và thêm thông tin khoảng cách
+     * @param customerAddress - Địa chỉ khách hàng
+     * @param limit - Số lượng chi nhánh cần lấy
+     * @return Danh sách chi nhánh với khoảng cách và thời gian giao hàng
+     */
+    public List<BranchWithDistanceResponse> findTopNearestBranchesWithDistance(
+            String customerAddress, int limit) {
+        try {
+            // Tận dụng method có sẵn để lấy danh sách chi nhánh gần nhất
+            List<Branch> nearestBranches = findTopNearestBranches(customerAddress, limit);
+            
+            if (nearestBranches == null || nearestBranches.isEmpty()) {
+                log.warn("No branches found for address: {}", customerAddress);
+                return List.of();
+            }
+
+            // Geocoding địa chỉ khách hàng để tính khoảng cách
+            GeocodingService.Coordinates customerLocation = geocodingService.geocodeAddress(customerAddress);
+
+            // Tính khoảng cách và tạo response cho từng chi nhánh
+            List<BranchWithDistanceResponse> branchesWithDistance = nearestBranches.stream()
+                    .map(branch -> {
+                        GeocodingService.Coordinates branchLocation = new GeocodingService.Coordinates(
+                                branch.getLatitude().doubleValue(),
+                                branch.getLongitude().doubleValue());
+                        
+                        double distance = geocodingService.calculateDistance(customerLocation, branchLocation);
+                        
+                        // Ước tính thời gian giao hàng: 5 phút/km (trung bình 12km/h)
+                        int estimatedTime = (int) Math.ceil(distance * 5);
+                        
+                        // Map Branch to BranchResponse sử dụng mapper
+                        BranchResponse branchResponse = branchMapper.toBranchResponse(branch);
+                        
+                        return BranchWithDistanceResponse.builder()
+                                .branch(branchResponse)
+                                .distance(Math.round(distance * 100.0) / 100.0) // Làm tròn 2 chữ số
+                                .estimatedDeliveryTime(estimatedTime)
+                                .build();
+                    })
+                    .toList();
+
+            return branchesWithDistance;
+
+        } catch (Exception e) {
+            log.error("Error finding top nearest branches with distance: {}", e.getMessage(), e);
+            return List.of();
         }
     }
 

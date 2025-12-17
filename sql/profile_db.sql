@@ -57,8 +57,6 @@ CREATE TABLE manager_profiles (
     COMMENT 'Lương cơ bản theo tháng cho Manager',
   insurance_salary DECIMAL(12,2) DEFAULT 0.00 
     COMMENT 'Lương để tính bảo hiểm (thường = lương tối thiểu vùng)',
-  overtime_rate DECIMAL(12,2) DEFAULT NULL 
-    COMMENT 'Hệ số tăng ca (ví dụ: 1.5 = 150%)',
   number_of_dependents INT DEFAULT 0 
     COMMENT 'Số người phụ thuộc (để tính giảm trừ thuế TNCN)',
   create_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

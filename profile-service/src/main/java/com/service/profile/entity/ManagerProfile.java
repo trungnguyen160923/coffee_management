@@ -35,9 +35,6 @@ public class ManagerProfile {
     @Column(name = "insurance_salary", precision = 12, scale = 2)
     java.math.BigDecimal insuranceSalary;
 
-    @Column(name = "overtime_rate", precision = 12, scale = 2)
-    java.math.BigDecimal overtimeRate;
-
     @Column(name = "number_of_dependents")
     Integer numberOfDependents;
 

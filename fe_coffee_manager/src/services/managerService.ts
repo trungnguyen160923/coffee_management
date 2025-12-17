@@ -60,6 +60,7 @@ class ManagerService {
     hireDate: string; // YYYY-MM-DD
     identityCard: string;
     baseSalary?: number;
+    numberOfDependents?: number;
   }): Promise<any> {
     const response = await apiClient.post<{ code: number; message?: string; result?: any }>(`${this.v2Url}/create-manager`, payload);
     if (response.code && response.code !== 1000 && response.code !== 200 && response.code !== 201 && response.code !== 202) {
@@ -85,6 +86,7 @@ class ManagerService {
     identityCard?: string;
     hireDate?: string;
     baseSalary?: number;
+    numberOfDependents?: number;
     branchId?: number;
   }): Promise<any> {
     const resp = await apiClient.put<{ code: number; result: any }>(`/api/profiles/manager-profiles/${userId}`, payload);
@@ -101,6 +103,7 @@ class ManagerService {
     identityCard?: string;
     hireDate?: string;
     baseSalary?: number;
+    numberOfDependents?: number;
     branchId?: number;
     currentBranchId?: number; // To check if branch actually changed
   }): Promise<any> {
@@ -114,11 +117,12 @@ class ManagerService {
       await this.updateUser(userId, userUpdates);
     }
 
-    // Update manager profile (identityCard, hireDate, baseSalary)
+    // Update manager profile (identityCard, hireDate, baseSalary, numberOfDependents)
     const profileUpdates: any = {};
     if (payload.identityCard !== undefined) profileUpdates.identityCard = payload.identityCard;
     if (payload.hireDate !== undefined) profileUpdates.hireDate = payload.hireDate;
     if (payload.baseSalary !== undefined) profileUpdates.baseSalary = payload.baseSalary;
+    if (payload.numberOfDependents !== undefined) profileUpdates.numberOfDependents = payload.numberOfDependents;
 
     if (Object.keys(profileUpdates).length > 0) {
       await this.updateManagerProfile(userId, profileUpdates);

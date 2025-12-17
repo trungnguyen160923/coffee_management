@@ -743,11 +743,33 @@ const ManagerManagement: React.FC = () => {
                   </p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-700">Salary</label>
+                  <label className="text-sm font-medium text-gray-700">Base salary</label>
                   <p className="text-sm text-gray-900 mt-1">
-                    {viewingManager.salary 
-                      ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(viewingManager.salary)
+                    {typeof (viewingManager as any).baseSalary === 'number'
+                      ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(
+                          (viewingManager as any).baseSalary as number
+                        )
+                      : viewingManager.salary
+                      ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(
+                          viewingManager.salary
+                        )
                       : '-'}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700">Insurance salary</label>
+                  <p className="text-sm text-gray-900 mt-1">
+                    {typeof (viewingManager as any).insuranceSalary === 'number'
+                      ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(
+                          (viewingManager as any).insuranceSalary as number
+                        )
+                      : '-'}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700">Number of dependents</label>
+                  <p className="text-sm text-gray-900 mt-1">
+                    {(viewingManager as any).numberOfDependents ?? '-'}
                   </p>
                 </div>
                 <div>
