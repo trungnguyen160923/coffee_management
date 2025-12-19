@@ -170,6 +170,22 @@ export const shiftAssignmentService = {
     );
     return res.result;
   },
+
+  // Get active shift assignment for current staff
+  async getMyActiveShift(): Promise<ShiftAssignment | null> {
+    try {
+      const res = await apiClient.get<ApiResponse<ShiftAssignment>>(
+        `/api/profiles/shift-assignments/my-active-shift`
+      );
+      return res.result || null;
+    } catch (error: any) {
+      // If 404 or no active shift, return null
+      if (error?.response?.status === 404 || error?.response?.status === 400) {
+        return null;
+      }
+      throw error;
+    }
+  },
 };
 
 export interface BranchPublicScheduleItem {

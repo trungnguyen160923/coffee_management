@@ -87,7 +87,7 @@ public class ShiftRequestService {
                         "You already have an assignment for this shift");
             }
         } else {
-            // Other request types require assignmentId
+            // Other request types (SWAP / PICK_UP / TWO_WAY_SWAP / LEAVE) require assignmentId
             if (request.getAssignmentId() == null) {
                 throw new AppException(ErrorCode.SHIFT_NOT_FOUND, "Assignment ID is required");
             }
@@ -97,6 +97,26 @@ public class ShiftRequestService {
             
             // Re-validate assignment status (race condition protection)
             conflictService.validateAssignmentStatus(assignment, "creating request");
+
+            // Global deadline rule for all assignment-based requests:
+            // Staff cannot create SWAP / PICK_UP / TWO_WAY_SWAP / LEAVE requests
+            // if the shift will start in less than 12 hours from now.
+            if (shift != null && shift.getShiftDate() != null && shift.getStartTime() != null) {
+                LocalDate shiftDate = shift.getShiftDate();
+                LocalTime shiftStartTime = shift.getStartTime();
+                // Start time is always on shiftDate (even for shifts that span midnight)
+                LocalDateTime shiftStart = shiftDate.atTime(shiftStartTime);
+                
+                LocalDateTime now = LocalDateTime.now();
+                long hoursUntilShift = ChronoUnit.HOURS.between(now, shiftStart);
+                
+                // Ví dụ: now = 19/12 15:00 → không cho tạo request cho ca bắt đầu từ 15:00 đến trước 03:00 ngày 20/12
+                if (hoursUntilShift < 12) {
+                    throw new AppException(ErrorCode.SHIFT_REQUEST_LEAVE_DEADLINE_PASSED,
+                            "Shift request must be submitted at least 12 hours before shift start time. " +
+                            "Shift starts at " + shiftStart + ", but current time is " + now);
+                }
+            }
         }
 
         String initialStatus = "PENDING"; // Default status

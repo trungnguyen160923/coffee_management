@@ -5,6 +5,7 @@ import '../../utils/leafletConfig'; // Fix icon issue
 import { branchService } from '../../services/branchService';
 import { stockService } from '../../services/stockService';
 import { showToast } from '../../utils/toast';
+import { CONFIG } from '../../configurations/configuration';
 
 // Custom marker icons
 const createCustomIcon = (color) => {
@@ -37,33 +38,64 @@ const createCustomIcon = (color) => {
 // Component để fit bounds khi branches thay đổi
 function MapBounds({ branches, userLocation, currentUserLocation }) {
     const map = useMap();
+    const [isMapReady, setIsMapReady] = useState(false);
+    
+    // Đợi map ready
+    useEffect(() => {
+        if (map && map.getContainer()) {
+            // Kiểm tra map đã sẵn sàng bằng cách kiểm tra container
+            const checkMapReady = () => {
+                try {
+                    if (map && map.getContainer() && map.getContainer().offsetParent !== null) {
+                        setIsMapReady(true);
+                    } else {
+                        setTimeout(checkMapReady, 100);
+                    }
+                } catch (error) {
+                    console.error('[MapBounds] Error checking map ready:', error);
+                }
+            };
+            checkMapReady();
+        }
+    }, [map]);
     
     useEffect(() => {
-        if (branches.length === 0) return;
+        if (!isMapReady || branches.length === 0) return;
         
-        const bounds = L.latLngBounds([]);
-        
-        // Thêm vị trí địa chỉ giao hàng vào bounds
-        if (userLocation) {
-            bounds.extend([userLocation.lat, userLocation.lng]);
-        }
-        
-        // Thêm vị trí hiện tại của người dùng vào bounds
-        if (currentUserLocation) {
-            bounds.extend([currentUserLocation.lat, currentUserLocation.lng]);
-        }
-        
-        // Thêm tất cả chi nhánh vào bounds
-        branches.forEach(item => {
-            if (item.branch.latitude && item.branch.longitude) {
-                bounds.extend([item.branch.latitude, item.branch.longitude]);
+        // Đợi thêm một chút để đảm bảo map đã render hoàn toàn
+        const timer = setTimeout(() => {
+            try {
+                if (!map || !map.getContainer()) return;
+                
+                const bounds = L.latLngBounds([]);
+                
+                // Thêm vị trí địa chỉ giao hàng vào bounds (chỉ khi đã geocode xong)
+                if (userLocation && userLocation.lat && userLocation.lng) {
+                    bounds.extend([userLocation.lat, userLocation.lng]);
+                }
+                
+                // Thêm vị trí hiện tại của người dùng vào bounds
+                if (currentUserLocation && currentUserLocation.lat && currentUserLocation.lng) {
+                    bounds.extend([currentUserLocation.lat, currentUserLocation.lng]);
+                }
+                
+                // Thêm tất cả chi nhánh vào bounds
+                branches.forEach(item => {
+                    if (item.branch.latitude && item.branch.longitude) {
+                        bounds.extend([item.branch.latitude, item.branch.longitude]);
+                    }
+                });
+                
+                if (bounds.isValid() && map) {
+                    map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
+                }
+            } catch (error) {
+                console.error('[MapBounds] Error fitting bounds:', error);
             }
-        });
+        }, 200); // Delay 200ms để đảm bảo map đã render
         
-        if (bounds.isValid()) {
-            map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
-        }
-    }, [branches, userLocation, currentUserLocation, map]);
+        return () => clearTimeout(timer);
+    }, [branches, userLocation, currentUserLocation, map, isMapReady]);
     
     return null;
 }
@@ -73,6 +105,7 @@ const BranchMapSelector = ({
     onClose, 
     onSelectBranch, 
     deliveryAddress,
+    deliveryCoordinates = null, // { lat, lng } - tọa độ địa chỉ giao hàng nếu có
     cartItems,
     userSession,
     selectedBranch: currentSelectedBranch 
@@ -105,12 +138,26 @@ const BranchMapSelector = ({
         if (isOpen && deliveryAddress) {
             console.log('✅ Conditions met, calling functions...');
             loadBranches();
-            geocodeUserAddress();
+            
+            // Nếu có coordinates sẵn, dùng luôn (chính xác hơn và nhanh hơn)
+            if (deliveryCoordinates && deliveryCoordinates.lat && deliveryCoordinates.lng) {
+                console.log('✅ Using provided coordinates:', deliveryCoordinates);
+                setUserLocation({
+                    lat: deliveryCoordinates.lat,
+                    lng: deliveryCoordinates.lng
+                });
+                setMapCenter([deliveryCoordinates.lat, deliveryCoordinates.lng]);
+            } else {
+                // Nếu không có coordinates, mới geocode
+                console.log('⚠️ No coordinates provided, geocoding address...');
+                geocodeUserAddress();
+            }
+            
             getCurrentUserPosition(); // Lấy vị trí hiện tại của người dùng
         } else {
             console.warn('❌ Conditions not met:', { isOpen, deliveryAddress });
         }
-    }, [isOpen, deliveryAddress]);
+    }, [isOpen, deliveryAddress, deliveryCoordinates]);
 
     // Ngăn scroll page khi đang ở trong modal
     useEffect(() => {
@@ -254,11 +301,21 @@ const BranchMapSelector = ({
             );
             
             if (result.success && result.branches) {
-                // Lưu tất cả chi nhánh (có distance) để hiển thị trên map
-                setAllBranches(result.branches);
+                // QUAN TRỌNG: Filter lại theo khoảng cách tối đa ở frontend để đảm bảo
+                const MAX_DELIVERY_DISTANCE_KM = CONFIG.MAX_DELIVERY_DISTANCE_KM;
+                const branchesWithinDistance = result.branches.filter(branchData => {
+                    // Nếu có distance, kiểm tra; nếu không có distance thì giữ lại (backend đã filter)
+                    return branchData.distance == null || branchData.distance <= MAX_DELIVERY_DISTANCE_KM;
+                });
                 
-                // Kiểm tra stock cho tất cả chi nhánh
-                await checkStockForAllBranches(result.branches);
+                console.log('[BranchMapSelector] loadBranches: Filtered branches within', MAX_DELIVERY_DISTANCE_KM, 'km:', 
+                    branchesWithinDistance.length, 'out of', result.branches.length);
+                
+                // Lưu tất cả chi nhánh (có distance) trong phạm vi để hiển thị trên map
+                setAllBranches(branchesWithinDistance);
+                
+                // Kiểm tra stock cho tất cả chi nhánh trong phạm vi
+                await checkStockForAllBranches(branchesWithinDistance);
                 
                 // Filter chỉ lấy chi nhánh có hàng để hiển thị trong danh sách
                 // (sẽ được cập nhật sau khi checkStockForAllBranches hoàn thành)
@@ -282,7 +339,10 @@ const BranchMapSelector = ({
 
     // Kiểm tra stock cho tất cả chi nhánh
     const checkStockForAllBranches = async (branchesList) => {
+        // Nếu không có giỏ hàng hoặc không có session:
+        // - Vẫn hiển thị toàn bộ danh sách chi nhánh ở card "Chi nhánh có thể chọn"
         if (!cartItems || cartItems.length === 0 || !userSession) {
+            setBranches(branchesList || []);
             return;
         }
 
@@ -309,6 +369,13 @@ const BranchMapSelector = ({
         }
         
         setBranchStockStatus(stockStatusMap);
+
+        // Cập nhật danh sách "Chi nhánh có thể chọn" = chỉ những chi nhánh còn hàng
+        const selectableBranches = branchesList.filter((item) => {
+            const status = stockStatusMap[item.branch.branchId];
+            return status && status.available;
+        });
+        setBranches(selectableBranches);
     };
 
     // Xử lý khi click marker
@@ -320,10 +387,27 @@ const BranchMapSelector = ({
     const panToLocation = (lat, lng, zoom = 15) => {
         if (mapRef.current) {
             const map = mapRef.current;
-            map.flyTo([lat, lng], zoom, {
-                animate: true,
-                duration: 1.0
-            });
+            try {
+                // Kiểm tra map đã sẵn sàng trước khi flyTo
+                if (map.getContainer && map.getContainer()) {
+                    map.flyTo([lat, lng], zoom, {
+                        animate: true,
+                        duration: 1.0
+                    });
+                } else {
+                    // Nếu map chưa ready, đợi một chút rồi thử lại
+                    setTimeout(() => {
+                        if (mapRef.current && mapRef.current.getContainer && mapRef.current.getContainer()) {
+                            mapRef.current.flyTo([lat, lng], zoom, {
+                                animate: true,
+                                duration: 1.0
+                            });
+                        }
+                    }, 300);
+                }
+            } catch (error) {
+                console.error('[BranchMapSelector] Error panning to location:', error);
+            }
         }
     };
 
@@ -331,22 +415,39 @@ const BranchMapSelector = ({
     const panToAllLocations = () => {
         if (mapRef.current && branches.length > 0) {
             const map = mapRef.current;
-            const bounds = L.latLngBounds([]);
-            
-            if (userLocation) {
-                bounds.extend([userLocation.lat, userLocation.lng]);
-            }
-            if (currentUserLocation) {
-                bounds.extend([currentUserLocation.lat, currentUserLocation.lng]);
-            }
-            branches.forEach(item => {
-                if (item.branch.latitude && item.branch.longitude) {
-                    bounds.extend([item.branch.latitude, item.branch.longitude]);
+            try {
+                // Kiểm tra map đã sẵn sàng và userLocation đã geocode xong
+                if (map.getContainer && map.getContainer()) {
+                    const bounds = L.latLngBounds([]);
+                    
+                    // Chỉ thêm userLocation nếu đã geocode xong (có lat và lng)
+                    if (userLocation && userLocation.lat && userLocation.lng) {
+                        bounds.extend([userLocation.lat, userLocation.lng]);
+                    }
+                    
+                    if (currentUserLocation && currentUserLocation.lat && currentUserLocation.lng) {
+                        bounds.extend([currentUserLocation.lat, currentUserLocation.lng]);
+                    }
+                    
+                    branches.forEach(item => {
+                        if (item.branch.latitude && item.branch.longitude) {
+                            bounds.extend([item.branch.latitude, item.branch.longitude]);
+                        }
+                    });
+                    
+                    if (bounds.isValid()) {
+                        map.flyToBounds(bounds, { padding: [50, 50], maxZoom: 15 });
+                    }
+                } else {
+                    // Nếu map chưa ready, đợi một chút rồi thử lại
+                    setTimeout(() => {
+                        if (mapRef.current && mapRef.current.getContainer && mapRef.current.getContainer()) {
+                            panToAllLocations();
+                        }
+                    }, 300);
                 }
-            });
-            
-            if (bounds.isValid()) {
-                map.flyToBounds(bounds, { padding: [50, 50], maxZoom: 15 });
+            } catch (error) {
+                console.error('[BranchMapSelector] Error panning to all locations:', error);
             }
         }
     };

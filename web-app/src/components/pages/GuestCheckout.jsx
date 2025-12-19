@@ -7,17 +7,24 @@ import { emailService } from '../../services/emailService';
 import { discountService } from '../../services/discountService';
 import { branchService } from '../../services/branchService';
 import { stockService } from '../../services/stockService';
-import { getCurrentUserSessionAsync, createGuestSession } from '../../utils/userSession';
+import { getCurrentUserSession, getCurrentUserSessionAsync, createGuestSession } from '../../utils/userSession';
+import BranchMapSelector from '../common/BranchMapSelector';
+import LocationMapPicker from '../common/LocationMapPicker';
 import MomoPaymentPage from './MomoPaymentPage';
 import axios from 'axios';
 import { showToast } from '../../utils/toast';
 import { CONFIG } from '../../configurations/configuration';
+import { getAddressFromCurrentLocation, calculateDistance } from '../../services/locationService';
+
+// Lấy giá trị từ config (env variable)
+const MAX_DELIVERY_DISTANCE_KM = CONFIG.MAX_DELIVERY_DISTANCE_KM;
 
 const GuestCheckout = () => {
     const navigate = useNavigate();
 
     const [formData, setFormData] = useState({
         name: '',
+        streetAddress: '', // Địa chỉ nhà/số nhà
         province: '',
         provinceCode: '',
         district: '',
@@ -29,6 +36,10 @@ const GuestCheckout = () => {
         paymentMethod: 'CASH',
         notes: ''
     });
+
+    // Address input mode: 'manual' or 'map'
+    const [addressInputMode, setAddressInputMode] = useState('manual');
+    const [selectedLocationFromMap, setSelectedLocationFromMap] = useState(null); // {lat, lng, address}
 
     const [provinces, setProvinces] = useState([]);
     const [districts, setDistricts] = useState([]);
@@ -44,6 +55,9 @@ const GuestCheckout = () => {
     const [selectedBranch, setSelectedBranch] = useState(null);
     const [branchStockStatus, setBranchStockStatus] = useState(null);
     const [isCheckingStock, setIsCheckingStock] = useState(false);
+    const [showBranchMap, setShowBranchMap] = useState(false);
+    const [isGettingLocation, setIsGettingLocation] = useState(false);
+    const [showLocationMapPicker, setShowLocationMapPicker] = useState(false);
 
     // Fetch provinces and cart items on mount
     useEffect(() => {
@@ -73,10 +87,13 @@ const GuestCheckout = () => {
     // Tìm chi nhánh khác có hàng khi chi nhánh gần nhất hết hàng
     const findAlternativeBranchWithStock = async (deliveryAddress, currentBranchId, cartItems, userSession) => {
         try {
-            // Tìm các chi nhánh khác gần địa chỉ
+            // Tìm các chi nhánh khác gần địa chỉ (backend đã tự động filter theo max distance)
             const branchesResult = await branchService.findTopNearestBranches(deliveryAddress, 10);
             if (!branchesResult.success || branchesResult.branches.length === 0) {
-                setBranchStockStatus({ available: false, message: 'Không tìm thấy chi nhánh nào khác gần địa chỉ này' });
+                setBranchStockStatus({ 
+                    available: false, 
+                    message: `Không tìm thấy chi nhánh nào khác trong phạm vi ${MAX_DELIVERY_DISTANCE_KM}km từ địa chỉ này` 
+                });
                 return;
             }
             
@@ -84,8 +101,32 @@ const GuestCheckout = () => {
             // Loại bỏ chi nhánh hiện tại
             const otherBranches = allBranches.filter(branch => branch.branchId !== currentBranchId);
             
-            // Kiểm tra stock cho các chi nhánh khác
-            const stockResults = await stockService.checkStockForMultipleBranches(cartItems, otherBranches, userSession);
+            // QUAN TRỌNG: Kiểm tra lại khoảng cách ở frontend nếu có coordinates
+            let validBranches = otherBranches;
+            
+            if (addressInputMode === 'map' && selectedLocationFromMap?.coordinates) {
+                validBranches = otherBranches.filter(branch => {
+                    if (!branch.latitude || !branch.longitude) return false;
+                    const distance = calculateDistance(
+                        selectedLocationFromMap.coordinates.lat,
+                        selectedLocationFromMap.coordinates.lng,
+                        branch.latitude,
+                        branch.longitude
+                    );
+                    return distance <= MAX_DELIVERY_DISTANCE_KM;
+                });
+                
+                if (validBranches.length === 0) {
+                    setBranchStockStatus({ 
+                        available: false, 
+                        message: `Không tìm thấy chi nhánh nào khác trong phạm vi ${MAX_DELIVERY_DISTANCE_KM}km từ địa chỉ này` 
+                    });
+                    return;
+                }
+            }
+            
+            // Kiểm tra stock cho các chi nhánh khác (đã được filter theo khoảng cách)
+            const stockResults = await stockService.checkStockForMultipleBranches(cartItems, validBranches, userSession);
             
             const availableBranches = stockResults.filter(result => result.available);
             
@@ -135,6 +176,24 @@ const GuestCheckout = () => {
             if (!branchResult.success) {
                 showToast('Failed to find nearest branch. Please check your address.', 'error');
                 return;
+            }
+
+            // Kiểm tra khoảng cách nếu có coordinates (chỉ khi chọn từ map)
+            if (addressInputMode === 'map' && selectedLocationFromMap?.coordinates && 
+                branchResult.branch.latitude && branchResult.branch.longitude) {
+                const distance = calculateDistance(
+                    selectedLocationFromMap.coordinates.lat,
+                    selectedLocationFromMap.coordinates.lng,
+                    branchResult.branch.latitude,
+                    branchResult.branch.longitude
+                );
+                
+                if (distance > MAX_DELIVERY_DISTANCE_KM) {
+                    setSelectedBranch(null);
+                    setDiscountError(`Khoảng cách từ địa chỉ giao hàng đến chi nhánh gần nhất là ${distance.toFixed(2)} km, vượt quá giới hạn ${MAX_DELIVERY_DISTANCE_KM} km. Vui lòng chọn địa chỉ giao hàng gần hơn.`);
+                    showToast(`Khoảng cách quá xa (${distance.toFixed(2)} km). Vui lòng chọn địa chỉ giao hàng trong phạm vi ${MAX_DELIVERY_DISTANCE_KM} km từ chi nhánh.`, 'error');
+                    return;
+                }
             }
 
             setSelectedBranch(branchResult.branch);
@@ -215,6 +274,111 @@ const GuestCheckout = () => {
         setFormData((prev) => ({ ...prev, [name]: value }));
     };
 
+    // Function tìm chi nhánh dựa trên địa chỉ (province, district, streetAddress)
+    const findBranchForAddress = async (province, district, streetAddress = '') => {
+        try {
+            setIsCheckingStock(true);
+            
+            // Tạo guest session nếu chưa có
+            let userSession = await getCurrentUserSessionAsync();
+            if (!userSession) {
+                userSession = createGuestSession();
+            }
+
+            // Xóa reservations cũ
+            try {
+                await stockService.clearAllReservations(userSession);
+            } catch (error) {
+                console.error('Lỗi khi xóa reservations cũ:', error);
+            }
+
+            // Build địa chỉ: streetAddress (nếu có), district, province
+            // Không cần ward nữa
+            const addressParts = [streetAddress, district, province].filter(a => a && a.trim());
+            const fullAddress = addressParts.join(', ');
+            
+            console.log('[GuestCheckout] findBranchForAddress: Tìm chi nhánh cho địa chỉ:', fullAddress);
+            
+            // Tìm chi nhánh gần nhất
+            const branchResult = await branchService.findNearestBranch(fullAddress);
+            
+            if (branchResult.success && branchResult.branch) {
+                // Kiểm tra khoảng cách nếu có coordinates (chỉ khi chọn từ map)
+                if (addressInputMode === 'map' && selectedLocationFromMap?.coordinates && 
+                    branchResult.branch.latitude && branchResult.branch.longitude) {
+                    const distance = calculateDistance(
+                        selectedLocationFromMap.coordinates.lat,
+                        selectedLocationFromMap.coordinates.lng,
+                        branchResult.branch.latitude,
+                        branchResult.branch.longitude
+                    );
+                    
+                    if (distance > MAX_DELIVERY_DISTANCE_KM) {
+                        setSelectedBranch(null);
+                        setBranchStockStatus({ 
+                            available: false, 
+                            message: `Khoảng cách từ địa chỉ giao hàng đến chi nhánh gần nhất là ${distance.toFixed(2)} km, vượt quá giới hạn ${MAX_DELIVERY_DISTANCE_KM} km. Vui lòng chọn địa chỉ giao hàng gần hơn.` 
+                        });
+                        showToast(`Khoảng cách quá xa (${distance.toFixed(2)} km). Vui lòng chọn địa chỉ giao hàng trong phạm vi ${MAX_DELIVERY_DISTANCE_KM} km từ chi nhánh.`, 'error');
+                        return;
+                    }
+                }
+                
+                setSelectedBranch(branchResult.branch);
+                
+                // Kiểm tra stock của chi nhánh này
+                const stockResult = await stockService.checkStockAvailability(cartItems, branchResult.branch.branchId, userSession);
+                
+                if (stockResult.success && stockResult.available) {
+                    setBranchStockStatus({ available: true, message: 'Chi nhánh có đủ hàng' });
+                    showToast('Chi nhánh có đủ hàng, có thể đặt hàng', 'success');
+                } else {
+                    setBranchStockStatus({ available: false, message: 'Chi nhánh hết hàng, đang tìm chi nhánh khác...' });
+                    showToast('Chi nhánh gần nhất hết hàng, đang tìm chi nhánh khác...', 'warning');
+                    
+                    // Tự động tìm chi nhánh khác có hàng
+                    await findAlternativeBranchWithStock(fullAddress, branchResult.branch.branchId, cartItems, userSession);
+                }
+            } else {
+                setSelectedBranch(null);
+                setBranchStockStatus({ 
+                    available: false, 
+                    message: branchResult.message || `Không tìm thấy chi nhánh gần địa chỉ này trong phạm vi ${MAX_DELIVERY_DISTANCE_KM}km` 
+                });
+                showToast(branchResult.message || `Không tìm thấy chi nhánh gần địa chỉ này trong phạm vi ${MAX_DELIVERY_DISTANCE_KM}km`, 'error');
+            }
+        } catch (error) {
+            console.error('Lỗi khi tìm chi nhánh:', error);
+            setBranchStockStatus({ available: false, message: 'Lỗi khi tìm chi nhánh' });
+            showToast('Lỗi khi tìm chi nhánh', 'error');
+        } finally {
+            setIsCheckingStock(false);
+        }
+    };
+
+    // Handler cho street address với debounce để tìm chi nhánh sau khi user nhập xong
+    const handleStreetAddressChange = (e) => {
+        const { value } = e.target;
+        setFormData((prev) => {
+            const newFormData = { ...prev, streetAddress: value };
+            
+            // Debounce: Đợi 1 giây sau khi user ngừng gõ mới tìm chi nhánh
+            // Clear timeout cũ nếu có
+            if (window.streetAddressTimeout) {
+                clearTimeout(window.streetAddressTimeout);
+            }
+            
+            // Chỉ tìm chi nhánh nếu đã có province và district (không cần ward)
+            if (newFormData.province && newFormData.district) {
+                window.streetAddressTimeout = setTimeout(async () => {
+                    await findBranchForAddress(newFormData.province, newFormData.district, value || '');
+                }, 1000); // Đợi 1 giây sau khi user ngừng gõ
+            }
+            
+            return newFormData;
+        });
+    };
+
     const handleProvinceChange = (e) => {
         const selectedOption = e.target.options[e.target.selectedIndex];
         const provinceCode = selectedOption.value;
@@ -250,7 +414,7 @@ const GuestCheckout = () => {
         }
     };
 
-    const handleDistrictChange = (e) => {
+    const handleDistrictChange = async (e) => {
         const selectedOption = e.target.options[e.target.selectedIndex];
         const districtCode = selectedOption.value;
         const districtName = selectedOption.text;
@@ -276,6 +440,19 @@ const GuestCheckout = () => {
 
         if (districtCode) {
             fetchWards(districtCode);
+            
+            // Nếu đã có province, tự động tìm chi nhánh sau khi chọn district
+            // (Không cần đợi chọn ward hoặc điền street address nữa)
+            // Đợi một chút để state cập nhật
+            setTimeout(async () => {
+                setFormData((prev) => {
+                    if (prev.province) {
+                        // Tìm chi nhánh với province và district (streetAddress có thể rỗng)
+                        findBranchForAddress(prev.province, districtName, prev.streetAddress || '');
+                    }
+                    return prev;
+                });
+            }, 200);
         }
     };
 
@@ -319,6 +496,28 @@ const GuestCheckout = () => {
                 const branchResult = await branchService.findNearestBranch(fullAddress);
                 
                 if (branchResult.success && branchResult.branch) {
+                    // Kiểm tra khoảng cách nếu có coordinates
+                    
+                    if (addressInputMode === 'map' && selectedLocationFromMap?.coordinates && 
+                        branchResult.branch.latitude && branchResult.branch.longitude) {
+                        const distance = calculateDistance(
+                            selectedLocationFromMap.coordinates.lat,
+                            selectedLocationFromMap.coordinates.lng,
+                            branchResult.branch.latitude,
+                            branchResult.branch.longitude
+                        );
+                        
+                        if (distance > MAX_DELIVERY_DISTANCE_KM) {
+                            setSelectedBranch(null);
+                            setBranchStockStatus({ 
+                                available: false, 
+                                message: `Khoảng cách từ địa chỉ giao hàng đến chi nhánh gần nhất là ${distance.toFixed(2)} km, vượt quá giới hạn ${MAX_DELIVERY_DISTANCE_KM} km. Vui lòng chọn địa chỉ giao hàng gần hơn.` 
+                            });
+                            showToast(`Khoảng cách quá xa (${distance.toFixed(2)} km). Vui lòng chọn địa chỉ giao hàng trong phạm vi ${MAX_DELIVERY_DISTANCE_KM} km từ chi nhánh.`, 'error');
+                            return;
+                        }
+                    }
+                    
                     setSelectedBranch(branchResult.branch);
                     
                     // Kiểm tra stock của chi nhánh này
@@ -349,9 +548,300 @@ const GuestCheckout = () => {
         }
     };
 
+    // Function to get address from current location
+    const getCurrentLocationAddress = async () => {
+        console.log('[GuestCheckout] getCurrentLocationAddress: Bắt đầu lấy địa chỉ từ vị trí hiện tại');
+        setIsGettingLocation(true);
+        
+        try {
+            console.log('[GuestCheckout] getCurrentLocationAddress: Gọi getAddressFromCurrentLocation với', provinces.length, 'provinces');
+            const result = await getAddressFromCurrentLocation(
+                provinces,
+                CONFIG.API_GATEWAY,
+                fetchDistricts,
+                fetchWards
+            );
+            console.log('[GuestCheckout] getCurrentLocationAddress: Kết quả từ service:', result);
+
+            if (!result.success) {
+                console.warn('[GuestCheckout] getCurrentLocationAddress: Không thành công:', result.message);
+                showToast(result.message, 'warning');
+                return;
+            }
+
+            // Reset discount when address changes
+            if (appliedDiscount) {
+                setAppliedDiscount(null);
+                setDiscountCode('');
+                setDiscountError(null);
+                setSelectedBranch(null);
+            }
+
+            // Update form data with matched province
+            if (result.province) {
+                console.log('[GuestCheckout] getCurrentLocationAddress: Cập nhật form data với province:', result.province);
+                setFormData(prev => ({
+                    ...prev,
+                    province: result.province.name,
+                    provinceCode: result.province.code,
+                    district: result.district ? result.district.name : '',
+                    districtCode: result.district ? result.district.code : '',
+                    ward: result.ward ? result.ward.name : '',
+                    wardCode: ''
+                }));
+
+                // If we have district, fetch districts to populate dropdown
+                if (result.district) {
+                    console.log('[GuestCheckout] getCurrentLocationAddress: Fetch districts cho province:', result.province.code);
+                    await fetchDistricts(result.province.code);
+                    
+                    // If we have ward, fetch wards to populate dropdown
+                    if (result.ward) {
+                        console.log('[GuestCheckout] getCurrentLocationAddress: Fetch wards cho district:', result.district.code);
+                        await fetchWards(result.district.code);
+                        
+                        // Trigger stock check similar to handleWardChange
+                        console.log('[GuestCheckout] getCurrentLocationAddress: Bắt đầu kiểm tra stock...');
+                        setTimeout(async () => {
+                            try {
+                                setIsCheckingStock(true);
+                                
+                                let userSession = await getCurrentUserSessionAsync();
+                                if (!userSession) {
+                                    userSession = createGuestSession();
+                                }
+
+                                try {
+                                    await stockService.clearAllReservations(userSession);
+                                } catch (error) {
+                                    console.error('Lỗi khi xóa reservations cũ:', error);
+                                }
+
+                                const fullAddress = `${result.ward.name}, ${result.district.name}, ${result.province.name}`;
+                                console.log('[GuestCheckout] getCurrentLocationAddress: Địa chỉ đầy đủ:', fullAddress);
+                                
+                                const branchResult = await branchService.findNearestBranch(fullAddress);
+                                console.log('[GuestCheckout] getCurrentLocationAddress: Kết quả tìm chi nhánh:', branchResult);
+                                
+                                if (branchResult.success && branchResult.branch) {
+                                    console.log('[GuestCheckout] getCurrentLocationAddress: Đã tìm thấy chi nhánh:', branchResult.branch);
+                                    
+                                    // Kiểm tra khoảng cách (có coordinates từ reverse geocode)
+                                    if (result.coordinates && branchResult.branch.latitude && branchResult.branch.longitude) {
+                                        const distance = calculateDistance(
+                                            result.coordinates.lat,
+                                            result.coordinates.lng,
+                                            branchResult.branch.latitude,
+                                            branchResult.branch.longitude
+                                        );
+                                        
+                                        if (distance > MAX_DELIVERY_DISTANCE_KM) {
+                                            setSelectedBranch(null);
+                                            setBranchStockStatus({ 
+                                                available: false, 
+                                                message: `Khoảng cách quá xa (${distance.toFixed(2)} km). Vui lòng chọn địa chỉ giao hàng trong phạm vi ${MAX_DELIVERY_DISTANCE_KM} km.` 
+                                            });
+                                            showToast(`Khoảng cách từ địa chỉ đến chi nhánh gần nhất là ${distance.toFixed(2)} km, vượt quá giới hạn ${MAX_DELIVERY_DISTANCE_KM} km. Vui lòng chọn địa chỉ giao hàng gần hơn.`, 'error');
+                                            return;
+                                        }
+                                    }
+                                    
+                                    setSelectedBranch(branchResult.branch);
+                                    
+                                    const stockResult = await stockService.checkStockAvailability(cartItems, branchResult.branch.branchId, userSession);
+                                    console.log('[GuestCheckout] getCurrentLocationAddress: Kết quả kiểm tra stock:', stockResult);
+                                    
+                                    if (stockResult.success && stockResult.available) {
+                                        console.log('[GuestCheckout] getCurrentLocationAddress: Chi nhánh có đủ hàng');
+                                        setBranchStockStatus({ available: true, message: 'Chi nhánh có đủ hàng' });
+                                        showToast('Chi nhánh có đủ hàng, có thể đặt hàng', 'success');
+                                    } else {
+                                        console.log('[GuestCheckout] getCurrentLocationAddress: Chi nhánh hết hàng, tìm chi nhánh khác');
+                                        setBranchStockStatus({ available: false, message: 'Chi nhánh hết hàng, đang tìm chi nhánh khác...' });
+                                        showToast('Chi nhánh gần nhất hết hàng, đang tìm chi nhánh khác...', 'warning');
+                                        
+                                        await findAlternativeBranchWithStock(fullAddress, branchResult.branch.branchId, cartItems, userSession);
+                                    }
+                                } else {
+                                    console.warn('[GuestCheckout] getCurrentLocationAddress: Không tìm thấy chi nhánh');
+                                    setSelectedBranch(null);
+                                    setBranchStockStatus({ available: false, message: 'Không tìm thấy chi nhánh gần địa chỉ này' });
+                                    showToast('Không tìm thấy chi nhánh gần địa chỉ này', 'error');
+                                }
+                            } catch (error) {
+                                console.error('[GuestCheckout] getCurrentLocationAddress: Lỗi khi kiểm tra stock:', error);
+                                setBranchStockStatus({ available: false, message: 'Lỗi khi kiểm tra tồn kho' });
+                            } finally {
+                                setIsCheckingStock(false);
+                            }
+                        }, 100);
+                    } else {
+                        console.log('[GuestCheckout] getCurrentLocationAddress: Không có ward, chỉ có district');
+                    }
+                } else {
+                    console.log('[GuestCheckout] getCurrentLocationAddress: Không có district, chỉ có province');
+                }
+            }
+
+            console.log('[GuestCheckout] getCurrentLocationAddress: Hoàn thành, hiển thị toast:', result.message);
+            showToast(result.message, 'success');
+        } catch (error) {
+            console.error('[GuestCheckout] getCurrentLocationAddress: Lỗi:', error);
+            showToast(error.message || 'Lỗi khi lấy địa chỉ từ vị trí', 'error');
+        } finally {
+            setIsGettingLocation(false);
+            console.log('[GuestCheckout] getCurrentLocationAddress: Đã hoàn thành (finally)');
+        }
+    };
+
+    // Handle confirm location from map picker
+    const handleLocationFromMapConfirm = async (locationData) => {
+        console.log('[GuestCheckout] handleLocationFromMapConfirm: Location data:', locationData);
+        
+        // Save selected location data for display (including coordinates)
+        setSelectedLocationFromMap({
+            streetAddress: locationData.streetAddress || '',
+            province: locationData.province ? locationData.province.name : '',
+            district: locationData.district ? locationData.district.name : '',
+            ward: locationData.ward ? locationData.ward.name : '',
+            fullAddress: locationData.fullAddress || '',
+            coordinates: locationData.coordinates || null,
+            // Store raw data for matching
+            rawLocationData: locationData
+        });
+        
+        // Reset discount when address changes
+        if (appliedDiscount) {
+            setAppliedDiscount(null);
+            setDiscountCode('');
+            setDiscountError(null);
+            setSelectedBranch(null);
+        }
+
+        // Xóa reservations cũ ngay khi thay đổi địa chỉ (trước khi tìm chi nhánh mới)
+        try {
+            let userSession = await getCurrentUserSessionAsync();
+            if (!userSession) {
+                userSession = createGuestSession();
+            }
+            console.log('[GuestCheckout] handleLocationFromMapConfirm: Xóa reservations cũ do thay đổi địa chỉ');
+            await stockService.clearAllReservations(userSession);
+        } catch (error) {
+            console.error('[GuestCheckout] handleLocationFromMapConfirm: Lỗi khi xóa reservations cũ:', error);
+        }
+
+        // Update form data
+        if (locationData.province) {
+            setFormData(prev => ({
+                ...prev,
+                streetAddress: locationData.streetAddress || '',
+                province: locationData.province.name,
+                provinceCode: locationData.province.code,
+                district: locationData.district ? locationData.district.name : '',
+                districtCode: locationData.district ? locationData.district.code : '',
+                ward: locationData.ward ? locationData.ward.name : '',
+                wardCode: ''
+            }));
+
+            // Fetch districts and wards if needed
+            if (locationData.district) {
+                await fetchDistricts(locationData.province.code);
+                if (locationData.ward) {
+                    await fetchWards(locationData.district.code);
+                    
+                    // Trigger stock check
+                    setTimeout(async () => {
+                        try {
+                            setIsCheckingStock(true);
+                            
+                            let userSession = await getCurrentUserSessionAsync();
+                            if (!userSession) {
+                                userSession = createGuestSession();
+                            }
+
+                            // Đảm bảo đã xóa reservations (có thể đã xóa ở trên, nhưng xóa lại để chắc chắn)
+                            try {
+                                await stockService.clearAllReservations(userSession);
+                            } catch (error) {
+                                console.error('[GuestCheckout] handleLocationFromMapConfirm: Lỗi khi xóa reservations cũ (lần 2):', error);
+                            }
+
+                            const fullAddress = [
+                                locationData.streetAddress,
+                                locationData.ward.name,
+                                locationData.district.name,
+                                locationData.province.name
+                            ].filter(a => a && a.trim()).join(', ');
+                            
+                            const branchResult = await branchService.findNearestBranch(fullAddress);
+                            
+                            if (branchResult.success && branchResult.branch) {
+                                // Kiểm tra khoảng cách nếu có coordinates
+                                if (locationData.coordinates && branchResult.branch.latitude && branchResult.branch.longitude) {
+                                    const distance = calculateDistance(
+                                        locationData.coordinates.lat,
+                                        locationData.coordinates.lng,
+                                        branchResult.branch.latitude,
+                                        branchResult.branch.longitude
+                                    );
+                                    
+                                    if (distance > MAX_DELIVERY_DISTANCE_KM) {
+                                        setSelectedBranch(null);
+                                        setBranchStockStatus({ 
+                                            available: false, 
+                                            message: `Khoảng cách quá xa (${distance.toFixed(2)} km). Vui lòng chọn địa chỉ giao hàng trong phạm vi ${MAX_DELIVERY_DISTANCE_KM} km.` 
+                                        });
+                                        showToast(`Khoảng cách từ địa chỉ đến chi nhánh gần nhất là ${distance.toFixed(2)} km, vượt quá giới hạn ${MAX_DELIVERY_DISTANCE_KM} km. Vui lòng chọn địa chỉ giao hàng gần hơn.`, 'error');
+                                        return;
+                                    }
+                                }
+                                
+                                setSelectedBranch(branchResult.branch);
+                                
+                                const stockResult = await stockService.checkStockAvailability(cartItems, branchResult.branch.branchId, userSession);
+                                
+                                if (stockResult.success && stockResult.available) {
+                                    setBranchStockStatus({ available: true, message: 'Chi nhánh có đủ hàng' });
+                                    showToast('Chi nhánh có đủ hàng, có thể đặt hàng', 'success');
+                                } else {
+                                    setBranchStockStatus({ available: false, message: 'Chi nhánh hết hàng, đang tìm chi nhánh khác...' });
+                                    showToast('Chi nhánh gần nhất hết hàng, đang tìm chi nhánh khác...', 'warning');
+                                    
+                                    await findAlternativeBranchWithStock(fullAddress, branchResult.branch.branchId, cartItems, userSession);
+                                }
+                            } else {
+                                setSelectedBranch(null);
+                                setBranchStockStatus({ available: false, message: 'Không tìm thấy chi nhánh gần địa chỉ này' });
+                                showToast('Không tìm thấy chi nhánh gần địa chỉ này', 'error');
+                            }
+                        } catch (error) {
+                            console.error('Lỗi khi kiểm tra stock:', error);
+                            setBranchStockStatus({ available: false, message: 'Lỗi khi kiểm tra tồn kho' });
+                        } finally {
+                            setIsCheckingStock(false);
+                        }
+                    }, 100);
+                }
+            }
+
+            showToast('Đã chọn địa chỉ từ bản đồ thành công!', 'success');
+        }
+    };
 
     const validateRequired = () => {
         const { name, province, district, phone } = formData;
+        
+        // Nếu chọn mode map, cần có selectedLocationFromMap
+        if (addressInputMode === 'map') {
+            return (
+                name.trim() !== '' &&
+                phone.trim() !== '' &&
+                selectedLocationFromMap !== null &&
+                selectedLocationFromMap.province !== ''
+            );
+        }
+        
+        // Mode manual: cần có province và district
         return (
             name.trim() !== '' &&
             province.trim() !== '' &&
@@ -379,12 +869,62 @@ const GuestCheckout = () => {
                 return;
             }
 
+            // QUAN TRỌNG: Kiểm tra lại khoảng cách trước khi submit
+            // Để đảm bảo không bypass validation
+            if (addressInputMode === 'map' && selectedLocationFromMap?.coordinates && 
+                selectedBranch.latitude && selectedBranch.longitude) {
+                const distance = calculateDistance(
+                    selectedLocationFromMap.coordinates.lat,
+                    selectedLocationFromMap.coordinates.lng,
+                    selectedBranch.latitude,
+                    selectedBranch.longitude
+                );
+                
+                if (distance > MAX_DELIVERY_DISTANCE_KM) {
+                    showToast(`Khoảng cách từ địa chỉ đến chi nhánh là ${distance.toFixed(2)} km, vượt quá giới hạn ${MAX_DELIVERY_DISTANCE_KM} km. Vui lòng chọn địa chỉ giao hàng gần hơn.`, 'error');
+                    setSelectedBranch(null);
+                    setBranchStockStatus({ 
+                        available: false, 
+                        message: `Khoảng cách quá xa (${distance.toFixed(2)} km). Vui lòng chọn địa chỉ giao hàng trong phạm vi ${MAX_DELIVERY_DISTANCE_KM} km.` 
+                    });
+                    return;
+                }
+            } else if (addressInputMode === 'manual') {
+                // Nếu nhập thủ công, không có coordinates nên không thể kiểm tra ở frontend
+                // Backend sẽ kiểm tra khi tạo order
+                console.log('[GuestCheckout] proceedWithOrder: Manual address input, distance validation will be done by backend');
+            }
+
             // Build full deliveryAddress for database storage
-            const fullDeliveryAddress = [
-                formData.ward,
-                formData.district,
-                formData.province
-            ].filter(a => a.trim()).join(', ');
+            // Nếu chọn từ map, ưu tiên dùng địa chỉ từ selectedLocationFromMap (đã loại bỏ postal code)
+            const fullDeliveryAddress = (() => {
+                if (addressInputMode === 'map' && selectedLocationFromMap) {
+                    // Dùng địa chỉ từ map (đã loại bỏ postal code khi hiển thị)
+                    const address = [
+                        selectedLocationFromMap.streetAddress,
+                        selectedLocationFromMap.ward,
+                        selectedLocationFromMap.district,
+                        selectedLocationFromMap.province
+                    ].filter(a => a && a.trim()).join(', ');
+                    
+                    // Đảm bảo loại bỏ postal code nếu có trong fullAddress
+                    if (selectedLocationFromMap.fullAddress) {
+                        let cleanAddress = selectedLocationFromMap.fullAddress;
+                        // Remove postal code pattern (5 digits, possibly with spaces or commas)
+                        cleanAddress = cleanAddress.replace(/,\s*\d{5}\s*,?/g, '').replace(/,\s*\d{5}$/, '').trim();
+                        // Nếu address từ map không rỗng, dùng nó; nếu không dùng cleanAddress
+                        return address || cleanAddress;
+                    }
+                    return address;
+                }
+                // Nếu không chọn từ map, dùng formData
+                return [
+                    formData.streetAddress,
+                    formData.ward,
+                    formData.district,
+                    formData.province
+                ].filter(a => a && a.trim()).join(', ');
+            })();
 
             // Build deliveryAddress for branch selection (district + province only)
             const deliveryAddress = [
@@ -478,7 +1018,11 @@ const GuestCheckout = () => {
         e.preventDefault();
 
         if (!validateRequired()) {
-            alert('Please fill all the required fields (Name, Province, District, Phone) !!');
+            if (addressInputMode === 'map') {
+                showToast('Vui lòng điền đầy đủ thông tin (Tên, Số điện thoại) và chọn địa chỉ trên bản đồ!', 'warning');
+            } else {
+                showToast('Vui lòng điền đầy đủ thông tin (Tên, Tỉnh/Thành phố, Quận/Huyện, Số điện thoại)!', 'warning');
+            }
             return;
         }
 
@@ -620,9 +1164,42 @@ const GuestCheckout = () => {
 
                                     <div className="w-100"></div>
 
+                                    {/* Address Input Mode Selection */}
                                     <div className="col-md-12">
                                         <div className="form-group">
-                                            <label htmlFor="province">Province / City *</label>
+                                            <label className="mb-3">Cách nhập địa chỉ *</label>
+                                            <div className="btn-group w-100" role="group">
+                                                <button
+                                                    type="button"
+                                                    className={`btn ${addressInputMode === 'manual' ? 'btn-primary' : 'btn-outline-primary'}`}
+                                                    onClick={() => setAddressInputMode('manual')}
+                                                >
+                                                    <i className="fa fa-edit me-2"></i>
+                                                    Nhập địa chỉ
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className={`btn ${addressInputMode === 'map' ? 'btn-primary' : 'btn-outline-primary'}`}
+                                                    onClick={() => {
+                                                        setAddressInputMode('map');
+                                                        setShowLocationMapPicker(true);
+                                                    }}
+                                                >
+                                                    <i className="fa fa-map-marker-alt me-2"></i>
+                                                    Chọn trên bản đồ
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="w-100"></div>
+
+                                    {/* Manual Address Input */}
+                                    {addressInputMode === 'manual' && (
+                                        <>
+                                            <div className="col-md-12">
+                                                <div className="form-group">
+                                                    <label htmlFor="province">Province / City *</label>
                                             <div className="select-wrap">
                                                 <div className="icon">
                                                     <span className="ion-ios-arrow-down"></span>
@@ -703,40 +1280,125 @@ const GuestCheckout = () => {
 
                                     <div className="w-100"></div>
 
-                                    {/* Hiển thị thông tin chi nhánh và trạng thái stock */}
-                                    {selectedBranch && (
+                                    <div className="col-md-12">
+                                        <div className="form-group">
+                                            <label htmlFor="streetAddress">Street Address / House Number (Optional)</label>
+                                            <input
+                                                type="text"
+                                                id="streetAddress"
+                                                name="streetAddress"
+                                                value={formData.streetAddress}
+                                                onChange={handleStreetAddressChange}
+                                                className="form-control"
+                                                placeholder="e.g., 123 ABC Street"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="w-100"></div>
+                                        </>
+                                    )}
+
+                                    {/* Map Selected Address Display */}
+                                    {addressInputMode === 'map' && selectedLocationFromMap && (
                                         <div className="col-md-12">
-                                            <div className="mt-3 p-3 border rounded" style={{ backgroundColor: '#2a2a2a', borderColor: '#444' }}>
+                                            <div className="alert alert-info" style={{ 
+                                                backgroundColor: '#e7f3ff', 
+                                                borderColor: '#b3d9ff',
+                                                color: '#004085'
+                                            }}>
                                                 <div className="d-flex align-items-center mb-2">
-                                                    <i className="fa fa-store me-2" style={{ color: '#C39C5E' }}></i>
-                                                    <strong>Chi nhánh phục vụ:</strong>
+                                                    <i className="fa fa-map-marker-alt me-2" style={{ color: '#C39C5E' }}></i>
+                                                    <strong style={{ color: '#004085' }}>Địa chỉ đã chọn từ bản đồ:</strong>
                                                 </div>
-                                                <div className="mb-2">
-                                                    <span className="text-light">{selectedBranch.name}</span>
+                                                <div style={{ color: '#004085', fontWeight: '500', marginBottom: '10px' }}>
+                                                    {(() => {
+                                                        // Remove postal code (5-digit number) from address
+                                                        let address = selectedLocationFromMap.fullAddress || 
+                                                            `${selectedLocationFromMap.streetAddress || ''}, ${selectedLocationFromMap.ward || ''}, ${selectedLocationFromMap.district || ''}, ${selectedLocationFromMap.province || ''}`.replace(/^,\s*|,\s*$/g, '');
+                                                        // Remove postal code pattern (5 digits, possibly with spaces or commas)
+                                                        address = address.replace(/,\s*\d{5}\s*,?/g, '').replace(/,\s*\d{5}$/, '').trim();
+                                                        return address;
+                                                    })()}
                                                 </div>
-                                                <div className="mb-2">
-                                                    <small className="text-muted">
-                                                        <i className="fa fa-map-marker-alt me-1"></i>
-                                                        {selectedBranch.address}
-                                                    </small>
-                                                </div>
-                                                {branchStockStatus && (
-                                                    <div className={`alert ${branchStockStatus.available ? 'alert-success' : 'alert-warning'} mb-0 py-2`}>
-                                                        <i className={`fa ${branchStockStatus.available ? 'fa-check-circle' : 'fa-exclamation-triangle'} me-2`}></i>
-                                                        <small>{branchStockStatus.message}</small>
-                                                        {branchStockStatus.available && branchStockStatus.message.includes('tự động chọn') && (
-                                                            <div className="mt-1">
-                                                                <small className="text-success">
-                                                                    <i className="fa fa-info-circle me-1"></i>
-                                                                    Chi nhánh gần nhất hết hàng, đã tự động chọn chi nhánh khác có hàng
-                                                                </small>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                )}
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-sm"
+                                                    onClick={() => setShowLocationMapPicker(true)}
+                                                    style={{
+                                                        backgroundColor: '#004085',
+                                                        color: '#fff',
+                                                        borderColor: '#004085'
+                                                    }}
+                                                    onMouseEnter={(e) => {
+                                                        e.target.style.backgroundColor = '#003366';
+                                                        e.target.style.borderColor = '#003366';
+                                                    }}
+                                                    onMouseLeave={(e) => {
+                                                        e.target.style.backgroundColor = '#004085';
+                                                        e.target.style.borderColor = '#004085';
+                                                    }}
+                                                >
+                                                    <i className="fa fa-edit me-1"></i>
+                                                    Thay đổi địa chỉ
+                                                </button>
                                             </div>
                                         </div>
                                     )}
+
+                                    <div className="w-100"></div>
+
+                                    {/* Hiển thị thông tin chi nhánh, trạng thái stock và nút chọn trên bản đồ */}
+                            {selectedBranch && (
+                                <div className="col-md-12">
+                                    <div className="mt-3 p-3 border rounded" style={{ backgroundColor: '#2a2a2a', borderColor: '#444' }}>
+                                        <div className="d-flex align-items-center justify-content-between mb-2">
+                                            <div className="d-flex align-items-center">
+                                                <i className="fa fa-store me-2" style={{ color: '#C39C5E' }}></i>
+                                                <strong>Chi nhánh phục vụ:</strong>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                className="btn btn-sm btn-outline-primary"
+                                                onClick={() => {
+                                                    if (!formData.province || !formData.district || !formData.ward) {
+                                                        showToast('Vui lòng chọn đầy đủ địa chỉ giao hàng trước', 'warning');
+                                                        return;
+                                                    }
+                                                    setShowBranchMap(true);
+                                                }}
+                                                title="Chọn chi nhánh trên bản đồ"
+                                            >
+                                                <i className="fa fa-map me-1"></i>
+                                                Chọn trên bản đồ
+                                            </button>
+                                        </div>
+                                        <div className="mb-2">
+                                            <span className="text-light">{selectedBranch.name}</span>
+                                        </div>
+                                        <div className="mb-2">
+                                            <small className="text-muted">
+                                                <i className="fa fa-map-marker-alt me-1"></i>
+                                                {selectedBranch.address}
+                                            </small>
+                                        </div>
+                                        {branchStockStatus && (
+                                            <div className={`alert ${branchStockStatus.available ? 'alert-success' : 'alert-warning'} mb-0 py-2`}>
+                                                <i className={`fa ${branchStockStatus.available ? 'fa-check-circle' : 'fa-exclamation-triangle'} me-2`}></i>
+                                                <small>{branchStockStatus.message}</small>
+                                                {branchStockStatus.available && branchStockStatus.message.includes('tự động chọn') && (
+                                                    <div className="mt-1">
+                                                        <small className="text-success">
+                                                            <i className="fa fa-info-circle me-1"></i>
+                                                            Chi nhánh gần nhất hết hàng, đã tự động chọn chi nhánh khác có hàng
+                                                        </small>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
 
                                     <div className="w-100"></div>
 
@@ -1020,6 +1682,91 @@ const GuestCheckout = () => {
                     </div>
                 </div>
             </section>
+
+            {/* Location Map Picker Modal */}
+            <LocationMapPicker
+                isOpen={showLocationMapPicker}
+                onClose={() => setShowLocationMapPicker(false)}
+                onConfirm={(locationData) => {
+                    handleLocationFromMapConfirm(locationData);
+                }}
+                provinces={provinces}
+                apiGateway={CONFIG.API_GATEWAY}
+                fetchDistricts={fetchDistricts}
+                fetchWards={fetchWards}
+                initialLocation={selectedLocationFromMap?.rawLocationData || null}
+            />
+
+            {/* Branch Map Selector Modal cho guest checkout */}
+            {formData.province && formData.district && formData.ward && (
+                <BranchMapSelector
+                    isOpen={showBranchMap}
+                    onClose={() => setShowBranchMap(false)}
+                    onSelectBranch={async (branch) => {
+                        setSelectedBranch(branch);
+                        setShowBranchMap(false);
+
+                        // Kiểm tra lại tồn kho cho chi nhánh được chọn
+                        try {
+                            let userSession = await getCurrentUserSessionAsync();
+                            if (!userSession) {
+                                userSession = createGuestSession();
+                            }
+
+                            const stockResult = await stockService.checkStockAvailability(
+                                cartItems,
+                                branch.branchId,
+                                userSession
+                            );
+
+                            if (stockResult.success && stockResult.available) {
+                                setBranchStockStatus({ available: true, message: 'Chi nhánh có đủ hàng' });
+                                showToast('Đã chọn chi nhánh và kiểm tra tồn kho thành công', 'success');
+                            } else {
+                                setBranchStockStatus({
+                                    available: false,
+                                    message: 'Chi nhánh không có đủ hàng'
+                                });
+                                showToast('Chi nhánh này không có đủ hàng. Vui lòng chọn chi nhánh khác.', 'warning');
+                            }
+                        } catch (error) {
+                            console.error('Error checking stock:', error);
+                            setBranchStockStatus({ available: false, message: 'Lỗi khi kiểm tra tồn kho' });
+                            showToast('Lỗi khi kiểm tra tồn kho', 'error');
+                        }
+                    }}
+                    deliveryAddress={(() => {
+                        // Nếu có địa chỉ từ map với coordinates, ưu tiên dùng nó
+                        if (addressInputMode === 'map' && selectedLocationFromMap && selectedLocationFromMap.coordinates) {
+                            // Build address từ selectedLocationFromMap (đã loại bỏ postal code)
+                            const address = [
+                                selectedLocationFromMap.streetAddress,
+                                selectedLocationFromMap.ward,
+                                selectedLocationFromMap.district,
+                                selectedLocationFromMap.province
+                            ].filter(a => a && a.trim()).join(', ');
+                            return address;
+                        }
+                        // Nếu không, dùng formData
+                        return [
+                            formData.streetAddress,
+                            formData.ward,
+                            formData.district,
+                            formData.province
+                        ].filter(a => a && a.trim()).join(', ');
+                    })()}
+                    deliveryCoordinates={(() => {
+                        // Nếu có coordinates từ map, truyền luôn để tăng độ chính xác
+                        if (addressInputMode === 'map' && selectedLocationFromMap && selectedLocationFromMap.coordinates) {
+                            return selectedLocationFromMap.coordinates;
+                        }
+                        return null;
+                    })()}
+                    cartItems={cartItems}
+                    userSession={getCurrentUserSession()}
+                    selectedBranch={selectedBranch}
+                />
+            )}
 
             {/* Loading overlay for stock checking */}
             {isCheckingStock && (

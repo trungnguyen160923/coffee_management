@@ -71,6 +71,8 @@ public class TableManagementController {
         String userRole = orderservice.order_service.util.SecurityUtils.getCurrentUserRole();
         if (userRole != null && "STAFF".equals(userRole)) {
             StaffPermissionValidator.requireTableManagementAccess(profileServiceClient, authServiceClient);
+            // Validate that staff is in an active shift
+            StaffPermissionValidator.requireActiveShift(profileServiceClient);
         }
         
         try {
@@ -104,6 +106,8 @@ public class TableManagementController {
         String userRole = orderservice.order_service.util.SecurityUtils.getCurrentUserRole();
         if (userRole != null && "STAFF".equals(userRole)) {
             StaffPermissionValidator.requireTableManagementAccess(profileServiceClient, authServiceClient);
+            // Validate that staff is in an active shift
+            StaffPermissionValidator.requireActiveShift(profileServiceClient);
         }
         
         try {
@@ -136,6 +140,8 @@ public class TableManagementController {
         String userRole = orderservice.order_service.util.SecurityUtils.getCurrentUserRole();
         if (userRole != null && "STAFF".equals(userRole)) {
             StaffPermissionValidator.requireTableManagementAccess(profileServiceClient, authServiceClient);
+            // Validate that staff is in an active shift
+            StaffPermissionValidator.requireActiveShift(profileServiceClient);
         }
         
         try {
@@ -166,6 +172,8 @@ public class TableManagementController {
         String userRole = orderservice.order_service.util.SecurityUtils.getCurrentUserRole();
         if (userRole != null && "STAFF".equals(userRole)) {
             StaffPermissionValidator.requireTableManagementAccess(profileServiceClient, authServiceClient);
+            // Validate that staff is in an active shift
+            StaffPermissionValidator.requireActiveShift(profileServiceClient);
         }
         
         try {
@@ -197,6 +205,8 @@ public class TableManagementController {
         String userRole = orderservice.order_service.util.SecurityUtils.getCurrentUserRole();
         if (userRole != null && "STAFF".equals(userRole)) {
             StaffPermissionValidator.requireTableManagementAccess(profileServiceClient, authServiceClient);
+            // Validate that staff is in an active shift
+            StaffPermissionValidator.requireActiveShift(profileServiceClient);
         }
         
         try {
@@ -227,6 +237,8 @@ public class TableManagementController {
         String userRole = orderservice.order_service.util.SecurityUtils.getCurrentUserRole();
         if (userRole != null && "STAFF".equals(userRole)) {
             StaffPermissionValidator.requireTableManagementAccess(profileServiceClient, authServiceClient);
+            // Validate that staff is in an active shift
+            StaffPermissionValidator.requireActiveShift(profileServiceClient);
         }
         
         try {
@@ -305,6 +317,8 @@ public class TableManagementController {
         String userRole = orderservice.order_service.util.SecurityUtils.getCurrentUserRole();
         if (userRole != null && "STAFF".equals(userRole)) {
             StaffPermissionValidator.requireTableManagementAccess(profileServiceClient, authServiceClient);
+            // Validate that staff is in an active shift
+            StaffPermissionValidator.requireActiveShift(profileServiceClient);
         }
         
         try {

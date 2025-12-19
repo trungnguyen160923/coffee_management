@@ -294,6 +294,21 @@ public class ShiftAssignmentController {
                 .build();
     }
 
+    /**
+     * Get active shift assignment for current staff
+     * GET /api/shift-assignments/my-active-shift
+     * Returns the shift assignment if staff is currently checked in and within shift time window
+     */
+    @GetMapping("/my-active-shift")
+    @PreAuthorize("hasRole('STAFF')")
+    public ApiResponse<ShiftAssignmentResponse> getMyActiveShift() {
+        Integer staffUserId = getUserIdFromSecurityContext();
+        ShiftAssignmentResponse result = shiftAssignmentService.getActiveShiftAssignment(staffUserId);
+        return ApiResponse.<ShiftAssignmentResponse>builder()
+                .result(result)
+                .build();
+    }
+
     private Integer getUserIdFromSecurityContext() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth != null && auth.getPrincipal() instanceof Jwt jwt) {

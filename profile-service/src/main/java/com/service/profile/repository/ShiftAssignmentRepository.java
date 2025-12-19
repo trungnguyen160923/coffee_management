@@ -36,6 +36,9 @@ public interface ShiftAssignmentRepository extends JpaRepository<ShiftAssignment
 
     // Find assignments with specific statuses for cleanup job
     List<ShiftAssignment> findByStatusIn(List<String> statuses);
+
+    // Find active shift assignment (CHECKED_IN status) for a staff member
+    List<ShiftAssignment> findByStaffUserIdAndStatus(Integer staffUserId, String status);
 }
 
 

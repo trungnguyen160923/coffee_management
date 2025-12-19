@@ -948,24 +948,32 @@ public class StockReservationService {
     }
     
     /**
-     * Validate trạng thái đăng nhập và session
+     * Validate trạng thái đăng nhập và session.
+     *
+     * Lưu ý:
+     * - Đối với luồng web (customer), luôn truyền cartId hoặc guestId để có thể
+     *   liên kết reservation với order sau này.
+     * - Đối với luồng nội bộ/POS, có thể không có cartId/guestId (chỉ dùng holdId),
+     *   khi đó sẽ bỏ qua validate session để không chặn flow.
      */
     private void validateUserSession(Integer cartId, String guestId) {
-        // Kiểm tra logic đăng nhập
         boolean hasCart = cartId != null;
         boolean hasGuest = guestId != null && !guestId.trim().isEmpty();
-        
+
+        // Nếu không có cả cartId lẫn guestId → coi như call nội bộ (POS / system), bỏ qua validate
+        if (!hasCart && !hasGuest) {
+            log.info("No cartId or guestId provided - treating as internal/system caller (e.g. POS). Skipping session validation.");
+            return;
+        }
+
         if (hasCart && hasGuest) {
             log.info("User has both cart and guest ID - authenticated user with guest session");
-        } else if (hasCart && !hasGuest) {
+        } else if (hasCart) {
             log.info("User has cart only - authenticated user");
-        } else if (!hasCart && hasGuest) {
-            log.info("User has guest ID only - guest user");
         } else {
-            log.warn("User has neither cart nor guest ID - invalid session");
-            throw new IllegalArgumentException("Either cartId or guestId must be provided");
+            log.info("User has guest ID only - guest user");
         }
-        
+
         log.debug("Session validation passed - cartId: {}, guestId: {}", cartId, guestId);
     }
 

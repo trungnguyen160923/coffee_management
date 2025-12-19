@@ -122,6 +122,29 @@ class BonusService {
   }
 
   /**
+   * Lấy bonuses theo shift và userId
+   */
+  async getBonusesByShift(shiftId?: number, userId?: number): Promise<Bonus[]> {
+    try {
+      const params = new URLSearchParams();
+      if (shiftId) params.append('shiftId', shiftId.toString());
+      if (userId) params.append('userId', userId.toString());
+
+      const queryString = params.toString();
+      const url = `${this.baseUrl}/by-shift${queryString ? `?${queryString}` : ''}`;
+
+      const response = await apiClient.get<ApiResponse<Bonus[]>>(url);
+      if (response.code === 1000 || response.code === 200) {
+        return response.result || [];
+      }
+      throw new Error(`API Error: ${response.code}`);
+    } catch (error) {
+      console.error('Error fetching bonuses by shift:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Lấy chi tiết bonus
    */
   async getBonusById(bonusId: number): Promise<Bonus> {

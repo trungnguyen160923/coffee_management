@@ -85,4 +85,7 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
      * dùng cho auto-cancel các đơn quá hạn.
      */
     List<Order> findByStatusAndCreateAtBefore(String status, LocalDateTime cutoffTime);
+
+    @Query("SELECT o FROM Order o WHERE o.status IN :statuses")
+    List<Order> findByStatusIn(@Param("statuses") List<String> statuses);
 }

@@ -23,7 +23,7 @@ export default function TableStatusSummary({ branchId, refreshTrigger }: TableSt
                 setTables(Array.isArray(data) ? data : []);
             } catch (e: any) {
                 console.error('Failed to load table status', e);
-                setError(`Failed to load table status: ${e.message || 'Unknown error'}`);
+                setError(`${e.message || 'Unknown error'}`);
             } finally {
                 setLoading(false);
             }
@@ -88,12 +88,10 @@ export default function TableStatusSummary({ branchId, refreshTrigger }: TableSt
         );
     }
 
+    // Nếu có lỗi, không render thêm block lỗi ở đây
+    // để tránh trùng với thông báo lỗi ở component cha.
     if (error) {
-        return (
-            <div className="bg-red-50 text-red-700 border border-red-200 rounded-xl p-4">
-                {error}
-            </div>
-        );
+        return null;
     }
 
     return (

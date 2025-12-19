@@ -3,6 +3,7 @@ import { toast } from 'react-hot-toast';
 import { stockService, StockResponse, DailyStockReconciliationResponse } from '../../services/stockService';
 import { useAuth } from '../../context/AuthContext';
 import { Search, X } from 'lucide-react';
+import { useActiveShift } from '../../hooks/useActiveShift';
 
 interface DailyUsageFormProps {
   compact?: boolean;
@@ -20,6 +21,7 @@ export const DailyUsageForm = ({
   onSuccess,
 }: DailyUsageFormProps) => {
   const { user } = useAuth();
+  const { hasActiveShift, loading: shiftLoading } = useActiveShift();
   const branchId = useMemo(() => {
     if (user?.branch?.branchId) return user.branch.branchId;
     if (user?.branchId) return Number(user.branchId);
@@ -198,6 +200,14 @@ export const DailyUsageForm = ({
     return (
       <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-3">
         Cannot determine branch for this account. Please contact your manager.
+      </div>
+    );
+  }
+
+  if (!shiftLoading && !hasActiveShift) {
+    return (
+      <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+        You must be checked in to an active shift to record daily stock usage.
       </div>
     );
   }

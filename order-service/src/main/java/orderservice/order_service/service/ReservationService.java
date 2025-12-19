@@ -264,11 +264,23 @@ public class ReservationService {
     }
 
     public ReservationResponse updateReservationStatus(Integer reservationId, String status) {
+        log.info("[ReservationService] updateReservationStatus: reservationId={}, newStatus={}", reservationId, status);
+        
         Reservation reservation = reservationRepository.findById(reservationId)
-                .orElseThrow(() -> new AppException(ErrorCode.RESERVATION_NOT_FOUND));
+                .orElseThrow(() -> {
+                    log.error("[ReservationService] Reservation not found: reservationId={}", reservationId);
+                    return new AppException(ErrorCode.RESERVATION_NOT_FOUND);
+                });
+
+        String oldStatus = reservation.getStatus();
+        log.info("[ReservationService] Updating reservationId={} from status '{}' to '{}'", 
+                reservationId, oldStatus, status);
 
         reservation.setStatus(status);
         Reservation updatedReservation = reservationRepository.save(reservation);
+        
+        log.info("[ReservationService] ✅ Successfully updated reservationId={} status to '{}' (was '{}')", 
+                reservationId, updatedReservation.getStatus(), oldStatus);
 
         // Publish event when reservation is confirmed or cancelled
         if (("CONFIRMED".equals(status) || "confirmed".equalsIgnoreCase(status)) && updatedReservation.getCustomerId() != null) {

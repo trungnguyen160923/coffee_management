@@ -244,6 +244,25 @@ public class ShiftValidationService {
         String shiftEmploymentType = shift.getEmploymentType();
         ShiftTemplate shiftTemplate = shift.getTemplate();
 
+        // Extra rule for same-day shifts when allowToday = true:
+        // - Allow assigning today, but ONLY if the shift has not already ended.
+        if (allowToday && shiftDate != null && shiftStartTime != null && shiftEndTime != null) {
+            LocalDate today = LocalDate.now();
+            if (shiftDate.equals(today)) {
+                LocalDateTime now = LocalDateTime.now();
+                LocalDateTime shiftStart = shiftDate.atTime(shiftStartTime);
+                LocalDateTime shiftEnd = shiftDate.atTime(shiftEndTime);
+                // If shift spans midnight, adjust end time
+                if (shiftEndTime.isBefore(shiftStartTime)) {
+                    shiftEnd = shiftEnd.plusDays(1);
+                }
+                if (now.isAfter(shiftEnd)) {
+                    throw new AppException(ErrorCode.SHIFT_NOT_AVAILABLE,
+                            "Cannot assign to shift that has already ended");
+                }
+            }
+        }
+
         // Group 1: Basic validations (independent, can run in parallel)
         // NOTE: Pre-load all entity fields before async execution to avoid Hibernate session issues
         List<CompletableFuture<Void>> basicValidations = new ArrayList<>();

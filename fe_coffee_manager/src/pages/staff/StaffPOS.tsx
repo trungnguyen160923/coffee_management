@@ -5,6 +5,7 @@ import { Table } from '../../types/table';
 import { DiscountApplicationResponse, Discount } from '../../types/discount';
 import catalogService from '../../services/catalogService';
 import { posService, tableService } from '../../services';
+import { stockService, CheckAndReserveItem } from '../../services/stockService';
 import discountService from '../../services/discountService';
 import branchService from '../../services/branchService';
 import { NotificationBell } from '../../components/notifications/NotificationBell';
@@ -13,6 +14,8 @@ import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../../config/api';
 import { POSSkeleton, POSTableManagementSkeleton } from '../../components/staff/skeletons';
 import { toast } from 'react-hot-toast';
+import { useActiveShift } from '../../hooks/useActiveShift';
+import { ActiveShiftBanner } from '../../components/staff/ActiveShiftBanner';
 import {
     ShoppingCart,
     Plus,
@@ -47,6 +50,7 @@ interface CartItem {
 export default function StaffPOS() {
     const { user } = useAuth();
     const navigate = useNavigate();
+    const { activeShift, hasActiveShift, loading: shiftLoading, refresh: refreshShift } = useActiveShift();
     const [products, setProducts] = useState<CatalogProduct[]>([]);
     const [cart, setCart] = useState<CartItem[]>([]);
     const [selectedTable, setSelectedTable] = useState<Table | null>(null);
@@ -57,7 +61,7 @@ export default function StaffPOS() {
     const [loading, setLoading] = useState(true);
     const [processing, setProcessing] = useState(false);
     const [showPaymentModal, setShowPaymentModal] = useState(false);
-    const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'transfer'>('cash');
+    const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CARD' | 'TRANSFER'>('CASH');
     const [receivedAmount, setReceivedAmount] = useState<number>(0);
     const [orderSuccess, setOrderSuccess] = useState(false);
     const [leftPanelTab, setLeftPanelTab] = useState<'products' | 'tables'>('products');
@@ -318,10 +322,13 @@ export default function StaffPOS() {
         try {
             const { apiClient } = await import('../../config/api');
             // Search customer by phone
-            const response = await apiClient.get(`/api/auth-service/users/customers/search?phone=${encodeURIComponent(customerPhone.trim())}`);
+            const response = await apiClient.get<any>(`/api/auth-service/users/customers/search?phone=${encodeURIComponent(customerPhone.trim())}`);
             
-            if (response && response.result) {
-                const customer = response.result;
+            const customer = (response && typeof response === 'object' && 'result' in response)
+                ? (response as any).result
+                : response;
+
+            if (customer) {
                 setCustomerSearchResult(customer);
                 setCustomerName(customer.name || customer.fullname || '');
                 setCustomerPhone(customer.phone || customer.phoneNumber || customerPhone);
@@ -362,11 +369,6 @@ export default function StaffPOS() {
                 toast.error('Vui lòng chọn bàn');
                 return;
             }
-        } else if (orderMode === 'takeaway') {
-            if (!customerName.trim() || !customerPhone.trim()) {
-                toast.error('Vui lòng nhập tên và số điện thoại khách hàng');
-                return;
-            }
         }
         
         if (!branchId || !user?.user_id) {
@@ -377,6 +379,15 @@ export default function StaffPOS() {
         // Check if user has STAFF role
         if (user?.role !== 'staff') {
             toast.error('Bạn cần đăng nhập bằng tài khoản nhân viên để sử dụng POS');
+            return;
+        }
+
+        // Kiểm tra active shift
+        if (!hasActiveShift) {
+            toast.error('Bạn phải đang trong ca làm việc mới có thể tạo đơn. Vui lòng check-in vào ca làm việc của bạn.', {
+                duration: 5000,
+            });
+            navigate('/staff/my-shifts');
             return;
         }
 
@@ -393,14 +404,31 @@ export default function StaffPOS() {
             // Tạo order data dựa trên mode
             let orderData: any;
             
+            // Cả takeaway và dine-in đều phải có branchId để check & reserve
+            if (!branchId) {
+                throw new Error('Branch ID is missing for POS order');
+            }
+
+            // 1) Check & reserve stock tại catalog-service để lấy holdId
+            const reserveItems: CheckAndReserveItem[] = cart.map(item => ({
+                productDetailId: item.productDetail.pdId,
+                quantity: item.quantity
+            }));
+
+            const reserveResp = await stockService.checkAndReserve(branchId, reserveItems);
+            
             if (orderMode === 'takeaway') {
-                // Takeaway order - sử dụng guest order endpoint
+                // Takeaway order - sử dụng guest order endpoint nhưng có giữ chỗ nguyên liệu (holdId)
                 const { apiClient } = await import('../../config/api');
                 orderData = {
-                    customerName: customerName.trim(),
-                    phone: customerPhone.trim(),
+                    // Customer info is optional for POS takeaway; nếu bỏ trống sẽ dùng mặc định
+                    customerName: customerName.trim() || 'Customer take away',
+                    // Backend CreateGuestOrderRequest yêu cầu phone không null, dùng '_' như POSService
+                    phone: customerPhone.trim() || '_',
                     branchId: branchId,
                     orderType: 'takeaway',
+                    // Gửi holdId để backend link reservation với order giống online/dine-in
+                    holdId: reserveResp.holdId,
                     orderItems: cart.map(item => ({
                         productId: item.product.productId,
                         productDetailId: item.productDetail.pdId,
@@ -411,15 +439,19 @@ export default function StaffPOS() {
                     paymentStatus: 'PENDING',
                     discount: appliedDiscount?.discountAmount || 0,
                     discountCode: appliedDiscount?.discountCode,
-                    notes: `Takeaway order - ${customerName}`
+                    notes: customerName
+                        ? `Takeaway order - ${customerName}`
+                        : 'Takeaway order',
                 };
                 
                 await apiClient.post('/api/order-service/api/orders/guest', orderData);
             } else {
-                // Dine-in order - sử dụng posService như cũ
+                // Dine-in order - dùng reservation giống customer:
+                // 2) Gửi order POS kèm holdId xuống order-service
                 orderData = {
                     staffId: Number(user.user_id),
                     branchId: branchId,
+                    holdId: reserveResp.holdId,
                     tableIds: selectedTable ? [selectedTable.tableId] : selectedTables.map(t => t.tableId),
                     orderItems: cart.map(item => ({
                         productId: item.product.productId,
@@ -671,7 +703,8 @@ export default function StaffPOS() {
 
     return (
         <>
-        <div className="h-screen bg-gray-50 flex">
+        <ActiveShiftBanner />
+        <div className={`h-screen bg-gray-50 flex ${!shiftLoading && !hasActiveShift ? 'pt-14' : ''}`}>
             {/* Left Panel - Products */}
             <div className="flex-1 flex flex-col">
                 {/* Header */}
@@ -1632,7 +1665,7 @@ export default function StaffPOS() {
                                         <span className="text-xl font-bold text-blue-600">{formatCurrency(getFinalAmount())}</span>
                                     </div>
 
-                                    {paymentMethod === 'cash' && receivedAmount > 0 && (
+                                    {paymentMethod === 'CASH' && receivedAmount > 0 && (
                                         <div className="flex justify-between items-center">
                                             <span className="text-lg font-semibold text-blue-600">Amount Received:</span>
                                             <span className="text-xl font-bold text-blue-600">{formatCurrency(receivedAmount)}</span>
@@ -1646,9 +1679,9 @@ export default function StaffPOS() {
                                 <h4 className="text-sm font-medium text-gray-700 mb-3">Payment Method</h4>
                                 <div className="grid grid-cols-3 gap-2">
                                     {[
-                                        { value: 'cash', label: 'Cash', icon: '💵' },
-                                        { value: 'card', label: 'Card', icon: '💳' },
-                                        { value: 'transfer', label: 'Transfer', icon: '📱' }
+                                        { value: 'CASH', label: 'Cash', icon: '💵' },
+                                        { value: 'CARD', label: 'Card', icon: '💳' },
+                                        { value: 'TRANSFER', label: 'Transfer', icon: '📱' }
                                     ].map((method) => (
                                         <button
                                             key={method.value}
@@ -1667,7 +1700,7 @@ export default function StaffPOS() {
 
 
                             {/* Cash Input */}
-                            {paymentMethod === 'cash' && (
+                            {paymentMethod === 'CASH' && (
                                 <div className="mb-6">
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                         Amount Received
@@ -1694,7 +1727,7 @@ export default function StaffPOS() {
                             )}
 
                             {/* Card Payment */}
-                            {paymentMethod === 'card' && (
+                            {paymentMethod === 'CARD' && (
                                 <div className="mb-6">
                                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                                         <div className="text-center">
@@ -1720,7 +1753,7 @@ export default function StaffPOS() {
                             )}
 
                             {/* Transfer Payment */}
-                            {paymentMethod === 'transfer' && (
+                            {paymentMethod === 'TRANSFER' && (
                                 <div className="mb-6">
                                     <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                                         <div className="text-center">
@@ -1776,7 +1809,7 @@ export default function StaffPOS() {
                                 </button>
                                 <button
                                     onClick={handleCheckout}
-                                    disabled={processing || (paymentMethod === 'cash' && receivedAmount < getFinalAmount())}
+                                    disabled={processing || (paymentMethod === 'CASH' && receivedAmount < getFinalAmount())}
                                     className="flex-1 flex items-center justify-center space-x-2 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     <span>💰</span>

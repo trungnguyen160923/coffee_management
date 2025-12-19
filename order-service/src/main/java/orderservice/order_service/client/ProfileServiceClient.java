@@ -3,6 +3,7 @@ package orderservice.order_service.client;
 import orderservice.order_service.configuration.AuthenticationRequestInterceptor;
 import orderservice.order_service.dto.response.ApiResponse;
 import orderservice.order_service.dto.response.ManagerProfileResponse;
+import orderservice.order_service.dto.response.ShiftAssignmentResponse;
 import orderservice.order_service.dto.response.StaffProfileResponse;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -29,6 +30,14 @@ public interface ProfileServiceClient {
     @GetMapping("/manager-profiles/{userId}")
     ApiResponse<ManagerProfileResponse> getManagerProfile(
             @PathVariable("userId") Integer userId,
+            @RequestHeader(value = "Authorization", required = false) String token);
+
+    /**
+     * Get active shift assignment for current staff
+     * Returns the shift assignment if staff is currently checked in and within shift time window
+     */
+    @GetMapping("/shift-assignments/my-active-shift")
+    ApiResponse<ShiftAssignmentResponse> getMyActiveShift(
             @RequestHeader(value = "Authorization", required = false) String token);
 }
 

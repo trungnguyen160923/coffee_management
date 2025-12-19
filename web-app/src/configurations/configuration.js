@@ -1,5 +1,6 @@
 export const CONFIG = {
   API_GATEWAY: process.env.REACT_APP_API_GATEWAY || "http://localhost:8000/api",
+  MAX_DELIVERY_DISTANCE_KM: parseFloat(process.env.REACT_APP_MAX_DELIVERY_DISTANCE_KM || "20"),
 };
 
 export const API = {

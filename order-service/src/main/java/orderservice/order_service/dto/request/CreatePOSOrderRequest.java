@@ -22,6 +22,9 @@ public class CreatePOSOrderRequest {
     @NotNull(message = "Branch ID is required")
     Integer branchId;
 
+    // Optional stock reservation holdId (for POS reservations similar to customer orders)
+    String holdId;
+
     // Customer information (optional for POS)
     Integer customerId;
     String customerName;

@@ -274,7 +274,7 @@ public class ShiftAssignmentService {
         
         // Filter out:
         // 1. CANCELLED assignments that were self-cancelled by staff (not rejected by manager)
-        // 2. Shifts that are today or in the past (only show future shifts)
+        // 2. Shifts that are in the past (only show today and future shifts)
         return assignments.stream()
                 .filter(a -> {
                     // Show REJECTED assignments (CANCELLED with "Rejected by manager" in notes)
@@ -285,7 +285,8 @@ public class ShiftAssignmentService {
                     // Show all other non-CANCELLED assignments
                     return !"CANCELLED".equals(a.getStatus());
                 })
-                .filter(a -> shift.getShiftDate().isAfter(today))
+                // Show today and future shifts (shiftDate >= today)
+                .filter(a -> !shift.getShiftDate().isBefore(today))
                 .map(this::toAssignmentResponse)
                 .collect(Collectors.toList());
     }
@@ -341,7 +342,7 @@ public class ShiftAssignmentService {
         
         // Filter out:
         // 1. CANCELLED assignments that were self-cancelled by staff (not rejected by manager)
-        // 2. Shifts that are today or in the past (only show future shifts)
+        // Note: For manager view, we show all shifts including past ones (for viewing purposes)
         allAssignments = allAssignments.stream()
                 .filter(a -> {
                     // Show REJECTED assignments (CANCELLED with "Rejected by manager" in notes)
@@ -352,10 +353,7 @@ public class ShiftAssignmentService {
                     // Show all other non-CANCELLED assignments
                     return !"CANCELLED".equals(a.getStatus());
                 })
-                .filter(a -> {
-                    Shift shift = a.getShift();
-                    return shift != null && shift.getShiftDate().isAfter(today);
-                })
+                // Removed past date filter - manager can view past shifts
                 .collect(Collectors.toList());
         
         // Filter by status if provided
@@ -672,8 +670,9 @@ public class ShiftAssignmentService {
         }
 
         // Use centralized validation service (manager can override role requirements and capacity)
+        // allowToday = true để cho phép gán ca trong ngày (sẽ bị chặn nếu ca đã kết thúc)
         // Skip capacity validation since we already handled it above
-        shiftValidationService.validateStaffForShift(staffUserId, shift, false, true, true);
+        shiftValidationService.validateStaffForShift(staffUserId, shift, true, true, true);
 
         // Build notes with override reasons if provided
         StringBuilder notesBuilder = new StringBuilder();
@@ -688,15 +687,34 @@ public class ShiftAssignmentService {
         }
         String notes = notesBuilder.length() > 0 ? notesBuilder.toString() : null;
 
-        // Create assignment with status CONFIRMED (manager assigned directly)
+        // Determine initial status:
+        // - If manager assigns while the shift is currently in progress today,
+        //   treat it as already checked-in (CHECKED_IN) to avoid missing check-in window.
+        // - Otherwise, keep CONFIRMED (will require normal check-in flow).
+        LocalDate today = LocalDate.now();
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime shiftStart = shift.getShiftDate().atTime(shift.getStartTime());
+        LocalDateTime shiftEnd = shift.getShiftDate().atTime(shift.getEndTime());
+        if (shift.getEndTime().isBefore(shift.getStartTime())) {
+            shiftEnd = shiftEnd.plusDays(1);
+        }
+
+        boolean isToday = shift.getShiftDate().equals(today);
+        boolean isDuringShift = isToday && !now.isBefore(shiftStart) && !now.isAfter(shiftEnd);
+
+        String initialStatus = isDuringShift ? "CHECKED_IN" : "CONFIRMED";
+        LocalDateTime initialCheckedInAt = isDuringShift ? now : null;
+
+        // Create assignment (status depends on whether we're already inside the shift window)
         // No role_id needed - staff will work with all their roles
         ShiftAssignment assignment = ShiftAssignment.builder()
                 .shift(shift)
                 .staffUserId(staffUserId)
                 .assignmentType("MANUAL")
-                .status("CONFIRMED")
+                .status(initialStatus)
                 .borrowedStaff(false)
                 .assignedBy(managerUserId)
+                .checkedInAt(initialCheckedInAt)
                 .notes(notes)
                 .build();
 
@@ -862,6 +880,16 @@ public class ShiftAssignmentService {
         // Get all staff in the branch
         List<StaffWithUserResponse> allStaff = staffProfileService.getStaffsWithUserInfoByBranch(shift.getBranchId());
 
+        // Determine required employment type for this shift (FULL_TIME, PART_TIME, CASUAL, ANY)
+        String requiredEmploymentType = shift.getEmploymentType();
+        if (requiredEmploymentType == null && shift.getTemplate() != null) {
+            requiredEmploymentType = shift.getTemplate().getEmploymentType();
+        }
+        if (requiredEmploymentType == null) {
+            requiredEmploymentType = "ANY";
+        }
+        final String finalRequiredEmploymentType = requiredEmploymentType;
+
         // Get already assigned staff IDs
         List<Integer> assignedStaffIds = assignmentRepository.findByShift(shift).stream()
                 .filter(a -> !"CANCELLED".equals(a.getStatus()))
@@ -875,6 +903,14 @@ public class ShiftAssignmentService {
 
         // Check each staff and return with availability info
         return allStaff.stream()
+                // Filter by employment type: only staff with matching employmentType (or ANY) are returned
+                .filter(staff -> {
+                    if ("ANY".equalsIgnoreCase(finalRequiredEmploymentType)) {
+                        return true;
+                    }
+                    String staffEmploymentType = staff.getEmploymentType();
+                    return staffEmploymentType != null && finalRequiredEmploymentType.equalsIgnoreCase(staffEmploymentType);
+                })
                 .map(staff -> {
                     String conflictReason = null;
                     boolean isAvailable = true;
@@ -887,8 +923,10 @@ public class ShiftAssignmentService {
 
                     // 2. Use centralized validation service (manager can override role requirements)
                     if (isAvailable) {
+                        // allowToday = true để cho phép gán ca trong ngày,
+                        // nhưng ShiftValidationService sẽ chặn nếu ca đã kết thúc.
                         conflictReason = shiftValidationService.validateStaffForShiftWithReason(
-                                staff.getUserId(), shift, false, true);
+                                staff.getUserId(), shift, true, true);
                         if (conflictReason != null) {
                             isAvailable = false;
                         }
@@ -1237,6 +1275,48 @@ public class ShiftAssignmentService {
                 assignment.getAssignmentId(), e);
             // Không throw exception để không ảnh hưởng đến flow chính
         }
+    }
+
+    /**
+     * Get active shift assignment for a staff member
+     * Active means: status = CHECKED_IN and current time is within shift time window
+     * 
+     * @param staffUserId Staff user ID
+     * @return ShiftAssignmentResponse if staff is in an active shift, null otherwise
+     */
+    public ShiftAssignmentResponse getActiveShiftAssignment(Integer staffUserId) {
+        // Find all CHECKED_IN assignments for this staff
+        List<ShiftAssignment> checkedInAssignments = assignmentRepository.findByStaffUserIdAndStatus(
+                staffUserId, "CHECKED_IN");
+        
+        if (checkedInAssignments.isEmpty()) {
+            return null;
+        }
+        
+        LocalDateTime now = LocalDateTime.now();
+        
+        // Find the assignment where current time is within shift time window
+        for (ShiftAssignment assignment : checkedInAssignments) {
+            Shift shift = assignment.getShift();
+            if (shift == null) {
+                continue;
+            }
+            
+            LocalDateTime shiftStart = shift.getShiftDate().atTime(shift.getStartTime());
+            LocalDateTime shiftEnd = shift.getShiftDate().atTime(shift.getEndTime());
+            
+            // If shift spans midnight, adjust end time
+            if (shift.getEndTime().isBefore(shift.getStartTime())) {
+                shiftEnd = shiftEnd.plusDays(1);
+            }
+            
+            // Check if current time is within shift time window
+            if (!now.isBefore(shiftStart) && !now.isAfter(shiftEnd)) {
+                return toAssignmentResponse(assignment);
+            }
+        }
+        
+        return null;
     }
 }
 

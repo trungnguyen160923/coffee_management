@@ -47,7 +47,7 @@ export function TableManagement() {
                 // Tables will be loaded by the TableManagementComponent
             } catch (e: any) {
                 console.error('Failed to load tables', e);
-                setError(`Failed to load tables: ${e.message || 'Unknown error'}`);
+                setError(`${e.message || 'Unknown error'}`);
             } finally {
                 setLoading(false);
             }

@@ -19,18 +19,22 @@ import com.service.catalog.dto.request.stock.CommitReservationRequest;
 import com.service.catalog.dto.request.stock.DailyStockReconciliationRequest;
 import com.service.catalog.dto.request.stock.ManagerStockAdjustmentRequest;
 import com.service.catalog.dto.request.stock.UpdateStockAdjustmentRequest;
+import com.service.catalog.dto.request.stock.UpdateStockAdjustmentEntryRequest;
 import com.service.catalog.dto.request.stock.ReleaseReservationRequest;
 import com.service.catalog.dto.response.stock.CheckAndReserveResponse;
 import com.service.catalog.dto.response.stock.DailyStockReconciliationResponse;
 import com.service.catalog.dto.response.stock.StockAdjustmentResponse;
+import com.service.catalog.dto.response.stock.StockAdjustmentEntryResponse;
 import com.service.catalog.entity.StockAdjustment;
 import com.service.catalog.exception.InsufficientStockException;
 import com.service.catalog.service.StockReservationService;
 import com.service.catalog.service.StockAdjustmentService;
 import com.service.catalog.dto.ApiResponse;
+import com.service.catalog.repository.http_client.ProfileClient;
 import org.springframework.http.HttpStatus;
 import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.security.oauth2.jwt.Jwt;
 import java.util.Map;
 import java.util.List;
 import java.time.LocalDate;
@@ -44,6 +48,7 @@ public class StockController {
     private final StockService stockService;
     private final StockAdjustmentService stockAdjustmentService;
     private final org.springframework.context.ApplicationContext applicationContext;
+    private final ProfileClient profileClient;
 
     @GetMapping("/search")
     @PreAuthorize("hasRole('STAFF') or hasRole('MANAGER') or hasRole('ADMIN')")
@@ -162,15 +167,36 @@ public class StockController {
     public ResponseEntity<ApiResponse<DailyStockReconciliationResponse>> reconcileDailyUsage(
             @Valid @RequestBody DailyStockReconciliationRequest request,
             org.springframework.security.core.Authentication authentication) {
+        boolean isStaff = authentication != null && authentication.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("STAFF"));
+
         // Validate: Staff chỉ được ghi ngày hiện tại, Manager/Admin có thể ghi ngày đã qua
-        if (authentication != null && authentication.getAuthorities().stream()
-                .anyMatch(a -> a.getAuthority().equals("STAFF"))) {
+        if (isStaff) {
             LocalDate today = LocalDate.now();
             if (!request.getAdjustmentDate().equals(today)) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
                         .body(ApiResponse.<DailyStockReconciliationResponse>builder()
                                 .code(403)
                                 .message("Staff chỉ được ghi nhận nguyên liệu cho ngày hôm nay")
+                                .build());
+            }
+
+            // Additional validation: staff must be checked in to an active shift today
+            try {
+                ApiResponse<ProfileClient.ShiftAssignmentResponse> activeShift = profileClient.getMyActiveShift();
+                if (activeShift == null || activeShift.getResult() == null) {
+                    return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                            .body(ApiResponse.<DailyStockReconciliationResponse>builder()
+                                    .code(403)
+                                    .message("Staff must be checked in to an active shift to record daily stock usage")
+                                    .build());
+                }
+            } catch (Exception e) {
+                log.error("Failed to verify active shift for daily stock usage", e);
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(ApiResponse.<DailyStockReconciliationResponse>builder()
+                                .code(403)
+                                .message("Cannot verify active shift. Please check in to a shift before recording stock usage")
                                 .build());
             }
         }
@@ -221,6 +247,74 @@ public class StockController {
     }
 
     /**
+     * GET /api/stocks/adjustments/{adjustmentId}/entries
+     * Lấy danh sách các lần ghi nhận (entries) cho một adjustment
+     */
+    @GetMapping("/adjustments/{adjustmentId}/entries")
+    @PreAuthorize("hasRole('STAFF') or hasRole('MANAGER') or hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<List<StockAdjustmentEntryResponse>>> getAdjustmentEntries(
+            @PathVariable Long adjustmentId) {
+
+        List<StockAdjustmentEntryResponse> entries = stockAdjustmentService.getAdjustmentEntries(adjustmentId);
+        return ResponseEntity.ok(ApiResponse.<List<StockAdjustmentEntryResponse>>builder()
+                .code(200)
+                .message("Adjustment entries fetched successfully")
+                .result(entries)
+                .build());
+    }
+
+    /**
+     * DELETE /api/stocks/entries/{entryId}
+     * Xóa một entry của adjustment (chỉ khi adjustment còn PENDING)
+     */
+    @DeleteMapping("/entries/{entryId}")
+    @PreAuthorize("hasRole('STAFF') or hasRole('MANAGER') or hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> deleteAdjustmentEntry(
+            @PathVariable Long entryId,
+            org.springframework.security.core.Authentication authentication) {
+        boolean isStaff = isCurrentUserStaff();
+        Integer currentUserId = extractUserId(authentication);
+
+        stockAdjustmentService.deleteEntry(entryId, currentUserId, isStaff);
+
+        Map<String, Object> result = Map.of(
+                "entryId", entryId,
+                "message", "Adjustment entry deleted successfully");
+
+        return ResponseEntity.ok(ApiResponse.<Map<String, Object>>builder()
+                .code(200)
+                .message("Adjustment entry deleted successfully")
+                .result(result)
+                .build());
+    }
+
+    /**
+     * PUT /api/stocks/entries/{entryId}
+     * Cập nhật một entry (qty + notes) - chỉ khi adjustment PENDING và đúng owner (đối với STAFF)
+     */
+    @PutMapping("/entries/{entryId}")
+    @PreAuthorize("hasRole('STAFF') or hasRole('MANAGER') or hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> updateAdjustmentEntry(
+            @PathVariable Long entryId,
+            @Valid @RequestBody UpdateStockAdjustmentEntryRequest request,
+            org.springframework.security.core.Authentication authentication) {
+        boolean isStaff = isCurrentUserStaff();
+        Integer currentUserId = extractUserId(authentication);
+
+        stockAdjustmentService.updateEntry(entryId, request, currentUserId, isStaff);
+
+        Map<String, Object> result = Map.of(
+                "entryId", entryId,
+                "message", "Adjustment entry updated successfully");
+
+        return ResponseEntity.ok(ApiResponse.<Map<String, Object>>builder()
+                .code(200)
+                .message("Adjustment entry updated successfully")
+                .result(result)
+                .build());
+    }
+
+    /**
      * GET /api/stocks/daily-usage-summary
      * Lấy danh sách nguyên liệu đã được dùng trong ngày (từ orders) với system quantity
      */
@@ -248,8 +342,46 @@ public class StockController {
     @PreAuthorize("hasRole('STAFF') or hasRole('MANAGER') or hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<StockAdjustmentResponse>> updateAdjustment(
             @PathVariable Long adjustmentId,
-            @Valid @RequestBody UpdateStockAdjustmentRequest request) {
-        
+            @Valid @RequestBody UpdateStockAdjustmentRequest request,
+            org.springframework.security.core.Authentication authentication) {
+        // Nếu là STAFF thì phải đang ở trong ca active và là người duy nhất tạo entries mới được chỉnh sửa
+        boolean isStaff = isCurrentUserStaff();
+        Integer currentUserId = extractUserId(authentication);
+
+        if (isStaff) {
+            try {
+                ApiResponse<ProfileClient.ShiftAssignmentResponse> activeShift = profileClient.getMyActiveShift();
+                if (activeShift == null || activeShift.getResult() == null) {
+                    return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                            .body(ApiResponse.<StockAdjustmentResponse>builder()
+                                    .code(403)
+                                    .message("Staff must be checked in to an active shift to modify daily stock usage")
+                                    .build());
+                }
+            } catch (Exception e) {
+                log.error("Failed to verify active shift for updating daily stock usage", e);
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(ApiResponse.<StockAdjustmentResponse>builder()
+                                .code(403)
+                                .message("Cannot verify active shift. Please check in to a shift before modifying stock usage")
+                                .build());
+            }
+
+            // Kiểm tra quyền sửa: staff chỉ được sửa nếu tất cả entries thuộc về chính họ
+            List<StockAdjustmentEntryResponse> entries = stockAdjustmentService.getAdjustmentEntries(adjustmentId);
+            boolean hasEntries = entries != null && !entries.isEmpty();
+            boolean allOwnedByUser = hasEntries && entries.stream()
+                    .allMatch(e -> e.getUserId() != null && e.getUserId().equals(currentUserId));
+
+            if (hasEntries && !allOwnedByUser) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(ApiResponse.<StockAdjustmentResponse>builder()
+                                .code(403)
+                                .message("You can only modify adjustments that were created entirely by you")
+                                .build());
+            }
+        }
+
         StockAdjustmentResponse response = stockAdjustmentService.updateAdjustment(adjustmentId, request);
         
         return ResponseEntity.ok(ApiResponse.<StockAdjustmentResponse>builder()
@@ -265,7 +397,46 @@ public class StockController {
      */
     @DeleteMapping("/adjustments/{adjustmentId}")
     @PreAuthorize("hasRole('STAFF') or hasRole('MANAGER') or hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> deleteAdjustment(@PathVariable Long adjustmentId) {
+    public ResponseEntity<ApiResponse<Map<String, Object>>> deleteAdjustment(
+            @PathVariable Long adjustmentId,
+            org.springframework.security.core.Authentication authentication) {
+        // Nếu là STAFF thì phải đang ở trong ca active và là người duy nhất tạo entries mới được xóa
+        boolean isStaff = isCurrentUserStaff();
+        Integer currentUserId = extractUserId(authentication);
+
+        if (isStaff) {
+            try {
+                ApiResponse<ProfileClient.ShiftAssignmentResponse> activeShift = profileClient.getMyActiveShift();
+                if (activeShift == null || activeShift.getResult() == null) {
+                    return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                            .body(ApiResponse.<Map<String, Object>>builder()
+                                    .code(403)
+                                    .message("Staff must be checked in to an active shift to delete daily stock usage")
+                                    .build());
+                }
+            } catch (Exception e) {
+                log.error("Failed to verify active shift for deleting daily stock usage", e);
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(ApiResponse.<Map<String, Object>>builder()
+                                .code(403)
+                                .message("Cannot verify active shift. Please check in to a shift before deleting stock usage")
+                                .build());
+            }
+
+            List<StockAdjustmentEntryResponse> entries = stockAdjustmentService.getAdjustmentEntries(adjustmentId);
+            boolean hasEntries = entries != null && !entries.isEmpty();
+            boolean allOwnedByUser = hasEntries && entries.stream()
+                    .allMatch(e -> e.getUserId() != null && e.getUserId().equals(currentUserId));
+
+            if (hasEntries && !allOwnedByUser) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(ApiResponse.<Map<String, Object>>builder()
+                                .code(403)
+                                .message("You can only delete adjustments that were created entirely by you")
+                                .build());
+            }
+        }
+
         stockAdjustmentService.deleteAdjustment(adjustmentId);
         
         Map<String, Object> result = Map.of(
@@ -600,6 +771,28 @@ public class StockController {
                     .code(500)
                     .message("Internal server error: " + e.getMessage())
                     .build());
+        }
+    }
+
+    private boolean isCurrentUserStaff() {
+        org.springframework.security.core.Authentication auth =
+                org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        return auth != null && auth.getAuthorities().stream()
+                .anyMatch(a -> "STAFF".equals(a.getAuthority()));
+    }
+
+    private Integer extractUserId(org.springframework.security.core.Authentication authentication) {
+        if (authentication == null || !(authentication.getPrincipal() instanceof Jwt jwt)) {
+            return null;
+        }
+        String userIdStr = jwt.getClaimAsString("user_id");
+        if (userIdStr == null) {
+            return null;
+        }
+        try {
+            return Integer.parseInt(userIdStr);
+        } catch (NumberFormatException e) {
+            return null;
         }
     }
 

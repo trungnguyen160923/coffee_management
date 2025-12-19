@@ -119,6 +119,19 @@ export interface DailyStockReconciliationPayload {
   items: DailyStockAdjustmentItem[];
 }
 
+export interface StockAdjustmentEntry {
+  entryId: number;
+  adjustmentId: number;
+  branchId: number;
+  ingredientId: number;
+  entryQuantity: number;
+  recordedBy?: string;
+  userId?: number;
+  entryTime: string;
+  notes?: string;
+  source?: string;
+}
+
 export interface DailyStockReconciliationResult {
   ingredientId: number;
   ingredientName?: string;
@@ -143,6 +156,17 @@ export interface DailyStockReconciliationResponse {
   committedItems: number;
   totalVariance: number;
   results: DailyStockReconciliationResult[];
+}
+
+// Check-and-reserve payload & response (used for POS / generic orders)
+export interface CheckAndReserveItem {
+  productDetailId: number;
+  quantity: number;
+}
+
+export interface CheckAndReserveResponse {
+  holdId: string;
+  expiresAt: string;
 }
 
 export interface ManagerStockAdjustPayload {
@@ -248,6 +272,37 @@ export const stockService = {
     return response;
   },
 
+  // Kiểm tra và giữ chỗ kho (dùng cho POS để tạo reservation giống customer)
+  checkAndReserve: async (
+    branchId: number,
+    items: CheckAndReserveItem[]
+  ): Promise<CheckAndReserveResponse> => {
+    const payload = {
+      branchId,
+      items,
+      cartId: null,
+      guestId: null,
+      orderDraftId: null
+    };
+
+    const response = await apiClient.post<any>(
+      `${baseUrl}/stocks/check-and-reserve`,
+      payload
+    );
+
+    // Hỗ trợ cả dạng gateway bọc ApiResponse lẫn trả thẳng
+    if (response && typeof response === 'object') {
+      if ('result' in response && response.result) {
+        return response.result as CheckAndReserveResponse;
+      }
+      if ('holdId' in response) {
+        return response as CheckAndReserveResponse;
+      }
+    }
+
+    throw new Error('Invalid response from check-and-reserve API');
+  },
+
   // Lấy holdId từ orderId
   getHoldIdByOrderId: async (orderId: string): Promise<string> => {
     const response = await apiClient.get(`${baseUrl}/stocks/hold-id/${orderId}`) as any;
@@ -336,6 +391,32 @@ export const stockService = {
   deleteStockAdjustment: async (adjustmentId: number): Promise<void> => {
     await apiClient.delete<ApiResponse<{ adjustmentId: number; message: string }>>(
       `${baseUrl}/stocks/adjustments/${adjustmentId}`
+    );
+  },
+
+  // Lấy danh sách entries của một adjustment
+  getStockAdjustmentEntries: async (adjustmentId: number): Promise<StockAdjustmentEntry[]> => {
+    const response = await apiClient.get<ApiResponse<StockAdjustmentEntry[]>>(
+      `${baseUrl}/stocks/adjustments/${adjustmentId}/entries`
+    );
+    return response.result || [];
+  },
+
+  // Xóa một adjustment entry
+  deleteStockAdjustmentEntry: async (entryId: number): Promise<void> => {
+    await apiClient.delete<ApiResponse<{ entryId: number; message: string }>>(
+      `${baseUrl}/stocks/entries/${entryId}`
+    );
+  },
+
+  // Cập nhật một adjustment entry
+  updateStockAdjustmentEntry: async (entryId: number, entryQuantity: number, notes?: string): Promise<void> => {
+    await apiClient.put<ApiResponse<{ entryId: number; message: string }>>(
+      `${baseUrl}/stocks/entries/${entryId}`,
+      {
+        entryQuantity,
+        notes,
+      }
     );
   }
 };

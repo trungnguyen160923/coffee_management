@@ -104,7 +104,7 @@ geocoding:
 
 # Delivery configuration
 delivery:
-  max-distance-km: ${DELIVERY_MAX_DISTANCE_KM:10}  # Maximum delivery distance in kilometers (default: 10km)
+  max-distance-km: ${DELIVERY_MAX_DISTANCE_KM:20}  # Maximum delivery distance in kilometers (default: 20km)
 
 # Actuator configuration
 management:

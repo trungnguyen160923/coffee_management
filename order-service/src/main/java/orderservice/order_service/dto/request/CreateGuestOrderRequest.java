@@ -37,6 +37,9 @@ public class CreateGuestOrderRequest {
     Integer cartId;
     String guestId;
 
+    // Tuỳ chọn: holdId nếu đã check & reserve trước (ví dụ từ POS takeaway)
+    String holdId;
+
     Integer tableId;
     Integer reservationId;
 

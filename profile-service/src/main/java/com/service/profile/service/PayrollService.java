@@ -96,8 +96,8 @@ public class PayrollService {
             insuranceSalary = managerProfile.getInsuranceSalary() != null && 
                 managerProfile.getInsuranceSalary().compareTo(BigDecimal.ZERO) > 0 ?
                 managerProfile.getInsuranceSalary() : managerProfile.getBaseSalary();
-            overtimeRate = managerProfile.getOvertimeRate() != null ? 
-                managerProfile.getOvertimeRate() : payrollProperties.getDefaultOvertimeRate();
+            // Manager hiện không có cấu hình overtime riêng, dùng default
+            overtimeRate = payrollProperties.getDefaultOvertimeRate();
             numberOfDependents = managerProfile.getNumberOfDependents() != null ? 
                 managerProfile.getNumberOfDependents() : 0;
         } else {

@@ -39,6 +39,8 @@ public class POSController {
             @Valid @RequestBody CreatePOSOrderRequest request) {
         // Validate permission - chỉ CASHIER_STAFF mới được tạo POS order
         StaffPermissionValidator.requirePOSAccess(profileServiceClient, authServiceClient);
+        // Validate that staff is in an active shift
+        StaffPermissionValidator.requireActiveShift(profileServiceClient);
         
         try {
             POSOrderResponse order = posService.createPOSOrder(request);
@@ -66,6 +68,8 @@ public class POSController {
             @PathVariable Integer staffId) {
         // Validate permission - chỉ CASHIER_STAFF
         StaffPermissionValidator.requirePOSAccess(profileServiceClient, authServiceClient);
+        // Validate that staff is in an active shift
+        StaffPermissionValidator.requireActiveShift(profileServiceClient);
         
         try {
             List<POSOrderResponse> orders = posService.getPOSOrdersByStaff(staffId);
@@ -92,6 +96,8 @@ public class POSController {
             @PathVariable Integer branchId) {
         // Validate permission - chỉ CASHIER_STAFF
         StaffPermissionValidator.requirePOSAccess(profileServiceClient, authServiceClient);
+        // Validate that staff is in an active shift
+        StaffPermissionValidator.requireActiveShift(profileServiceClient);
         
         try {
             List<POSOrderResponse> orders = posService.getPOSOrdersByBranch(branchId);
@@ -117,6 +123,8 @@ public class POSController {
     public ResponseEntity<ApiResponse<POSOrderResponse>> getPOSOrderById(@PathVariable Integer orderId) {
         // Validate permission - chỉ CASHIER_STAFF
         StaffPermissionValidator.requirePOSAccess(profileServiceClient, authServiceClient);
+        // Validate that staff is in an active shift
+        StaffPermissionValidator.requireActiveShift(profileServiceClient);
         
         try {
             POSOrderResponse order = posService.getPOSOrderById(orderId);
@@ -144,6 +152,8 @@ public class POSController {
             @RequestParam String status) {
         // Validate permission - chỉ CASHIER_STAFF
         StaffPermissionValidator.requirePOSAccess(profileServiceClient, authServiceClient);
+        // Validate that staff is in an active shift
+        StaffPermissionValidator.requireActiveShift(profileServiceClient);
         
         try {
             POSOrderResponse order = posService.updatePOSOrderStatus(orderId, status);
@@ -169,6 +179,8 @@ public class POSController {
     public ResponseEntity<ApiResponse<Void>> deletePOSOrder(@PathVariable Integer orderId) {
         // Validate permission - chỉ CASHIER_STAFF
         StaffPermissionValidator.requirePOSAccess(profileServiceClient, authServiceClient);
+        // Validate that staff is in an active shift
+        StaffPermissionValidator.requireActiveShift(profileServiceClient);
         
         try {
             posService.deletePOSOrder(orderId);

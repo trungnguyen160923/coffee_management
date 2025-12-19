@@ -3,9 +3,12 @@ import { useAuth } from '../../context/AuthContext';
 import { TableStatusSummary, StaffTableList } from '../../components/table';
 import { TablesSkeleton } from '../../components/staff/skeletons';
 import { RefreshCw } from 'lucide-react';
+import { ActiveShiftBanner } from '../../components/staff/ActiveShiftBanner';
+import { useActiveShift } from '../../hooks/useActiveShift';
 
 export default function StaffTables() {
     const { user } = useAuth();
+    const { hasActiveShift, loading: shiftLoading } = useActiveShift();
     const [initialLoading, setInitialLoading] = useState(true);
     const [refreshTrigger, setRefreshTrigger] = useState(0);
 
@@ -28,7 +31,9 @@ export default function StaffTables() {
     }
 
     return (
-        <div className="min-h-screen bg-slate-50">
+        <>
+        <ActiveShiftBanner />
+        <div className={`min-h-screen bg-slate-50 ${!shiftLoading && !hasActiveShift ? 'pt-14' : ''}`}>
             <div className="max-w-7xl mx-auto px-2 py-4 sm:px-4 lg:px-4">
                 <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
                     <div className="flex items-center justify-between px-8 pt-6 pb-3">
@@ -56,5 +61,6 @@ export default function StaffTables() {
                 </div>
             </div>
         </div>
+        </>
     );
 }

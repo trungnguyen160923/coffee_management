@@ -199,6 +199,8 @@ public class ReservationController {
             @RequestParam String status) {
         // Validate permission - CASHIER_STAFF hoặc SERVER_STAFF
         StaffPermissionValidator.requireReservationAccess(profileServiceClient, authServiceClient);
+        // Validate that staff is in an active shift
+        StaffPermissionValidator.requireActiveShift(profileServiceClient);
         
         try {
             ReservationResponse reservation = reservationService.updateReservationStatus(reservationId, status);
@@ -224,6 +226,8 @@ public class ReservationController {
     public ResponseEntity<ApiResponse<Void>> cancelReservation(@PathVariable Integer reservationId) {
         // Validate permission - CASHIER_STAFF hoặc SERVER_STAFF
         StaffPermissionValidator.requireReservationAccess(profileServiceClient, authServiceClient);
+        // Validate that staff is in an active shift
+        StaffPermissionValidator.requireActiveShift(profileServiceClient);
         
         try {
             reservationService.cancelReservation(reservationId);
@@ -249,6 +253,8 @@ public class ReservationController {
     public ResponseEntity<ApiResponse<Void>> deleteReservation(@PathVariable Integer reservationId) {
         // Validate permission - CASHIER_STAFF hoặc SERVER_STAFF
         StaffPermissionValidator.requireReservationAccess(profileServiceClient, authServiceClient);
+        // Validate that staff is in an active shift
+        StaffPermissionValidator.requireActiveShift(profileServiceClient);
         
         try {
             reservationService.deleteReservation(reservationId);

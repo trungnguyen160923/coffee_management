@@ -42,6 +42,19 @@ public interface StockAdjustmentRepository extends JpaRepository<StockAdjustment
                                                                                                 Integer ingredientId,
                                                                                                 LocalDate adjustmentDate);
 
+    /**
+     * Tìm tất cả adjustments cho cùng branch, ingredient và date
+     * Trả về List để xử lý trường hợp có nhiều adjustments (COMMITTED + PENDING)
+     */
+    @Query("SELECT sa FROM StockAdjustment sa " +
+            "WHERE sa.branchId = :branchId " +
+            "AND sa.ingredient.ingredientId = :ingredientId " +
+            "AND sa.adjustmentDate = :adjustmentDate " +
+            "ORDER BY sa.createdAt DESC")
+    List<StockAdjustment> findAllByBranchIdAndIngredientIdAndAdjustmentDate(@Param("branchId") Integer branchId,
+                                                                             @Param("ingredientId") Integer ingredientId,
+                                                                             @Param("adjustmentDate") LocalDate adjustmentDate);
+
     @Query("SELECT sa FROM StockAdjustment sa " +
             "WHERE sa.branchId = :branchId " +
             "AND sa.adjustmentDate = :date " +

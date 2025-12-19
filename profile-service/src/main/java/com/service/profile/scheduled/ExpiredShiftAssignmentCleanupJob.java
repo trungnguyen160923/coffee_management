@@ -42,14 +42,14 @@ public class ExpiredShiftAssignmentCleanupJob {
         
         int cancelledCount = 0;
         for (ShiftAssignment assignment : activeAssignments) {
-            // Check if shift date is today or has passed (cancel if shift date <= today)
+            // Check if shift date has passed (strictly before today)
             if (assignment.getShift() != null) {
                 LocalDate shiftDate = assignment.getShift().getShiftDate();
-                if (shiftDate.isBefore(today) || shiftDate.isEqual(today)) {
+                if (shiftDate.isBefore(today)) {
                     assignment.setStatus("CANCELLED");
                     String existingNotes = assignment.getNotes() != null ? assignment.getNotes() : "";
                     assignment.setNotes(existingNotes + (existingNotes.isEmpty() ? "" : "\n") +
-                            "Auto-cancelled: Shift date has passed or is today (" + shiftDate + ")");
+                            "Auto-cancelled: Shift date has passed (" + shiftDate + ")");
                     assignmentRepository.save(assignment);
                     cancelledCount++;
                     log.debug("Cancelled assignment {} for expired shift {} (date: {})", 

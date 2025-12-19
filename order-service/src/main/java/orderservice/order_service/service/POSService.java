@@ -178,7 +178,8 @@ public class POSService {
                     .branchId(request.getBranchId())
                     .tableId(request.getTableIds().get(0)) // Use first table as primary
                     .staffId(request.getStaffId())
-                    .status("CREATED")
+                    // POS orders bắt đầu ở trạng thái PREPARING để phù hợp với flow bếp/bar
+                    .status("PREPARING")
                     .paymentMethod(request.getPaymentMethod())
                     .paymentStatus(request.getPaymentStatus() == null ? "PENDING" : request.getPaymentStatus())
                     .subtotal(subtotal)
@@ -191,22 +192,24 @@ public class POSService {
 
             order = orderRepository.save(order);
             
-            // Trừ kho trực tiếp cho POS order
-            try {
-                Map<String, Object> commitPayload = new HashMap<>();
-                commitPayload.put("branchId", request.getBranchId());
-                commitPayload.put("orderId", order.getOrderId());
-                List<Map<String, Object>> items = request.getOrderItems().stream().map(it -> {
-                    Map<String, Object> item = new HashMap<>();
-                    item.put("productDetailId", it.getProductDetailId());
-                    item.put("quantity", it.getQuantity());
-                    return item;
-                }).collect(Collectors.toList());
-                commitPayload.put("items", items);
-                catalogServiceClient.commitPosStock(commitPayload);
-            } catch (Exception e) {
-                log.error("Failed to commit POS stock for order {}: {}", order.getOrderId(), e.getMessage(), e);
-                throw new AppException(ErrorCode.VALIDATION_FAILED, "Cannot commit stock for POS order: " + e.getMessage());
+            // Nếu POS gửi kèm holdId, link reservation với order giống như luồng customer
+            if (request.getHoldId() != null && !request.getHoldId().isBlank()) {
+                try {
+                    Map<String, Object> updateRequest = new HashMap<>();
+                    updateRequest.put("orderId", order.getOrderId());
+                    updateRequest.put("holdId", request.getHoldId());
+                    
+                    catalogServiceClient.updateReservationOrderId(updateRequest);
+                    log.info("Linked POS order {} with reservation holdId {}", order.getOrderId(), request.getHoldId());
+                } catch (Exception e) {
+                    log.error("Failed to link POS order {} with reservation holdId {}: {}", 
+                            order.getOrderId(), request.getHoldId(), e.getMessage(), e);
+                    throw new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION, 
+                            "Failed to link POS order with reservations: " + e.getMessage());
+                }
+            } else {
+                log.warn("No holdId provided for POS order {}. Stock will not be reserved via reservation flow.", 
+                        order.getOrderId());
             }
             
             // Use discount AFTER order is successfully created

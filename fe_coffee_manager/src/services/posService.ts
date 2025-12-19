@@ -5,6 +5,7 @@ import { API_ENDPOINTS } from '../config/constants';
 export interface CreatePOSOrderRequest {
     staffId: number;
     branchId: number;
+    holdId?: string;
     customerId?: number;
     customerName?: string;
     phone?: string;

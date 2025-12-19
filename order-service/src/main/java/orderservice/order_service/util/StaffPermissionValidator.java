@@ -5,6 +5,7 @@ import orderservice.order_service.client.AuthServiceClient;
 import orderservice.order_service.client.ProfileServiceClient;
 import orderservice.order_service.dto.response.ApiResponse;
 import orderservice.order_service.dto.response.RoleResponse;
+import orderservice.order_service.dto.response.ShiftAssignmentResponse;
 import orderservice.order_service.dto.response.StaffProfileResponse;
 import orderservice.order_service.exception.AppException;
 import orderservice.order_service.exception.ErrorCode;
@@ -454,6 +455,64 @@ public class StaffPermissionValidator {
      */
     public static void requireOrderAccess(ProfileServiceClient profileServiceClient, AuthServiceClient authServiceClient) {
         requireAnyStaffRole(profileServiceClient, authServiceClient, CASHIER_STAFF, SERVER_STAFF, BARISTA_STAFF);
+    }
+    
+    /**
+     * Require that the current staff is in an active shift (checked in and within shift time window).
+     * Throws AppException with ACCESS_DENIED if the staff is not in an active shift.
+     * 
+     * @param profileServiceClient Profile service client to fetch active shift
+     * @throws AppException if staff is not in an active shift
+     */
+    public static void requireActiveShift(ProfileServiceClient profileServiceClient) {
+        if (profileServiceClient == null) {
+            log.warn("[StaffPermissionValidator] profileServiceClient is null, skipping shift validation");
+            return; // Skip validation if client is not available
+        }
+        
+        try {
+            String token = SecurityUtils.getCurrentJwtToken();
+            // Fallback: try to get token from request context if SecurityUtils returns null
+            if (token == null) {
+                try {
+                    ServletRequestAttributes attributes = (ServletRequestAttributes) 
+                            RequestContextHolder.getRequestAttributes();
+                    if (attributes != null) {
+                        String authHeader = attributes.getRequest().getHeader("Authorization");
+                        if (authHeader != null && !authHeader.trim().isEmpty()) {
+                            token = authHeader;
+                        }
+                    }
+                } catch (Exception e) {
+                    // Silent fallback
+                }
+            }
+            
+            if (token == null) {
+                log.warn("[StaffPermissionValidator] No token available, skipping shift validation");
+                return; // Skip validation if no token
+            }
+            
+            ApiResponse<ShiftAssignmentResponse> shiftResponse = profileServiceClient.getMyActiveShift(token);
+            
+            if (shiftResponse == null || shiftResponse.getResult() == null) {
+                log.debug("[StaffPermissionValidator] requireActiveShift FAILED. No active shift found");
+                throw new AppException(
+                        ErrorCode.ACCESS_DENIED,
+                        "Bạn phải đang trong ca làm việc mới có thể thực hiện nghiệp vụ này. Vui lòng check-in vào ca làm việc của bạn."
+                );
+            }
+            
+            log.debug("[StaffPermissionValidator] requireActiveShift PASSED. Active shift found: assignmentId={}", 
+                    shiftResponse.getResult().getAssignmentId());
+        } catch (AppException e) {
+            throw e; // Re-throw AppException as-is
+        } catch (Exception e) {
+            log.error("[StaffPermissionValidator] Exception when checking active shift: {}", e.getMessage(), e);
+            // Don't block operations if there's an error checking shift status
+            // This allows the system to continue working even if profile-service is temporarily unavailable
+            log.warn("[StaffPermissionValidator] Failed to verify active shift, allowing operation to continue");
+        }
     }
     
     /**

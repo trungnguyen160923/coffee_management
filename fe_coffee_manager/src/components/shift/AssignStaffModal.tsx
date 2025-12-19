@@ -92,10 +92,14 @@ export default function AssignStaffModal({
     try {
       setLoadingStaff(true);
       const staff = await shiftAssignmentService.getAvailableStaffForShift(shiftId);
-      setAvailableStaff(staff || []);
+      // Sort so that isAvailable = true appears first, but still show all staff
+      const sorted = (staff || []).slice().sort((a, b) => {
+        return Number(b.isAvailable) - Number(a.isAvailable);
+      });
+      setAvailableStaff(sorted);
       // Get remaining slots from first staff (all should have same value)
-      if (staff && staff.length > 0) {
-        setRemainingSlots(staff[0].remainingSlots);
+      if (sorted && sorted.length > 0) {
+        setRemainingSlots(sorted[0].remainingSlots);
       } else {
         setRemainingSlots(0);
       }
@@ -556,26 +560,9 @@ export default function AssignStaffModal({
                 const maxAllowedWithOverride = maxStaffAllowed !== null ? Math.ceil(maxStaffAllowed * 1.20) : Infinity;
                 const canStillAddStaff = currentAssignedCount < maxAllowedWithOverride;
                 
-                // Filter staff by availability and name
-                // Show staff even if not available due to capacity, as long as we're within 20% limit
+                // Filter staff only by name (do NOT hide unavailable staff),
+                // so that manager can see all staff with conflictReason.
                 const filteredStaff = availableStaff.filter((staffItem) => {
-                  // If shift is within 20% limit, show staff even if not available due to capacity
-                  if (!staffItem.isAvailable) {
-                    // Check if the conflict is due to capacity (can be overridden)
-                    const isCapacityConflict = canStillAddStaff && 
-                      staffItem.conflictReason && 
-                      (staffItem.conflictReason.includes("capacity") || 
-                       staffItem.conflictReason.includes("full") ||
-                       staffItem.conflictReason === null); // null conflictReason might indicate capacity issue
-                    
-                    // Only hide if conflict is not capacity-related or we've exceeded 20% limit
-                    if (!isCapacityConflict) {
-                      return false; // Hide staff with other conflicts (time conflict, etc.)
-                    }
-                    // Show staff with capacity conflict if within 20% limit
-                  }
-                  
-                  // Filter by name if search term exists
                   if (!staffNameFilter.trim()) return true;
                   const searchTerm = staffNameFilter.toLowerCase().trim();
                   const staffName = staffItem.staff.fullname?.toLowerCase() || '';
@@ -596,77 +583,67 @@ export default function AssignStaffModal({
                 }
                 
                 return (
-                  <div className="grid grid-cols-1 gap-2 max-h-64 overflow-y-auto">
-                    {filteredStaff.map((staffItem) => {
-                      const staff = staffItem.staff;
-                      const isAvailable = staffItem.isAvailable;
-                      // Check if this staff is not available due to capacity (can be overridden)
-                      const conflictReason = staffItem.conflictReason || '';
-                      const isCapacityConflict = !isAvailable && canStillAddStaff && 
-                        (conflictReason.includes("capacity") || 
-                         conflictReason.includes("full") ||
-                         conflictReason === '');
-                      
-                      return (
-                        <button
-                          key={staff.userId}
-                          type="button"
-                          onClick={() => {
-                            // Allow clicking even if not available due to capacity (will show override modal)
-                            if (!isAvailable && !isCapacityConflict) {
-                              toast.error(conflictReason || 'This staff member is not available for this shift');
-                              return;
-                            }
-                            // Pass true to allow selection (capacity override will be handled in handleStaffToggle)
-                            handleStaffToggle(staff.userId, true);
-                          }}
-                          className={`p-3 rounded-lg border text-left transition-colors ${
-                            selectedStaffIds.has(staff.userId)
-                              ? 'border-sky-500 bg-sky-50'
-                              : isCapacityConflict
-                              ? 'border-amber-300 bg-amber-50 hover:border-amber-400 hover:bg-amber-100'
-                              : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-medium text-slate-900">
-                                  {staff.fullname}
-                                </span>
-                                {staff.employmentType && (
-                                  <span className="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">
-                                    {staff.employmentType.replace('_', '-')}
+                    <div className="grid grid-cols-1 gap-2 max-h-64 overflow-y-auto">
+                      {filteredStaff.map((staffItem) => {
+                        const staff = staffItem.staff;
+                        const isAvailable = staffItem.isAvailable;
+                        const conflictReason = staffItem.conflictReason || '';
+                        
+                        const isSelected = selectedStaffIds.has(staff.userId);
+                        
+                        return (
+                          <button
+                            key={staff.userId}
+                            type="button"
+                            onClick={() => {
+                              if (!isAvailable) {
+                                toast.error(conflictReason || 'This staff member is not available for this shift');
+                                return;
+                              }
+                              handleStaffToggle(staff.userId, true);
+                            }}
+                            className={`p-3 rounded-lg border text-left transition-colors ${
+                              isSelected
+                                ? 'border-sky-500 bg-sky-50'
+                                : isAvailable
+                                ? 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                                : 'border-slate-200 bg-slate-50 opacity-60 cursor-not-allowed'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-medium text-slate-900">
+                                    {staff.fullname}
                                   </span>
+                                  {staff.employmentType && (
+                                    <span className="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">
+                                      {staff.employmentType.replace('_', '-')}
+                                    </span>
+                                  )}
+                                </div>
+                                {staff.email && (
+                                  <p className="text-xs text-slate-500 mt-0.5">{staff.email}</p>
+                                )}
+                                {staff.staffBusinessRoleIds && staff.staffBusinessRoleIds.length > 0 && (
+                                  <p className="text-xs text-slate-400 mt-1">
+                                    {staff.staffBusinessRoleIds.length} role(s)
+                                  </p>
+                                )}
+                                {!isAvailable && conflictReason && (
+                                  <p className="text-xs text-red-500 mt-1">
+                                    {conflictReason}
+                                  </p>
                                 )}
                               </div>
-                              {staff.email && (
-                                <p className="text-xs text-slate-500 mt-0.5">{staff.email}</p>
-                              )}
-                              {staff.staffBusinessRoleIds && staff.staffBusinessRoleIds.length > 0 && (
-                                <p className="text-xs text-slate-400 mt-1">
-                                  {staff.staffBusinessRoleIds.length} role(s)
-                                </p>
-                              )}
-                              {isCapacityConflict && (
-                                <p className="text-xs text-amber-600 mt-1 font-medium">
-                                  Requires capacity override
-                                </p>
-                              )}
-                              {!isAvailable && !isCapacityConflict && staffItem.conflictReason && (
-                                <p className="text-xs text-red-500 mt-1">
-                                  {staffItem.conflictReason}
-                                </p>
+                              {isSelected && (
+                                <Check className="w-5 h-5 text-sky-600" />
                               )}
                             </div>
-                            {selectedStaffIds.has(staff.userId) && (
-                              <Check className="w-5 h-5 text-sky-600" />
-                            )}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
+                          </button>
+                        );
+                      })}
+                    </div>
                 );
               })()}
             </div>

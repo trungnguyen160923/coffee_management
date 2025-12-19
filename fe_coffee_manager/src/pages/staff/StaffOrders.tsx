@@ -9,6 +9,8 @@ import { CatalogProduct, CatalogRecipe } from '../../types';
 import toast from 'react-hot-toast';
 import { API_BASE_URL } from '../../config/api';
 import { OrdersSkeleton } from '../../components/staff/skeletons';
+import { ActiveShiftBanner } from '../../components/staff/ActiveShiftBanner';
+import { useActiveShift } from '../../hooks/useActiveShift';
 
 interface SimpleOrderItem {
     productName?: string;
@@ -27,6 +29,8 @@ interface SimpleOrder {
     paymentMethod?: string;
     paymentStatus?: string;
     status?: string;
+    // Backend OrderResponse also expose inferred type: 'online' | 'takeaway' | 'dine-in' | 'pos'
+    type?: string;
     items?: SimpleOrderItem[];
 }
 
@@ -86,7 +90,8 @@ export default function StaffOrders() {
 
             // Load regular orders (all staff with canViewOrders can see this)
             const regularData = await orderService.getOrdersByBranch(branchId);
-            setOrders(Array.isArray(regularData) ? regularData : []);
+            const regularArray = Array.isArray(regularData) ? regularData : [];
+            setOrders(regularArray);
 
             // Only load POS orders if user has permission to view POS
             // POS orders require CASHIER_STAFF role
@@ -94,7 +99,8 @@ export default function StaffOrders() {
             if (staffPermissions.canViewPOS && !staffPermissions.loading) {
                 try {
                     posData = await posService.getPOSOrdersByBranch(Number(branchId));
-                    setPosOrders(Array.isArray(posData) ? posData : []);
+                    const posArray = Array.isArray(posData) ? posData : [];
+                    setPosOrders(posArray);
                 } catch (posError: any) {
                     // If user doesn't have permission for POS orders, just set empty array
                     // Don't show error as this is expected for non-CASHIER_STAFF roles
@@ -170,7 +176,44 @@ export default function StaffOrders() {
     }, [staffPermissions.canViewPOS, staffPermissions.loading, activeTab]);
 
     const currentOrders = useMemo(() => {
-        return activeTab === 'regular' ? orders : posOrders;
+        if (activeTab === 'regular') {
+            return orders;
+        }
+
+        // POS tab: gộp đơn từ Regular (đặc biệt là take-away, POS guest) và POSService.
+        // Ưu tiên: giữ đầy đủ thông tin từ regular (deliveryAddress, type, ...) và
+        // bổ sung thêm các field POS (staffId, tableIds, ...) nếu có.
+        const map = new Map<string, SimpleOrder>();
+
+        // 1) Bỏ toàn bộ regular orders vào map trước
+        orders.forEach(o => {
+            if (o.orderId != null) {
+                map.set(String(o.orderId), { ...o });
+            }
+        });
+
+        // 2) Với mỗi POS order, merge chồng lên nhưng KHÔNG làm mất deliveryAddress/type từ regular
+        posOrders.forEach(o => {
+            if (o.orderId == null) return;
+            const key = String(o.orderId);
+            const existing = map.get(key);
+
+            if (existing) {
+                // Merge: giữ deliveryAddress/type từ existing nếu POS không có
+                map.set(key, {
+                    ...existing,
+                    ...o,
+                    deliveryAddress: o.deliveryAddress ?? existing.deliveryAddress,
+                    type: o.type ?? existing.type,
+                });
+            } else {
+                map.set(key, { ...o });
+            }
+        });
+
+        const merged = Array.from(map.values());
+
+        return merged;
     }, [activeTab, orders, posOrders]);
 
     const filteredOrders = useMemo(() => {
@@ -199,12 +242,27 @@ export default function StaffOrders() {
 
         // Filter orders based on tab type
         const isCorrectOrderType = (o: SimpleOrder) => {
+            const typeLower = (o.type || '').toLowerCase();
+
+            // Một đơn được coi là POS-like nếu:
+            // - Backend gán type = 'pos' | 'dine-in' | 'takeaway'
+            // - Hoặc có tableIds / staffId
+            // - Hoặc deliveryAddress = 'take-away' (fallback an toàn)
+            const isPosLike =
+                typeLower === 'pos' ||
+                typeLower === 'dine-in' ||
+                typeLower === 'takeaway' ||
+                (o.tableIds && o.tableIds.length > 0) ||
+                !!o.staffId ||
+                (o.deliveryAddress !== undefined && o.deliveryAddress !== null &&
+                    o.deliveryAddress.toString().trim().toLowerCase() === 'take-away');
+
             if (activeTab === 'pos') {
-                // POS orders: only show orders that have tables or staff_id
-                return (o.tableIds && o.tableIds.length > 0) || o.staffId;
+                // POS Orders tab: hiển thị tất cả đơn POS (dine-in + takeaway)
+                return isPosLike;
             } else {
-                // Regular orders: exclude orders that have tables or staff_id (POS orders)
-                return !((o.tableIds && o.tableIds.length > 0) || o.staffId);
+                // Regular Orders tab: loại bỏ toàn bộ đơn POS (kể cả takeaway)
+                return !isPosLike;
             }
         };
 
@@ -222,7 +280,9 @@ export default function StaffOrders() {
             return true;
         };
 
-        return currentOrders.filter(o => byStatus(o) && bySearch(o) && byDate(o) && isCorrectOrderType(o) && byOrderType(o));
+        return currentOrders.filter(
+            o => byStatus(o) && bySearch(o) && byDate(o) && isCorrectOrderType(o) && byOrderType(o)
+        );
     }, [currentOrders, statusFilter, debouncedSearch, activeTab, selectedDate, orderTypeFilter]);
 
     const statusClass = (status?: string) => {
@@ -300,12 +360,39 @@ export default function StaffOrders() {
                 
                 toast.success(`Order status updated to ${status}`);
             } else {
+                // POS orders: sử dụng reservation nếu có (giống regular),
+                // nhưng không chặn đơn cũ không có reservation (fallback).
+                if (status === 'ready') {
+                    try {
+                        await stockService.commitReservation(String(orderId));
+                    } catch (reservationError: any) {
+                        const msg = reservationError?.response?.data?.message || reservationError?.message || '';
+                        // Nếu không tìm thấy reservation (đơn POS cũ), cho phép tiếp tục update status
+                        if (!String(msg).toLowerCase().includes('no active reservation')) {
+                            toast.error(`Failed to commit reservation for POS order: ${msg || 'Unknown error'}`);
+                            return;
+                        }
+                    }
+                } else if (status === 'cancelled') {
+                    try {
+                        await stockService.releaseReservation(String(orderId));
+                    } catch (reservationError: any) {
+                        const msg = reservationError?.response?.data?.message || reservationError?.message || '';
+                        if (!String(msg).toLowerCase().includes('no active reservation')) {
+                            toast.error(`Failed to release reservation for POS order: ${msg || 'Unknown error'}`);
+                            return;
+                        }
+                    }
+                }
+
                 const updated: any = await posService.updatePOSOrderStatus(Number(orderId), status);
                 setPosOrders(prev => prev.map(o =>
                     String(o.orderId) === String(orderId)
                         ? { ...o, status: updated?.status ?? status }
                         : o
                 ));
+
+                toast.success(`POS order status updated to ${status}`);
             }
         } catch (e: any) {
             console.error('Failed to update order status', e);
@@ -517,8 +604,12 @@ export default function StaffOrders() {
         setSelectedRecipe(null);
     };
 
+    const { hasActiveShift, loading: shiftLoading } = useActiveShift();
+
     return (
-        <div className="min-h-screen bg-slate-50">
+        <>
+        <ActiveShiftBanner />
+        <div className={`min-h-screen bg-slate-50 ${!shiftLoading && !hasActiveShift ? 'pt-14' : ''}`}>
             <div className="max-w-7xl mx-auto px-2 py-4 sm:px-4 lg:px-4">
                 <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
                     <div className="flex items-center justify-between px-8 pt-6 pb-3">
@@ -544,6 +635,7 @@ export default function StaffOrders() {
                                 {staffPermissions.canViewPOS && !staffPermissions.loading && (
                                     <button
                                         onClick={() => {
+                                            console.log('[StaffOrders] Switch to POS tab');
                                             setActiveTab('pos');
                                             setOrderTypeFilter('all'); // Reset filter when switching tabs
                                         }}
@@ -717,7 +809,7 @@ export default function StaffOrders() {
                                         )}
                                         <th className="px-6 py-3 font-medium">Total Amount</th>
                                         <th className="px-6 py-3 font-medium">Payment</th>
-                                        {activeTab === 'regular' && <th className="px-6 py-3 font-medium">Status</th>}
+                                        <th className="px-6 py-3 font-medium">Status</th>
                                         <th className="px-6 py-3 font-medium">Actions</th>
                                     </tr>
                                 </thead>
@@ -764,11 +856,11 @@ export default function StaffOrders() {
                                             )}
                                             <td className="px-6 py-4 text-gray-900 font-semibold">{formatCurrency(o.totalAmount as unknown as number)}</td>
                                             <td className="px-6 py-4 text-gray-800">{o.paymentMethod || '-'}</td>
-                                            {activeTab === 'regular' && (
-                                                <td className="px-6 py-4">
-                                                    <span className={`px-3 py-1 rounded-full text-xs font-medium border ${statusClass(o.status)}`}>{(o.status || 'unknown').toUpperCase()}</span>
-                                                </td>
-                                            )}
+                                            <td className="px-6 py-4">
+                                                <span className={`px-3 py-1 rounded-full text-xs font-medium border ${statusClass(o.status)}`}>
+                                                    {(o.status || 'unknown').toUpperCase()}
+                                                </span>
+                                            </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="flex items-center gap-2">
                                                     <button
@@ -783,8 +875,8 @@ export default function StaffOrders() {
                                                         </svg>
                                                     </button>
                                                     
-                                                    {/* Logic chỉnh sửa trạng thái (đã hợp nhất) */}
-                                                    {activeTab === 'regular' && !['completed', 'cancelled'].includes((o.status || '').toLowerCase()) && (
+                                                    {/* Logic chỉnh sửa trạng thái cho cả Regular & POS */}
+                                                    {!['completed', 'cancelled'].includes((o.status || '').toLowerCase()) && (
                                                         <>
                                                             <button
                                                                 onClick={() => {
@@ -1098,5 +1190,6 @@ export default function StaffOrders() {
                 </div>
             </div>
         </div>
+        </>
     );
 }

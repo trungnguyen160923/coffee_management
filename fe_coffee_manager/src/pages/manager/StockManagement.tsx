@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { stockService, StockSearchParams, StockPageResponse, StockResponse, ManagerStockAdjustPayload } from '../../services/stockService';
 import { useAuth } from '../../context/AuthContext';
-import { Package, AlertTriangle, RefreshCw, Search, Eye, Edit3 } from 'lucide-react';
+import { Package, AlertTriangle, RefreshCw, Search, Eye, Edit3, Droplet } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { StockManagementSkeleton } from '../../components/manager/skeletons';
+import { DailyStockUsageView } from '../../components/manager/DailyStockUsageView';
 
 const adjustmentReasons = [
   { value: 'RECOUNT', label: 'Inventory recount' },
@@ -79,6 +80,7 @@ const StockManagement: React.FC = () => {
   const [forceAdjust, setForceAdjust] = useState(false);
   const [currentTime, setCurrentTime] = useState<Date>(() => new Date());
   const nowMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
+  const [activeTab, setActiveTab] = useState<'inventory' | 'daily-usage'>('inventory');
 
   const openMinutes = useMemo(
     () => parseTimeToMinutes(managerBranch?.openHours),
@@ -258,6 +260,14 @@ const StockManagement: React.FC = () => {
             </div>
             <div className="flex items-center gap-2">
               <button
+                onClick={() => setActiveTab('daily-usage')}
+                className="flex items-center space-x-2 rounded-lg bg-sky-500 text-white px-4 py-2 text-sm font-medium hover:bg-sky-600 transition"
+                title="View Daily Stock Usage"
+              >
+                <Droplet className="w-4 h-4" />
+                <span>View Daily Usage</span>
+              </button>
+              <button
                 onClick={handleRefresh}
                 disabled={loading}
                 className="flex items-center space-x-2 rounded-lg bg-slate-100 text-slate-700 px-4 py-2 text-sm font-medium hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -266,7 +276,7 @@ const StockManagement: React.FC = () => {
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 <span>Refresh</span>
               </button>
-              {managerBranch && (
+              {managerBranch && activeTab === 'inventory' && (
                 <span
                   className={`text-xs md:text-sm px-3 py-1 rounded-full font-medium ${
                     isWithinBusinessHours ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'
@@ -281,7 +291,41 @@ const StockManagement: React.FC = () => {
             </div>
           </div>
 
+          {/* Tabs */}
+          <div className="px-8 border-b border-gray-200">
+            <div className="flex gap-4">
+              <button
+                onClick={() => setActiveTab('inventory')}
+                className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === 'inventory'
+                    ? 'border-sky-500 text-sky-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Inventory Management
+              </button>
+              <button
+                onClick={() => setActiveTab('daily-usage')}
+                className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === 'daily-usage'
+                    ? 'border-sky-500 text-sky-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Daily Stock Usage
+              </button>
+            </div>
+          </div>
+
           <div className="p-8 pt-4">
+            {/* Daily Usage Tab */}
+            {activeTab === 'daily-usage' && managerBranch?.branchId && (
+              <DailyStockUsageView branchId={managerBranch.branchId} />
+            )}
+
+            {/* Inventory Management Tab */}
+            {activeTab === 'inventory' && (
+              <>
             {/* Stats Cards */}
             {stockData && (
               <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -480,6 +524,8 @@ const StockManagement: React.FC = () => {
                 <button className="px-3 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50" disabled={(stockData?.totalPages || 0) === 0 || page >= (stockData?.totalPages || 1) - 1} onClick={() => setPage((stockData?.totalPages || 1) - 1)}>Last</button>
               </div>
             </div>
+              </>
+            )}
           </div>
         </div>
 

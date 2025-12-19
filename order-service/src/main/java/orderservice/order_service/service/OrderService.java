@@ -46,7 +46,7 @@ public class OrderService {
         OrderEventProducer orderEventProducer;
         BranchClosureService branchClosureService;
 
-        @Value("${delivery.max-distance-km:10}")
+        @Value("${delivery.max-distance-km:20}")
         @NonFinal
         private double maxDeliveryDistanceKm; // Not final to allow @Value injection
 
@@ -96,19 +96,45 @@ public class OrderService {
 
                         // Sử dụng chi nhánh đã được chọn từ frontend
                         Branch selectedBranch = null;
+                        String addressForBranchSelection = request.getBranchSelectionAddress() != null
+                                        ? request.getBranchSelectionAddress()
+                                        : request.getDeliveryAddress();
+                        
                         if (request.getBranchId() != null) {
                                 // Frontend đã gửi branchId, sử dụng chi nhánh này
                                 selectedBranch = branchRepository.findById(request.getBranchId()).orElse(null);
                                 if (selectedBranch == null) {
                                         throw new AppException(ErrorCode.BRANCH_NOT_FOUND);
                                 }
+                                
+                                // QUAN TRỌNG: Luôn kiểm tra khoảng cách, kể cả khi có branchId
+                                // Để tránh bypass validation bằng cách gửi branchId
+                                if (addressForBranchSelection != null && !addressForBranchSelection.trim().isEmpty()) {
+                                        try {
+                                                double distance = branchSelectionService.calculateDistanceFromAddress(
+                                                        addressForBranchSelection, selectedBranch);
+                                                
+                                                if (distance > maxDeliveryDistanceKm) {
+                                                        String errorMessage = String.format("Chi nhánh được chọn cách địa chỉ giao hàng %.2f km, vượt quá giới hạn %s km. Vui lòng chọn địa chỉ giao hàng gần hơn hoặc liên hệ hỗ trợ.", 
+                                                                distance, maxDeliveryDistanceKm);
+                                                        log.warn("Order creation rejected: Branch {} is {} km away from address '{}', exceeds max distance {} km", 
+                                                                selectedBranch.getBranchId(), distance, addressForBranchSelection, maxDeliveryDistanceKm);
+                                                        throw new AppException(ErrorCode.DELIVERY_DISTANCE_TOO_FAR, errorMessage);
+                                                }
+                                                log.info("Validated branch {} distance: {} km from address '{}' (within {} km limit)", 
+                                                        selectedBranch.getBranchId(), distance, addressForBranchSelection, maxDeliveryDistanceKm);
+                                        } catch (AppException e) {
+                                                throw e; // Re-throw AppException (distance too far)
+                                        } catch (Exception e) {
+                                                log.error("Error validating distance for branch {}: {}", selectedBranch.getBranchId(), e.getMessage());
+                                                // Nếu lỗi geocoding, vẫn cho phép tạo order (fallback)
+                                                // Nhưng log warning để theo dõi
+                                        }
+                                }
+                                
                                 log.info("Using branch from request: {} (ID: {})", selectedBranch.getName(), selectedBranch.getBranchId());
                         } else {
                                 // Fallback: Tự động chọn chi nhánh dựa trên địa chỉ giao hàng
-                                String addressForBranchSelection = request.getBranchSelectionAddress() != null
-                                                ? request.getBranchSelectionAddress()
-                                                : request.getDeliveryAddress();
-                                
                                 // Kiểm tra khoảng cách tối đa khi tự động chọn chi nhánh
                                 selectedBranch = branchSelectionService.findNearestBranchWithinDistance(
                                                 addressForBranchSelection, maxDeliveryDistanceKm);
@@ -703,16 +729,41 @@ public class OrderService {
 
                         // Sử dụng branchId từ request nếu có, nếu không thì tự động tìm
                         Branch selectedBranch;
+                        String addressForBranchSelection = request.getBranchSelectionAddress() != null
+                                        ? request.getBranchSelectionAddress()
+                                        : request.getDeliveryAddress();
+                        
                         if (request.getBranchId() != null) {
                                 // Sử dụng branchId từ frontend (đã được kiểm tra stock)
                                 selectedBranch = branchRepository.findById(request.getBranchId())
                                                 .orElseThrow(() -> new AppException(ErrorCode.BRANCH_NOT_FOUND));
+                                
+                                // QUAN TRỌNG: Luôn kiểm tra khoảng cách, kể cả khi có branchId
+                                // Để tránh bypass validation bằng cách gửi branchId
+                                if (addressForBranchSelection != null && !addressForBranchSelection.trim().isEmpty()) {
+                                        try {
+                                                double distance = branchSelectionService.calculateDistanceFromAddress(
+                                                        addressForBranchSelection, selectedBranch);
+                                                
+                                                if (distance > maxDeliveryDistanceKm) {
+                                                        String errorMessage = String.format("Chi nhánh được chọn cách địa chỉ giao hàng %.2f km, vượt quá giới hạn %s km. Vui lòng chọn địa chỉ giao hàng gần hơn hoặc liên hệ hỗ trợ.", 
+                                                                distance, maxDeliveryDistanceKm);
+                                                        log.warn("Guest order creation rejected: Branch {} is {} km away from address '{}', exceeds max distance {} km", 
+                                                                selectedBranch.getBranchId(), distance, addressForBranchSelection, maxDeliveryDistanceKm);
+                                                        throw new AppException(ErrorCode.DELIVERY_DISTANCE_TOO_FAR, errorMessage);
+                                                }
+                                                log.info("Validated branch {} distance: {} km from address '{}' (within {} km limit)", 
+                                                        selectedBranch.getBranchId(), distance, addressForBranchSelection, maxDeliveryDistanceKm);
+                                        } catch (AppException e) {
+                                                throw e; // Re-throw AppException (distance too far)
+                                        } catch (Exception e) {
+                                                log.error("Error validating distance for branch {}: {}", selectedBranch.getBranchId(), e.getMessage());
+                                                // Nếu lỗi geocoding, vẫn cho phép tạo order (fallback)
+                                                // Nhưng log warning để theo dõi
+                                        }
+                                }
                         } else {
                                 // Fallback: tự động chọn chi nhánh dựa trên địa chỉ giao hàng
-                                String addressForBranchSelection = request.getBranchSelectionAddress() != null
-                                                ? request.getBranchSelectionAddress()
-                                                : request.getDeliveryAddress();
-                                
                                 // Kiểm tra khoảng cách tối đa khi tự động chọn chi nhánh
                                 selectedBranch = branchSelectionService.findNearestBranchWithinDistance(
                                                 addressForBranchSelection, maxDeliveryDistanceKm);
@@ -731,7 +782,7 @@ public class OrderService {
                         if (orderType == null || orderType.trim().isEmpty()) {
                                 orderType = determineOrderTypeFromGuestRequest(request);
                         }
-
+                                
                         // Validation cho takeaway order
                         if ("takeaway".equalsIgnoreCase(orderType)) {
                                 // Takeaway không cần tableId
@@ -790,7 +841,7 @@ public class OrderService {
                                                 "Total amount cannot be negative. Please check discount amount.");
                         }
 
-                        // Create order (customerId = null for guest)
+                    // Create order (customerId = null for guest)
                         Order order = Order.builder()
                                         .customerId(null) // Guest order không có customerId
                                         .customerName(request.getCustomerName())
@@ -864,21 +915,29 @@ public class OrderService {
                                 orderItemRepository.save(orderItem);
                         }
 
-                        // Cập nhật orderId trong stock_reservations nếu có cartId hoặc guestId
-                        if (request.getCartId() != null || request.getGuestId() != null) {
-                                try {
+                        // Cập nhật orderId trong stock_reservations
+                        // Ưu tiên liên kết theo holdId (POS/flow đã check & reserve trước),
+                        // fallback sang cartId/guestId như luồng guest online cũ
+                        try {
+                                if (request.getHoldId() != null && !request.getHoldId().trim().isEmpty()) {
+                                        Map<String, Object> updateRequest = new HashMap<>();
+                                        updateRequest.put("orderId", order.getOrderId());
+                                        updateRequest.put("holdId", request.getHoldId());
+
+                                        catalogServiceClient.updateReservationOrderId(updateRequest);
+                                } else if (request.getCartId() != null || request.getGuestId() != null) {
                                         Map<String, Object> updateRequest = new HashMap<>();
                                         updateRequest.put("orderId", order.getOrderId());
                                         updateRequest.put("cartId", request.getCartId());
                                         updateRequest.put("guestId", request.getGuestId());
                                         
                                         catalogServiceClient.updateOrderIdForReservationsByCartOrGuest(updateRequest);
-                                } catch (Exception e) {
-                                        // Nếu không thể cập nhật reservations, rollback order
-                                        orderRepository.delete(order);
-                                        throw new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION, 
-                                                "Failed to update stock reservations: " + e.getMessage());
                                 }
+                        } catch (Exception e) {
+                                // Nếu không thể cập nhật reservations, rollback order để tránh chênh lệch kho
+                                orderRepository.delete(order);
+                                throw new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION, 
+                                                "Failed to update stock reservations: " + e.getMessage());
                         }
 
                         // Publish order created event to Kafka for staff notification
@@ -951,8 +1010,12 @@ public class OrderService {
                         catalogServiceClient.commitReservation(request);
                         log.info("Committed reservation for order {} with holdId {}", order.getOrderId(), holdId);
                 } catch (FeignException.NotFound e) {
-                        log.info("No reservation found for order {} during commit. Nothing to do.", order.getOrderId());
+                        // Không tìm thấy reservation khi commit: có thể đã hết hạn hoặc bị dọn dẹp.
+                        // Không auto-cancel order ở đây, chỉ log để debug.
+                        log.warn("No reservation found for order {} during commit. Reservation may have been expired or cleaned up. Skipping commit.", 
+                                        order.getOrderId());
                 } catch (Exception e) {
+                        // Commit thất bại do lỗi hệ thống / kết nối: log và ném lỗi để FE biết, nhưng KHÔNG auto-cancel order.
                         log.error("Failed to commit reservation for order {}: {}", order.getOrderId(), e.getMessage(), e);
                         throw new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION,
                                         "Failed to commit reservation. Please try again later.");
@@ -978,7 +1041,24 @@ public class OrderService {
                         log.info("Released reservations for order {} with holdId {}", orderId, holdIdValue);
                 } catch (FeignException.NotFound e) {
                         log.info("No active reservation found for order {}. Nothing to release.", orderId);
+                } catch (FeignException e) {
+                        // Kiểm tra xem có phải lỗi do reservation đã COMMITTED không
+                        String errorMessage = e.getMessage();
+                        if (errorMessage != null && errorMessage.contains("COMMITTED")) {
+                                log.info("Reservation for order {} is already COMMITTED. Skipping release (stock already deducted).", orderId);
+                                return; // Không throw exception để cho phép cancel order tiếp tục
+                        }
+                        // Các lỗi khác từ Feign → log và throw
+                        log.error("Failed to release reservations for order {}: {}", orderId, e.getMessage(), e);
+                        throw new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION,
+                                        "Failed to release stock reservations. Please try again later.");
                 } catch (Exception e) {
+                        // Kiểm tra xem có phải lỗi do reservation đã COMMITTED không
+                        String errorMessage = e.getMessage();
+                        if (errorMessage != null && errorMessage.contains("COMMITTED")) {
+                                log.info("Reservation for order {} is already COMMITTED. Skipping release (stock already deducted).", orderId);
+                                return; // Không throw exception để cho phép cancel order tiếp tục
+                        }
                         log.error("Failed to release reservations for order {}: {}", orderId, e.getMessage(), e);
                         throw new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION,
                                         "Failed to release stock reservations. Please try again later.");

@@ -7,6 +7,8 @@ import { UpdateTableStatusRequest } from '../../types/table';
 import { TableAssignmentModal } from '../../components/table';
 import { ReservationsSkeleton } from '../../components/staff/skeletons';
 import { RefreshCw } from 'lucide-react';
+import { ActiveShiftBanner } from '../../components/staff/ActiveShiftBanner';
+import { useActiveShift } from '../../hooks/useActiveShift';
 
 export default function StaffReservations() {
     const { user } = useAuth();
@@ -37,6 +39,8 @@ export default function StaffReservations() {
         window.setTimeout(() => setToast(null), 2500);
     };
 
+    const { hasActiveShift, loading: shiftLoading } = useActiveShift();
+    
     const branchId = useMemo(() => {
         if (user?.branch?.branchId) return user.branch.branchId;
         if (user?.branchId) return user.branchId;
@@ -248,13 +252,14 @@ export default function StaffReservations() {
 
     return (
         <>
+            <ActiveShiftBanner />
             {toast && (
                 <div className={`fixed top-4 right-4 z-[60] px-4 py-3 rounded-lg shadow-lg text-sm border ${toast.type === 'error' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-green-50 text-green-700 border-green-200'
                     }`}>
                     {toast.message}
                 </div>
             )}
-            <div className="min-h-screen bg-slate-50">
+            <div className={`min-h-screen bg-slate-50 ${!shiftLoading && !hasActiveShift ? 'pt-14' : ''}`}>
                 <div className="max-w-7xl mx-auto px-2 py-4 sm:px-4 lg:px-4">
                     <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
                         <div className="flex items-center justify-between px-8 pt-6 pb-3">

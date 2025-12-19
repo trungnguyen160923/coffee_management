@@ -17,5 +17,6 @@ public interface ManagerProfileMapper {
     ManagerProfile toManagerProfile(ManagerProfileCreationRequest request);
     
     @Mapping(target = "branch", ignore = true)
+    @Mapping(target = "overtimeRate", ignore = true)
     ManagerProfileResponse toManagerProfileResponse(ManagerProfile managerProfile);
 }

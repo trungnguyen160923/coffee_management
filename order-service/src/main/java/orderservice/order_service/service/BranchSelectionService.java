@@ -7,6 +7,7 @@ import orderservice.order_service.mapper.BranchMapper;
 import orderservice.order_service.dto.response.BranchResponse;
 import orderservice.order_service.dto.response.BranchWithDistanceResponse;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -26,6 +27,9 @@ public class BranchSelectionService {
 
     @Autowired
     private BranchMapper branchMapper;
+
+    @Value("${delivery.max-distance-km:20}")
+    private double maxDeliveryDistanceKm;
 
     /**
      * Kiểm tra chi nhánh có đang trong giờ làm việc không
@@ -54,6 +58,7 @@ public class BranchSelectionService {
     /**
      * Tìm chi nhánh gần nhất dựa trên địa chỉ khách hàng
      * Chỉ trả về chi nhánh đang hoạt động (không nghỉ, có trong openDays, và trong giờ làm việc)
+     * QUAN TRỌNG: Tự động lọc theo khoảng cách tối đa (maxDeliveryDistanceKm)
      */
     public Branch findNearestBranch(String customerAddress) {
         try {
@@ -79,7 +84,7 @@ public class BranchSelectionService {
                 return null;
             }
 
-            // 3️⃣ Tìm chi nhánh gần nhất (ưu tiên branch_id nhỏ nếu khoảng cách bằng nhau)
+            // 3️⃣ Tìm chi nhánh gần nhất trong phạm vi cho phép (ưu tiên branch_id nhỏ nếu khoảng cách bằng nhau)
             Branch nearestBranch = null;
             double minDistance = Double.MAX_VALUE;
 
@@ -89,6 +94,13 @@ public class BranchSelectionService {
                         branch.getLongitude().doubleValue());
 
                 double distance = geocodingService.calculateDistance(customerLocation, branchLocation);
+
+                // QUAN TRỌNG: Chỉ xem xét chi nhánh trong phạm vi cho phép
+                if (distance > maxDeliveryDistanceKm) {
+                    log.debug("Branch {} is {} km away, exceeds max distance {} km, skipping", 
+                            branch.getBranchId(), distance, maxDeliveryDistanceKm);
+                    continue; // Bỏ qua chi nhánh quá xa
+                }
 
                 // So sánh ổn định: khoảng cách nhỏ hơn, hoặc bằng nhưng ID nhỏ hơn
                 if (distance < minDistance - 0.05 ||
@@ -100,11 +112,12 @@ public class BranchSelectionService {
             }
 
             if (nearestBranch == null) {
-                nearestBranch = allBranches.get(0);
+                log.warn("No branches found within {} km from address: {}", maxDeliveryDistanceKm, customerAddress);
+                return null; // Không có chi nhánh trong phạm vi
             }
 
-            log.info("Selected nearest active branch: {} (ID: {}) for address: {}", 
-                    nearestBranch.getName(), nearestBranch.getBranchId(), customerAddress);
+            log.info("Selected nearest active branch: {} (ID: {}) at {} km from address: {} (within {} km limit)", 
+                    nearestBranch.getName(), nearestBranch.getBranchId(), minDistance, customerAddress, maxDeliveryDistanceKm);
             return nearestBranch;
 
         } catch (Exception e) {
@@ -133,6 +146,27 @@ public class BranchSelectionService {
     }
 
     /**
+     * Tính khoảng cách từ địa chỉ đến chi nhánh
+     * @param customerAddress - Địa chỉ khách hàng
+     * @param branch - Chi nhánh
+     * @return Khoảng cách (km)
+     */
+    public double calculateDistanceFromAddress(String customerAddress, Branch branch) {
+        try {
+            GeocodingService.Coordinates customerLocation = geocodingService.geocodeAddress(customerAddress);
+            GeocodingService.Coordinates branchLocation = new GeocodingService.Coordinates(
+                    branch.getLatitude().doubleValue(),
+                    branch.getLongitude().doubleValue());
+            
+            return geocodingService.calculateDistance(customerLocation, branchLocation);
+        } catch (Exception e) {
+            log.error("Error calculating distance from address '{}' to branch {}: {}", 
+                    customerAddress, branch.getBranchId(), e.getMessage());
+            throw new RuntimeException("Failed to calculate distance", e);
+        }
+    }
+
+    /**
      * Tìm chi nhánh gần nhất với giới hạn khoảng cách tối đa
      * Chỉ trả về chi nhánh đang hoạt động (không nghỉ và có trong openDays)
      */
@@ -142,12 +176,7 @@ public class BranchSelectionService {
 
         if (nearestBranch != null) {
             try {
-                GeocodingService.Coordinates customerLocation = geocodingService.geocodeAddress(customerAddress);
-                GeocodingService.Coordinates branchLocation = new GeocodingService.Coordinates(
-                        nearestBranch.getLatitude().doubleValue(),
-                        nearestBranch.getLongitude().doubleValue());
-
-                double distance = geocodingService.calculateDistance(customerLocation, branchLocation);
+                double distance = calculateDistanceFromAddress(customerAddress, nearestBranch);
 
                 if (distance > maxDistanceKm) {
                     log.debug("Nearest active branch {} is {} km away, exceeds max distance {} km", 
@@ -166,11 +195,25 @@ public class BranchSelectionService {
     /**
      * Tìm n chi nhánh gần nhất dựa trên địa chỉ khách hàng
      * Chỉ trả về các chi nhánh đang hoạt động (không nghỉ và có trong openDays)
+     * QUAN TRỌNG: Tự động lọc theo khoảng cách tối đa (maxDeliveryDistanceKm)
      * @param customerAddress - Địa chỉ khách hàng
      * @param limit - Số lượng chi nhánh cần lấy
-     * @return Danh sách n chi nhánh gần nhất, sắp xếp theo khoảng cách
+     * @return Danh sách n chi nhánh gần nhất trong phạm vi cho phép, sắp xếp theo khoảng cách
      */
     public List<Branch> findTopNearestBranches(String customerAddress, int limit) {
+        // Tự động filter theo khoảng cách tối đa
+        return findTopNearestBranches(customerAddress, limit, maxDeliveryDistanceKm);
+    }
+
+    /**
+     * Tìm n chi nhánh gần nhất dựa trên địa chỉ khách hàng với giới hạn khoảng cách
+     * Chỉ trả về các chi nhánh đang hoạt động (không nghỉ và có trong openDays)
+     * @param customerAddress - Địa chỉ khách hàng
+     * @param limit - Số lượng chi nhánh cần lấy
+     * @param maxDistanceKm - Khoảng cách tối đa (km), null nếu không giới hạn
+     * @return Danh sách n chi nhánh gần nhất, sắp xếp theo khoảng cách
+     */
+    public List<Branch> findTopNearestBranches(String customerAddress, int limit, Double maxDistanceKm) {
         try {
             // 1️⃣ Geocoding địa chỉ khách hàng
             GeocodingService.Coordinates customerLocation = geocodingService.geocodeAddress(customerAddress);
@@ -202,6 +245,8 @@ public class BranchSelectionService {
                         double distance = geocodingService.calculateDistance(customerLocation, branchLocation);
                         return new BranchWithDistance(branch, distance);
                     })
+                    // QUAN TRỌNG: Lọc theo khoảng cách tối đa nếu có
+                    .filter(branchWithDistance -> maxDistanceKm == null || branchWithDistance.distance <= maxDistanceKm)
                     .sorted((a, b) -> {
                         // Sắp xếp theo khoảng cách, nếu bằng nhau thì theo branch_id
                         int distanceComparison = Double.compare(a.distance, b.distance);
@@ -240,15 +285,17 @@ public class BranchSelectionService {
     /**
      * Tìm n chi nhánh gần nhất với khoảng cách và thời gian giao hàng ước tính
      * Tận dụng method findTopNearestBranches() có sẵn và thêm thông tin khoảng cách
+     * QUAN TRỌNG: Tự động lọc theo khoảng cách tối đa (maxDeliveryDistanceKm)
      * @param customerAddress - Địa chỉ khách hàng
      * @param limit - Số lượng chi nhánh cần lấy
-     * @return Danh sách chi nhánh với khoảng cách và thời gian giao hàng
+     * @return Danh sách chi nhánh với khoảng cách và thời gian giao hàng (chỉ trong phạm vi cho phép)
      */
     public List<BranchWithDistanceResponse> findTopNearestBranchesWithDistance(
             String customerAddress, int limit) {
         try {
             // Tận dụng method có sẵn để lấy danh sách chi nhánh gần nhất
-            List<Branch> nearestBranches = findTopNearestBranches(customerAddress, limit);
+            // QUAN TRỌNG: Lọc theo khoảng cách tối đa
+            List<Branch> nearestBranches = findTopNearestBranches(customerAddress, limit, maxDeliveryDistanceKm);
             
             if (nearestBranches == null || nearestBranches.isEmpty()) {
                 log.warn("No branches found for address: {}", customerAddress);

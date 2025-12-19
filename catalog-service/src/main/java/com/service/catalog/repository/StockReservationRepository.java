@@ -70,6 +70,23 @@ public interface StockReservationRepository extends JpaRepository<StockReservati
                                                        @Param("status") StockReservation.ReservationStatus status);
     
     /**
+     * Tính tổng quantity đã commit từ một thời điểm cụ thể
+     */
+    @Query("SELECT sr.ingredientId, COALESCE(SUM(sr.quantityReserved), 0) " +
+            "FROM StockReservation sr " +
+            "WHERE sr.branchId = :branchId " +
+            "AND sr.ingredientId = :ingredientId " +
+            "AND sr.status = :status " +
+            "AND sr.updatedAt >= :fromTime " +
+            "AND sr.updatedAt < :toTime " +
+            "GROUP BY sr.ingredientId")
+    List<Object[]> sumCommittedQuantityFromTime(@Param("branchId") Integer branchId,
+                                                @Param("ingredientId") Integer ingredientId,
+                                                @Param("fromTime") LocalDateTime fromTime,
+                                                @Param("toTime") LocalDateTime toTime,
+                                                @Param("status") StockReservation.ReservationStatus status);
+    
+    /**
      * Tìm reservations theo group ID và ingredient
      */
     @Query("SELECT sr FROM StockReservation sr WHERE sr.reservationGroupId = :groupId AND sr.ingredientId = :ingredientId AND sr.status = 'ACTIVE'")

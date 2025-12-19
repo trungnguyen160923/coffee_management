@@ -6,6 +6,8 @@ import com.service.catalog.dto.request.stock.UpdateStockAdjustmentRequest;
 import com.service.catalog.dto.response.stock.DailyStockReconciliationResponse;
 import com.service.catalog.dto.response.stock.DailyUsageSummaryResponse;
 import com.service.catalog.dto.response.stock.StockAdjustmentResponse;
+import com.service.catalog.dto.response.stock.StockAdjustmentEntryResponse;
+import com.service.catalog.dto.request.stock.UpdateStockAdjustmentEntryRequest;
 import com.service.catalog.entity.Ingredient;
 import com.service.catalog.entity.InventoryTransaction;
 import com.service.catalog.entity.Stock;
@@ -34,8 +36,12 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -62,8 +68,6 @@ public class StockAdjustmentService {
 
     @Transactional
     public DailyStockReconciliationResponse reconcile(DailyStockReconciliationRequest request) {
-        Map<Integer, BigDecimal> systemUsageMap = preloadSystemUsage(request.getBranchId(), request.getAdjustmentDate());
-
         List<DailyStockReconciliationResponse.DailyStockReconciliationResult> results = new ArrayList<>();
         int committed = 0;
         BigDecimal totalVariance = BigDecimal.ZERO;
@@ -99,7 +103,11 @@ public class StockAdjustmentService {
             adjustment.setLastEntryAt(entry.getEntryTime());
 
             BigDecimal previousVariance = adjustment.getVariance() != null ? adjustment.getVariance() : BigDecimal.ZERO;
-            BigDecimal systemQuantity = systemUsageMap.getOrDefault(item.getIngredientId(), BigDecimal.ZERO);
+            // Tính system_quantity có điều chỉnh cho adjustments đã commit
+            BigDecimal systemQuantity = calculateAdjustedSystemQuantity(
+                    request.getBranchId(), 
+                    item.getIngredientId(), 
+                    request.getAdjustmentDate());
             adjustment.setSystemQuantity(systemQuantity);
 
             BigDecimal newActualQuantity = (adjustment.getActualQuantity() != null ? adjustment.getActualQuantity() : BigDecimal.ZERO)
@@ -236,33 +244,12 @@ public class StockAdjustmentService {
             throw new AppException(ErrorCode.ADJUSTMENT_NOT_PENDING);
         }
 
-        // Cập nhật actual quantity và notes
-        BigDecimal newActualQuantity = request.getActualQuantity();
-        adjustment.setActualQuantity(newActualQuantity);
-        
-        if (request.getNotes() != null) {
-            adjustment.setNotes(request.getNotes());
-        }
+        // Cập nhật notes (actualQuantity sẽ được tính lại từ entries)
+        // Cho phép cả set giá trị mới lẫn xóa (notes = null)
+        adjustment.setNotes(request.getNotes());
 
-        // Tính lại variance và quantity
-        BigDecimal systemQuantity = adjustment.getSystemQuantity();
-        BigDecimal variance = newActualQuantity.subtract(systemQuantity);
-        adjustment.setVariance(variance);
-
-        // Xác định lại adjustment type và quantity
-        if (variance.abs().compareTo(BigDecimal.ZERO) == 0) {
-            // Nếu variance = 0, có thể xóa adjustment này hoặc giữ nguyên
-            // Ở đây ta giữ nguyên nhưng đặt quantity = 0
-            adjustment.setQuantity(BigDecimal.ZERO);
-            adjustment.setAdjustmentType(AdjustmentType.ADJUST_IN); // Mặc định
-        } else {
-            AdjustmentType adjustmentType = variance.compareTo(BigDecimal.ZERO) > 0 
-                    ? AdjustmentType.ADJUST_OUT 
-                    : AdjustmentType.ADJUST_IN;
-            adjustment.setAdjustmentType(adjustmentType);
-            adjustment.setQuantity(variance.abs());
-        }
-
+        // Recalculate quantities from entries to keep adjustment consistent
+        recalculateFromEntries(adjustment);
         adjustment.setUpdatedAt(LocalDateTime.now());
         StockAdjustment saved = stockAdjustmentRepository.save(adjustment);
         return toResponse(saved);
@@ -279,6 +266,11 @@ public class StockAdjustmentService {
             throw new AppException(ErrorCode.ADJUSTMENT_ALREADY_COMMITTED);
         }
 
+        // Xóa luôn các entries liên quan để tránh mồ côi dữ liệu
+        List<StockAdjustmentEntry> entries = stockAdjustmentEntryRepository.findByAdjustmentAdjustmentId(adjustmentId);
+        if (entries != null && !entries.isEmpty()) {
+            stockAdjustmentEntryRepository.deleteAll(entries);
+        }
         stockAdjustmentRepository.delete(adjustment);
     }
 
@@ -308,11 +300,24 @@ public class StockAdjustmentService {
                                                            AdjustmentStatus status,
                                                            int page,
                                                            int size) {
+        // Debug log: input params
+        log.info("[StockAdjustmentService] searchAdjustments called with branchId={}, date={}, status={}, page={}, size={}",
+                branchId, adjustmentDate, status, page, size);
+
         Page<StockAdjustment> adjustments = stockAdjustmentRepository.searchAdjustments(
                 branchId,
                 adjustmentDate,
                 status,
                 PageRequest.of(page, size));
+        
+        // Debug log: result page summary
+        log.info("[StockAdjustmentService] searchAdjustments result: totalElements={}, totalPages={}, pageNumber={}, pageSize={}, pageContentSize={}",
+                adjustments.getTotalElements(),
+                adjustments.getTotalPages(),
+                adjustments.getNumber(),
+                adjustments.getSize(),
+                adjustments.getContent() != null ? adjustments.getContent().size() : 0);
+
         return adjustments.map(this::toResponse);
     }
 
@@ -337,12 +342,10 @@ public class StockAdjustmentService {
                     .items(List.of())
                     .build();
         }
-        Map<Integer, StockAdjustment> adjustmentMap = dailyAdjustments.stream()
-                .collect(Collectors.toMap(
-                        adj -> adj.getIngredient().getIngredientId(),
-                        adj -> adj,
-                        (existing, replacement) -> existing // Nếu có nhiều, lấy cái đầu tiên
-                ));
+
+        // Group all DAILY adjustments by ingredient, then by status
+        Map<Integer, List<StockAdjustment>> adjustmentsByIngredient = dailyAdjustments.stream()
+                .collect(Collectors.groupingBy(adj -> adj.getIngredient().getIngredientId()));
 
         // 3. Build response items
         List<DailyUsageSummaryResponse.DailyUsageItem> items = new ArrayList<>();
@@ -354,48 +357,130 @@ public class StockAdjustmentService {
                     .orElse(null);
             if (ingredient == null) continue;
 
-            StockAdjustment adjustment = adjustmentMap.get(ingredientId);
-            boolean hasAdjustment = adjustment != null;
+            List<StockAdjustment> ingredientAdjustments = adjustmentsByIngredient.getOrDefault(
+                    ingredientId,
+                    Collections.emptyList()
+            );
 
-            DailyUsageSummaryResponse.DailyUsageItem.DailyUsageItemBuilder itemBuilder = DailyUsageSummaryResponse.DailyUsageItem.builder()
-                    .ingredientId(ingredientId)
-                    .ingredientName(ingredient.getName())
-                    .unitCode(ingredient.getUnit() != null ? ingredient.getUnit().getCode() : null)
-                    .unitName(ingredient.getUnit() != null ? ingredient.getUnit().getName() : null)
-                    .systemQuantity(systemQty)
-                    .hasAdjustment(hasAdjustment);
+            if (ingredientAdjustments.isEmpty()) {
+                // Không có adjustment nào cho nguyên liệu này → chỉ có system usage
+                DailyUsageSummaryResponse.DailyUsageItem item = DailyUsageSummaryResponse.DailyUsageItem.builder()
+                        .ingredientId(ingredientId)
+                        .ingredientName(ingredient.getName())
+                        .unitCode(ingredient.getUnit() != null ? ingredient.getUnit().getCode() : null)
+                        .unitName(ingredient.getUnit() != null ? ingredient.getUnit().getName() : null)
+                        .systemQuantity(systemQty)
+                        .hasAdjustment(false)
+                        .build();
+                items.add(item);
+            } else {
+                // Gộp theo status để FE có thể tách bảng Committed / Non-committed
+                Map<AdjustmentStatus, List<StockAdjustment>> byStatus = ingredientAdjustments.stream()
+                        .collect(Collectors.groupingBy(StockAdjustment::getStatus));
 
-            if (hasAdjustment) {
-                itemBuilder
-                        .actualQuantity(adjustment.getActualQuantity())
-                        .variance(adjustment.getVariance())
-                        .adjustmentStatus(adjustment.getStatus().name())
-                        .entryCount(adjustment.getEntryCount())
-                        .lastEntryAt(adjustment.getLastEntryAt());
-            }
+                for (Map.Entry<AdjustmentStatus, List<StockAdjustment>> statusEntry : byStatus.entrySet()) {
+                    AdjustmentStatus status = statusEntry.getKey();
+                    List<StockAdjustment> group = statusEntry.getValue();
 
-            items.add(itemBuilder.build());
-        }
+                    BigDecimal totalActual = group.stream()
+                            .map(StockAdjustment::getActualQuantity)
+                            .filter(Objects::nonNull)
+                            .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // 4. Thêm các adjustments không có trong systemUsageMap (ví dụ: chỉ ghi nhận nhưng chưa có đơn hàng)
-        dailyAdjustments.stream()
-                .filter(adj -> !systemUsageMap.containsKey(adj.getIngredient().getIngredientId()))
-                .forEach(adj -> {
-                    Ingredient ingredient = adj.getIngredient();
+                    BigDecimal totalVariance = group.stream()
+                            .map(StockAdjustment::getVariance)
+                            .filter(Objects::nonNull)
+                            .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+                    Integer totalEntryCount = group.stream()
+                            .map(StockAdjustment::getEntryCount)
+                            .filter(Objects::nonNull)
+                            .reduce(0, Integer::sum);
+
+                    LocalDateTime lastEntryAt = group.stream()
+                            .map(StockAdjustment::getLastEntryAt)
+                            .filter(Objects::nonNull)
+                            .max(LocalDateTime::compareTo)
+                            .orElse(null);
+
                     DailyUsageSummaryResponse.DailyUsageItem item = DailyUsageSummaryResponse.DailyUsageItem.builder()
-                            .ingredientId(ingredient.getIngredientId())
+                            .ingredientId(ingredientId)
                             .ingredientName(ingredient.getName())
                             .unitCode(ingredient.getUnit() != null ? ingredient.getUnit().getCode() : null)
                             .unitName(ingredient.getUnit() != null ? ingredient.getUnit().getName() : null)
-                            .systemQuantity(BigDecimal.ZERO)
+                            .systemQuantity(systemQty)
                             .hasAdjustment(true)
-                            .actualQuantity(adj.getActualQuantity())
-                            .variance(adj.getVariance())
-                            .adjustmentStatus(adj.getStatus().name())
-                            .entryCount(adj.getEntryCount())
-                            .lastEntryAt(adj.getLastEntryAt())
+                            .actualQuantity(totalActual)
+                            .variance(totalVariance)
+                            .adjustmentStatus(status != null ? status.name() : null)
+                            .entryCount(totalEntryCount)
+                            .lastEntryAt(lastEntryAt)
                             .build();
+
                     items.add(item);
+                }
+            }
+        }
+
+        // 4. Thêm các adjustments không có trong systemUsageMap (ví dụ: chỉ ghi nhận nhưng chưa có đơn hàng)
+        adjustmentsByIngredient.entrySet().stream()
+                .filter(entry2 -> !systemUsageMap.containsKey(entry2.getKey()))
+                .forEach(entry2 -> {
+                    Integer ingredientId = entry2.getKey();
+                    List<StockAdjustment> ingredientAdjustments = entry2.getValue();
+                    if (ingredientAdjustments == null || ingredientAdjustments.isEmpty()) {
+                        return;
+                    }
+
+                    Ingredient ingredient = ingredientAdjustments.get(0).getIngredient();
+                    if (ingredient == null) {
+                        return;
+                    }
+
+                    Map<AdjustmentStatus, List<StockAdjustment>> byStatus = ingredientAdjustments.stream()
+                            .collect(Collectors.groupingBy(StockAdjustment::getStatus));
+
+                    for (Map.Entry<AdjustmentStatus, List<StockAdjustment>> statusEntry : byStatus.entrySet()) {
+                        AdjustmentStatus status = statusEntry.getKey();
+                        List<StockAdjustment> group = statusEntry.getValue();
+
+                        BigDecimal totalActual = group.stream()
+                                .map(StockAdjustment::getActualQuantity)
+                                .filter(Objects::nonNull)
+                                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+                        BigDecimal totalVariance = group.stream()
+                                .map(StockAdjustment::getVariance)
+                                .filter(Objects::nonNull)
+                                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+                        Integer totalEntryCount = group.stream()
+                                .map(StockAdjustment::getEntryCount)
+                                .filter(Objects::nonNull)
+                                .reduce(0, Integer::sum);
+
+                        LocalDateTime lastEntryAt = group.stream()
+                                .map(StockAdjustment::getLastEntryAt)
+                                .filter(Objects::nonNull)
+                                .max(LocalDateTime::compareTo)
+                                .orElse(null);
+
+                        DailyUsageSummaryResponse.DailyUsageItem item = DailyUsageSummaryResponse.DailyUsageItem.builder()
+                                .ingredientId(ingredient.getIngredientId())
+                                .ingredientName(ingredient.getName())
+                                .unitCode(ingredient.getUnit() != null ? ingredient.getUnit().getCode() : null)
+                                .unitName(ingredient.getUnit() != null ? ingredient.getUnit().getName() : null)
+                                .systemQuantity(BigDecimal.ZERO)
+                                .hasAdjustment(true)
+                                .actualQuantity(totalActual)
+                                .variance(totalVariance)
+                                .adjustmentStatus(status != null ? status.name() : null)
+                                .entryCount(totalEntryCount)
+                                .lastEntryAt(lastEntryAt)
+                                .build();
+
+                        items.add(item);
+                    }
                 });
 
         // Sort by ingredient name
@@ -453,30 +538,41 @@ public class StockAdjustmentService {
                                                    String adjustedBy,
                                                    Integer userId,
                                                    String notes) {
-        return stockAdjustmentRepository
-                .findByBranchIdAndIngredientIngredientIdAndAdjustmentDate(
+        // Tìm tất cả adjustments cho cùng branch, ingredient và date
+        // Có thể có nhiều adjustments (COMMITTED + PENDING)
+        List<StockAdjustment> allAdjustments = stockAdjustmentRepository
+                .findAllByBranchIdAndIngredientIdAndAdjustmentDate(
                         branchId,
                         ingredient.getIngredientId(),
-                        adjustmentDate)
-                .orElseGet(() -> {
-                    StockAdjustment adjustment = StockAdjustment.builder()
-                            .branchId(branchId)
-                            .ingredient(ingredient)
-                            .adjustmentType(AdjustmentType.ADJUST_OUT)
-                            .status(AdjustmentStatus.PENDING)
-                            .quantity(BigDecimal.ZERO)
-                            .systemQuantity(BigDecimal.ZERO)
-                            .actualQuantity(BigDecimal.ZERO)
-                            .variance(BigDecimal.ZERO)
-                            .entryCount(0)
-                            .reason(REASON_DAILY)
-                            .userId(userId)
-                            .adjustedBy(adjustedBy)
-                            .adjustmentDate(adjustmentDate)
-                            .notes(notes)
-                            .build();
-                    return stockAdjustmentRepository.save(adjustment);
-                });
+                        adjustmentDate);
+        
+        // Tìm adjustment PENDING hoặc CANCELLED (có thể chỉnh sửa)
+        Optional<StockAdjustment> existingAdjustment = allAdjustments.stream()
+                .filter(adj -> adj.getStatus() == AdjustmentStatus.PENDING || adj.getStatus() == AdjustmentStatus.CANCELLED)
+                .findFirst();
+        
+        if (existingAdjustment.isPresent()) {
+            return existingAdjustment.get();
+        }
+        
+        // Nếu không tìm thấy PENDING hoặc CANCELLED, tạo adjustment mới
+        StockAdjustment adjustment = StockAdjustment.builder()
+                .branchId(branchId)
+                .ingredient(ingredient)
+                .adjustmentType(AdjustmentType.ADJUST_OUT)
+                .status(AdjustmentStatus.PENDING)
+                .quantity(BigDecimal.ZERO)
+                .systemQuantity(BigDecimal.ZERO)
+                .actualQuantity(BigDecimal.ZERO)
+                .variance(BigDecimal.ZERO)
+                .entryCount(0)
+                .reason(REASON_DAILY)
+                .userId(userId)
+                .adjustedBy(adjustedBy)
+                .adjustmentDate(adjustmentDate)
+                .notes(notes)
+                .build();
+        return stockAdjustmentRepository.save(adjustment);
     }
 
     private int autoCommitBranchAdjustments(Integer branchId) {
@@ -516,14 +612,11 @@ public class StockAdjustmentService {
      * Xử lý trường hợp adjustment được tạo trước khi có đơn hàng
      */
     private void recalculateAndUpdateAdjustment(StockAdjustment adjustment) {
-        // Tính lại system_quantity từ stock_reservations COMMITTED trong ngày
-        Map<Integer, BigDecimal> systemUsageMap = preloadSystemUsage(
-                adjustment.getBranchId(), 
+        // Tính lại system_quantity có điều chỉnh cho adjustments đã commit
+        BigDecimal newSystemQuantity = calculateAdjustedSystemQuantity(
+                adjustment.getBranchId(),
+                adjustment.getIngredient().getIngredientId(),
                 adjustment.getAdjustmentDate());
-        
-        BigDecimal newSystemQuantity = systemUsageMap.getOrDefault(
-                adjustment.getIngredient().getIngredientId(), 
-                BigDecimal.ZERO);
         
         BigDecimal oldSystemQuantity = adjustment.getSystemQuantity();
         BigDecimal actualQuantity = adjustment.getActualQuantity();
@@ -607,6 +700,61 @@ public class StockAdjustmentService {
         ));
     }
 
+    /**
+     * Tính system_quantity từ thời điểm adjustment cuối cùng commit → hiện tại
+     * Logic: Khi adjustment commit → đã trừ kho, từ đó trở đi orders mới sẽ tính vào system_quantity mới
+     * 
+     * @param branchId Branch ID
+     * @param ingredientId Ingredient ID
+     * @param adjustmentDate Ngày adjustment
+     * @return System quantity từ thời điểm commit cuối cùng
+     */
+    private BigDecimal calculateAdjustedSystemQuantity(Integer branchId, Integer ingredientId, LocalDate adjustmentDate) {
+        // 1. Tìm adjustment cuối cùng đã commit cho cùng ingredient/ngày
+        Optional<StockAdjustment> lastCommittedAdjustment = stockAdjustmentRepository
+                .findByBranchIdAndAdjustmentDate(branchId, adjustmentDate)
+                .stream()
+                .filter(adj -> adj.getIngredient().getIngredientId().equals(ingredientId))
+                .filter(adj -> adj.getStatus() == AdjustmentStatus.COMMITTED || 
+                              adj.getStatus() == AdjustmentStatus.AUTO_COMMITTED)
+                .max(Comparator.comparing(StockAdjustment::getUpdatedAt));
+        
+        // 2. Xác định thời điểm bắt đầu tính orders
+        LocalDateTime startTime;
+        if (lastCommittedAdjustment.isPresent()) {
+            // Nếu có adjustment đã commit → tính từ thời điểm commit đó
+            startTime = lastCommittedAdjustment.get().getUpdatedAt();
+            log.debug("[StockAdjustment] Found last committed adjustment at {} for ingredient {} on {}",
+                    startTime, ingredientId, adjustmentDate);
+        } else {
+            // Nếu chưa có adjustment nào commit → tính từ đầu ngày
+            startTime = adjustmentDate.atStartOfDay();
+            log.debug("[StockAdjustment] No committed adjustment found, calculating from start of day for ingredient {} on {}",
+                    ingredientId, adjustmentDate);
+        }
+        
+        // 3. Tính orders từ thời điểm đó → cuối ngày
+        LocalDateTime endTime = adjustmentDate.plusDays(1).atStartOfDay();
+        List<Object[]> raw = stockReservationRepository.sumCommittedQuantityFromTime(
+                branchId, ingredientId, startTime, endTime, StockReservation.ReservationStatus.COMMITTED);
+        
+        BigDecimal ordersQuantity = BigDecimal.ZERO;
+        if (raw != null && !raw.isEmpty()) {
+            for (Object[] row : raw) {
+                if (row[0].equals(ingredientId)) {
+                    ordersQuantity = toBigDecimal(row[1]);
+                    break;
+                }
+            }
+        }
+        
+        log.debug("[StockAdjustment] Calculated system quantity for ingredient {} on {}: " +
+                        "fromTime={}, ordersQuantity={}",
+                ingredientId, adjustmentDate, startTime, ordersQuantity);
+        
+        return ordersQuantity;
+    }
+
     private void applyAdjustment(StockAdjustment adjustment, boolean autoCommit) {
         Stock stock = stockRepository.findByBranchIdAndIngredientIngredientId(adjustment.getBranchId(),
                         adjustment.getIngredient().getIngredientId())
@@ -675,6 +823,145 @@ public class StockAdjustmentService {
 
     private BigDecimal defaultUnitPrice(Ingredient ingredient) {
         return ingredient.getUnitPrice() != null ? ingredient.getUnitPrice() : BigDecimal.ZERO;
+    }
+
+    /**
+     * Tính lại actualQuantity, systemQuantity, variance, quantity, entryCount, lastEntryAt
+     * dựa trên danh sách entries hiện có cho adjustment.
+     */
+    private void recalculateFromEntries(StockAdjustment adjustment) {
+        List<StockAdjustmentEntry> entries = stockAdjustmentEntryRepository
+                .findByAdjustmentAdjustmentId(adjustment.getAdjustmentId());
+
+        BigDecimal totalActual = entries == null ? BigDecimal.ZERO :
+                entries.stream()
+                        .map(StockAdjustmentEntry::getEntryQuantity)
+                        .filter(Objects::nonNull)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        adjustment.setActualQuantity(totalActual);
+
+        BigDecimal systemQuantity = calculateAdjustedSystemQuantity(
+                adjustment.getBranchId(),
+                adjustment.getIngredient().getIngredientId(),
+                adjustment.getAdjustmentDate());
+        adjustment.setSystemQuantity(systemQuantity);
+
+        BigDecimal variance = totalActual.subtract(systemQuantity);
+        adjustment.setVariance(variance);
+
+        if (variance.abs().compareTo(BigDecimal.ZERO) == 0) {
+            adjustment.setQuantity(BigDecimal.ZERO);
+            adjustment.setAdjustmentType(AdjustmentType.ADJUST_IN);
+        } else {
+            AdjustmentType adjustmentType = variance.compareTo(BigDecimal.ZERO) > 0
+                    ? AdjustmentType.ADJUST_OUT
+                    : AdjustmentType.ADJUST_IN;
+            adjustment.setAdjustmentType(adjustmentType);
+            adjustment.setQuantity(variance.abs());
+        }
+
+        if (entries != null && !entries.isEmpty()) {
+            adjustment.setEntryCount(entries.size());
+            LocalDateTime lastEntryAt = entries.stream()
+                    .map(StockAdjustmentEntry::getEntryTime)
+                    .filter(Objects::nonNull)
+                    .max(LocalDateTime::compareTo)
+                    .orElse(null);
+            adjustment.setLastEntryAt(lastEntryAt);
+        } else {
+            adjustment.setEntryCount(0);
+            adjustment.setLastEntryAt(null);
+        }
+    }
+
+    public List<StockAdjustmentEntryResponse> getAdjustmentEntries(Long adjustmentId) {
+        StockAdjustment adjustment = stockAdjustmentRepository.findById(adjustmentId)
+                .orElseThrow(() -> new AppException(ErrorCode.ADJUSTMENT_NOT_FOUND));
+
+        List<StockAdjustmentEntry> entries = stockAdjustmentEntryRepository.findByAdjustmentAdjustmentId(adjustment.getAdjustmentId());
+        if (entries == null || entries.isEmpty()) {
+            return List.of();
+        }
+
+        return entries.stream()
+                .sorted(Comparator.comparing(StockAdjustmentEntry::getEntryTime))
+                .map(entry -> StockAdjustmentEntryResponse.builder()
+                        .entryId(entry.getEntryId())
+                        .adjustmentId(adjustment.getAdjustmentId())
+                        .branchId(entry.getBranchId())
+                        .ingredientId(entry.getIngredientId())
+                        .entryQuantity(entry.getEntryQuantity())
+                        .recordedBy(entry.getRecordedBy())
+                        .userId(entry.getUserId())
+                        .entryTime(entry.getEntryTime())
+                        .notes(entry.getNotes())
+                        .source(entry.getSource())
+                        .build())
+                .toList();
+    }
+
+    @Transactional
+    public void deleteEntry(Long entryId, Integer currentUserId, boolean isStaff) {
+        StockAdjustmentEntry entry = stockAdjustmentEntryRepository.findById(entryId)
+                .orElseThrow(() -> new AppException(ErrorCode.ADJUSTMENT_NOT_FOUND, "Adjustment entry not found"));
+
+        StockAdjustment adjustment = entry.getAdjustment();
+        if (adjustment == null) {
+            throw new AppException(ErrorCode.ADJUSTMENT_NOT_FOUND);
+        }
+
+        if (adjustment.getStatus() != AdjustmentStatus.PENDING) {
+            throw new AppException(ErrorCode.ADJUSTMENT_NOT_PENDING,
+                    "Only PENDING adjustments can be modified");
+        }
+
+        if (isStaff) {
+            if (entry.getUserId() == null || currentUserId == null || !entry.getUserId().equals(currentUserId)) {
+                throw new AppException(ErrorCode.UNAUTHORIZED,
+                        "You can only delete entries that you created");
+            }
+        }
+
+        stockAdjustmentEntryRepository.delete(entry);
+        // Recalculate parent adjustment from remaining entries
+        recalculateFromEntries(adjustment);
+        adjustment.setUpdatedAt(LocalDateTime.now());
+        stockAdjustmentRepository.save(adjustment);
+    }
+
+    @Transactional
+    public void updateEntry(Long entryId, UpdateStockAdjustmentEntryRequest request, Integer currentUserId, boolean isStaff) {
+        StockAdjustmentEntry entry = stockAdjustmentEntryRepository.findById(entryId)
+                .orElseThrow(() -> new AppException(ErrorCode.ADJUSTMENT_NOT_FOUND, "Adjustment entry not found"));
+
+        StockAdjustment adjustment = entry.getAdjustment();
+        if (adjustment == null) {
+            throw new AppException(ErrorCode.ADJUSTMENT_NOT_FOUND);
+        }
+
+        if (adjustment.getStatus() != AdjustmentStatus.PENDING) {
+            throw new AppException(ErrorCode.ADJUSTMENT_NOT_PENDING,
+                    "Only PENDING adjustments can be modified");
+        }
+
+        if (isStaff) {
+            if (entry.getUserId() == null || currentUserId == null || !entry.getUserId().equals(currentUserId)) {
+                throw new AppException(ErrorCode.UNAUTHORIZED,
+                        "You can only edit entries that you created");
+            }
+        }
+
+        entry.setEntryQuantity(request.getEntryQuantity());
+        if (request.getNotes() != null) {
+            entry.setNotes(request.getNotes());
+        }
+        stockAdjustmentEntryRepository.save(entry);
+
+        // Recalculate parent adjustment from updated entries
+        recalculateFromEntries(adjustment);
+        adjustment.setUpdatedAt(LocalDateTime.now());
+        stockAdjustmentRepository.save(adjustment);
     }
 
     private StockAdjustmentResponse toResponse(StockAdjustment adjustment) {
