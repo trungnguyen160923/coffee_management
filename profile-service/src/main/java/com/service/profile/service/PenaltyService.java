@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -228,19 +229,20 @@ public class PenaltyService {
     }
 
     /**
-     * Cập nhật penalty (chỉ khi PENDING)
+     * Cập nhật penalty (cho phép mọi status)
      */
     @Transactional
     public PenaltyResponse updatePenalty(Integer penaltyId, PenaltyCreationRequest request, Integer currentUserId, String currentUserRole) {
         Penalty penalty = penaltyRepository.findById(penaltyId)
             .orElseThrow(() -> new AppException(ErrorCode.PENALTY_NOT_FOUND));
 
-        if (penalty.getStatus() != Penalty.PenaltyStatus.PENDING) {
-            throw new AppException(ErrorCode.VALIDATION_FAILED, "Only PENDING penalties can be updated");
-        }
-
         // Không cho đổi user/branch/period
         validateAuthorization(currentUserId, currentUserRole, penalty.getUserId(), penalty.getUserRole(), penalty.getBranchId());
+
+        // Nếu penalty đã APPROVED, cần check payroll
+        if (penalty.getStatus() == Penalty.PenaltyStatus.APPROVED) {
+            checkPayrollAndRecalculate(penalty.getUserId(), penalty.getPeriod(), currentUserId, currentUserRole);
+        }
 
         if (request.getPenaltyType() != null) {
             penalty.setPenaltyType(Penalty.PenaltyType.valueOf(request.getPenaltyType()));
@@ -251,9 +253,15 @@ public class PenaltyService {
         if (request.getDescription() != null) {
             penalty.setDescription(request.getDescription());
         }
-        penalty.setIncidentDate(request.getIncidentDate());
-        penalty.setShiftId(request.getShiftId());
-        penalty.setReasonCode(request.getReasonCode());
+        if (request.getIncidentDate() != null) {
+            penalty.setIncidentDate(request.getIncidentDate());
+        }
+        if (request.getShiftId() != null) {
+            penalty.setShiftId(request.getShiftId());
+        }
+        if (request.getReasonCode() != null) {
+            penalty.setReasonCode(request.getReasonCode());
+        }
         penalty.setUpdateAt(LocalDateTime.now());
 
         Penalty updated = penaltyRepository.save(penalty);
@@ -314,16 +322,12 @@ public class PenaltyService {
     }
 
     /**
-     * Xóa penalty (chỉ khi PENDING)
+     * Xóa penalty (cho phép mọi status)
      */
     @Transactional
     public void deletePenalty(Integer penaltyId, Integer currentUserId, String currentUserRole) {
         Penalty penalty = penaltyRepository.findById(penaltyId)
             .orElseThrow(() -> new AppException(ErrorCode.PENALTY_NOT_FOUND));
-        
-        if (penalty.getStatus() != Penalty.PenaltyStatus.PENDING) {
-            throw new AppException(ErrorCode.VALIDATION_FAILED, "Cannot delete penalty that is not in PENDING status");
-        }
         
         validateAuthorization(currentUserId, currentUserRole, penalty.getUserId(), penalty.getUserRole(), penalty.getBranchId());
         
@@ -379,6 +383,48 @@ public class PenaltyService {
         ManagerProfile managerProfile = managerProfileRepository.findById(managerUserId)
             .orElseThrow(() -> new AppException(ErrorCode.USER_ID_NOT_FOUND));
         return managerProfile.getBranchId();
+    }
+
+    /**
+     * Kiểm tra payroll và tự động recalculate nếu cần
+     * Logic:
+     * 1. Nếu payroll chưa tồn tại → OK (không làm gì)
+     * 2. Nếu payroll DRAFT/REVIEW → Tự động recalculate
+     * 3. Nếu payroll APPROVED/PAID → CHẶN (throw exception)
+     */
+    private void checkPayrollAndRecalculate(Integer userId, String period, Integer currentUserId, String currentUserRole) {
+        Optional<Payroll> payrollOpt = payrollRepository.findByUserIdAndPeriod(userId, period);
+        
+        if (payrollOpt.isEmpty()) {
+            // Chưa có payroll → OK, không làm gì
+            log.debug("No payroll found for userId={}, period={}. Proceeding with bonus/penalty operation.", userId, period);
+            return;
+        }
+        
+        Payroll payroll = payrollOpt.get();
+        
+        if (payroll.getStatus() == Payroll.PayrollStatus.DRAFT || 
+            payroll.getStatus() == Payroll.PayrollStatus.REVIEW) {
+            // Tự động recalculate
+            log.info("Auto-recalculating payroll: payrollId={}, userId={}, period={}", 
+                payroll.getPayrollId(), userId, period);
+            try {
+                payrollService.recalculatePayroll(payroll.getPayrollId(), currentUserId, currentUserRole);
+                log.info("Successfully auto-recalculated payroll: payrollId={}", payroll.getPayrollId());
+            } catch (Exception e) {
+                log.error("Failed to auto-recalculate payroll: payrollId={}", payroll.getPayrollId(), e);
+                throw new AppException(ErrorCode.VALIDATION_FAILED, 
+                    "Failed to auto-recalculate payroll: " + e.getMessage());
+            }
+        } else {
+            // APPROVED/PAID → CHẶN
+            String statusStr = payroll.getStatus().name();
+            log.warn("Cannot modify bonus/penalty. Payroll is already {}: payrollId={}, userId={}, period={}", 
+                statusStr, payroll.getPayrollId(), userId, period);
+            throw new AppException(ErrorCode.PAYROLL_ALREADY_APPROVED_OR_PAID, 
+                "Cannot modify bonus/penalty. Payroll for period " + period + 
+                " is already " + statusStr + ". Please reject payroll first.");
+        }
     }
 }
 

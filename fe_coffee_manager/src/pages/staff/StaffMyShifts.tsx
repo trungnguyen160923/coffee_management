@@ -360,16 +360,24 @@ export default function StaffMyShifts() {
       return false;
     }
     
-    // Check time window: 15 minutes before to 15 minutes after shift start
+    // Check time window: 15 minutes before shift start to 10 minutes before shift end
     const now = new Date();
     const shiftDate = new Date(assignment.shift.shiftDate);
     const [startHour, startMinute] = assignment.shift.startTime.split(':').map(Number);
+    const [endHour, endMinute] = assignment.shift.endTime.split(':').map(Number);
     const shiftStartTime = new Date(shiftDate);
     shiftStartTime.setHours(startHour, startMinute, 0, 0);
+    const shiftEndTime = new Date(shiftDate);
+    shiftEndTime.setHours(endHour, endMinute, 0, 0);
     
-    // Check-in window: 15 minutes before to 15 minutes after shift start
+    // Handle shift that spans midnight
+    if (assignment.shift.endTime < assignment.shift.startTime) {
+      shiftEndTime.setDate(shiftEndTime.getDate() + 1);
+    }
+    
+    // Check-in window: 15 minutes before shift start to 10 minutes before shift end
     const fifteenMinutesBefore = new Date(shiftStartTime.getTime() - 15 * 60 * 1000);
-    const fifteenMinutesAfter = new Date(shiftStartTime.getTime() + 15 * 60 * 1000);
+    const tenMinutesBeforeEnd = new Date(shiftEndTime.getTime() - 10 * 60 * 1000);
     
     // Also check if shift date is today or past (not future)
     const today = new Date();
@@ -378,7 +386,7 @@ export default function StaffMyShifts() {
     assignmentDate.setHours(0, 0, 0, 0);
     
     return now >= fifteenMinutesBefore && 
-           now <= fifteenMinutesAfter && 
+           now <= tenMinutesBeforeEnd && 
            assignmentDate <= today;
   };
 

@@ -7,6 +7,8 @@ import { bonusService, penaltyService, payrollTemplateService } from '../../serv
 import { BonusType, PenaltyType } from '../../types/payroll';
 import { useEffect, useState } from 'react';
 import { BonusTemplate, PenaltyConfig } from '../../services/payrollTemplateService';
+import { Bonus } from '../../services/bonusService';
+import { Penalty } from '../../services/penaltyService';
 
 interface AssignmentDetailModalProps {
   isOpen: boolean;
@@ -96,6 +98,11 @@ export default function AssignmentDetailModal({
     description?: string;
   } | null>(null);
   const [selectedAssignmentStaffIds, setSelectedAssignmentStaffIds] = useState<number[]>([]);
+  
+  // State để lưu bonus/penalty theo assignment
+  const [bonusesByAssignment, setBonusesByAssignment] = useState<
+    Map<number, { bonuses: Bonus[]; penalties: Penalty[] }>
+  >(new Map());
 
   // Load templates once (manager scope)
   useEffect(() => {
@@ -118,8 +125,47 @@ export default function AssignmentDetailModal({
   useEffect(() => {
     if (!isOpen) {
       setSelectedAssignmentStaffIds([]);
+      setBonusesByAssignment(new Map());
     }
   }, [isOpen]);
+
+  // Load bonuses and penalties when modal opens and assignments change
+  useEffect(() => {
+    if (!isOpen || selectedAssignments.length === 0) {
+      return;
+    }
+
+    const loadBonusesAndPenalties = async () => {
+      try {
+        const newMap = new Map<number, { bonuses: Bonus[]; penalties: Penalty[] }>();
+        
+        // Load for each assignment
+        const promises = selectedAssignments.map(async (assignment) => {
+          const shift = shifts.get(assignment.shiftId);
+          if (!shift) return;
+          
+          try {
+            const [bonuses, penalties] = await Promise.all([
+              bonusService.getBonusesByShift(shift.shiftId, assignment.staffUserId),
+              penaltyService.getPenaltiesByShift(shift.shiftId, assignment.staffUserId),
+            ]);
+            
+            newMap.set(assignment.assignmentId, { bonuses, penalties });
+          } catch (error) {
+            console.error(`Failed to load bonus/penalty for assignment ${assignment.assignmentId}:`, error);
+            newMap.set(assignment.assignmentId, { bonuses: [], penalties: [] });
+          }
+        });
+        
+        await Promise.all(promises);
+        setBonusesByAssignment(newMap);
+      } catch (error) {
+        console.error('Failed to load bonuses and penalties:', error);
+      }
+    };
+
+    loadBonusesAndPenalties();
+  }, [isOpen, selectedAssignments, shifts]);
 
   // Helper function to get period from date (YYYY-MM format)
   const getPeriodFromDate = (dateStr: string): string => {
@@ -155,6 +201,14 @@ export default function AssignmentDetailModal({
     
     if (now < shiftStartDateTime) {
       return { canAdd: false, reason: 'Cannot add bonus/penalty before shift starts' };
+    }
+    
+    // Condition 4: Shift must not be older than 30 days
+    const thirtyDaysAgo = new Date(now);
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+    if (shiftStartDateTime < thirtyDaysAgo) {
+      return { canAdd: false, reason: 'Cannot add bonus/penalty for shifts older than 30 days' };
     }
     
     return { canAdd: true };
@@ -213,6 +267,26 @@ export default function AssignmentDetailModal({
           );
         }
         toast.success('Bonus created successfully');
+        
+        // Reload bonuses and penalties
+        const newMap = new Map(bonusesByAssignment);
+        for (const assignment of selectedAssignments) {
+          if (quickCreateModal.staffUserIds.includes(assignment.staffUserId)) {
+            const shift = shifts.get(assignment.shiftId);
+            if (shift) {
+              try {
+                const [bonuses, penalties] = await Promise.all([
+                  bonusService.getBonusesByShift(shift.shiftId, assignment.staffUserId),
+                  penaltyService.getPenaltiesByShift(shift.shiftId, assignment.staffUserId),
+                ]);
+                newMap.set(assignment.assignmentId, { bonuses, penalties });
+              } catch (error) {
+                console.error('Failed to reload bonus/penalty:', error);
+              }
+            }
+          }
+        }
+        setBonusesByAssignment(newMap);
       } else {
         if (quickCreateForm.templateId) {
           const templateId = Number(quickCreateForm.templateId);
@@ -245,6 +319,26 @@ export default function AssignmentDetailModal({
           );
         }
         toast.success('Penalty created successfully');
+        
+        // Reload bonuses and penalties
+        const newMap = new Map(bonusesByAssignment);
+        for (const assignment of selectedAssignments) {
+          if (quickCreateModal.staffUserIds.includes(assignment.staffUserId)) {
+            const shift = shifts.get(assignment.shiftId);
+            if (shift) {
+              try {
+                const [bonuses, penalties] = await Promise.all([
+                  bonusService.getBonusesByShift(shift.shiftId, assignment.staffUserId),
+                  penaltyService.getPenaltiesByShift(shift.shiftId, assignment.staffUserId),
+                ]);
+                newMap.set(assignment.assignmentId, { bonuses, penalties });
+              } catch (error) {
+                console.error('Failed to reload bonus/penalty:', error);
+              }
+            }
+          }
+        }
+        setBonusesByAssignment(newMap);
       }
 
       // Reset and close modal
@@ -650,6 +744,65 @@ export default function AssignmentDetailModal({
                       </div>
                     )}
 
+                    {/* Bonus/Penalty Display */}
+                    {(() => {
+                      const bonusPenaltyData = bonusesByAssignment.get(assignment.assignmentId);
+                      if (!bonusPenaltyData || (bonusPenaltyData.bonuses.length === 0 && bonusPenaltyData.penalties.length === 0)) {
+                        return null;
+                      }
+
+                      return (
+                        <div className="mb-4 space-y-2">
+                          {bonusPenaltyData.bonuses.length > 0 && (
+                            <div className="p-2 bg-emerald-50 border border-emerald-200 rounded">
+                              <div className="text-xs font-semibold text-emerald-800 mb-1 flex items-center gap-1">
+                                <Gift className="w-3 h-3" />
+                                Bonuses ({bonusPenaltyData.bonuses.length})
+                              </div>
+                              <div className="space-y-1">
+                                {bonusPenaltyData.bonuses.map((bonus) => (
+                                  <div key={bonus.bonusId} className="text-xs text-emerald-700 flex items-center justify-between">
+                                    <span>
+                                      {bonus.bonusType} · {bonus.amount.toLocaleString('vi-VN')} VND
+                                      {bonus.status === 'PENDING' && (
+                                        <span className="ml-1 px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px]">Pending</span>
+                                      )}
+                                      {bonus.status === 'APPROVED' && (
+                                        <span className="ml-1 px-1.5 py-0.5 bg-green-100 text-green-700 rounded text-[10px]">Approved</span>
+                                      )}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {bonusPenaltyData.penalties.length > 0 && (
+                            <div className="p-2 bg-red-50 border border-red-200 rounded">
+                              <div className="text-xs font-semibold text-red-800 mb-1 flex items-center gap-1">
+                                <AlertTriangle className="w-3 h-3" />
+                                Penalties ({bonusPenaltyData.penalties.length})
+                              </div>
+                              <div className="space-y-1">
+                                {bonusPenaltyData.penalties.map((penalty) => (
+                                  <div key={penalty.penaltyId} className="text-xs text-red-700 flex items-center justify-between">
+                                    <span>
+                                      {penalty.penaltyType} · {penalty.amount.toLocaleString('vi-VN')} VND
+                                      {penalty.status === 'PENDING' && (
+                                        <span className="ml-1 px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px]">Pending</span>
+                                      )}
+                                      {penalty.status === 'APPROVED' && (
+                                        <span className="ml-1 px-1.5 py-0.5 bg-green-100 text-green-700 rounded text-[10px]">Approved</span>
+                                      )}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+
                     {/* Action Buttons */}
                     <div className="flex flex-wrap gap-2 pt-4 border-t border-slate-200">
                       {assignment.status === 'PENDING' && (
@@ -680,6 +833,9 @@ export default function AssignmentDetailModal({
                       )}
                       {(() => {
                         const bonusPenaltyValidation = canAddBonusPenalty(assignment, shift);
+                        if (!bonusPenaltyValidation.canAdd) {
+                          return null; // Ẩn nút nếu không thể thêm
+                        }
                         return (
                           <>
                             <button
@@ -702,7 +858,7 @@ export default function AssignmentDetailModal({
                                 });
                               }}
                               className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded hover:bg-emerald-100 transition-colors"
-                              title={bonusPenaltyValidation.reason || 'Add bonus for this staff'}
+                              title="Add bonus for this staff"
                             >
                               <Gift className="w-3.5 h-3.5" />
                               Bonus
@@ -727,7 +883,7 @@ export default function AssignmentDetailModal({
                                 });
                               }}
                               className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded hover:bg-red-100 transition-colors"
-                              title={bonusPenaltyValidation.reason || 'Add penalty for this staff'}
+                              title="Add penalty for this staff"
                             >
                               <AlertTriangle className="w-3.5 h-3.5" />
                               Penalty
@@ -772,14 +928,27 @@ export default function AssignmentDetailModal({
       {/* Quick Create Bonus/Penalty Modal */}
       {quickCreateModal.open && (
         <div
-          className="fixed inset-0 z-[10000] flex items-center justify-center bg-black bg-opacity-50"
-          onClick={(e) => e.stopPropagation()}
+          className="fixed inset-0 z-[10000] flex items-center justify-center bg-black bg-opacity-50 overflow-y-auto p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setQuickCreateModal({
+                open: false,
+                type: null,
+                staffUserIds: [],
+                staffNames: [],
+                shiftId: null,
+                shiftDate: '',
+              });
+            }
+            e.stopPropagation();
+          }}
+          style={{ overscrollBehavior: 'contain' }}
         >
           <div
-            className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4"
+            className="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col my-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 flex-shrink-0">
               <h2 className="text-lg font-semibold text-slate-900">
                 Add {quickCreateModal.type === 'bonus' ? 'Bonus' : 'Penalty'}
               </h2>
@@ -808,7 +977,7 @@ export default function AssignmentDetailModal({
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <form onSubmit={handleQuickCreate} className="px-6 py-4 space-y-4">
+            <form onSubmit={handleQuickCreate} className="px-6 py-4 space-y-4 flex-1 overflow-y-auto" style={{ overscrollBehavior: 'contain' }}>
               <div className="space-y-1">
                 <label className="text-xs font-medium text-slate-700">Staff</label>
                 <div className="text-sm font-medium text-slate-900 bg-slate-50 px-3 py-2 rounded-lg border border-slate-200">
@@ -960,7 +1129,7 @@ export default function AssignmentDetailModal({
                   required
                 />
               </div>
-              <div className="flex items-center gap-2 justify-end pt-2 border-t border-slate-100">
+              <div className="flex items-center gap-2 justify-end pt-2 border-t border-slate-100 flex-shrink-0">
                 <button
                   type="button"
                   onClick={() => {

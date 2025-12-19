@@ -302,7 +302,18 @@ const ManagerBonusPenaltyAllowanceManagement: React.FC = () => {
       });
     });
     
-    return transactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    // Sort: PENDING status first, then by date (newest first)
+    return transactions.sort((a, b) => {
+      // Priority: PENDING status comes first
+      const aIsPending = a.status === 'PENDING';
+      const bIsPending = b.status === 'PENDING';
+      
+      if (aIsPending && !bIsPending) return -1; // a comes first
+      if (!aIsPending && bIsPending) return 1;  // b comes first
+      
+      // If both have same pending status, sort by date (newest first)
+      return new Date(b.date).getTime() - new Date(a.date).getTime();
+    });
   }, [bonuses, penalties, allowances]);
 
   // Fetch shift details for transactions (to show shift date/time)
@@ -432,13 +443,14 @@ const ManagerBonusPenaltyAllowanceManagement: React.FC = () => {
     load();
   }, [unifiedTransactions, shiftMap]);
 
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+    setSelectedItems(new Set());
+  }, [filterType, filterStatus, filterDateFrom, filterDateTo, searchQuery]);
+
   // Filter transactions
   const filteredTransactions = useMemo(() => {
-    // Reset to first page when filters change (handled by dependencies below)
-    setCurrentPage(1);
-    // Reset selection when filters change
-    setSelectedItems(new Set());
-
     return unifiedTransactions.filter(tx => {
       // Type filter
       if (filterType !== 'all' && tx.type !== filterType) return false;
@@ -658,7 +670,8 @@ const ManagerBonusPenaltyAllowanceManagement: React.FC = () => {
         toast.error('Allowance does not support approval flow');
       }
     } catch (err: any) {
-      toast.error(err?.message || 'Failed to approve transaction');
+      const errorMessage = err?.response?.data?.message || err?.response?.message || err?.message || 'Failed to approve transaction';
+      toast.error(errorMessage, { duration: 5000 });
     } finally {
       setActionLoading(false);
     }
@@ -870,7 +883,8 @@ const ManagerBonusPenaltyAllowanceManagement: React.FC = () => {
         toast.error('Allowance does not support rejection flow');
       }
     } catch (err: any) {
-      toast.error(err?.message || 'Failed to reject transaction');
+      const errorMessage = err?.response?.data?.message || err?.response?.message || err?.message || 'Failed to reject transaction';
+      toast.error(errorMessage, { duration: 5000 });
     } finally {
       setActionLoading(false);
     }
@@ -889,43 +903,35 @@ const ManagerBonusPenaltyAllowanceManagement: React.FC = () => {
         // Update - only single user for edit mode
         const userId = formUserIds[0];
         if (createType === 'bonus') {
-          if (selectedItem.status !== 'PENDING') {
-            toast.error('Only PENDING bonuses can be updated');
-          } else {
-            const bonus = selectedItem.originalData as Bonus;
-            const updated = await bonusService.updateBonus(bonus.bonusId, {
-              userId: bonus.userId,
-              period: bonus.period,
-              bonusType: formType as BonusType,
-              amount: Number(formAmount),
-              description: formDescription,
-              shiftId: formShiftId ? Number(formShiftId) : undefined,
-            });
-            setBonuses((prev) =>
-              prev.map((b) => (b.bonusId === updated.bonusId ? updated : b))
-            );
-            toast.success('Bonus updated successfully');
-          }
+          const bonus = selectedItem.originalData as Bonus;
+          const updated = await bonusService.updateBonus(bonus.bonusId, {
+            userId: bonus.userId,
+            period: bonus.period,
+            bonusType: formType as BonusType,
+            amount: Number(formAmount),
+            description: formDescription,
+            shiftId: formShiftId ? Number(formShiftId) : undefined,
+          });
+          setBonuses((prev) =>
+            prev.map((b) => (b.bonusId === updated.bonusId ? updated : b))
+          );
+          toast.success('Bonus updated successfully');
         } else if (createType === 'penalty') {
-          if (selectedItem.status !== 'PENDING') {
-            toast.error('Only PENDING penalties can be updated');
-          } else {
-            const penalty = selectedItem.originalData as Penalty;
-            const updated = await penaltyService.updatePenalty(penalty.penaltyId, {
-              userId: penalty.userId,
-              period: penalty.period,
-              penaltyType: formType as PenaltyType,
-              amount: Number(formAmount),
-              description: formDescription,
-              shiftId: formShiftId ? Number(formShiftId) : undefined,
-              incidentDate: formIncidentDate || undefined,
-              reasonCode: penalty.reasonCode,
-            });
-            setPenalties((prev) =>
-              prev.map((p) => (p.penaltyId === updated.penaltyId ? updated : p))
-            );
-            toast.success('Penalty updated successfully');
-          }
+          const penalty = selectedItem.originalData as Penalty;
+          const updated = await penaltyService.updatePenalty(penalty.penaltyId, {
+            userId: penalty.userId,
+            period: penalty.period,
+            penaltyType: formType as PenaltyType,
+            amount: Number(formAmount),
+            description: formDescription,
+            shiftId: formShiftId ? Number(formShiftId) : undefined,
+            incidentDate: formIncidentDate || undefined,
+            reasonCode: penalty.reasonCode,
+          });
+          setPenalties((prev) =>
+            prev.map((p) => (p.penaltyId === updated.penaltyId ? updated : p))
+          );
+          toast.success('Penalty updated successfully');
         } else {
           await allowanceService.updateAllowance(
             (selectedItem.originalData as Allowance).allowanceId,
@@ -1006,7 +1012,8 @@ const ManagerBonusPenaltyAllowanceManagement: React.FC = () => {
       setSelectedItem(null);
       fetchData();
     } catch (err: any) {
-      toast.error(err?.message || 'Operation failed');
+      const errorMessage = err?.response?.data?.message || err?.response?.message || err?.message || 'Operation failed';
+      toast.error(errorMessage, { duration: 5000 });
     } finally {
       setActionLoading(false);
     }
@@ -1511,10 +1518,20 @@ const ManagerBonusPenaltyAllowanceManagement: React.FC = () => {
 
       {/* Create/Edit Modal - Render in Quick page too */}
       {(showCreateModal || showEditModal) && createPortal(
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[1300] p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+        <div 
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-[1300] p-4 overflow-y-auto"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowCreateModal(false);
+              setShowEditModal(false);
+              setSelectedItem(null);
+            }
+          }}
+          style={{ overscrollBehavior: 'contain' }}
+        >
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col my-auto">
             {/* Header với màu sắc theo loại */}
-            <div className={`px-6 py-4 ${
+            <div className={`px-6 py-4 flex-shrink-0 ${
               createType === 'bonus' ? 'bg-gradient-to-r from-green-500 to-green-600' :
               createType === 'penalty' ? 'bg-gradient-to-r from-red-500 to-red-600' :
               'bg-gradient-to-r from-orange-500 to-orange-600'
@@ -1552,7 +1569,7 @@ const ManagerBonusPenaltyAllowanceManagement: React.FC = () => {
             </div>
 
             {/* Form Content */}
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 overflow-y-auto p-6" style={{ overscrollBehavior: 'contain' }}>
               <div className="space-y-5">
                 {/* Employee Selection - Multiple */}
                 <div>
@@ -1669,15 +1686,38 @@ const ManagerBonusPenaltyAllowanceManagement: React.FC = () => {
                       required
                     >
                       <option value="">Select type</option>
-                      {createType === 'bonus' ? (
-                        <>
-                          <option value="PERFORMANCE">Performance</option>
-                          <option value="ATTENDANCE">Attendance</option>
-                          <option value="SPECIAL">Special</option>
-                          <option value="HOLIDAY">Holiday</option>
-                          <option value="OTHER">Other</option>
-                        </>
-                      ) : createType === 'penalty' ? (
+                      {createType === 'bonus' ? (() => {
+                        // Lấy danh sách bonus types từ templates (unique)
+                        const bonusTypesFromTemplates = Array.from(
+                          new Set(bonusTemplates.map(t => t.bonusType))
+                        ).sort();
+                        
+                        // Danh sách bonus types mặc định
+                        const defaultBonusTypes: BonusType[] = ['PERFORMANCE', 'ATTENDANCE', 'SPECIAL', 'HOLIDAY', 'OTHER'];
+                        
+                        // Kết hợp và loại bỏ trùng lặp
+                        const allBonusTypes = Array.from(
+                          new Set([...defaultBonusTypes, ...bonusTypesFromTemplates])
+                        ) as BonusType[];
+                        
+                        const typeLabels: Record<BonusType, string> = {
+                          PERFORMANCE: 'Performance',
+                          ATTENDANCE: 'Attendance',
+                          SPECIAL: 'Special',
+                          HOLIDAY: 'Holiday',
+                          OTHER: 'Other',
+                        };
+                        
+                        return (
+                          <>
+                            {allBonusTypes.map((type) => (
+                              <option key={type} value={type}>
+                                {typeLabels[type] || type}
+                              </option>
+                            ))}
+                          </>
+                        );
+                      })() : createType === 'penalty' ? (
                         <>
                           <option value="NO_SHOW">No Show</option>
                           <option value="LATE">Late</option>
@@ -1809,7 +1849,7 @@ const ManagerBonusPenaltyAllowanceManagement: React.FC = () => {
             </div>
 
             {/* Footer với buttons */}
-            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex justify-end gap-3">
+            <div className="px-6 py-4 flex-shrink-0 border-t border-gray-200 bg-gray-50 flex justify-end gap-3">
               <button
                 onClick={() => {
                   setShowCreateModal(false);
@@ -2571,8 +2611,18 @@ const ManagerBonusPenaltyAllowanceManagement: React.FC = () => {
 
       {/* Create/Edit Modal */}
       {(showCreateModal || showEditModal) && createPortal(
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[1300] p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+        <div 
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-[1300] p-4 overflow-y-auto"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowCreateModal(false);
+              setShowEditModal(false);
+              setSelectedItem(null);
+            }
+          }}
+          style={{ overscrollBehavior: 'contain' }}
+        >
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col my-auto">
             {/* Header với màu sắc theo loại */}
             <div className={`px-6 py-4 ${
               createType === 'bonus' ? 'bg-gradient-to-r from-green-500 to-green-600' :
@@ -2612,7 +2662,7 @@ const ManagerBonusPenaltyAllowanceManagement: React.FC = () => {
             </div>
 
             {/* Form Content */}
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 overflow-y-auto p-6" style={{ overscrollBehavior: 'contain' }}>
               <div className="space-y-5">
                 {/* Employee Selection - Multiple */}
                 <div>
@@ -2729,15 +2779,38 @@ const ManagerBonusPenaltyAllowanceManagement: React.FC = () => {
                       required
                     >
                       <option value="">Select type</option>
-                      {createType === 'bonus' ? (
-                        <>
-                          <option value="PERFORMANCE">Performance</option>
-                          <option value="ATTENDANCE">Attendance</option>
-                          <option value="SPECIAL">Special</option>
-                          <option value="HOLIDAY">Holiday</option>
-                          <option value="OTHER">Other</option>
-                        </>
-                      ) : createType === 'penalty' ? (
+                      {createType === 'bonus' ? (() => {
+                        // Lấy danh sách bonus types từ templates (unique)
+                        const bonusTypesFromTemplates = Array.from(
+                          new Set(bonusTemplates.map(t => t.bonusType))
+                        ).sort();
+                        
+                        // Danh sách bonus types mặc định
+                        const defaultBonusTypes: BonusType[] = ['PERFORMANCE', 'ATTENDANCE', 'SPECIAL', 'HOLIDAY', 'OTHER'];
+                        
+                        // Kết hợp và loại bỏ trùng lặp
+                        const allBonusTypes = Array.from(
+                          new Set([...defaultBonusTypes, ...bonusTypesFromTemplates])
+                        ) as BonusType[];
+                        
+                        const typeLabels: Record<BonusType, string> = {
+                          PERFORMANCE: 'Performance',
+                          ATTENDANCE: 'Attendance',
+                          SPECIAL: 'Special',
+                          HOLIDAY: 'Holiday',
+                          OTHER: 'Other',
+                        };
+                        
+                        return (
+                          <>
+                            {allBonusTypes.map((type) => (
+                              <option key={type} value={type}>
+                                {typeLabels[type] || type}
+                              </option>
+                            ))}
+                          </>
+                        );
+                      })() : createType === 'penalty' ? (
                         <>
                           <option value="NO_SHOW">No Show</option>
                           <option value="LATE">Late</option>
@@ -2868,7 +2941,7 @@ const ManagerBonusPenaltyAllowanceManagement: React.FC = () => {
             </div>
 
             {/* Footer với buttons */}
-            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex justify-end gap-3">
+            <div className="px-6 py-4 flex-shrink-0 border-t border-gray-200 bg-gray-50 flex justify-end gap-3">
               <button
                 onClick={() => {
                   setShowCreateModal(false);

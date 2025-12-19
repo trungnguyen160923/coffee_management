@@ -219,6 +219,28 @@ class PayrollService {
       throw error;
     }
   }
+
+  /**
+   * Lấy thông tin tổng giờ làm và số ca từ shift start/end time
+   */
+  async getShiftWorkSummary(userId: number, period: string): Promise<{ totalHours: number; totalShifts: number }> {
+    try {
+      const params = new URLSearchParams();
+      params.append('userId', userId.toString());
+      params.append('period', period);
+      
+      const response = await apiClient.get<ApiResponse<{ totalHours: number; totalShifts: number }>>(
+        `${this.baseUrl}/shift-work-summary?${params.toString()}`
+      );
+      if (response.code === 1000 || response.code === 200) {
+        return response.result;
+      }
+      throw new Error(`API Error: ${response.code}`);
+    } catch (error) {
+      console.error('Error fetching shift work summary:', error);
+      throw error;
+    }
+  }
 }
 
 export default new PayrollService();

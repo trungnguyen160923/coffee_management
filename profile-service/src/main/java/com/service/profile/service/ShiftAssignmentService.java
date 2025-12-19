@@ -1015,7 +1015,7 @@ public class ShiftAssignmentService {
                     "Cannot check in. Shift has been cancelled");
         }
 
-        // 5. Validate time window (15 minutes before/after shift start)
+        // 5. Validate time window (15 minutes before shift start to 10 minutes before shift end)
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime shiftStart = shift.getShiftDate().atTime(shift.getStartTime());
         LocalDateTime shiftEnd = shift.getShiftDate().atTime(shift.getEndTime());
@@ -1031,15 +1031,9 @@ public class ShiftAssignmentService {
                     "Cannot check in. Shift date is in the future");
         }
 
-        // Check if shift has already ended
-        if (now.isAfter(shiftEnd)) {
-            throw new AppException(ErrorCode.SHIFT_CHECKIN_SHIFT_ENDED,
-                    "Cannot check in. Shift has already ended");
-        }
-
-        // Check-in window: 15 minutes before to 15 minutes after shift start
+        // Check-in window: 15 minutes before shift start to 10 minutes before shift end
         LocalDateTime checkInWindowStart = shiftStart.minusMinutes(15);
-        LocalDateTime checkInWindowEnd = shiftStart.plusMinutes(15);
+        LocalDateTime checkInWindowEnd = shiftEnd.minusMinutes(10);
 
         if (now.isBefore(checkInWindowStart)) {
             throw new AppException(ErrorCode.SHIFT_CHECKIN_TOO_EARLY,
@@ -1047,7 +1041,7 @@ public class ShiftAssignmentService {
         }
         if (now.isAfter(checkInWindowEnd)) {
             throw new AppException(ErrorCode.SHIFT_CHECKIN_TOO_LATE,
-                    "Cannot check in. Too late. Check-in window closed 15 minutes after shift start");
+                    "Cannot check in. Too late. Check-in window closed 10 minutes before shift end");
         }
 
         // 6. Update assignment

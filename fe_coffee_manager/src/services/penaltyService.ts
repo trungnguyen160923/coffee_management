@@ -128,6 +128,29 @@ class PenaltyService {
   }
 
   /**
+   * Lấy penalties theo shift và userId
+   */
+  async getPenaltiesByShift(shiftId?: number, userId?: number): Promise<Penalty[]> {
+    try {
+      const params = new URLSearchParams();
+      if (shiftId) params.append('shiftId', shiftId.toString());
+      if (userId) params.append('userId', userId.toString());
+
+      const queryString = params.toString();
+      const url = `${this.baseUrl}/by-shift${queryString ? `?${queryString}` : ''}`;
+
+      const response = await apiClient.get<ApiResponse<Penalty[]>>(url);
+      if (response.code === 1000 || response.code === 200) {
+        return response.result || [];
+      }
+      throw new Error(`API Error: ${response.code}`);
+    } catch (error) {
+      console.error('Error fetching penalties by shift:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Lấy chi tiết penalty
    */
   async getPenaltyById(penaltyId: number): Promise<Penalty> {

@@ -200,34 +200,161 @@ public class PayrollService {
 
     /**
      * Tính base salary cho part-time (theo giờ)
+     * Tính từ shift start time đến shift end time (không phụ thuộc vào check-in/check-out)
      */
     private BigDecimal calculateHourlyBaseSalary(Integer userId, String period, BigDecimal hourlyRate) {
         YearMonth yearMonth = YearMonth.parse(period);
         LocalDate startDate = yearMonth.atDay(1);
         LocalDate endDate = yearMonth.atEndOfMonth();
 
+        // Lấy thông tin staff để kiểm tra employmentType
+        Optional<StaffProfile> staffProfileOpt = staffProfileRepository.findById(userId);
+        final String staffEmploymentType = staffProfileOpt
+            .map(StaffProfile::getEmploymentType)
+            .orElse(null);
+
         // Lấy tất cả shift assignments đã hoàn thành trong kỳ
         List<ShiftAssignment> completedShifts = shiftAssignmentRepository
             .findByStaffUserIdAndShift_ShiftDateBetween(userId, startDate, endDate);
 
-        // Lọc chỉ các shift có status = CHECKED_OUT
+        // Lọc chỉ các shift có status = CHECKED_OUT và phù hợp với employmentType
         BigDecimal totalHours = completedShifts.stream()
-            .filter(sa -> "CHECKED_OUT".equals(sa.getStatus()))
-            .map(sa -> {
-                if (sa.getActualHours() != null) {
-                    return sa.getActualHours();
-                } else {
-                    // Tính từ check-in/check-out nếu actual_hours NULL
-                    if (sa.getCheckedInAt() != null && sa.getCheckedOutAt() != null) {
-                        long minutes = java.time.Duration.between(sa.getCheckedInAt(), sa.getCheckedOutAt()).toMinutes();
-                        return BigDecimal.valueOf(minutes).divide(BigDecimal.valueOf(60), 2, RoundingMode.HALF_UP);
-                    }
-                    return BigDecimal.ZERO;
+            .filter(sa -> {
+                // Chỉ tính các ca đã CHECKED_OUT
+                if (!"CHECKED_OUT".equals(sa.getStatus())) {
+                    return false;
                 }
+                
+                // Lọc theo employmentType của shift (nếu staff có employmentType)
+                if (staffEmploymentType != null && !"ANY".equals(staffEmploymentType)) {
+                    Shift shift = sa.getShift();
+                    if (shift != null) {
+                        String shiftEmploymentType = shift.getEmploymentType();
+                        // Nếu shift không có employmentType, lấy từ template
+                        if (shiftEmploymentType == null && shift.getTemplate() != null) {
+                            shiftEmploymentType = shift.getTemplate().getEmploymentType();
+                        }
+                        // Nếu vẫn null, mặc định là "ANY"
+                        if (shiftEmploymentType == null) {
+                            shiftEmploymentType = "ANY";
+                        }
+                        // Chỉ tính nếu shift là "ANY" hoặc match với employmentType của staff
+                        if (!"ANY".equals(shiftEmploymentType) && !shiftEmploymentType.equals(staffEmploymentType)) {
+                            return false;
+                        }
+                    }
+                }
+                
+                return true;
+            })
+            .map(sa -> {
+                Shift shift = sa.getShift();
+                if (shift != null && shift.getStartTime() != null && shift.getEndTime() != null) {
+                    // Tính từ shift start time đến shift end time
+                    java.time.Duration duration = java.time.Duration.between(
+                        shift.getStartTime(), 
+                        shift.getEndTime()
+                    );
+                    long minutes = duration.toMinutes();
+                    // Xử lý trường hợp end time < start time (ca qua đêm)
+                    if (minutes < 0) {
+                        minutes += 24 * 60; // Cộng thêm 24 giờ
+                    }
+                    return BigDecimal.valueOf(minutes).divide(BigDecimal.valueOf(60), 2, RoundingMode.HALF_UP);
+                }
+                return BigDecimal.ZERO;
             })
             .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         return totalHours.multiply(hourlyRate).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * Tính tổng giờ làm và số ca từ shift start/end time cho một nhân viên trong kỳ
+     * Dùng để hiển thị thông tin chi tiết ở frontend
+     */
+    public ShiftWorkSummary calculateShiftWorkSummary(Integer userId, String period) {
+        YearMonth yearMonth = YearMonth.parse(period);
+        LocalDate startDate = yearMonth.atDay(1);
+        LocalDate endDate = yearMonth.atEndOfMonth();
+
+        // Lấy thông tin staff để kiểm tra employmentType
+        Optional<StaffProfile> staffProfileOpt = staffProfileRepository.findById(userId);
+        final String staffEmploymentType = staffProfileOpt
+            .map(StaffProfile::getEmploymentType)
+            .orElse(null);
+
+        // Lấy tất cả shift assignments đã hoàn thành trong kỳ
+        List<ShiftAssignment> completedShifts = shiftAssignmentRepository
+            .findByStaffUserIdAndShift_ShiftDateBetween(userId, startDate, endDate);
+
+        // Lọc chỉ các shift có status = CHECKED_OUT và phù hợp với employmentType
+        List<ShiftAssignment> checkedOutShifts = completedShifts.stream()
+            .filter(sa -> {
+                // Chỉ tính các ca đã CHECKED_OUT
+                if (!"CHECKED_OUT".equals(sa.getStatus())) {
+                    return false;
+                }
+                
+                // Lọc theo employmentType của shift (nếu staff có employmentType)
+                if (staffEmploymentType != null && !"ANY".equals(staffEmploymentType)) {
+                    Shift shift = sa.getShift();
+                    if (shift != null) {
+                        String shiftEmploymentType = shift.getEmploymentType();
+                        // Nếu shift không có employmentType, lấy từ template
+                        if (shiftEmploymentType == null && shift.getTemplate() != null) {
+                            shiftEmploymentType = shift.getTemplate().getEmploymentType();
+                        }
+                        // Nếu vẫn null, mặc định là "ANY"
+                        if (shiftEmploymentType == null) {
+                            shiftEmploymentType = "ANY";
+                        }
+                        // Chỉ tính nếu shift là "ANY" hoặc match với employmentType của staff
+                        if (!"ANY".equals(shiftEmploymentType) && !shiftEmploymentType.equals(staffEmploymentType)) {
+                            return false;
+                        }
+                    }
+                }
+                
+                return true;
+            })
+            .toList();
+
+        // Tính tổng giờ làm từ shift start/end time
+        BigDecimal totalHours = checkedOutShifts.stream()
+            .map(sa -> {
+                Shift shift = sa.getShift();
+                if (shift != null && shift.getStartTime() != null && shift.getEndTime() != null) {
+                    // Tính từ shift start time đến shift end time
+                    java.time.Duration duration = java.time.Duration.between(
+                        shift.getStartTime(), 
+                        shift.getEndTime()
+                    );
+                    long minutes = duration.toMinutes();
+                    // Xử lý trường hợp end time < start time (ca qua đêm)
+                    if (minutes < 0) {
+                        minutes += 24 * 60; // Cộng thêm 24 giờ
+                    }
+                    return BigDecimal.valueOf(minutes).divide(BigDecimal.valueOf(60), 2, RoundingMode.HALF_UP);
+                }
+                return BigDecimal.ZERO;
+            })
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        return ShiftWorkSummary.builder()
+            .totalHours(totalHours.setScale(2, RoundingMode.HALF_UP))
+            .totalShifts(checkedOutShifts.size())
+            .build();
+    }
+
+    /**
+     * DTO để trả về thông tin tổng giờ làm và số ca
+     */
+    @lombok.Data
+    @lombok.Builder
+    public static class ShiftWorkSummary {
+        private BigDecimal totalHours;
+        private Integer totalShifts;
     }
 
     /**

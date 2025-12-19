@@ -19,6 +19,8 @@ import { branchService } from '../../services/branchService';
 import { bonusService, penaltyService, payrollTemplateService } from '../../services';
 import { BonusType, PenaltyType } from '../../types/payroll';
 import { BonusTemplate, PenaltyConfig } from '../../services/payrollTemplateService';
+import { Bonus } from '../../services/bonusService';
+import { Penalty } from '../../services/penaltyService';
 
 type Mode = 'create' | 'edit' | 'view';
 
@@ -176,6 +178,10 @@ export default function ShiftCalendarPage() {
     description?: string;
   } | null>(null);
   const [selectedAssignedStaffIds, setSelectedAssignedStaffIds] = useState<number[]>([]);
+  
+  // State để lưu bonus/penalty theo shift và staff
+  const [shiftBonuses, setShiftBonuses] = useState<Map<number, Bonus[]>>(new Map());
+  const [shiftPenalties, setShiftPenalties] = useState<Map<number, Penalty[]>>(new Map());
 
 
   const branchId = useMemo(() => {
@@ -206,8 +212,53 @@ export default function ShiftCalendarPage() {
   useEffect(() => {
     if (!isShiftModalOpen) {
       setSelectedAssignedStaffIds([]);
+      setShiftBonuses(new Map());
+      setShiftPenalties(new Map());
     }
   }, [isShiftModalOpen]);
+
+  // Load bonuses and penalties when shift is selected
+  useEffect(() => {
+    if (!shiftForm.shiftId || !isShiftModalOpen) {
+      return;
+    }
+
+    const loadShiftBonusesAndPenalties = async () => {
+      try {
+        // Load all bonuses and penalties for this shift (without userId filter)
+        const [bonuses, penalties] = await Promise.all([
+          bonusService.getBonusesByShift(shiftForm.shiftId),
+          penaltyService.getPenaltiesByShift(shiftForm.shiftId),
+        ]);
+
+        // Group by staff userId
+        const bonusesByStaff = new Map<number, Bonus[]>();
+        const penaltiesByStaff = new Map<number, Penalty[]>();
+
+        bonuses.forEach((bonus) => {
+          if (!bonusesByStaff.has(bonus.userId)) {
+            bonusesByStaff.set(bonus.userId, []);
+          }
+          bonusesByStaff.get(bonus.userId)!.push(bonus);
+        });
+
+        penalties.forEach((penalty) => {
+          if (!penaltiesByStaff.has(penalty.userId)) {
+            penaltiesByStaff.set(penalty.userId, []);
+          }
+          penaltiesByStaff.get(penalty.userId)!.push(penalty);
+        });
+
+        // Convert to Map with shiftId as key (for compatibility, but we'll use staff-based lookup)
+        setShiftBonuses(bonusesByStaff);
+        setShiftPenalties(penaltiesByStaff);
+      } catch (error) {
+        console.error('Failed to load shift bonuses and penalties:', error);
+      }
+    };
+
+    loadShiftBonusesAndPenalties();
+  }, [shiftForm.shiftId, isShiftModalOpen]);
 
   // Helper: update form and clear template if user overrides template defaults
   const updateQuickCreateField = (key: 'type' | 'amount' | 'description' | 'incidentDate', value: string) => {
@@ -850,6 +901,38 @@ export default function ShiftCalendarPage() {
           );
         }
         toast.success('Bonus created successfully');
+        
+        // Reload bonuses and penalties for affected staff
+        if (shiftForm.shiftId) {
+          try {
+            const [allBonuses, allPenalties] = await Promise.all([
+              bonusService.getBonusesByShift(shiftForm.shiftId),
+              penaltyService.getPenaltiesByShift(shiftForm.shiftId),
+            ]);
+            
+            const bonusesByStaff = new Map<number, Bonus[]>();
+            const penaltiesByStaff = new Map<number, Penalty[]>();
+            
+            allBonuses.forEach((bonus) => {
+              if (!bonusesByStaff.has(bonus.userId)) {
+                bonusesByStaff.set(bonus.userId, []);
+              }
+              bonusesByStaff.get(bonus.userId)!.push(bonus);
+            });
+            
+            allPenalties.forEach((penalty) => {
+              if (!penaltiesByStaff.has(penalty.userId)) {
+                penaltiesByStaff.set(penalty.userId, []);
+              }
+              penaltiesByStaff.get(penalty.userId)!.push(penalty);
+            });
+            
+            setShiftBonuses(bonusesByStaff);
+            setShiftPenalties(penaltiesByStaff);
+          } catch (error) {
+            console.error('Failed to reload bonuses/penalties:', error);
+          }
+        }
       } else {
         if (quickCreateForm.templateId) {
           const templateId = Number(quickCreateForm.templateId);
@@ -882,6 +965,38 @@ export default function ShiftCalendarPage() {
           );
         }
         toast.success('Penalty created successfully');
+        
+        // Reload bonuses and penalties for affected staff
+        if (shiftForm.shiftId) {
+          try {
+            const [allBonuses, allPenalties] = await Promise.all([
+              bonusService.getBonusesByShift(shiftForm.shiftId),
+              penaltyService.getPenaltiesByShift(shiftForm.shiftId),
+            ]);
+            
+            const bonusesByStaff = new Map<number, Bonus[]>();
+            const penaltiesByStaff = new Map<number, Penalty[]>();
+            
+            allBonuses.forEach((bonus) => {
+              if (!bonusesByStaff.has(bonus.userId)) {
+                bonusesByStaff.set(bonus.userId, []);
+              }
+              bonusesByStaff.get(bonus.userId)!.push(bonus);
+            });
+            
+            allPenalties.forEach((penalty) => {
+              if (!penaltiesByStaff.has(penalty.userId)) {
+                penaltiesByStaff.set(penalty.userId, []);
+              }
+              penaltiesByStaff.get(penalty.userId)!.push(penalty);
+            });
+            
+            setShiftBonuses(bonusesByStaff);
+            setShiftPenalties(penaltiesByStaff);
+          } catch (error) {
+            console.error('Failed to reload bonuses/penalties:', error);
+          }
+        }
       }
 
       // Reset and close modal
@@ -1491,19 +1606,35 @@ export default function ShiftCalendarPage() {
                         return null;
                       }
 
-                      // Check conditions (PUBLISHED + shift started) for bonus/penalty buttons
+                      // Check conditions (PUBLISHED + shift started + not older than 30 days + has confirmed assignments) for bonus/penalty buttons
                       const bonusPenaltyCheck = (() => {
                         if (shiftForm.status !== 'PUBLISHED') {
                           return { canAdd: false, reason: 'Bonus/Penalty can only be added for PUBLISHED shifts' };
                         }
+                        
+                        // Check if there are confirmed assignments
+                        if (confirmedAssignments.length === 0) {
+                          return { canAdd: false, reason: 'No confirmed assignments for this shift' };
+                        }
+                        
                         const now = new Date();
                         const shiftDate = parseISO(shiftForm.date);
                         const [hours, minutes] = shiftForm.startTime.split(':').map(Number);
                         const shiftStartDateTime = new Date(shiftDate);
                         shiftStartDateTime.setHours(hours, minutes, 0, 0);
+                        
                         if (now < shiftStartDateTime) {
                           return { canAdd: false, reason: 'Cannot add bonus/penalty before shift starts' };
                         }
+                        
+                        // Check if shift is not older than 30 days
+                        const thirtyDaysAgo = new Date(now);
+                        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+                        
+                        if (shiftStartDateTime < thirtyDaysAgo) {
+                          return { canAdd: false, reason: 'Cannot add bonus/penalty for shifts older than 30 days' };
+                        }
+                        
                         return { canAdd: true };
                       })();
                       const canAddBonusPenalty = bonusPenaltyCheck.canAdd;
@@ -1541,7 +1672,69 @@ export default function ShiftCalendarPage() {
                               {bonusPenaltyCheck.reason || 'Bonus/Penalty cannot be added'}
                             </div>
                           )}
-                          {selectedCount >= 2 && (
+                          
+                          {/* Bonus/Penalty Summary */}
+                          {(() => {
+                            const allBonuses: Bonus[] = [];
+                            const allPenalties: Penalty[] = [];
+                            
+                            confirmedAssignments.forEach((assignment) => {
+                              const staffBonuses = shiftBonuses.get(assignment.staffUserId) || [];
+                              const staffPenalties = shiftPenalties.get(assignment.staffUserId) || [];
+                              allBonuses.push(...staffBonuses);
+                              allPenalties.push(...staffPenalties);
+                            });
+                            
+                            if (allBonuses.length === 0 && allPenalties.length === 0) {
+                              return null;
+                            }
+                            
+                            const totalBonuses = allBonuses.reduce((sum, b) => sum + b.amount, 0);
+                            const totalPenalties = allPenalties.reduce((sum, p) => sum + p.amount, 0);
+                            const net = totalBonuses - totalPenalties;
+                            
+                            return (
+                              <div className="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                                <div className="text-xs font-semibold text-slate-700 mb-2">Bonus/Penalty Summary</div>
+                                <div className="space-y-1.5 text-xs">
+                                  {allBonuses.length > 0 && (
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-emerald-700 flex items-center gap-1">
+                                        <Gift className="w-3 h-3" />
+                                        Bonuses ({allBonuses.length})
+                                      </span>
+                                      <span className="font-semibold text-emerald-700">
+                                        +{totalBonuses.toLocaleString('vi-VN')} VND
+                                      </span>
+                                    </div>
+                                  )}
+                                  {allPenalties.length > 0 && (
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-red-700 flex items-center gap-1">
+                                        <AlertTriangle className="w-3 h-3" />
+                                        Penalties ({allPenalties.length})
+                                      </span>
+                                      <span className="font-semibold text-red-700">
+                                        -{totalPenalties.toLocaleString('vi-VN')} VND
+                                      </span>
+                                    </div>
+                                  )}
+                                  {(allBonuses.length > 0 || allPenalties.length > 0) && (
+                                    <div className="flex items-center justify-between pt-1.5 border-t border-slate-200">
+                                      <span className="font-semibold text-slate-700">Net</span>
+                                      <span className={`font-bold ${
+                                        net >= 0 ? 'text-emerald-700' : 'text-red-700'
+                                      }`}>
+                                        {net >= 0 ? '+' : ''}{net.toLocaleString('vi-VN')} VND
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })()}
+                          
+                          {selectedCount >= 2 && canAddBonusPenalty && (
                             <div className="flex items-center gap-2">
                               <button
                                 type="button"
@@ -1637,61 +1830,96 @@ export default function ShiftCalendarPage() {
                                     {assignment.notes && (
                                       <p className="text-xs text-slate-500 mt-1">{assignment.notes}</p>
                                     )}
+                                    
+                                    {/* Bonus/Penalty Display */}
+                                    {(() => {
+                                      const staffBonuses = shiftBonuses.get(assignment.staffUserId) || [];
+                                      const staffPenalties = shiftPenalties.get(assignment.staffUserId) || [];
+                                      
+                                      if (staffBonuses.length === 0 && staffPenalties.length === 0) {
+                                        return null;
+                                      }
+                                      
+                                      return (
+                                        <div className="mt-2 space-y-1">
+                                          {staffBonuses.length > 0 && (
+                                            <div className="flex items-center gap-1.5 text-xs">
+                                              <Gift className="w-3 h-3 text-emerald-600" />
+                                              <span className="text-emerald-700">
+                                                {staffBonuses.length} bonus{staffBonuses.length > 1 ? 'es' : ''} · 
+                                                {staffBonuses.reduce((sum, b) => sum + b.amount, 0).toLocaleString('vi-VN')} VND
+                                              </span>
+                                            </div>
+                                          )}
+                                          {staffPenalties.length > 0 && (
+                                            <div className="flex items-center gap-1.5 text-xs">
+                                              <AlertTriangle className="w-3 h-3 text-red-600" />
+                                              <span className="text-red-700">
+                                                {staffPenalties.length} penalt{staffPenalties.length > 1 ? 'ies' : 'y'} · 
+                                                {staffPenalties.reduce((sum, p) => sum + p.amount, 0).toLocaleString('vi-VN')} VND
+                                              </span>
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })()}
                                   </div>
-                                  <div className="flex items-center gap-1.5">
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setQuickCreateModal({
-                                          open: true,
-                                          type: 'bonus',
-                                          staffUserIds: [assignment.staffUserId],
-                                          staffNames: [staffName],
-                                          shiftId: shiftForm.shiftId!,
-                                          shiftDate: shiftForm.date,
-                                        });
-                                        setQuickCreateForm({
-                                          type: '',
-                                          amount: '',
-                                          description: '',
-                                          incidentDate: shiftForm.date,
-                                          templateId: '',
-                                        });
-                                      }}
-                                      className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded transition-colors hover:bg-emerald-100"
-                                      title={bonusPenaltyCheck.reason || 'Add bonus for this staff'}
-                                    >
-                                      <Gift className="w-3 h-3" />
-                                      Bonus
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setQuickCreateModal({
-                                          open: true,
-                                          type: 'penalty',
-                                          staffUserIds: [assignment.staffUserId],
-                                          staffNames: [staffName],
-                                          shiftId: shiftForm.shiftId!,
-                                          shiftDate: shiftForm.date,
-                                        });
-                                        setQuickCreateForm({
-                                          type: '',
-                                          amount: '',
-                                          description: '',
-                                          incidentDate: shiftForm.date,
-                                          templateId: '',
-                                        });
-                                      }}
-                                      className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded transition-colors hover:bg-red-100"
-                                      title={bonusPenaltyCheck.reason || 'Add penalty for this staff'}
-                                    >
-                                      <AlertTriangle className="w-3 h-3" />
-                                      Penalty
-                                    </button>
-                                  </div>
+                                  {canAddBonusPenalty && (
+                                    <div className="flex items-center gap-1.5">
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setQuickCreateModal({
+                                            open: true,
+                                            type: 'bonus',
+                                            staffUserIds: [assignment.staffUserId],
+                                            staffNames: [staffName],
+                                            shiftId: shiftForm.shiftId!,
+                                            shiftDate: shiftForm.date,
+                                          });
+                                          setQuickCreateForm({
+                                            type: '',
+                                            amount: '',
+                                            description: '',
+                                            incidentDate: shiftForm.date,
+                                            templateId: '',
+                                          });
+                                        }}
+                                        className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded transition-colors hover:bg-emerald-100"
+                                        title="Add bonus for this staff"
+                                      >
+                                        <Gift className="w-3 h-3" />
+                                        Bonus
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setQuickCreateModal({
+                                            open: true,
+                                            type: 'penalty',
+                                            staffUserIds: [assignment.staffUserId],
+                                            staffNames: [staffName],
+                                            shiftId: shiftForm.shiftId!,
+                                            shiftDate: shiftForm.date,
+                                          });
+                                          setQuickCreateForm({
+                                            type: '',
+                                            amount: '',
+                                            description: '',
+                                            incidentDate: shiftForm.date,
+                                            templateId: '',
+                                          });
+                                        }}
+                                        className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded transition-colors hover:bg-red-100"
+                                        title="Add penalty for this staff"
+                                      >
+                                        <AlertTriangle className="w-3 h-3" />
+                                        Penalty
+                                      </button>
+                                    </div>
+                                  )}
                                 </div>
                               );
                             })}
@@ -2704,9 +2932,24 @@ export default function ShiftCalendarPage() {
 
         {/* Quick Create Bonus/Penalty Modal */}
         {quickCreateModal.open && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
-              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+          <div 
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 overflow-y-auto p-4"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                setQuickCreateModal({
+                  open: false,
+                  type: null,
+                  staffUserIds: [],
+                  staffNames: [],
+                  shiftId: null,
+                  shiftDate: '',
+                });
+              }
+            }}
+            style={{ overscrollBehavior: 'contain' }}
+          >
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col my-auto">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 flex-shrink-0">
                 <h2 className="text-lg font-semibold text-slate-900">
                   Add {quickCreateModal.type === 'bonus' ? 'Bonus' : 'Penalty'}
                 </h2>
@@ -2735,7 +2978,7 @@ export default function ShiftCalendarPage() {
                   <X className="h-4 w-4" />
                 </button>
               </div>
-              <form onSubmit={handleQuickCreate} className="px-6 py-4 space-y-4">
+              <form onSubmit={handleQuickCreate} className="px-6 py-4 space-y-4 flex-1 overflow-y-auto" style={{ overscrollBehavior: 'contain' }}>
                 <div className="space-y-1">
                   <label className="text-xs font-medium text-slate-700">Staff</label>
                   <div className="text-sm font-medium text-slate-900 bg-slate-50 px-3 py-2 rounded-lg border border-slate-200">
@@ -2828,15 +3071,38 @@ export default function ShiftCalendarPage() {
                     required
                   >
                     <option value="">Select type...</option>
-                    {quickCreateModal.type === 'bonus' ? (
-                      <>
-                        <option value="PERFORMANCE">Performance</option>
-                        <option value="ATTENDANCE">Attendance</option>
-                        <option value="SPECIAL">Special</option>
-                        <option value="HOLIDAY">Holiday</option>
-                        <option value="OTHER">Other</option>
-                      </>
-                    ) : (
+                    {quickCreateModal.type === 'bonus' ? (() => {
+                      // Lấy danh sách bonus types từ templates (unique)
+                      const bonusTypesFromTemplates = Array.from(
+                        new Set(bonusTemplates.map(t => t.bonusType))
+                      ).sort();
+                      
+                      // Danh sách bonus types mặc định
+                      const defaultBonusTypes: BonusType[] = ['PERFORMANCE', 'ATTENDANCE', 'SPECIAL', 'HOLIDAY', 'OTHER'];
+                      
+                      // Kết hợp và loại bỏ trùng lặp
+                      const allBonusTypes = Array.from(
+                        new Set([...defaultBonusTypes, ...bonusTypesFromTemplates])
+                      ) as BonusType[];
+                      
+                      const typeLabels: Record<BonusType, string> = {
+                        PERFORMANCE: 'Performance',
+                        ATTENDANCE: 'Attendance',
+                        SPECIAL: 'Special',
+                        HOLIDAY: 'Holiday',
+                        OTHER: 'Other',
+                      };
+                      
+                      return (
+                        <>
+                          {allBonusTypes.map((type) => (
+                            <option key={type} value={type}>
+                              {typeLabels[type] || type}
+                            </option>
+                          ))}
+                        </>
+                      );
+                    })() : (
                       <>
                         <option value="NO_SHOW">No Show</option>
                         <option value="LATE">Late</option>
@@ -2887,7 +3153,7 @@ export default function ShiftCalendarPage() {
                     required
                   />
                 </div>
-                <div className="flex items-center gap-2 justify-end pt-2 border-t border-slate-100">
+                <div className="flex items-center gap-2 justify-end pt-2 border-t border-slate-100 flex-shrink-0">
                   <button
                     type="button"
                     onClick={() => {

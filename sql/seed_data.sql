@@ -480,6 +480,130 @@ ON DUPLICATE KEY UPDATE quantity=VALUES(quantity);
 
 
 -- =============================================
+-- 6. PROFILE_DB - Payroll Templates (Bonus, Penalty, Allowance)
+-- =============================================
+
+USE profile_db;
+
+-- =====================================================
+-- BONUS TEMPLATES - Mẫu thưởng
+-- =====================================================
+
+-- Xóa dữ liệu cũ nếu có (uncomment dòng này nếu muốn reset và tạo lại từ đầu)
+-- DELETE FROM bonus_templates WHERE branch_id IS NULL;
+
+-- Thưởng hiệu suất làm việc
+-- Lưu ý: Nếu chạy nhiều lần sẽ tạo duplicate. Uncomment DELETE ở trên nếu muốn reset.
+INSERT INTO bonus_templates (branch_id, name, bonus_type, amount, description, is_active, created_by) VALUES
+-- PERFORMANCE - Thưởng hiệu suất
+(NULL, 'Thưởng hiệu suất xuất sắc', 'PERFORMANCE', 500000, 'Thưởng cho nhân viên có hiệu suất làm việc xuất sắc trong tháng (doanh số cao, phục vụ tốt, không có khiếu nại)', TRUE, 1),
+(NULL, 'Thưởng nhân viên của tháng', 'PERFORMANCE', 1000000, 'Thưởng cho nhân viên được bình chọn là nhân viên của tháng', TRUE, 1),
+(NULL, 'Thưởng phục vụ tốt', 'PERFORMANCE', 200000, 'Thưởng cho nhân viên được khách hàng đánh giá tốt, không có khiếu nại', TRUE, 1),
+(NULL, 'Thưởng làm thêm giờ', 'PERFORMANCE', 50000, 'Thưởng cho nhân viên sẵn sàng làm thêm giờ khi cần thiết', TRUE, 1),
+
+-- STORE_TARGET - Thưởng đạt chỉ tiêu
+(NULL, 'Thưởng đạt chỉ tiêu doanh số', 'STORE_TARGET', 300000, 'Thưởng khi chi nhánh đạt chỉ tiêu doanh số tháng', TRUE, 1),
+(NULL, 'Thưởng vượt chỉ tiêu doanh số', 'STORE_TARGET', 500000, 'Thưởng khi chi nhánh vượt chỉ tiêu doanh số tháng', TRUE, 1),
+(NULL, 'Thưởng đạt chỉ tiêu khách hàng', 'STORE_TARGET', 200000, 'Thưởng khi chi nhánh đạt chỉ tiêu số lượng khách hàng', TRUE, 1),
+
+-- HOLIDAY - Thưởng lễ tết
+(NULL, 'Thưởng Tết Nguyên Đán', 'HOLIDAY', 1000000, 'Thưởng Tết cho nhân viên làm việc trong dịp Tết Nguyên Đán', TRUE, 1),
+(NULL, 'Thưởng ngày lễ quốc gia', 'HOLIDAY', 300000, 'Thưởng cho nhân viên làm việc vào ngày lễ quốc gia', TRUE, 1),
+(NULL, 'Thưởng cuối năm', 'HOLIDAY', 500000, 'Thưởng cuối năm cho nhân viên có thâm niên và đóng góp tốt', TRUE, 1),
+
+-- REFERRAL - Thưởng giới thiệu
+(NULL, 'Thưởng giới thiệu nhân viên mới', 'REFERRAL', 500000, 'Thưởng khi giới thiệu được nhân viên mới và nhân viên đó làm việc trên 3 tháng', TRUE, 1),
+(NULL, 'Thưởng giới thiệu khách hàng VIP', 'REFERRAL', 200000, 'Thưởng khi giới thiệu được khách hàng VIP (mua hàng thường xuyên)', TRUE, 1),
+
+-- SPECIAL - Thưởng đặc biệt
+(NULL, 'Thưởng đặc biệt - Sự kiện', 'SPECIAL', 300000, 'Thưởng đặc biệt cho nhân viên tham gia tổ chức sự kiện thành công', TRUE, 1),
+(NULL, 'Thưởng đặc biệt - Đề xuất cải tiến', 'SPECIAL', 200000, 'Thưởng cho nhân viên có đề xuất cải tiến được áp dụng', TRUE, 1),
+(NULL, 'Thưởng đặc biệt - Xử lý tình huống khó', 'SPECIAL', 250000, 'Thưởng cho nhân viên xử lý tốt các tình huống khó khăn', TRUE, 1);
+
+-- =====================================================
+-- PENALTY CONFIG - Cấu hình mức phạt
+-- =====================================================
+
+-- Xóa dữ liệu cũ nếu có (uncomment dòng này nếu muốn reset)
+-- DELETE FROM penalty_config WHERE branch_id IS NULL;
+
+-- Cập nhật/Thêm mẫu phạt cho coffee shop
+-- Lưu ý: penalty_config có UNIQUE KEY (penalty_type, branch_id), nên dùng ON DUPLICATE KEY UPDATE
+INSERT INTO penalty_config (branch_id, name, penalty_type, amount, description, is_active, created_by) VALUES
+-- LATE - Đi muộn
+(NULL, 'Phạt đi muộn 5-15 phút', 'LATE', 20000, 'Phạt đi muộn từ 5 đến 15 phút', TRUE, 1),
+(NULL, 'Phạt đi muộn 15-30 phút', 'LATE', 40000, 'Phạt đi muộn từ 15 đến 30 phút', TRUE, 1),
+(NULL, 'Phạt đi muộn trên 30 phút', 'LATE', 60000, 'Phạt đi muộn trên 30 phút', TRUE, 1),
+(NULL, 'Phạt đi muộn quá 1 giờ', 'LATE', 100000, 'Phạt đi muộn quá 1 giờ (coi như nghỉ không phép nếu không có lý do)', TRUE, 1),
+
+-- NO_SHOW - Không đi làm
+(NULL, 'Phạt không đi làm (không báo trước)', 'NO_SHOW', 150000, 'Phạt không đi làm mà không báo trước cho quản lý', TRUE, 1),
+(NULL, 'Phạt không đi làm (có báo nhưng không hợp lý)', 'NO_SHOW', 100000, 'Phạt không đi làm có báo nhưng lý do không hợp lý', TRUE, 1),
+
+-- EARLY_LEAVE - Về sớm
+(NULL, 'Phạt về sớm 15-30 phút', 'EARLY_LEAVE', 30000, 'Phạt về sớm từ 15 đến 30 phút không có lý do', TRUE, 1),
+(NULL, 'Phạt về sớm trên 30 phút', 'EARLY_LEAVE', 50000, 'Phạt về sớm trên 30 phút không có lý do', TRUE, 1),
+
+-- VIOLATION - Vi phạm
+(NULL, 'Phạt vi phạm quy định phục vụ', 'VIOLATION', 50000, 'Phạt vi phạm quy định phục vụ khách hàng (thái độ không tốt, không tuân thủ quy trình)', TRUE, 1),
+(NULL, 'Phạt vi phạm vệ sinh an toàn thực phẩm', 'VIOLATION', 100000, 'Phạt vi phạm quy định vệ sinh an toàn thực phẩm', TRUE, 1),
+(NULL, 'Phạt làm hỏng thiết bị/máy móc', 'VIOLATION', 200000, 'Phạt làm hỏng thiết bị, máy móc do sơ suất', TRUE, 1),
+(NULL, 'Phạt vi phạm đồng phục', 'VIOLATION', 20000, 'Phạt không mặc đồng phục hoặc mặc không đúng quy định', TRUE, 1),
+(NULL, 'Phạt sử dụng điện thoại khi làm việc', 'VIOLATION', 30000, 'Phạt sử dụng điện thoại cá nhân khi đang phục vụ khách', TRUE, 1),
+
+-- UNPAID_LEAVE - Nghỉ không phép
+(NULL, 'Nghỉ không phép (tính theo lương ngày)', 'UNPAID_LEAVE', 0, 'Nghỉ không phép - trừ lương theo ngày (amount = 0, tính theo lương cơ bản)', TRUE, 1),
+
+-- OTHER - Khác
+(NULL, 'Phạt khác - Tùy trường hợp', 'OTHER', 50000, 'Phạt cho các trường hợp vi phạm khác (quản lý sẽ điều chỉnh amount)', TRUE, 1)
+ON DUPLICATE KEY UPDATE
+  name = VALUES(name),
+  amount = VALUES(amount),
+  description = VALUES(description),
+  is_active = VALUES(is_active),
+  update_at = CURRENT_TIMESTAMP;
+
+-- =====================================================
+-- ALLOWANCE TEMPLATES - Mẫu phụ cấp
+-- =====================================================
+
+-- Xóa dữ liệu cũ nếu có (uncomment dòng này nếu muốn reset và tạo lại từ đầu)
+-- DELETE FROM allowance_templates WHERE branch_id IS NULL;
+
+-- Phụ cấp cho nhân viên coffee shop
+-- Lưu ý: Nếu chạy nhiều lần sẽ tạo duplicate. Uncomment DELETE ở trên nếu muốn reset.
+INSERT INTO allowance_templates (branch_id, name, allowance_type, amount, description, is_active, created_by) VALUES
+-- MEAL - Phụ cấp ăn
+(NULL, 'Phụ cấp ăn trưa', 'MEAL', 30000, 'Phụ cấp ăn trưa cho nhân viên làm ca sáng/chiều', TRUE, 1),
+(NULL, 'Phụ cấp ăn tối', 'MEAL', 35000, 'Phụ cấp ăn tối cho nhân viên làm ca tối', TRUE, 1),
+(NULL, 'Phụ cấp ăn ca đêm', 'MEAL', 40000, 'Phụ cấp ăn cho nhân viên làm ca đêm (sau 22h)', TRUE, 1),
+
+-- TRANSPORT - Phụ cấp đi lại
+(NULL, 'Phụ cấp xăng xe', 'TRANSPORT', 200000, 'Phụ cấp xăng xe hàng tháng cho nhân viên đi xe máy', TRUE, 1),
+(NULL, 'Phụ cấp đi lại (xe bus/grab)', 'TRANSPORT', 150000, 'Phụ cấp đi lại hàng tháng cho nhân viên đi xe bus hoặc grab', TRUE, 1),
+(NULL, 'Phụ cấp đi lại ca đêm', 'TRANSPORT', 100000, 'Phụ cấp đi lại bổ sung cho nhân viên làm ca đêm (an toàn)', TRUE, 1),
+
+-- PHONE - Phụ cấp điện thoại
+(NULL, 'Phụ cấp điện thoại', 'PHONE', 100000, 'Phụ cấp điện thoại hàng tháng cho nhân viên', TRUE, 1),
+(NULL, 'Phụ cấp điện thoại quản lý', 'PHONE', 200000, 'Phụ cấp điện thoại hàng tháng cho quản lý (liên lạc nhiều hơn)', TRUE, 1),
+
+-- ROLE - Phụ cấp chức vụ
+(NULL, 'Phụ cấp trưởng ca', 'ROLE', 500000, 'Phụ cấp chức vụ cho nhân viên làm trưởng ca', TRUE, 1),
+(NULL, 'Phụ cấp phó quản lý', 'ROLE', 1000000, 'Phụ cấp chức vụ cho phó quản lý', TRUE, 1),
+(NULL, 'Phụ cấp quản lý', 'ROLE', 2000000, 'Phụ cấp chức vụ cho quản lý chi nhánh', TRUE, 1),
+(NULL, 'Phụ cấp barista chuyên nghiệp', 'ROLE', 300000, 'Phụ cấp cho barista có chứng chỉ hoặc kỹ năng đặc biệt', TRUE, 1),
+
+-- OTHER - Phụ cấp khác
+(NULL, 'Phụ cấp thâm niên (1-2 năm)', 'OTHER', 200000, 'Phụ cấp thâm niên cho nhân viên làm việc từ 1-2 năm', TRUE, 1),
+(NULL, 'Phụ cấp thâm niên (2-5 năm)', 'OTHER', 400000, 'Phụ cấp thâm niên cho nhân viên làm việc từ 2-5 năm', TRUE, 1),
+(NULL, 'Phụ cấp thâm niên (trên 5 năm)', 'OTHER', 600000, 'Phụ cấp thâm niên cho nhân viên làm việc trên 5 năm', TRUE, 1),
+(NULL, 'Phụ cấp làm việc cuối tuần', 'OTHER', 50000, 'Phụ cấp bổ sung cho nhân viên làm việc vào cuối tuần', TRUE, 1),
+(NULL, 'Phụ cấp làm việc ngày lễ', 'OTHER', 100000, 'Phụ cấp bổ sung cho nhân viên làm việc vào ngày lễ', TRUE, 1),
+(NULL, 'Phụ cấp làm việc ca đêm', 'OTHER', 80000, 'Phụ cấp bổ sung cho nhân viên làm việc ca đêm (sau 22h)', TRUE, 1),
+(NULL, 'Phụ cấp đào tạo', 'OTHER', 200000, 'Phụ cấp cho nhân viên tham gia đào tạo, nâng cao kỹ năng', TRUE, 1);
+
+
+-- =============================================
 -- HOÀN TẤT
 -- =============================================
 -- Dữ liệu mẫu đã được tạo thành công!
@@ -494,5 +618,8 @@ ON DUPLICATE KEY UPDATE quantity=VALUES(quantity);
 -- - 12 Products với product_details (28 product_details tổng cộng)
 -- - 28 Recipes với recipe_items (TẤT CẢ product_details đều có recipe)
 -- - Stock cho cả 2 branches
+-- - 15 Bonus Templates (SYSTEM scope)
+-- - 12 Penalty Configs (SYSTEM scope)
+-- - 17 Allowance Templates (SYSTEM scope)
 -- =============================================
 

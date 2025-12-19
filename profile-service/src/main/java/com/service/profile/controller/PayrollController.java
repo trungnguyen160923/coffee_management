@@ -124,6 +124,18 @@ public class PayrollController {
                 .build();
     }
 
+    @GetMapping("/shift-work-summary")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER') or hasRole('STAFF')")
+    public ApiResponse<PayrollService.ShiftWorkSummary> getShiftWorkSummary(
+            @RequestParam Integer userId,
+            @RequestParam String period
+    ) {
+        PayrollService.ShiftWorkSummary result = payrollService.calculateShiftWorkSummary(userId, period);
+        return ApiResponse.<PayrollService.ShiftWorkSummary>builder()
+                .result(result)
+                .build();
+    }
+
     private Integer getCurrentUserId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !(authentication.getPrincipal() instanceof Jwt)) {

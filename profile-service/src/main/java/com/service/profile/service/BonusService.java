@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -31,6 +32,8 @@ public class BonusService {
     ManagerProfileRepository managerProfileRepository;
     BonusMapper bonusMapper;
     BonusTemplateService bonusTemplateService;
+    PayrollRepository payrollRepository;
+    PayrollService payrollService;
 
     /**
      * Tạo bonus custom (không dùng template)
@@ -141,6 +144,9 @@ public class BonusService {
         Bonus updated = bonusRepository.save(bonus);
         log.info("Approved bonus: bonusId={}", bonusId);
         
+        // Check payroll and recalculate if needed
+        checkPayrollAndRecalculate(updated.getUserId(), updated.getPeriod(), currentUserId, currentUserRole);
+        
         return bonusMapper.toBonusResponse(updated);
     }
 
@@ -223,19 +229,20 @@ public class BonusService {
     }
 
     /**
-     * Cập nhật bonus (chỉ khi PENDING)
+     * Cập nhật bonus (cho phép mọi status)
      */
     @Transactional
     public BonusResponse updateBonus(Integer bonusId, BonusCreationRequest request, Integer currentUserId, String currentUserRole) {
         Bonus bonus = bonusRepository.findById(bonusId)
             .orElseThrow(() -> new AppException(ErrorCode.BONUS_NOT_FOUND));
 
-        if (bonus.getStatus() != Bonus.BonusStatus.PENDING) {
-            throw new AppException(ErrorCode.VALIDATION_FAILED, "Only PENDING bonuses can be updated");
-        }
-
         // Không cho đổi user/branch/period bằng API update – giữ nguyên liên kết payroll
         validateAuthorization(currentUserId, currentUserRole, bonus.getUserId(), bonus.getUserRole(), bonus.getBranchId());
+
+        // Nếu bonus đã APPROVED, cần check payroll
+        if (bonus.getStatus() == Bonus.BonusStatus.APPROVED) {
+            checkPayrollAndRecalculate(bonus.getUserId(), bonus.getPeriod(), currentUserId, currentUserRole);
+        }
 
         // Cho phép đổi loại, số tiền, mô tả, criteriaRef, shift
         if (request.getBonusType() != null) {
@@ -250,7 +257,9 @@ public class BonusService {
         if (request.getCriteriaRef() != null) {
             bonus.setCriteriaRef(request.getCriteriaRef());
         }
-        bonus.setShiftId(request.getShiftId());
+        if (request.getShiftId() != null) {
+            bonus.setShiftId(request.getShiftId());
+        }
         bonus.setUpdateAt(LocalDateTime.now());
 
         Bonus updated = bonusRepository.save(bonus);
@@ -260,19 +269,20 @@ public class BonusService {
     }
 
     /**
-     * Xóa bonus (chỉ khi PENDING)
+     * Xóa bonus (cho phép mọi status)
      */
     @Transactional
     public void deleteBonus(Integer bonusId, Integer currentUserId, String currentUserRole) {
         Bonus bonus = bonusRepository.findById(bonusId)
             .orElseThrow(() -> new AppException(ErrorCode.BONUS_NOT_FOUND));
         
-        if (bonus.getStatus() != Bonus.BonusStatus.PENDING) {
-            throw new AppException(ErrorCode.VALIDATION_FAILED, "Cannot delete bonus that is not in PENDING status");
-        }
-        
         // Validate authorization
         validateAuthorization(currentUserId, currentUserRole, bonus.getUserId(), bonus.getUserRole(), bonus.getBranchId());
+        
+        // Nếu bonus đã APPROVED, cần check payroll trước khi xóa
+        if (bonus.getStatus() == Bonus.BonusStatus.APPROVED) {
+            checkPayrollAndRecalculate(bonus.getUserId(), bonus.getPeriod(), currentUserId, currentUserRole);
+        }
         
         bonusRepository.delete(bonus);
         log.info("Deleted bonus: bonusId={}", bonusId);
@@ -339,6 +349,48 @@ public class BonusService {
         ManagerProfile managerProfile = managerProfileRepository.findById(managerUserId)
             .orElseThrow(() -> new AppException(ErrorCode.USER_ID_NOT_FOUND));
         return managerProfile.getBranchId();
+    }
+
+    /**
+     * Kiểm tra payroll và tự động recalculate nếu cần
+     * Logic:
+     * 1. Nếu payroll chưa tồn tại → OK (không làm gì)
+     * 2. Nếu payroll DRAFT/REVIEW → Tự động recalculate
+     * 3. Nếu payroll APPROVED/PAID → CHẶN (throw exception)
+     */
+    private void checkPayrollAndRecalculate(Integer userId, String period, Integer currentUserId, String currentUserRole) {
+        Optional<Payroll> payrollOpt = payrollRepository.findByUserIdAndPeriod(userId, period);
+        
+        if (payrollOpt.isEmpty()) {
+            // Chưa có payroll → OK, không làm gì
+            log.debug("No payroll found for userId={}, period={}. Proceeding with bonus/penalty operation.", userId, period);
+            return;
+        }
+        
+        Payroll payroll = payrollOpt.get();
+        
+        if (payroll.getStatus() == Payroll.PayrollStatus.DRAFT || 
+            payroll.getStatus() == Payroll.PayrollStatus.REVIEW) {
+            // Tự động recalculate
+            log.info("Auto-recalculating payroll: payrollId={}, userId={}, period={}", 
+                payroll.getPayrollId(), userId, period);
+            try {
+                payrollService.recalculatePayroll(payroll.getPayrollId(), currentUserId, currentUserRole);
+                log.info("Successfully auto-recalculated payroll: payrollId={}", payroll.getPayrollId());
+            } catch (Exception e) {
+                log.error("Failed to auto-recalculate payroll: payrollId={}", payroll.getPayrollId(), e);
+                throw new AppException(ErrorCode.VALIDATION_FAILED, 
+                    "Failed to auto-recalculate payroll: " + e.getMessage());
+            }
+        } else {
+            // APPROVED/PAID → CHẶN
+            String statusStr = payroll.getStatus().name();
+            log.warn("Cannot modify bonus/penalty. Payroll is already {}: payrollId={}, userId={}, period={}", 
+                statusStr, payroll.getPayrollId(), userId, period);
+            throw new AppException(ErrorCode.PAYROLL_ALREADY_APPROVED_OR_PAID, 
+                "Cannot modify bonus/penalty. Payroll for period " + period + 
+                " is already " + statusStr + ". Please reject payroll first.");
+        }
     }
 }
 
