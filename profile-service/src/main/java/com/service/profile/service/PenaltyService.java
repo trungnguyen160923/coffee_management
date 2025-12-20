@@ -32,6 +32,8 @@ public class PenaltyService {
     ManagerProfileRepository managerProfileRepository;
     PenaltyMapper penaltyMapper;
     PenaltyConfigService penaltyConfigService;
+    PayrollRepository payrollRepository;
+    PayrollService payrollService;
 
     /**
      * Tạo penalty custom
