@@ -598,6 +598,18 @@ const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
     const { index, maxQty } = quantityModalData;
     const detail = details[index];
 
+    console.log('[DEBUG handleQuantityModalSubmit] Input:', {
+      quantity,
+      index,
+      maxQty,
+      currentDetail: {
+        receivedQty: detail.receivedQty,
+        damageQty: detail.damageQty,
+        orderedQty: detail.orderedQty,
+        quantityValidation: detail.quantityValidation
+      }
+    });
+
     if (quantity < 0 || quantity > maxQty) {
       toast.error(`Invalid quantity. Please enter a number between 0 and ${maxQty}`);
       return;
@@ -605,14 +617,23 @@ const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
 
     // Update the detail with new quantity
     const newDetails = [...details];
+    const newReceivedQty = quantity + detail.damageQty;
     newDetails[index] = { 
       ...newDetails[index], 
-      receivedQty: quantity + detail.damageQty, // Add damage back to get total received
+      receivedQty: newReceivedQty, // Add damage back to get total received
       quantityValidation: {
-        status: quantity === detail.orderedQty ? ReceiptStatus.DAMAGE_PARTIAL : ReceiptStatus.DAMAGE_PARTIAL,
+        status: ReceiptStatus.DAMAGE_PARTIAL,
         message: `${ReceiptStatusMessage.PARTIAL_DAMAGE_ACCEPTED}: Received ${quantity} good items out of ${detail.orderedQty} ordered. ${detail.notes}`
       }
     };
+
+    console.log('[DEBUG handleQuantityModalSubmit] Updated detail:', {
+      receivedQty: newReceivedQty,
+      damageQty: detail.damageQty,
+      quantityValidation: newDetails[index].quantityValidation,
+      selectedAction: 'DAMAGE_PARTIAL'
+    });
+
     setDetails(newDetails);
     setSelectedActions(prev => ({
       ...prev,
@@ -672,10 +693,29 @@ const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
         if (Object.keys(receiptStatusesById).length > 0 && idKeyForCheck !== undefined && receiptStatusesById[idKeyForCheck]?.canReceiveMore === false) {
           continue;
         }
+        
+        // Check if user has already selected a specific action status
+        const hasUserSelectedStatus = detail.quantityValidation?.status && (
+          detail.quantityValidation.status === ReceiptStatus.SHORT_ACCEPTED ||
+          detail.quantityValidation.status === ReceiptStatus.SHORT_PENDING ||
+          detail.quantityValidation.status === ReceiptStatus.OVER_ACCEPTED ||
+          detail.quantityValidation.status === ReceiptStatus.OVER_ADJUSTED ||
+          detail.quantityValidation.status === ReceiptStatus.OVER_RETURN ||
+          detail.quantityValidation.status === ReceiptStatus.DAMAGE_ACCEPTED ||
+          detail.quantityValidation.status === ReceiptStatus.DAMAGE_RETURN ||
+          detail.quantityValidation.status === ReceiptStatus.DAMAGE_PARTIAL ||
+          detail.quantityValidation.status === ReceiptStatus.RETURN
+        );
+        
+        // If user has already selected a status, skip validation
+        if (hasUserSelectedStatus) {
+          continue;
+        }
+        
         const validation = validateQuantityWithDamage(detail);
         
         // Check if item has issues (SHORT, OVER, DAMAGE) but no action selected
-        // Use selectedActions instead of quantityValidation as it might be overwritten
+        // Use selectedActions as fallback check
         const detailIndex = details.indexOf(detail);
         const hasSelectedAction = selectedActions[detailIndex];
         
@@ -756,15 +796,29 @@ const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
         if (st && st.canReceiveMore === false) closedDetailIds.add(idNum);
       });
 
+      console.log('[DEBUG handleSubmit] Building requestData, details count:', details.length);
+      console.log('[DEBUG handleSubmit] Selected actions:', selectedActions);
+      console.log('[DEBUG handleSubmit] Receipt statuses:', receiptStatusesById);
+
       const requestData = {
         poId: purchaseOrder.poId,
         supplierId: supplierId,
         branchId: purchaseOrder.branchId,
         receivedBy: user?.user_id || 1, // Get user ID from auth context, fallback to 1
-        details: details.map((detail) => {
+        details: details.map((detail, detailIndex) => {
+          console.log(`[DEBUG handleSubmit] Processing detail ${detailIndex}:`, {
+            poDetailId: detail.poDetailId,
+            receivedQty: detail.receivedQty,
+            damageQty: detail.damageQty,
+            orderedQty: detail.orderedQty,
+            quantityValidation: detail.quantityValidation,
+            receivedUnitCode: detail.receivedUnitCode,
+            unitCode: detail.unitCode
+          });
           // Skip items that cannot receive more (only if receipt statuses exist)
           const idKey = detail.poDetailId ?? (detail as any).id;
           if (hasReceiptStatuses && idKey !== undefined && receiptStatusesById[idKey]?.canReceiveMore === false) {
+            console.log(`[DEBUG handleSubmit] Skipping detail ${detailIndex} - canReceiveMore = false`);
             return null;
           }
           // Validate detail data
@@ -887,9 +941,9 @@ const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
               } else if (detail.quantityValidation?.status === ReceiptStatus.DAMAGE_PARTIAL ||
                          detail.quantityValidation?.message?.includes(ReceiptStatusMessage.PARTIAL_DAMAGE_ACCEPTED)) {
                 status = ReceiptStatus.DAMAGE_PARTIAL;
-                note = `DAMAGE PARTIAL: ${detail.damageQty || 0} damaged, ${finalQty} good items accepted. ${note}`;
                 // Only good quantity goes to inventory
                 finalQty = detail.receivedQty - (detail.damageQty || 0);
+                note = `DAMAGE PARTIAL: ${detail.damageQty || 0} damaged, ${finalQty} good items accepted. ${note}`;
               } else {
                 // Default damage handling
                 status = ReceiptStatus.DAMAGE_PARTIAL;
@@ -934,7 +988,7 @@ const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
             ReceiptStatus.OVER_RETURN,
             ReceiptStatus.SHORT_ACCEPTED,
             ReceiptStatus.DAMAGE_ACCEPTED,
-            ReceiptStatus.DAMAGE_PARTIAL,
+            // DAMAGE_PARTIAL allows more receipts (only good items accepted, can receive remaining)
             ReceiptStatus.DAMAGE_RETURN,
             ReceiptStatus.RETURN
           ]);
@@ -945,10 +999,11 @@ const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
           
           // Skip sending RETURN lines to goods receipt (qtyInput = 0 is invalid on BE)
           if (status === ReceiptStatus.RETURN) {
+            console.log(`[DEBUG handleSubmit] Skipping detail ${detailIndex} - status is RETURN`);
             return null;
           }
 
-          return {
+          const requestDetail = {
             poDetailId: detail.poDetailId,
             ingredientId: detail.ingredient.ingredientId,
             unitCodeInput: finalUnitCode,
@@ -961,14 +1016,28 @@ const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
             damageQty: detail.damageQty || 0, // Use the damage quantity from the form
             note: note
           };
+
+          console.log(`[DEBUG handleSubmit] Detail ${detailIndex} mapped to:`, requestDetail);
+          return requestDetail;
         }).filter(detail => detail !== null)
       };
 
+      console.log('[DEBUG handleSubmit] RequestData built:', {
+        poId: requestData.poId,
+        detailsCount: requestData.details.length,
+        details: requestData.details
+      });
+
       // Check if there are any items to process
+      console.log('[DEBUG handleSubmit] Checking requestData.details.length:', requestData.details.length);
       if (requestData.details.length === 0) {
+        console.error('[DEBUG handleSubmit] ERROR: requestData.details.length === 0, returning early');
         toast.error('No items to process. All items have already been handled.');
+        setLoading(false);
         return;
       }
+
+      console.log('[DEBUG handleSubmit] Proceeding to API call with', requestData.details.length, 'details');
 
       // Create Return Goods payload if any details require returns
       const returnDetails: Array<{ ingredientId: number; unitCode: string; qty: number; unitPrice: number; returnReason: string; }> = [];
@@ -1011,6 +1080,18 @@ const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
               returnReason: 'Return damaged items'
             });
           }
+        } else if (d.status === ReceiptStatus.DAMAGE_PARTIAL) {
+          // Return the damaged quantity for DAMAGE_PARTIAL (partial damage - only good items accepted)
+          const damage = Math.max(0, d.damageQty || 0);
+          if (damage > 0) {
+            returnDetails.push({
+              ingredientId: d.ingredientId,
+              unitCode: original?.unitCode || d.unitCodeInput,
+              qty: damage,
+              unitPrice: d.unitPrice,
+              returnReason: 'Return damaged items (partial damage)'
+            });
+          }
         } else if (d.status === ReceiptStatus.RETURN) {
           // Return entire line quantity user attempted to receive
           const qty = Math.max(0, d.qtyInput || 0);
@@ -1027,7 +1108,9 @@ const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
       }
 
       // First create Goods Receipt
+      console.log('[DEBUG handleSubmit] Calling catalogService.createGoodsReceipt with:', requestData);
       await catalogService.createGoodsReceipt(requestData);
+      console.log('[DEBUG handleSubmit] catalogService.createGoodsReceipt completed successfully');
 
       // Also add RETURN items (full line returns) from original details, since we skipped them in GRN
       for (const original of details) {
@@ -1053,6 +1136,7 @@ const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
           poId: purchaseOrder.poId,
           supplierId: supplierId,
           branchId: purchaseOrder.branchId,
+          receivedBy: user?.user_id || 1,
           returnReason: 'Auto-generated from Goods Receipt actions',
           details: returnDetails
         });
@@ -1140,6 +1224,9 @@ const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
       onSuccess();
       onClose();
     } catch (error: any) {
+      console.error('[DEBUG handleSubmit] ERROR caught:', error);
+      console.error('[DEBUG handleSubmit] Error message:', error.message);
+      console.error('[DEBUG handleSubmit] Error stack:', error.stack);
       toast.error(error.message || 'Failed to create goods receipt');
     } finally {
       setLoading(false);

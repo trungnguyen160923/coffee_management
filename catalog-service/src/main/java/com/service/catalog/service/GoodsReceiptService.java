@@ -120,6 +120,7 @@ public class GoodsReceiptService {
         boolean allReceived = true;
         boolean hasShortage = false;
         boolean hasDamage = false;
+        boolean hasClosingStatus = false; // Check if any detail has closing status (SHORT_ACCEPTED, OVER_ACCEPTED, DAMAGE_ACCEPTED)
         
         // Check each PO detail against total received quantities
         for (PurchaseOrderDetail poDetail : poDetails) {
@@ -136,16 +137,21 @@ public class GoodsReceiptService {
             }
         }
         
-        // Check for damage in current receipt
+        // Check for damage and closing statuses in current receipt
         for (GoodsReceiptDetail detail : details) {
             if ("DAMAGE".equals(detail.getStatus())) {
                 hasDamage = true;
+            }
+            // Check if status closes the receipt (no more receipts allowed)
+            if (ReceiptStatusConstants.closesReceipt(detail.getStatus())) {
+                hasClosingStatus = true;
             }
         }
 
         // Update PO status based on receipt results
         String fromStatus = po.getStatus();
-        if (allReceived && !hasShortage && !hasDamage) {
+        // If all received OR has closing status (SHORT_ACCEPTED, OVER_ACCEPTED, DAMAGE_ACCEPTED), close the PO
+        if ((allReceived && !hasShortage && !hasDamage) || hasClosingStatus) {
             po.setStatus("RECEIVED");
         } else {
             po.setStatus("PARTIALLY_RECEIVED");

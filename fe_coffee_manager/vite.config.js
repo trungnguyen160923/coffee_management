@@ -8,4 +8,11 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ['lucide-react'],
   },
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: './src/test/setup.ts',
+    css: true,
+    testTimeout: 15000, // Increase timeout for complex tests with modals and async operations
+  },
 });

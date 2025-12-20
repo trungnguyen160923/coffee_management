@@ -155,6 +155,26 @@
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
 			</plugin>
+			<!-- Maven Surefire Plugin - Configure test execution and logging -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<version>3.5.4</version>
+				<configuration>
+					<!-- Redirect test output to file -->
+					<redirectTestOutputToFile>true</redirectTestOutputToFile>
+					<printSummary>true</printSummary>
+					<reportFormat>brief</reportFormat>
+					<!-- Log test execution details -->
+					<includes>
+						<include>**/*Test.java</include>
+					</includes>
+					<!-- Additional JVM arguments -->
+					<argLine>
+						-Dfile.encoding=UTF-8
+					</argLine>
+				</configuration>
+			</plugin>
 		</plugins>
 	</build>
 

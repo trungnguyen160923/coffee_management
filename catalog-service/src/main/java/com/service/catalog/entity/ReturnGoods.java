@@ -40,6 +40,9 @@ public class ReturnGoods {
     @Column(name = "branch_id")
     Integer branchId;
 
+    @Column(name = "received_by", nullable = false)
+    Integer receivedBy;
+
     @Column(nullable = false, length = 50)
     String status; // PENDING, APPROVED, RETURNED, REJECTED
 

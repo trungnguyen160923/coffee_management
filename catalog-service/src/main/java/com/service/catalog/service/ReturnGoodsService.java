@@ -58,6 +58,7 @@ public class ReturnGoodsService {
                 .purchaseOrder(po)
                 .supplier(supplier)
                 .branchId(request.getBranchId())
+                .receivedBy(request.getReceivedBy() != null ? request.getReceivedBy() : 1)
                 .status("PENDING")
                 .returnReason(request.getReturnReason())
                 .createAt(LocalDateTime.now())
