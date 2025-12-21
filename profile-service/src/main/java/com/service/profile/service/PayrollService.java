@@ -45,7 +45,8 @@ public class PayrollService {
     ShiftAssignmentRepository shiftAssignmentRepository;
     HolidayRepository holidayRepository;
     PayrollMapper payrollMapper;
-    PayrollProperties payrollProperties;
+    PayrollProperties payrollProperties; // Fallback nếu config không có trong DB
+    PayrollConfigurationService payrollConfigurationService;
     AuthClient authClient;
     BranchClient branchClient;
 
@@ -83,7 +84,7 @@ public class PayrollService {
                 staffProfile.getInsuranceSalary().compareTo(BigDecimal.ZERO) > 0 ?
                 staffProfile.getInsuranceSalary() : staffProfile.getBaseSalary();
             overtimeRate = staffProfile.getOvertimeRate() != null ? 
-                staffProfile.getOvertimeRate() : payrollProperties.getDefaultOvertimeRate();
+                staffProfile.getOvertimeRate() : getConfigValue("default_overtime_rate", payrollProperties.getDefaultOvertimeRate());
             numberOfDependents = staffProfile.getNumberOfDependents() != null ? 
                 staffProfile.getNumberOfDependents() : 0;
         } else if (isManager(userId)) {
@@ -97,7 +98,7 @@ public class PayrollService {
                 managerProfile.getInsuranceSalary().compareTo(BigDecimal.ZERO) > 0 ?
                 managerProfile.getInsuranceSalary() : managerProfile.getBaseSalary();
             // Manager hiện không có cấu hình overtime riêng, dùng default
-            overtimeRate = payrollProperties.getDefaultOvertimeRate();
+            overtimeRate = getConfigValue("default_overtime_rate", payrollProperties.getDefaultOvertimeRate());
             numberOfDependents = managerProfile.getNumberOfDependents() != null ? 
                 managerProfile.getNumberOfDependents() : 0;
         } else {
@@ -433,7 +434,8 @@ public class PayrollService {
             return totalHoursInDay;
         } else {
             // Ngày thường: OT = Tổng giờ làm - maxDailyHours (nếu > 0)
-            BigDecimal overtime = totalHoursInDay.subtract(payrollProperties.getMaxDailyHours());
+            BigDecimal maxDailyHours = getConfigValue("max_daily_hours", payrollProperties.getMaxDailyHours());
+            BigDecimal overtime = totalHoursInDay.subtract(maxDailyHours);
             return overtime.compareTo(BigDecimal.ZERO) > 0 ? overtime : BigDecimal.ZERO;
         }
     }
@@ -452,8 +454,11 @@ public class PayrollService {
             calculatedHourlyRate = hourlyRate;
         } else {
             // Full-time/Manager: Tính từ base_salary
-            BigDecimal standardHours = BigDecimal.valueOf(payrollProperties.getStandardWorkingDaysPerMonth())
-                .multiply(payrollProperties.getStandardWorkingHoursPerDay());
+            BigDecimal standardWorkingDays = getConfigValue("standard_working_days_per_month", 
+                BigDecimal.valueOf(payrollProperties.getStandardWorkingDaysPerMonth()));
+            BigDecimal standardWorkingHours = getConfigValue("standard_working_hours_per_day", 
+                payrollProperties.getStandardWorkingHoursPerDay());
+            BigDecimal standardHours = standardWorkingDays.multiply(standardWorkingHours);
             calculatedHourlyRate = baseSalary.divide(standardHours, 2, RoundingMode.HALF_UP);
         }
 
@@ -529,7 +534,8 @@ public class PayrollService {
      * Tính khấu trừ bảo hiểm
      */
     private BigDecimal calculateInsuranceDeduction(BigDecimal insuranceSalary) {
-        return insuranceSalary.multiply(payrollProperties.getInsuranceRate()).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal insuranceRate = getConfigValue("insurance_rate", payrollProperties.getInsuranceRate());
+        return insuranceSalary.multiply(insuranceRate).setScale(2, RoundingMode.HALF_UP);
     }
 
     /**
@@ -538,8 +544,10 @@ public class PayrollService {
     private BigDecimal calculatePersonalIncomeTax(BigDecimal grossSalary, BigDecimal totalInsurance, 
                                                  Integer numberOfDependents) {
         // Taxable Income = Gross - Insurance - Personal Deduction - Dependent Deduction
-        BigDecimal deduction = payrollProperties.getPersonalDeduction()
-            .add(payrollProperties.getDependentDeduction().multiply(BigDecimal.valueOf(numberOfDependents)));
+        BigDecimal personalDeduction = getConfigValue("personal_deduction", payrollProperties.getPersonalDeduction());
+        BigDecimal dependentDeduction = getConfigValue("dependent_deduction", payrollProperties.getDependentDeduction());
+        BigDecimal deduction = personalDeduction
+            .add(dependentDeduction.multiply(BigDecimal.valueOf(numberOfDependents)));
         
         BigDecimal taxableAmount = grossSalary.subtract(totalInsurance).subtract(deduction);
         
@@ -547,42 +555,65 @@ public class PayrollService {
             return BigDecimal.ZERO;
         }
 
-        // Tính thuế theo bậc (2024)
+        // Tính thuế theo bậc từ config
         BigDecimal tax = BigDecimal.ZERO;
         
-        if (taxableAmount.compareTo(BigDecimal.valueOf(5000000)) <= 0) {
+        BigDecimal bracket1Max = getConfigValue("tax_bracket_1_max", BigDecimal.valueOf(5000000));
+        BigDecimal bracket1Rate = getConfigValue("tax_bracket_1_rate", BigDecimal.valueOf(0.05));
+        BigDecimal bracket2Max = getConfigValue("tax_bracket_2_max", BigDecimal.valueOf(10000000));
+        BigDecimal bracket2Rate = getConfigValue("tax_bracket_2_rate", BigDecimal.valueOf(0.10));
+        BigDecimal bracket3Max = getConfigValue("tax_bracket_3_max", BigDecimal.valueOf(18000000));
+        BigDecimal bracket3Rate = getConfigValue("tax_bracket_3_rate", BigDecimal.valueOf(0.15));
+        BigDecimal bracket4Max = getConfigValue("tax_bracket_4_max", BigDecimal.valueOf(32000000));
+        BigDecimal bracket4Rate = getConfigValue("tax_bracket_4_rate", BigDecimal.valueOf(0.20));
+        BigDecimal bracket5Max = getConfigValue("tax_bracket_5_max", BigDecimal.valueOf(52000000));
+        BigDecimal bracket5Rate = getConfigValue("tax_bracket_5_rate", BigDecimal.valueOf(0.25));
+        BigDecimal bracket6Max = getConfigValue("tax_bracket_6_max", BigDecimal.valueOf(80000000));
+        BigDecimal bracket6Rate = getConfigValue("tax_bracket_6_rate", BigDecimal.valueOf(0.30));
+        BigDecimal bracket7Rate = getConfigValue("tax_bracket_7_rate", BigDecimal.valueOf(0.35));
+        
+        if (taxableAmount.compareTo(bracket1Max) <= 0) {
             // Bậc 1: 0-5tr → 5%
-            tax = taxableAmount.multiply(BigDecimal.valueOf(0.05));
-        } else if (taxableAmount.compareTo(BigDecimal.valueOf(10000000)) <= 0) {
+            tax = taxableAmount.multiply(bracket1Rate);
+        } else if (taxableAmount.compareTo(bracket2Max) <= 0) {
             // Bậc 2: 5-10tr → 10%
-            tax = BigDecimal.valueOf(250000) // 5tr * 5%
-                .add(taxableAmount.subtract(BigDecimal.valueOf(5000000))
-                    .multiply(BigDecimal.valueOf(0.10)));
-        } else if (taxableAmount.compareTo(BigDecimal.valueOf(18000000)) <= 0) {
+            tax = bracket1Max.multiply(bracket1Rate) // Thuế bậc 1
+                .add(taxableAmount.subtract(bracket1Max).multiply(bracket2Rate));
+        } else if (taxableAmount.compareTo(bracket3Max) <= 0) {
             // Bậc 3: 10-18tr → 15%
-            tax = BigDecimal.valueOf(750000) // 5tr*5% + 5tr*10%
-                .add(taxableAmount.subtract(BigDecimal.valueOf(10000000))
-                    .multiply(BigDecimal.valueOf(0.15)));
-        } else if (taxableAmount.compareTo(BigDecimal.valueOf(32000000)) <= 0) {
+            tax = bracket1Max.multiply(bracket1Rate)
+                .add(bracket2Max.subtract(bracket1Max).multiply(bracket2Rate))
+                .add(taxableAmount.subtract(bracket2Max).multiply(bracket3Rate));
+        } else if (taxableAmount.compareTo(bracket4Max) <= 0) {
             // Bậc 4: 18-32tr → 20%
-            tax = BigDecimal.valueOf(1950000) // 5tr*5% + 5tr*10% + 8tr*15%
-                .add(taxableAmount.subtract(BigDecimal.valueOf(18000000))
-                    .multiply(BigDecimal.valueOf(0.20)));
-        } else if (taxableAmount.compareTo(BigDecimal.valueOf(52000000)) <= 0) {
+            tax = bracket1Max.multiply(bracket1Rate)
+                .add(bracket2Max.subtract(bracket1Max).multiply(bracket2Rate))
+                .add(bracket3Max.subtract(bracket2Max).multiply(bracket3Rate))
+                .add(taxableAmount.subtract(bracket3Max).multiply(bracket4Rate));
+        } else if (taxableAmount.compareTo(bracket5Max) <= 0) {
             // Bậc 5: 32-52tr → 25%
-            tax = BigDecimal.valueOf(4750000) // ... + 14tr*20%
-                .add(taxableAmount.subtract(BigDecimal.valueOf(32000000))
-                    .multiply(BigDecimal.valueOf(0.25)));
-        } else if (taxableAmount.compareTo(BigDecimal.valueOf(80000000)) <= 0) {
+            tax = bracket1Max.multiply(bracket1Rate)
+                .add(bracket2Max.subtract(bracket1Max).multiply(bracket2Rate))
+                .add(bracket3Max.subtract(bracket2Max).multiply(bracket3Rate))
+                .add(bracket4Max.subtract(bracket3Max).multiply(bracket4Rate))
+                .add(taxableAmount.subtract(bracket4Max).multiply(bracket5Rate));
+        } else if (taxableAmount.compareTo(bracket6Max) <= 0) {
             // Bậc 6: 52-80tr → 30%
-            tax = BigDecimal.valueOf(9750000) // ... + 20tr*25%
-                .add(taxableAmount.subtract(BigDecimal.valueOf(52000000))
-                    .multiply(BigDecimal.valueOf(0.30)));
+            tax = bracket1Max.multiply(bracket1Rate)
+                .add(bracket2Max.subtract(bracket1Max).multiply(bracket2Rate))
+                .add(bracket3Max.subtract(bracket2Max).multiply(bracket3Rate))
+                .add(bracket4Max.subtract(bracket3Max).multiply(bracket4Rate))
+                .add(bracket5Max.subtract(bracket4Max).multiply(bracket5Rate))
+                .add(taxableAmount.subtract(bracket5Max).multiply(bracket6Rate));
         } else {
             // Bậc 7: >80tr → 35%
-            tax = BigDecimal.valueOf(18350000) // ... + 28tr*30%
-                .add(taxableAmount.subtract(BigDecimal.valueOf(80000000))
-                    .multiply(BigDecimal.valueOf(0.35)));
+            tax = bracket1Max.multiply(bracket1Rate)
+                .add(bracket2Max.subtract(bracket1Max).multiply(bracket2Rate))
+                .add(bracket3Max.subtract(bracket2Max).multiply(bracket3Rate))
+                .add(bracket4Max.subtract(bracket3Max).multiply(bracket4Rate))
+                .add(bracket5Max.subtract(bracket4Max).multiply(bracket5Rate))
+                .add(bracket6Max.subtract(bracket5Max).multiply(bracket6Rate))
+                .add(taxableAmount.subtract(bracket6Max).multiply(bracket7Rate));
         }
         
         return tax.setScale(0, RoundingMode.HALF_UP);
@@ -779,11 +810,11 @@ public class PayrollService {
     }
 
     /**
-     * Đánh dấu payroll đã thanh toán (Admin only)
+     * Đánh dấu payroll đã thanh toán (Admin hoặc Manager)
      */
     @Transactional
-    @PreAuthorize("hasRole('ADMIN')")
-    public PayrollResponse markPayrollAsPaid(Integer payrollId) {
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    public PayrollResponse markPayrollAsPaid(Integer payrollId, Integer currentUserId, String currentUserRole) {
         Payroll payroll = payrollRepository.findById(payrollId)
             .orElseThrow(() -> new AppException(ErrorCode.PAYROLL_NOT_FOUND));
         
@@ -792,6 +823,10 @@ public class PayrollService {
                 "Payroll must be APPROVED before marking as PAID");
         }
         
+        // Validate authorization: Manager chỉ có thể mark as paid cho staff payrolls trong branch của họ
+        validateAuthorization(currentUserId, currentUserRole, payroll.getUserId(), 
+            payroll.getUserRole(), payroll.getBranchId());
+        
         payroll.setStatus(Payroll.PayrollStatus.PAID);
         payroll.setPaidAt(LocalDateTime.now());
         payroll.setUpdateAt(LocalDateTime.now());
@@ -799,6 +834,59 @@ public class PayrollService {
         Payroll updated = payrollRepository.save(payroll);
         log.info("Marked payroll as paid: payrollId={}", payrollId);
         
+        return payrollMapper.toPayrollResponse(updated);
+    }
+
+    /**
+     * Revert payroll status về trạng thái trước đó
+     * - PAID -> APPROVED
+     * - APPROVED -> DRAFT
+     * Chỉ cho phép revert khi payroll period là tháng hiện tại hoặc 1 tháng trước
+     */
+    @Transactional
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    public PayrollResponse revertPayrollStatus(Integer payrollId, Integer currentUserId, String currentUserRole) {
+        Payroll payroll = payrollRepository.findById(payrollId)
+            .orElseThrow(() -> new AppException(ErrorCode.PAYROLL_NOT_FOUND));
+        
+        // Kiểm tra status hiện tại
+        if (payroll.getStatus() != Payroll.PayrollStatus.PAID && 
+            payroll.getStatus() != Payroll.PayrollStatus.APPROVED) {
+            throw new AppException(ErrorCode.VALIDATION_FAILED, 
+                "Chỉ có thể revert payroll ở trạng thái PAID hoặc APPROVED");
+        }
+        
+        // Kiểm tra period: chỉ cho phép revert nếu period là tháng hiện tại hoặc 1 tháng trước
+        YearMonth currentMonth = YearMonth.now();
+        YearMonth oneMonthAgo = currentMonth.minusMonths(1);
+        YearMonth payrollPeriod = YearMonth.parse(payroll.getPeriod());
+        
+        if (!payrollPeriod.equals(currentMonth) && !payrollPeriod.equals(oneMonthAgo)) {
+            throw new AppException(ErrorCode.VALIDATION_FAILED, 
+                "Chỉ có thể revert payroll của tháng hiện tại hoặc 1 tháng trước");
+        }
+        
+        // Validate authorization
+        validateAuthorization(currentUserId, currentUserRole, payroll.getUserId(), 
+            payroll.getUserRole(), payroll.getBranchId());
+        
+        // Revert status
+        if (payroll.getStatus() == Payroll.PayrollStatus.PAID) {
+            // PAID -> APPROVED
+            payroll.setStatus(Payroll.PayrollStatus.APPROVED);
+            payroll.setPaidAt(null); // Clear paidAt
+            log.info("Reverted payroll from PAID to APPROVED: payrollId={}", payrollId);
+        } else if (payroll.getStatus() == Payroll.PayrollStatus.APPROVED) {
+            // APPROVED -> DRAFT
+            payroll.setStatus(Payroll.PayrollStatus.DRAFT);
+            payroll.setApprovedBy(null); // Clear approvedBy
+            payroll.setApprovedAt(null); // Clear approvedAt
+            log.info("Reverted payroll from APPROVED to DRAFT: payrollId={}", payrollId);
+        }
+        
+        payroll.setUpdateAt(LocalDateTime.now());
+        
+        Payroll updated = payrollRepository.save(payroll);
         return payrollMapper.toPayrollResponse(updated);
     }
 
@@ -855,6 +943,55 @@ public class PayrollService {
     }
 
     /**
+     * Đánh dấu nhiều payroll đã thanh toán (batch) - Admin hoặc Manager
+     */
+    @Transactional
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    public List<PayrollResponse> markPayrollAsPaidBatch(List<Integer> payrollIds, 
+                                                          Integer currentUserId, String currentUserRole) {
+        List<PayrollResponse> results = new java.util.ArrayList<>();
+        
+        for (Integer payrollId : payrollIds) {
+            try {
+                PayrollResponse payroll = markPayrollAsPaid(payrollId, currentUserId, currentUserRole);
+                results.add(payroll);
+            } catch (Exception e) {
+                log.error("Failed to mark payroll as paid payrollId={}: {}", payrollId, e.getMessage());
+                // Continue with next payroll
+            }
+        }
+        
+        log.info("Marked payroll as paid batch: {} successful, {} total", results.size(), payrollIds.size());
+        return results;
+    }
+
+    /**
+     * Revert nhiều payroll status về trạng thái trước đó (batch)
+     * - PAID -> APPROVED
+     * - APPROVED -> DRAFT
+     * Chỉ cho phép revert khi payroll period là tháng hiện tại hoặc 1 tháng trước
+     */
+    @Transactional
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    public List<PayrollResponse> revertPayrollStatusBatch(List<Integer> payrollIds, 
+                                                          Integer currentUserId, String currentUserRole) {
+        List<PayrollResponse> results = new java.util.ArrayList<>();
+        
+        for (Integer payrollId : payrollIds) {
+            try {
+                PayrollResponse payroll = revertPayrollStatus(payrollId, currentUserId, currentUserRole);
+                results.add(payroll);
+            } catch (Exception e) {
+                log.error("Failed to revert payroll status payrollId={}: {}", payrollId, e.getMessage());
+                // Continue with next payroll
+            }
+        }
+        
+        log.info("Reverted payroll status batch: {} successful, {} total", results.size(), payrollIds.size());
+        return results;
+    }
+
+    /**
      * Tính lại payroll (nếu có thay đổi)
      */
     @Transactional
@@ -897,17 +1034,33 @@ public class PayrollService {
     private BigDecimal getOvertimeMultiplier(LocalDate date, BigDecimal baseRate) {
         // Kiểm tra ngày lễ
         if (isHoliday(date)) {
-            return baseRate.multiply(payrollProperties.getHolidayOvertimeMultiplier());
+            BigDecimal holidayMultiplier = getConfigValue("holiday_overtime_multiplier", 
+                payrollProperties.getHolidayOvertimeMultiplier());
+            return baseRate.multiply(holidayMultiplier);
         }
         
         // Kiểm tra cuối tuần
         java.time.DayOfWeek dayOfWeek = date.getDayOfWeek();
         if (dayOfWeek == java.time.DayOfWeek.SATURDAY || dayOfWeek == java.time.DayOfWeek.SUNDAY) {
-            return baseRate.multiply(payrollProperties.getWeekendOvertimeMultiplier());
+            BigDecimal weekendMultiplier = getConfigValue("weekend_overtime_multiplier", 
+                payrollProperties.getWeekendOvertimeMultiplier());
+            return baseRate.multiply(weekendMultiplier);
         }
         
         // Ngày thường
         return baseRate; // defaultOvertimeRate (1.5x)
+    }
+
+    /**
+     * Helper method để lấy config value từ database, fallback về PayrollProperties nếu không tìm thấy
+     */
+    private BigDecimal getConfigValue(String configKey, BigDecimal defaultValue) {
+        try {
+            return payrollConfigurationService.getConfigValue(configKey);
+        } catch (Exception e) {
+            log.warn("Failed to get config {} from database, using default value: {}", configKey, defaultValue, e);
+            return defaultValue;
+        }
     }
 }
 

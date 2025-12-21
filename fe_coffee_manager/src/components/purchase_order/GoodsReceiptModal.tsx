@@ -1161,7 +1161,12 @@ const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
       const allItemsCompleted = closedDetailIds.size === totalDetails;
       
       // Check if all items are fully received (no pending issues) - for backward compatibility
+      // IMPORTANT: Exclude SHORT_PENDING from allReceived check - these need follow-up
       const allReceived = details.every(detail => {
+        // If user explicitly selected SHORT_PENDING, this item is NOT fully received
+        if (detail.quantityValidation?.status === ReceiptStatus.SHORT_PENDING) {
+          return false;
+        }
         const validation = validateQuantityWithDamage(detail);
         return validation.status === ReceiptStatus.OK || 
                (validation.status === ReceiptStatus.OVER && detail.quantityValidation?.message?.includes(ReceiptStatusMessage.ACCEPTED_OVERAGE)) ||
@@ -1171,6 +1176,11 @@ const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
       
       // Check for different types of issues
       const hasPendingShortages = details.some(detail => {
+        // Check if user explicitly selected SHORT_PENDING (Follow Up)
+        if (detail.quantityValidation?.status === ReceiptStatus.SHORT_PENDING) {
+          return true;
+        }
+        // Otherwise check validation result
         const validation = validateQuantityWithDamage(detail);
         return validation.status === ReceiptStatus.SHORT && 
                !detail.quantityValidation?.message?.includes(ReceiptStatusMessage.ACCEPTED_SHORTAGE);
@@ -1194,18 +1204,22 @@ const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
       });
       
       
+      // Priority order: Check for pending issues first (they prevent RECEIVED status)
       if (allItemsCompleted) {
         poStatus = 'RECEIVED';
         statusMessage = 'All items completed. PO status updated to RECEIVED';
-      } else if (allReceived && !hasPendingShortages && !hasDamages && !hasReturns) {
-        poStatus = 'RECEIVED';
-        statusMessage = 'All items received successfully. PO status updated to RECEIVED';
       } else if (hasPendingShortages) {
+        // If ANY item has pending shortages (SHORT_PENDING), status must be PARTIALLY_RECEIVED
+        // This allows creating additional receipts to receive remaining quantities
         poStatus = 'PARTIALLY_RECEIVED';
         statusMessage = 'Items received with pending shortages. PO status updated to PARTIALLY_RECEIVED - Follow up with supplier';
       } else if (hasReturns) {
         poStatus = 'PARTIALLY_RECEIVED';
         statusMessage = 'Items returned to supplier. PO status updated to PARTIALLY_RECEIVED - Follow up with supplier';
+      } else if (allReceived && !hasDamages) {
+        // Only set RECEIVED if all items are received and no pending issues
+        poStatus = 'RECEIVED';
+        statusMessage = 'All items received successfully. PO status updated to RECEIVED';
       } else if (hasAcceptedShortages || hasDamages) {
         poStatus = 'RECEIVED';
         statusMessage = 'Items received with accepted shortages/damages. PO status updated to RECEIVED';

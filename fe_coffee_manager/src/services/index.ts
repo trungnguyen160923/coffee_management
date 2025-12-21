@@ -21,6 +21,7 @@ export { default as bonusService } from './bonusService';
 export { default as penaltyService } from './penaltyService';
 export { default as allowanceService } from './allowanceService';
 export { default as payrollTemplateService } from './payrollTemplateService';
+export { payrollConfigService } from './payrollConfigService';
 
 // Export API client
 export { default as apiClient } from '../config/api';

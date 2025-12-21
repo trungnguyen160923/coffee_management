@@ -71,6 +71,7 @@ export function Layout({ children }: LayoutProps) {
         { icon: DollarSign, label: 'Payroll', path: '/admin/payroll' },
         { icon: Settings, label: 'Payroll Templates', path: '/admin/payroll-templates' },
         { icon: FileText, label: 'Payroll Reports', path: '/admin/payroll-reports' },
+        { icon: Settings, label: 'Payroll Settings', path: '/admin/payroll-settings' },
         { icon: BarChart3, label: 'Statistics', path: '/admin/statistics' },
       ];
     } else if (user?.role === 'manager') {
@@ -89,6 +90,7 @@ export function Layout({ children }: LayoutProps) {
         { icon: DollarSign, label: 'Payroll', path: '/manager/payroll' },
         { icon: DollarSign, label: 'Rewards & Penalties', path: '/manager/bonus-penalty-allowance' },
         { icon: Settings, label: 'Payroll Templates', path: '/manager/payroll-templates' },
+        { icon: Settings, label: 'Payroll Settings', path: '/manager/payroll-settings' },
         { icon: Truck, label: 'Procurement', path: '/manager/procurement' },
         { icon: FileText, label: 'Purchase Orders', path: '/manager/purchase-orders' },
         { icon: Truck, label: 'Suppliers', path: '/manager/suppliers' },
@@ -108,6 +110,7 @@ export function Layout({ children }: LayoutProps) {
         { icon: Clock, label: 'Shift Registration', path: '/staff/shifts', requiresPermission: null }, // Always visible
         { icon: Calendar, label: 'My Schedule', path: '/staff/my-shifts', requiresPermission: null }, // Always visible
         { icon: AlertCircle, label: 'My Requests', path: '/staff/my-requests', requiresPermission: null }, // Always visible
+        { icon: Settings, label: 'Payroll Settings', path: '/staff/payroll-settings', requiresPermission: null }, // Always visible
         { icon: Square, label: 'Tables', path: '/staff/tables', requiresPermission: 'canViewTables' },
         { icon: BookOpen, label: 'Recipes', path: '/staff/recipes', requiresPermission: 'canViewRecipes' },
         { icon: Droplet, label: 'Stock Usage', path: '/staff/stock-usage', requiresPermission: 'canViewStockUsage' },
@@ -162,6 +165,7 @@ export function Layout({ children }: LayoutProps) {
             '/manager/payroll',
             '/manager/bonus-penalty-allowance',
             '/manager/payroll-templates',
+            '/manager/payroll-settings',
           ]),
         },
         {
@@ -201,6 +205,7 @@ export function Layout({ children }: LayoutProps) {
             '/admin/payroll',
             '/admin/payroll-templates',
             '/admin/payroll-reports',
+            '/admin/payroll-settings',
           ]),
         },
         { title: 'Analytics', items: pick(['/admin/statistics']) },
@@ -249,6 +254,12 @@ export function Layout({ children }: LayoutProps) {
       groups.push({
         title: 'Shift',
         items: pick(['/staff/shifts', '/staff/my-shifts', '/staff/my-requests', '/staff/pending-requests']),
+      });
+
+      // Payroll Settings - always visible
+      groups.push({
+        title: 'Payroll Settings',
+        items: pick(['/staff/payroll-settings']),
       });
       
       return groups.filter((group) => group.items.length > 0);

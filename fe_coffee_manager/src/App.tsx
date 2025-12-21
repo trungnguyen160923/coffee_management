@@ -20,6 +20,7 @@ import { AdminBranchActivities } from './pages/admin/AdminBranchActivities';
 import AdminPayrollManagement from './pages/admin/AdminPayrollManagement';
 import AdminPayrollTemplates from './pages/admin/AdminPayrollTemplates';
 import AdminPayrollReports from './pages/admin/AdminPayrollReports';
+import AdminPayrollSettings from './pages/admin/AdminPayrollSettings';
 import { ManagerDashboard } from './pages/manager/ManagerDashboard';
 import StaffManagement from './pages/manager/StaffManagement';
 import ManagerSupplierManagement from './pages/manager/SupplierManagement';
@@ -42,6 +43,7 @@ import ManagerShiftRequests from './pages/manager/ManagerShiftRequests';
 import ManagerPayrollManagement from './pages/manager/ManagerPayrollManagement';
 import ManagerBonusPenaltyAllowanceManagement from './pages/manager/ManagerBonusPenaltyAllowanceManagement';
 import ManagerPayrollTemplates from './pages/manager/ManagerPayrollTemplates';
+import ManagerPayrollSettings from './pages/manager/ManagerPayrollSettings';
 import { StaffDashboard } from './pages/staff/StaffDashboard';
 import SupplierConfirmPage from './pages/supplier/SupplierConfirmPage';
 import SupplierSuccessPage from './pages/supplier/SupplierSuccessPage';
@@ -55,6 +57,7 @@ import StaffStockUsage from './pages/staff/StaffStockUsage';
 import StaffShiftRegistration from './pages/staff/StaffShiftRegistration';
 import StaffMyShifts from './pages/staff/StaffMyShifts';
 import StaffMyRequests from './pages/staff/StaffMyRequests';
+import StaffPayrollSettings from './pages/staff/StaffPayrollSettings';
 import AccountSettingsPage from './pages/common/AccountSettingsPage';
 
 function AppRoutes() {
@@ -123,6 +126,7 @@ function AppRoutes() {
             <Route path="payroll" element={<Layout><AdminPayrollManagement /></Layout>} />
             <Route path="payroll-templates" element={<Layout><AdminPayrollTemplates /></Layout>} />
             <Route path="payroll-reports" element={<Layout><AdminPayrollReports /></Layout>} />
+            <Route path="payroll-settings" element={<Layout><AdminPayrollSettings /></Layout>} />
             <Route path="account" element={<Layout><AccountSettingsPage /></Layout>} />
             {/* Unknown admin subroute: show 404 without Layout */}
             <Route path="*" element={<NotFoundPage showLoginButton={false} />} />
@@ -154,6 +158,7 @@ function AppRoutes() {
             <Route path="payroll" element={<Layout><ManagerPayrollManagement /></Layout>} />
             <Route path="bonus-penalty-allowance" element={<Layout><ManagerBonusPenaltyAllowanceManagement /></Layout>} />
             <Route path="payroll-templates" element={<Layout><ManagerPayrollTemplates /></Layout>} />
+            <Route path="payroll-settings" element={<Layout><ManagerPayrollSettings /></Layout>} />
             <Route path="procurement" element={<Layout><IngredientProcurement /></Layout>} />
             <Route path="suppliers" element={<Layout><ManagerSupplierManagement /></Layout>} />
             <Route path="purchase-orders" element={<Layout><PurchaseOrders /></Layout>} />
@@ -189,6 +194,7 @@ function AppRoutes() {
             <Route path="my-shifts" element={<Layout><StaffMyShifts /></Layout>} />
             <Route path="my-requests" element={<Layout><StaffMyRequests /></Layout>} />
             <Route path="pending-requests" element={<Layout><StaffMyRequests /></Layout>} />
+            <Route path="payroll-settings" element={<Layout><StaffPayrollSettings /></Layout>} />
             <Route path="account" element={<Layout><AccountSettingsPage /></Layout>} />
             <Route path="*" element={<NotFoundPage showLoginButton={false} />} />
           </Routes>

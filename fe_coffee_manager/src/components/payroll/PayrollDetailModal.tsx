@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, User, Building2, Info, Clock } from 'lucide-react';
+import { X, Calendar, User, Building2, Info, Clock, Undo2 } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { Payroll } from '../../types';
 import PayrollStatusBadge from './PayrollStatusBadge';
@@ -12,6 +12,7 @@ interface PayrollDetailModalProps {
   onApprove?: (payrollId: number) => void;
   onMarkAsPaid?: (payrollId: number) => void;
   onRecalculate?: (payrollId: number) => void;
+  onRevert?: (payrollId: number) => void;
   loading?: boolean;
 }
 
@@ -22,6 +23,7 @@ const PayrollDetailModal: React.FC<PayrollDetailModalProps> = ({
   onApprove,
   onMarkAsPaid,
   onRecalculate,
+  onRevert,
   loading = false,
 }) => {
   // State để quản lý expand/collapse cho từng phần giải thích
@@ -591,6 +593,22 @@ const PayrollDetailModal: React.FC<PayrollDetailModalProps> = ({
               className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors disabled:opacity-50"
             >
               Mark as Paid
+            </button>
+          )}
+          {onRevert && (payroll.status === 'PAID' || payroll.status === 'APPROVED') && (() => {
+            const now = new Date();
+            const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+            const oneMonthAgo = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+            const oneMonthAgoStr = `${oneMonthAgo.getFullYear()}-${String(oneMonthAgo.getMonth() + 1).padStart(2, '0')}`;
+            return payroll.period === currentMonth || payroll.period === oneMonthAgoStr;
+          })() && (
+            <button
+              onClick={() => onRevert(payroll.payrollId)}
+              disabled={loading}
+              className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+            >
+              <Undo2 className="w-4 h-4" />
+              {payroll.status === 'PAID' ? 'Revert to Approved' : 'Revert to Draft'}
             </button>
           )}
         </div>

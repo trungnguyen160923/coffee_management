@@ -103,12 +103,50 @@ public class PayrollController {
     }
 
     @PutMapping("/{payrollId}/pay")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
     public ApiResponse<PayrollResponse> markPayrollAsPaid(@PathVariable Integer payrollId) {
-        PayrollResponse result = payrollService.markPayrollAsPaid(payrollId);
+        Integer currentUserId = getCurrentUserId();
+        String currentUserRole = getCurrentUserRole();
+        PayrollResponse result = payrollService.markPayrollAsPaid(payrollId, currentUserId, currentUserRole);
         return ApiResponse.<PayrollResponse>builder()
                 .result(result)
                 .message("Payroll marked as paid successfully")
+                .build();
+    }
+
+    @PutMapping("/pay-batch")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    public ApiResponse<List<PayrollResponse>> markPayrollAsPaidBatch(@Valid @RequestBody BatchApproveRequest request) {
+        Integer currentUserId = getCurrentUserId();
+        String currentUserRole = getCurrentUserRole();
+        List<PayrollResponse> result = payrollService.markPayrollAsPaidBatch(request.getPayrollIds(), currentUserId, currentUserRole);
+        return ApiResponse.<List<PayrollResponse>>builder()
+                .result(result)
+                .message("Payroll batch marked as paid successfully")
+                .build();
+    }
+
+    @PutMapping("/{payrollId}/revert")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    public ApiResponse<PayrollResponse> revertPayrollStatus(@PathVariable Integer payrollId) {
+        Integer currentUserId = getCurrentUserId();
+        String currentUserRole = getCurrentUserRole();
+        PayrollResponse result = payrollService.revertPayrollStatus(payrollId, currentUserId, currentUserRole);
+        return ApiResponse.<PayrollResponse>builder()
+                .result(result)
+                .message("Payroll status reverted successfully")
+                .build();
+    }
+
+    @PutMapping("/revert-batch")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    public ApiResponse<List<PayrollResponse>> revertPayrollStatusBatch(@Valid @RequestBody BatchApproveRequest request) {
+        Integer currentUserId = getCurrentUserId();
+        String currentUserRole = getCurrentUserRole();
+        List<PayrollResponse> result = payrollService.revertPayrollStatusBatch(request.getPayrollIds(), currentUserId, currentUserRole);
+        return ApiResponse.<List<PayrollResponse>>builder()
+                .result(result)
+                .message("Payroll batch status reverted successfully")
                 .build();
     }
 

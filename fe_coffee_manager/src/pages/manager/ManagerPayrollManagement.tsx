@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calculator, RefreshCw, CheckCircle, Download, X } from 'lucide-react';
+import { Calculator, RefreshCw, CheckCircle, Download, X, DollarSign, Undo2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
@@ -24,6 +24,8 @@ const ManagerPayrollManagement: React.FC = () => {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showCalculateModal, setShowCalculateModal] = useState(false);
   const [showBatchApproveModal, setShowBatchApproveModal] = useState(false);
+  const [showBatchMarkAsPaidModal, setShowBatchMarkAsPaidModal] = useState(false);
+  const [showBatchRevertModal, setShowBatchRevertModal] = useState(false);
   const [selectedPayrollIds, setSelectedPayrollIds] = useState<number[]>([]);
   const [actionLoading, setActionLoading] = useState(false);
   const [loadingStaff, setLoadingStaff] = useState(false);
@@ -182,6 +184,30 @@ const ManagerPayrollManagement: React.FC = () => {
     }
   };
 
+  const handleRevertPayroll = async (payrollId: number) => {
+    try {
+      setActionLoading(true);
+      await payrollService.revertPayrollStatus(payrollId);
+      toast.success('Payroll status reverted successfully');
+      fetchPayrolls();
+      // Update selected payroll if it's the one being reverted
+      if (selectedPayroll?.payrollId === payrollId) {
+        const updatedPayrolls = await payrollService.getPayrolls({
+          ...filters,
+          branchId: managerBranch.branchId,
+        });
+        const updated = updatedPayrolls.find((p) => p.payrollId === payrollId);
+        if (updated) {
+          setSelectedPayroll(updated);
+        }
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to revert payroll status');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const handleApproveBatch = async () => {
     if (selectedPayrollIds.length === 0) {
       toast.error('Please select at least one payroll');
@@ -197,6 +223,46 @@ const ManagerPayrollManagement: React.FC = () => {
       fetchPayrolls();
     } catch (err: any) {
       toast.error(err?.message || 'Batch approval failed');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleMarkAsPaidBatch = async () => {
+    if (selectedPayrollIds.length === 0) {
+      toast.error('Please select at least one payroll to mark as paid');
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      await payrollService.markPayrollAsPaidBatch({ payrollIds: selectedPayrollIds });
+      toast.success(`Marked ${selectedPayrollIds.length} payroll(s) as paid`);
+      setShowBatchMarkAsPaidModal(false);
+      setSelectedPayrollIds([]);
+      fetchPayrolls();
+    } catch (err: any) {
+      toast.error(err?.message || 'Batch mark as paid failed');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRevertBatch = async () => {
+    if (selectedPayrollIds.length === 0) {
+      toast.error('Please select at least one payroll to revert');
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      await payrollService.revertPayrollStatusBatch({ payrollIds: selectedPayrollIds });
+      toast.success(`Reverted ${selectedPayrollIds.length} payroll(s) status`);
+      setShowBatchRevertModal(false);
+      setSelectedPayrollIds([]);
+      fetchPayrolls();
+    } catch (err: any) {
+      toast.error(err?.message || 'Batch revert failed');
     } finally {
       setActionLoading(false);
     }
@@ -424,23 +490,72 @@ const ManagerPayrollManagement: React.FC = () => {
         onSelectAll={handleSelectAll}
         onViewDetail={handleViewDetail}
         onApprove={handleApprovePayroll}
+        onRevert={handleRevertPayroll}
         showCheckbox={true}
         showActions={true}
         loading={loading}
       />
 
-      {/* Batch Approve Button */}
-      {selectedPayrollIds.length > 0 && (
-        <div className="mt-4 flex justify-end">
-          <button
-            onClick={() => setShowBatchApproveModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-          >
-            <CheckCircle className="w-4 h-4" />
-            Approve {selectedPayrollIds.length} selected payroll(s)
-          </button>
-        </div>
-      )}
+      {/* Batch Action Buttons */}
+      {selectedPayrollIds.length > 0 && (() => {
+        const selectedPayrolls = payrolls.filter(p => selectedPayrollIds.includes(p.payrollId));
+        const allStatuses = selectedPayrolls.map(p => p.status);
+        const allDraft = allStatuses.every(s => s === 'DRAFT' || s === 'REVIEW');
+        const allApproved = allStatuses.every(s => s === 'APPROVED');
+        const allPaid = allStatuses.every(s => s === 'PAID');
+        
+        // Kiểm tra period cho revert (chỉ cho phép tháng hiện tại hoặc 1 tháng trước)
+        const now = new Date();
+        const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        const oneMonthAgo = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const oneMonthAgoStr = `${oneMonthAgo.getFullYear()}-${String(oneMonthAgo.getMonth() + 1).padStart(2, '0')}`;
+        const canRevert = selectedPayrolls.every(p => 
+          p.period === currentMonth || p.period === oneMonthAgoStr
+        );
+
+        return (
+          <div className="mt-4 flex justify-end gap-2">
+            {allDraft && (
+              <button
+                onClick={() => setShowBatchApproveModal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+              >
+                <CheckCircle className="w-4 h-4" />
+                Approve {selectedPayrollIds.length} selected payroll(s)
+              </button>
+            )}
+            {allApproved && (
+              <>
+                <button
+                  onClick={() => setShowBatchMarkAsPaidModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                >
+                  <DollarSign className="w-4 h-4" />
+                  Mark as Paid {selectedPayrollIds.length} selected payroll(s)
+                </button>
+                {canRevert && (
+                  <button
+                    onClick={() => setShowBatchRevertModal(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700"
+                  >
+                    <Undo2 className="w-4 h-4" />
+                    Revert to Draft {selectedPayrollIds.length} selected payroll(s)
+                  </button>
+                )}
+              </>
+            )}
+            {allPaid && canRevert && (
+              <button
+                onClick={() => setShowBatchRevertModal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700"
+              >
+                <Undo2 className="w-4 h-4" />
+                Revert to Approved {selectedPayrollIds.length} selected payroll(s)
+              </button>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Calculate Modal */}
       <PayrollCalculationForm
@@ -463,6 +578,30 @@ const ManagerPayrollManagement: React.FC = () => {
         cancelText="Cancel"
         onConfirm={handleApproveBatch}
         onCancel={() => setShowBatchApproveModal(false)}
+        loading={actionLoading}
+      />
+
+      {/* Batch Mark as Paid Modal */}
+      <ConfirmModal
+        open={showBatchMarkAsPaidModal}
+        title="Mark as Paid Multiple Payrolls"
+        description={`Are you sure you want to mark ${selectedPayrollIds.length} selected payroll(s) as paid?`}
+        confirmText="Mark as Paid"
+        cancelText="Cancel"
+        onConfirm={handleMarkAsPaidBatch}
+        onCancel={() => setShowBatchMarkAsPaidModal(false)}
+        loading={actionLoading}
+      />
+
+      {/* Batch Revert Modal */}
+      <ConfirmModal
+        open={showBatchRevertModal}
+        title="Revert Multiple Payrolls Status"
+        description={`Are you sure you want to revert ${selectedPayrollIds.length} selected payroll(s) status?`}
+        confirmText="Revert"
+        cancelText="Cancel"
+        onConfirm={handleRevertBatch}
+        onCancel={() => setShowBatchRevertModal(false)}
         loading={actionLoading}
       />
 
@@ -580,6 +719,7 @@ const ManagerPayrollManagement: React.FC = () => {
         }}
         onApprove={handleApprovePayroll}
         onRecalculate={handleRecalculatePayroll}
+        onRevert={handleRevertPayroll}
         loading={actionLoading}
       />
     </div>

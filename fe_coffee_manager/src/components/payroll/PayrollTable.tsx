@@ -1,5 +1,5 @@
 import React from 'react';
-import { Eye, CheckCircle, DollarSign, RefreshCw, User, Building2, Calendar } from 'lucide-react';
+import { Eye, CheckCircle, DollarSign, RefreshCw, Undo2, User, Building2, Calendar } from 'lucide-react';
 import { Payroll } from '../../types';
 import PayrollStatusBadge from './PayrollStatusBadge';
 
@@ -12,6 +12,7 @@ interface PayrollTableProps {
   onApprove?: (payrollId: number) => void;
   onMarkAsPaid?: (payrollId: number) => void;
   onRecalculate?: (payrollId: number) => void;
+  onRevert?: (payrollId: number) => void;
   showCheckbox?: boolean;
   showActions?: boolean;
   loading?: boolean;
@@ -26,6 +27,7 @@ const PayrollTable: React.FC<PayrollTableProps> = ({
   onApprove,
   onMarkAsPaid,
   onRecalculate,
+  onRevert,
   showCheckbox = false,
   showActions = true,
   loading = false,
@@ -35,6 +37,19 @@ const PayrollTable: React.FC<PayrollTableProps> = ({
       style: 'currency',
       currency: 'VND',
     }).format(amount);
+  };
+
+  /**
+   * Kiểm tra period có phải tháng hiện tại hoặc 1 tháng trước không
+   */
+  const canRevert = (period: string): boolean => {
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    
+    const oneMonthAgo = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const oneMonthAgoStr = `${oneMonthAgo.getFullYear()}-${String(oneMonthAgo.getMonth() + 1).padStart(2, '0')}`;
+    
+    return period === currentMonth || period === oneMonthAgoStr;
   };
 
   const allSelected = payrolls.length > 0 && selectedPayrollIds.length === payrolls.length;
@@ -180,7 +195,16 @@ const PayrollTable: React.FC<PayrollTableProps> = ({
                             <DollarSign className="w-4 h-4" />
                           </button>
                         )}
-                        {onRecalculate && (
+                        {onRevert && (payroll.status === 'PAID' || payroll.status === 'APPROVED') && canRevert(payroll.period) && (
+                          <button
+                            onClick={() => onRevert(payroll.payrollId)}
+                            className="text-orange-600 hover:text-orange-900"
+                            title={payroll.status === 'PAID' ? 'Revert to Approved' : 'Revert to Draft'}
+                          >
+                            <Undo2 className="w-4 h-4" />
+                          </button>
+                        )}
+                        {onRecalculate && (payroll.status === 'DRAFT' || payroll.status === 'REVIEW') && (
                           <button
                             onClick={() => onRecalculate(payroll.payrollId)}
                             className="text-gray-600 hover:text-gray-900"

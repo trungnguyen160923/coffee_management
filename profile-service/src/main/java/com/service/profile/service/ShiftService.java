@@ -26,13 +26,13 @@ import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import jakarta.persistence.EntityManager;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalDate;
-import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -53,6 +53,7 @@ public class ShiftService {
     HolidayRepository holidayRepository;
     StaffProfileService staffProfileService; // For getting staff list to notify
     ShiftNotificationService shiftNotificationService; // For sending notifications
+    EntityManager entityManager;
 
     public List<ShiftResponse> getShiftsByBranchAndDateRange(Integer branchId, LocalDate start, LocalDate end, String status) {
         List<Shift> shifts = shiftRepository.findByBranchIdAndShiftDateBetween(branchId, start, end);
@@ -191,12 +192,10 @@ public class ShiftService {
         
         // Update role requirements if provided (replace all)
         if (request.getRoleRequirements() != null) {
-            // Delete existing requirements
-            List<ShiftRoleRequirement> existingRequirements = 
-                shiftRoleRequirementRepository.findByShift(existing);
-            if (!existingRequirements.isEmpty()) {
-                shiftRoleRequirementRepository.deleteAll(existingRequirements);
-            }
+            // Delete existing requirements (more efficient than find + deleteAll)
+            shiftRoleRequirementRepository.deleteByShift_ShiftId(existing.getShiftId());
+            // Flush to ensure delete is committed before insert (prevents unique constraint violation)
+            entityManager.flush();
             // Save new requirements
             if (!request.getRoleRequirements().isEmpty()) {
                 saveRoleRequirementsFromRequest(existing, request.getRoleRequirements());

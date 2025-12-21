@@ -10,7 +10,8 @@ import {
   Calendar,
   Building2,
   User,
-  Download
+  Download,
+  Undo2
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { toast } from 'react-hot-toast';
@@ -19,6 +20,7 @@ import { branchService, managerService } from '../../services';
 import { Branch, UserResponseDto } from '../../types';
 import ConfirmModal from '../../components/common/modal/ConfirmModal';
 import { PayrollManagementSkeleton } from '../../components/admin/skeletons';
+import PayrollCalculationForm from '../../components/payroll/PayrollCalculationForm';
 
 const AdminPayrollManagement: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'manager' | 'staff'>('manager');
@@ -33,6 +35,8 @@ const AdminPayrollManagement: React.FC = () => {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showCalculateModal, setShowCalculateModal] = useState(false);
   const [showBatchApproveModal, setShowBatchApproveModal] = useState(false);
+  const [showBatchMarkAsPaidModal, setShowBatchMarkAsPaidModal] = useState(false);
+  const [showBatchRevertModal, setShowBatchRevertModal] = useState(false);
   const [selectedPayrollIds, setSelectedPayrollIds] = useState<number[]>([]);
   const [actionLoading, setActionLoading] = useState(false);
   const [loadingUsers, setLoadingUsers] = useState(false);
@@ -45,9 +49,7 @@ const AdminPayrollManagement: React.FC = () => {
   });
   const [showFilters, setShowFilters] = useState(false);
 
-  // Calculate form
-  const [calculateUserId, setCalculateUserId] = useState<number | ''>('');
-  const [calculatePeriod, setCalculatePeriod] = useState<string>('');
+  // Calculate form - removed single userId, using PayrollCalculationForm with multi-select
 
   // Staff tab state (read-only)
   const [staffPayrolls, setStaffPayrolls] = useState<Payroll[]>([]);
@@ -173,22 +175,57 @@ const AdminPayrollManagement: React.FC = () => {
     );
   };
 
-  const handleCalculatePayroll = async () => {
-    if (!calculateUserId || !calculatePeriod) {
-      toast.error('Please select employee and pay period');
+  const handleCalculatePayroll = async (userIds: number[], period: string) => {
+    if (userIds.length === 0 || !period) {
+      toast.error('Please select at least one manager and pay period');
       return;
     }
 
     try {
       setActionLoading(true);
-      await payrollService.calculatePayroll({
-        userId: calculateUserId as number,
-        period: calculatePeriod,
-      });
-      toast.success('Payroll calculated successfully');
+      
+      let createdCount = 0;
+      let recalculatedCount = 0;
+      const failedUsers: number[] = [];
+
+      // Xử lý lần lượt từng manager để dễ kiểm soát lỗi
+      for (const userId of userIds) {
+        try {
+          // Kiểm tra xem kỳ lương này đã tồn tại cho user chưa
+          const existingPayrolls = await payrollService.getPayrolls({
+            userId,
+            period,
+          });
+
+          if (existingPayrolls && existingPayrolls.length > 0) {
+            // Đã có payroll → gọi tính lại
+            const payrollToRecalc = existingPayrolls[0];
+            await payrollService.recalculatePayroll(payrollToRecalc.payrollId);
+            recalculatedCount += 1;
+          } else {
+            // Chưa có payroll → tính mới
+            await payrollService.calculatePayroll({ userId, period });
+            createdCount += 1;
+          }
+        } catch (err) {
+          // Ghi nhận user bị lỗi nhưng không chặn các user khác
+          failedUsers.push(userId);
+          console.error('Failed to calculate/recalculate payroll for user', userId, err);
+        }
+      }
+
+      // Summary notifications
+      if (createdCount > 0) {
+        toast.success(`Calculated new payroll for ${createdCount} manager(s)`);
+      }
+      if (recalculatedCount > 0) {
+        toast.success(`Recalculated payroll for ${recalculatedCount} manager(s)`);
+      }
+      if (failedUsers.length > 0) {
+        toast.error(`Failed to process ${failedUsers.length} manager(s). Please check logs or try again.`);
+      }
+
       setShowCalculateModal(false);
-      setCalculateUserId('');
-      setCalculatePeriod('');
       fetchPayrolls();
     } catch (err: any) {
       toast.error(err?.message || 'Failed to calculate payroll');
@@ -230,6 +267,46 @@ const AdminPayrollManagement: React.FC = () => {
     }
   };
 
+  const handleMarkAsPaidBatch = async () => {
+    if (selectedPayrollIds.length === 0) {
+      toast.error('Please select at least one payroll to mark as paid');
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      await payrollService.markPayrollAsPaidBatch({ payrollIds: selectedPayrollIds });
+      toast.success(`Marked ${selectedPayrollIds.length} payroll(s) as paid`);
+      setShowBatchMarkAsPaidModal(false);
+      setSelectedPayrollIds([]);
+      fetchPayrolls();
+    } catch (err: any) {
+      toast.error(err?.message || 'Batch mark as paid failed');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRevertBatch = async () => {
+    if (selectedPayrollIds.length === 0) {
+      toast.error('Please select at least one payroll to revert');
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      await payrollService.revertPayrollStatusBatch({ payrollIds: selectedPayrollIds });
+      toast.success(`Reverted ${selectedPayrollIds.length} payroll(s) status`);
+      setShowBatchRevertModal(false);
+      setSelectedPayrollIds([]);
+      fetchPayrolls();
+    } catch (err: any) {
+      toast.error(err?.message || 'Batch revert failed');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const handleMarkAsPaid = async (payrollId: number) => {
     try {
       setActionLoading(true);
@@ -256,6 +333,19 @@ const AdminPayrollManagement: React.FC = () => {
     }
   };
 
+  const handleRevertStatus = async (payrollId: number) => {
+    try {
+      setActionLoading(true);
+      await payrollService.revertPayrollStatus(payrollId);
+      toast.success('Payroll status reverted successfully');
+      fetchPayrolls();
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to revert status');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const handleViewDetail = (payroll: Payroll) => {
     setSelectedPayroll(payroll);
     setShowDetailModal(true);
@@ -267,6 +357,25 @@ const AdminPayrollManagement: React.FC = () => {
     const month = String(now.getMonth() + 1).padStart(2, '0');
     return `${year}-${month}`;
   };
+
+  // Convert manager list to UserResponseDto format for PayrollCalculationForm
+  const managersAsUsers = managerList.map((manager) => ({
+    user_id: manager.user_id,
+    email: manager.email,
+    fullname: manager.fullname,
+    phoneNumber: manager.phoneNumber,
+    dob: manager.dob,
+    avatarUrl: manager.avatarUrl,
+    bio: manager.bio,
+    role: manager.role,
+    identityCard: manager.identityCard,
+    branch: manager.branch,
+    hireDate: manager.hireDate,
+    position: manager.position,
+    salary: manager.salary,
+    adminLevel: manager.adminLevel,
+    notes: manager.notes,
+  }));
 
   // Export Manager Payrolls (by period)
   const handleExportManagerPayrolls = async () => {
@@ -615,8 +724,6 @@ const AdminPayrollManagement: React.FC = () => {
           </button>
           <button
             onClick={() => {
-              setCalculatePeriod(getCurrentMonthPeriod());
-              setCalculateUserId('');
               fetchUsers();
               setShowCalculateModal(true);
             }}
@@ -806,10 +913,10 @@ const AdminPayrollManagement: React.FC = () => {
                         >
                           <Eye className="w-4 h-4" />
                         </button>
-                        {payroll.status === 'REVIEW' && (
+                        {payroll.status !== 'APPROVED' && payroll.status !== 'PAID' && (
                           <button
                             onClick={() => handleApprovePayroll(payroll.payrollId)}
-                            className="text-blue-600 hover:text-blue-900"
+                            className="text-green-600 hover:text-green-900"
                             title="Approve"
                             disabled={actionLoading}
                           >
@@ -819,14 +926,30 @@ const AdminPayrollManagement: React.FC = () => {
                         {payroll.status === 'APPROVED' && (
                           <button
                             onClick={() => handleMarkAsPaid(payroll.payrollId)}
-                            className="text-green-600 hover:text-green-900"
-                            title="Mark as paid"
+                            className="text-blue-600 hover:text-blue-900"
+                            title="Mark as Paid"
                             disabled={actionLoading}
                           >
                             <DollarSign className="w-4 h-4" />
                           </button>
                         )}
-                        {payroll.status !== 'PAID' && (
+                        {((payroll.status === 'PAID' || payroll.status === 'APPROVED') && (() => {
+                          const now = new Date();
+                          const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+                          const oneMonthAgo = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                          const oneMonthAgoStr = `${oneMonthAgo.getFullYear()}-${String(oneMonthAgo.getMonth() + 1).padStart(2, '0')}`;
+                          return payroll.period === currentMonth || payroll.period === oneMonthAgoStr;
+                        })()) && (
+                          <button
+                            onClick={() => handleRevertStatus(payroll.payrollId)}
+                            className="text-orange-600 hover:text-orange-900"
+                            title={payroll.status === 'PAID' ? 'Revert to Approved' : 'Revert to Draft'}
+                            disabled={actionLoading}
+                          >
+                            <Undo2 className="w-4 h-4" />
+                          </button>
+                        )}
+                        {(payroll.status === 'DRAFT' || payroll.status === 'REVIEW') && (
                           <button
                             onClick={() => handleRecalculate(payroll.payrollId)}
                             className="text-gray-600 hover:text-gray-900"
@@ -846,101 +969,78 @@ const AdminPayrollManagement: React.FC = () => {
         </div>
       </div>
 
-      {/* Batch Approve Button */}
-      {selectedPayrollIds.length > 0 && (
-        <div className="mt-4 flex justify-end">
-          <button
-            onClick={() => setShowBatchApproveModal(true)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            Approve {selectedPayrollIds.length} selected payroll(s)
-          </button>
-        </div>
-      )}
+      {/* Batch Action Buttons */}
+      {selectedPayrollIds.length > 0 && (() => {
+        const selectedPayrolls = payrolls.filter(p => selectedPayrollIds.includes(p.payrollId));
+        const allStatuses = selectedPayrolls.map(p => p.status);
+        const allDraft = allStatuses.every(s => s === 'DRAFT' || s === 'REVIEW');
+        const allApproved = allStatuses.every(s => s === 'APPROVED');
+        const allPaid = allStatuses.every(s => s === 'PAID');
+        
+        // Kiểm tra period cho revert (chỉ cho phép tháng hiện tại hoặc 1 tháng trước)
+        const now = new Date();
+        const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        const oneMonthAgo = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const oneMonthAgoStr = `${oneMonthAgo.getFullYear()}-${String(oneMonthAgo.getMonth() + 1).padStart(2, '0')}`;
+        const canRevert = selectedPayrolls.every(p => 
+          p.period === currentMonth || p.period === oneMonthAgoStr
+        );
+
+        return (
+          <div className="mt-4 flex justify-end gap-2">
+            {allDraft && (
+              <button
+                onClick={() => setShowBatchApproveModal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                <CheckCircle className="w-4 h-4" />
+                Approve {selectedPayrollIds.length} selected payroll(s)
+              </button>
+            )}
+            {allApproved && (
+              <>
+                <button
+                  onClick={() => setShowBatchMarkAsPaidModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                >
+                  <DollarSign className="w-4 h-4" />
+                  Mark as Paid {selectedPayrollIds.length} selected payroll(s)
+                </button>
+                {canRevert && (
+                  <button
+                    onClick={() => setShowBatchRevertModal(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700"
+                  >
+                    <Undo2 className="w-4 h-4" />
+                    Revert to Draft {selectedPayrollIds.length} selected payroll(s)
+                  </button>
+                )}
+              </>
+            )}
+            {allPaid && canRevert && (
+              <button
+                onClick={() => setShowBatchRevertModal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700"
+              >
+                <Undo2 className="w-4 h-4" />
+                Revert to Approved {selectedPayrollIds.length} selected payroll(s)
+              </button>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Calculate Modal */}
-      {showCalculateModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[1300]">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">Calculate Payroll</h3>
-              <button
-                onClick={() => {
-                  setShowCalculateModal(false);
-                  setCalculateUserId('');
-                  setCalculatePeriod('');
-                }}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="space-y-4">
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <p className="text-sm text-blue-800">
-                  <strong>Note:</strong> Admin only calculates payroll for Managers. Staff payroll calculation is done by the branch Manager.
-                </p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Manager <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={calculateUserId || ''}
-                  onChange={(e) => setCalculateUserId(e.target.value ? Number(e.target.value) : '')}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500"
-                  disabled={loadingUsers}
-                >
-                  <option value="">Select Manager</option>
-                  {managerList.map((user) => (
-                    <option key={user.user_id} value={user.user_id}>
-                      {user.fullname || user.email} {user.branch ? `- ${user.branch.name}` : ''}
-                    </option>
-                  ))}
-                </select>
-                {loadingUsers && (
-                  <p className="mt-1 text-sm text-gray-500">Loading list...</p>
-                )}
-                {managerList.length === 0 && !loadingUsers && (
-                  <p className="mt-1 text-sm text-gray-500">
-                    No managers available
-                  </p>
-                )}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Pay Period (YYYY-MM) <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="month"
-                  value={calculatePeriod}
-                  onChange={(e) => setCalculatePeriod(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500"
-                />
-              </div>
-            </div>
-            <div className="mt-6 flex justify-end gap-2">
-              <button
-                onClick={() => {
-                  setShowCalculateModal(false);
-                  setCalculateUserId('');
-                  setCalculatePeriod('');
-                }}
-                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCalculatePayroll}
-                disabled={actionLoading || !calculateUserId || !calculatePeriod || loadingUsers}
-                className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:bg-gray-400"
-              >
-                {actionLoading ? 'Processing...' : 'Calculate Payroll'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <PayrollCalculationForm
+        open={showCalculateModal}
+        onClose={() => setShowCalculateModal(false)}
+        onSubmit={handleCalculatePayroll}
+        users={managersAsUsers}
+        loadingUsers={loadingUsers}
+        loading={actionLoading}
+        userLabel="Manager"
+        defaultPeriod={getCurrentMonthPeriod()}
+      />
 
       {/* Batch Approve Modal */}
       <ConfirmModal
@@ -952,6 +1052,34 @@ const AdminPayrollManagement: React.FC = () => {
         onConfirm={handleApproveBatch}
         onCancel={() => {
           setShowBatchApproveModal(false);
+        }}
+        loading={actionLoading}
+      />
+
+      {/* Batch Mark as Paid Modal */}
+      <ConfirmModal
+        open={showBatchMarkAsPaidModal}
+        title="Mark as Paid Batch Payroll"
+        description={`Are you sure you want to mark ${selectedPayrollIds.length} selected payroll(s) as paid?`}
+        confirmText="Mark as Paid"
+        cancelText="Cancel"
+        onConfirm={handleMarkAsPaidBatch}
+        onCancel={() => {
+          setShowBatchMarkAsPaidModal(false);
+        }}
+        loading={actionLoading}
+      />
+
+      {/* Batch Revert Modal */}
+      <ConfirmModal
+        open={showBatchRevertModal}
+        title="Revert Batch Payroll Status"
+        description={`Are you sure you want to revert ${selectedPayrollIds.length} selected payroll(s) status?`}
+        confirmText="Revert"
+        cancelText="Cancel"
+        onConfirm={handleRevertBatch}
+        onCancel={() => {
+          setShowBatchRevertModal(false);
         }}
         loading={actionLoading}
       />

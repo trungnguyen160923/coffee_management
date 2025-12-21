@@ -1,5 +1,6 @@
 package com.service.profile.service;
 
+import com.service.profile.dto.ApiResponse;
 import com.service.profile.dto.request.AssignManagerRequest;
 import com.service.profile.dto.request.AssignManagerRequest_;
 import com.service.profile.dto.request.ManagerProfileCreationRequest;
@@ -13,6 +14,7 @@ import com.service.profile.mapper.ManagerProfileMapper;
 import com.service.profile.repository.ManagerProfileRepository;
 
 import com.service.profile.repository.http_client.BranchClient;
+import feign.FeignException;
 import jakarta.transaction.Transactional;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -40,6 +42,12 @@ public class ManagerProfileService {
         if (managerProfileRepository.existsByIdentityCard(request.getIdentityCard())) {
             throw new AppException(ErrorCode.IDENTITY_CARD_EXISTED);
         }
+        
+        // Validate userId is not null
+        if (request.getUserId() == null) {
+            throw new AppException(ErrorCode.VALIDATION_FAILED, "User ID is required");
+        }
+        
         ManagerProfile managerProfile = managerProfileMapper.toManagerProfile(request);
         managerProfile.setCreateAt(LocalDateTime.now());
         managerProfile.setUpdateAt(LocalDateTime.now());
@@ -50,13 +58,60 @@ public class ManagerProfileService {
             try {
                 AssignManagerRequest assignRequest = new AssignManagerRequest();
                 assignRequest.setManagerUserId(managerProfile.getUserId());
-                branchClient.assignManager(managerProfile.getBranchId(), assignRequest).getResult();
-                log.info("Assigned manager {} to branch {} during createManagerProfile",
+                
+                log.info("Attempting to assign manager {} to branch {} during createManagerProfile",
                         managerProfile.getUserId(), managerProfile.getBranchId());
-            } catch (Exception e) {
+                
+                ApiResponse<?> branchResponse = branchClient.assignManager(managerProfile.getBranchId(), assignRequest);
+                
+                // Check if response is valid
+                if (branchResponse == null) {
+                    log.error("Branch service returned null response when assigning manager {} to branch {}",
+                            managerProfile.getUserId(), managerProfile.getBranchId());
+                    throw new AppException(ErrorCode.BRANCH_NOT_FOUND, 
+                            "Failed to assign manager: branch service returned null response");
+                }
+                
+                // Check response code
+                if (branchResponse.getCode() != 200 && branchResponse.getCode() != 1000) {
+                    log.error("Branch service returned error code {} when assigning manager {} to branch {}: {}",
+                            branchResponse.getCode(), managerProfile.getUserId(), managerProfile.getBranchId(), 
+                            branchResponse.getMessage());
+                    throw new AppException(ErrorCode.BRANCH_NOT_FOUND, 
+                            "Failed to assign manager: " + (branchResponse.getMessage() != null ? branchResponse.getMessage() : "Unknown error"));
+                }
+                
+                // Check result
+                if (branchResponse.getResult() == null) {
+                    log.error("Branch service returned null result when assigning manager {} to branch {}",
+                            managerProfile.getUserId(), managerProfile.getBranchId());
+                    throw new AppException(ErrorCode.BRANCH_NOT_FOUND, 
+                            "Failed to assign manager: branch service returned null result");
+                }
+                
+                log.info("Successfully assigned manager {} to branch {} during createManagerProfile",
+                        managerProfile.getUserId(), managerProfile.getBranchId());
+            } catch (AppException e) {
+                // Re-throw AppException as-is
                 log.error("Failed to assign manager {} to branch {} during createManagerProfile: {}",
                         managerProfile.getUserId(), managerProfile.getBranchId(), e.getMessage());
-                throw new AppException(ErrorCode.BRANCH_NOT_FOUND);
+                throw e;
+            } catch (FeignException e) {
+                // Handle Feign client exceptions (network errors, 404, 500, etc.)
+                log.error("Feign error when assigning manager {} to branch {} during createManagerProfile: status={}, message={}",
+                        managerProfile.getUserId(), managerProfile.getBranchId(), e.status(), e.getMessage());
+                if (e.status() == 404) {
+                    throw new AppException(ErrorCode.BRANCH_NOT_FOUND, 
+                            "Branch not found: " + managerProfile.getBranchId());
+                } else {
+                    throw new AppException(ErrorCode.BRANCH_NOT_FOUND, 
+                            "Failed to assign manager to branch: " + e.getMessage());
+                }
+            } catch (Exception e) {
+                log.error("Unexpected error when assigning manager {} to branch {} during createManagerProfile: {}",
+                        managerProfile.getUserId(), managerProfile.getBranchId(), e.getMessage(), e);
+                throw new AppException(ErrorCode.BRANCH_NOT_FOUND, 
+                        "Failed to assign manager to branch: " + e.getMessage());
             }
         }
 
@@ -87,7 +142,30 @@ public class ManagerProfileService {
         
         try {
             List<BranchResponse> branches = branchClient.getBranches().getResult();
-            for(ManagerProfileResponse managerProfileResponse : managerProfileResponses){
+            
+            // Create a map of branchId -> BranchResponse for quick lookup
+            java.util.Map<Integer, BranchResponse> branchMap = branches.stream()
+                .collect(java.util.stream.Collectors.toMap(
+                    BranchResponse::getBranchId, 
+                    b -> b,
+                    (existing, replacement) -> existing
+                ));
+            
+            // Set branch for each manager profile
+            for(int i = 0; i < managerProfiles.size(); i++){
+                ManagerProfile managerProfile = managerProfiles.get(i);
+                ManagerProfileResponse managerProfileResponse = managerProfileResponses.get(i);
+                
+                // First, try to get branch from branchId in ManagerProfile
+                if(managerProfile.getBranchId() != null && managerProfile.getBranchId() != -1){
+                    BranchResponse branch = branchMap.get(managerProfile.getBranchId());
+                    if(branch != null){
+                        managerProfileResponse.setBranch(branch);
+                        continue; // Branch found, skip to next manager
+                    }
+                }
+                
+                // Fallback: try to find branch where this manager is the manager (managerUserId)
                 BranchResponse branch = branches.stream()
                     .filter(b -> b.getManagerUserId() != null && b.getManagerUserId().equals(managerProfileResponse.getUserId()))
                     .findFirst().orElse(null);

@@ -203,6 +203,68 @@ class PayrollService {
   }
 
   /**
+   * Đánh dấu nhiều payroll đã thanh toán (batch) - Admin only
+   */
+  async markPayrollAsPaidBatch(request: BatchApproveRequest): Promise<Payroll[]> {
+    try {
+      const response = await apiClient.put<ApiResponse<Payroll[]>>(
+        `${this.baseUrl}/pay-batch`,
+        request
+      );
+      if (response.code === 1000 || response.code === 200) {
+        return response.result || [];
+      }
+      throw new Error(`API Error: ${response.code}`);
+    } catch (error) {
+      console.error('Error marking payroll as paid batch:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Revert payroll status về trạng thái trước đó
+   * - PAID -> APPROVED
+   * - APPROVED -> DRAFT
+   * Chỉ cho phép revert khi payroll period là tháng hiện tại hoặc 1 tháng trước
+   */
+  async revertPayrollStatus(payrollId: number): Promise<Payroll> {
+    try {
+      const response = await apiClient.put<ApiResponse<Payroll>>(
+        `${this.baseUrl}/${payrollId}/revert`
+      );
+      if (response.code === 1000 || response.code === 200) {
+        return response.result;
+      }
+      throw new Error(`API Error: ${response.code}`);
+    } catch (error) {
+      console.error('Error reverting payroll status:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Revert nhiều payroll status về trạng thái trước đó (batch)
+   * - PAID -> APPROVED
+   * - APPROVED -> DRAFT
+   * Chỉ cho phép revert khi payroll period là tháng hiện tại hoặc 1 tháng trước
+   */
+  async revertPayrollStatusBatch(request: BatchApproveRequest): Promise<Payroll[]> {
+    try {
+      const response = await apiClient.put<ApiResponse<Payroll[]>>(
+        `${this.baseUrl}/revert-batch`,
+        request
+      );
+      if (response.code === 1000 || response.code === 200) {
+        return response.result || [];
+      }
+      throw new Error(`API Error: ${response.code}`);
+    } catch (error) {
+      console.error('Error reverting payroll status batch:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Tính lại payroll
    */
   async recalculatePayroll(payrollId: number): Promise<Payroll> {

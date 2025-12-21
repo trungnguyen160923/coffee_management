@@ -708,6 +708,64 @@ CREATE TABLE holidays (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 COMMENT='Bảng ngày lễ - Lưu các ngày lễ để tính OT hệ số cao';
 
+-- Bảng PAYROLL_CONFIGURATIONS - Cấu hình tính lương hệ thống
+DROP TABLE IF EXISTS payroll_configurations;
+CREATE TABLE payroll_configurations (
+  config_id INT PRIMARY KEY AUTO_INCREMENT,
+  config_key VARCHAR(100) NOT NULL UNIQUE 
+    COMMENT 'Tên cấu hình (ví dụ: insurance_rate, personal_deduction)',
+  config_value DECIMAL(15,6) NOT NULL 
+    COMMENT 'Giá trị cấu hình (số thập phân)',
+  config_type ENUM('RATE', 'AMOUNT', 'DAYS', 'HOURS', 'MULTIPLIER') NOT NULL 
+    COMMENT 'Loại cấu hình: RATE (tỷ lệ %), AMOUNT (số tiền VNĐ), DAYS (số ngày), HOURS (số giờ), MULTIPLIER (hệ số)',
+  display_name VARCHAR(255) NOT NULL 
+    COMMENT 'Tên hiển thị (ví dụ: Tỷ lệ bảo hiểm)',
+  description TEXT 
+    COMMENT 'Mô tả chi tiết cách sử dụng',
+  unit VARCHAR(50) DEFAULT NULL 
+    COMMENT 'Đơn vị (ví dụ: %, VNĐ, ngày, giờ)',
+  min_value DECIMAL(15,6) DEFAULT NULL 
+    COMMENT 'Giá trị tối thiểu cho phép',
+  max_value DECIMAL(15,6) DEFAULT NULL 
+    COMMENT 'Giá trị tối đa cho phép',
+  is_active BOOLEAN DEFAULT TRUE 
+    COMMENT 'Có đang áp dụng không',
+  updated_by INT DEFAULT NULL 
+    COMMENT 'User ID của người cập nhật cuối cùng (Admin)',
+  create_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  update_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY idx_config_key (config_key),
+  KEY idx_is_active (is_active),
+  KEY idx_updated_by (updated_by)
+    COMMENT 'Index để tối ưu query theo người cập nhật (loose reference đến auth_db.users)'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT='Bảng cấu hình tính lương - Lưu các thông số tính lương có thể thay đổi (BHXH, thuế, giảm trừ, OT...)';
+
+-- Insert dữ liệu mặc định cho payroll_configurations
+INSERT INTO payroll_configurations (config_key, config_value, config_type, display_name, description, unit, min_value, max_value, is_active) VALUES
+('insurance_rate', 0.105, 'RATE', 'Tỷ lệ đóng bảo hiểm', 'Tỷ lệ đóng bảo hiểm xã hội (BHXH 8% + BHYT 1.5% + BHTN 1% = 10.5%)', '%', 0, 1, TRUE),
+('personal_deduction', 11000000, 'AMOUNT', 'Giảm trừ gia cảnh bản thân', 'Số tiền giảm trừ gia cảnh cho bản thân (VNĐ/tháng)', 'VNĐ', 0, 20000000, TRUE),
+('dependent_deduction', 4400000, 'AMOUNT', 'Giảm trừ người phụ thuộc', 'Số tiền giảm trừ cho mỗi người phụ thuộc (VNĐ/người/tháng)', 'VNĐ', 0, 10000000, TRUE),
+('default_overtime_rate', 1.5, 'MULTIPLIER', 'Hệ số tăng ca ngày thường', 'Hệ số nhân lương cho giờ tăng ca ngày thường (1.5x)', 'x', 1, 3, TRUE),
+('weekend_overtime_multiplier', 1.33, 'MULTIPLIER', 'Hệ số tăng ca cuối tuần', 'Hệ số nhân thêm cho tăng ca cuối tuần (1.5 × 1.33 ≈ 2.0x)', 'x', 1, 3, TRUE),
+('holiday_overtime_multiplier', 2.0, 'MULTIPLIER', 'Hệ số tăng ca ngày lễ', 'Hệ số nhân thêm cho tăng ca ngày lễ (1.5 × 2.0 = 3.0x)', 'x', 1, 5, TRUE),
+('max_daily_hours', 8, 'HOURS', 'Số giờ làm việc tối đa/ngày', 'Số giờ làm việc tối đa trong 1 ngày theo quy định lao động VN', 'giờ', 4, 12, TRUE),
+('standard_working_days_per_month', 26, 'DAYS', 'Số ngày công chuẩn/tháng', 'Số ngày công chuẩn trong tháng để tính lương full-time', 'ngày', 20, 31, TRUE),
+('standard_working_hours_per_day', 8, 'HOURS', 'Số giờ công chuẩn/ngày', 'Số giờ công chuẩn trong ngày để tính lương full-time', 'giờ', 4, 12, TRUE),
+('tax_bracket_1_rate', 0.05, 'RATE', 'Thuế suất bậc 1 (0-5M)', 'Thuế suất cho thu nhập chịu thuế từ 0-5 triệu VNĐ', '%', 0, 0.5, TRUE),
+('tax_bracket_1_max', 5000000, 'AMOUNT', 'Mức tối đa bậc thuế 1', 'Mức thu nhập chịu thuế tối đa của bậc 1 (VNĐ)', 'VNĐ', 0, 10000000, TRUE),
+('tax_bracket_2_rate', 0.10, 'RATE', 'Thuế suất bậc 2 (5-10M)', 'Thuế suất cho thu nhập chịu thuế từ 5-10 triệu VNĐ', '%', 0, 0.5, TRUE),
+('tax_bracket_2_max', 10000000, 'AMOUNT', 'Mức tối đa bậc thuế 2', 'Mức thu nhập chịu thuế tối đa của bậc 2 (VNĐ)', 'VNĐ', 5000000, 20000000, TRUE),
+('tax_bracket_3_rate', 0.15, 'RATE', 'Thuế suất bậc 3 (10-18M)', 'Thuế suất cho thu nhập chịu thuế từ 10-18 triệu VNĐ', '%', 0, 0.5, TRUE),
+('tax_bracket_3_max', 18000000, 'AMOUNT', 'Mức tối đa bậc thuế 3', 'Mức thu nhập chịu thuế tối đa của bậc 3 (VNĐ)', 'VNĐ', 10000000, 30000000, TRUE),
+('tax_bracket_4_rate', 0.20, 'RATE', 'Thuế suất bậc 4 (18-32M)', 'Thuế suất cho thu nhập chịu thuế từ 18-32 triệu VNĐ', '%', 0, 0.5, TRUE),
+('tax_bracket_4_max', 32000000, 'AMOUNT', 'Mức tối đa bậc thuế 4', 'Mức thu nhập chịu thuế tối đa của bậc 4 (VNĐ)', 'VNĐ', 18000000, 50000000, TRUE),
+('tax_bracket_5_rate', 0.25, 'RATE', 'Thuế suất bậc 5 (32-52M)', 'Thuế suất cho thu nhập chịu thuế từ 32-52 triệu VNĐ', '%', 0, 0.5, TRUE),
+('tax_bracket_5_max', 52000000, 'AMOUNT', 'Mức tối đa bậc thuế 5', 'Mức thu nhập chịu thuế tối đa của bậc 5 (VNĐ)', 'VNĐ', 32000000, 70000000, TRUE),
+('tax_bracket_6_rate', 0.30, 'RATE', 'Thuế suất bậc 6 (52-80M)', 'Thuế suất cho thu nhập chịu thuế từ 52-80 triệu VNĐ', '%', 0, 0.5, TRUE),
+('tax_bracket_6_max', 80000000, 'AMOUNT', 'Mức tối đa bậc thuế 6', 'Mức thu nhập chịu thuế tối đa của bậc 6 (VNĐ)', 'VNĐ', 52000000, 100000000, TRUE),
+('tax_bracket_7_rate', 0.35, 'RATE', 'Thuế suất bậc 7 (>80M)', 'Thuế suất cho thu nhập chịu thuế trên 80 triệu VNĐ', '%', 0, 0.5, TRUE);
+
 -- Insert một số ngày lễ mẫu (2024)
 INSERT INTO holidays (holiday_date, holiday_name, is_national, is_active) VALUES
 ('2024-01-01', 'Tết Dương lịch', TRUE, TRUE),
