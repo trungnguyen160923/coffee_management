@@ -68,7 +68,7 @@ public class Allowance {
     }
 
     public enum AllowanceType {
-        MEAL, TRANSPORT, PHONE, ROLE, OTHER
+        MEAL, TRANSPORT, PHONE, HOUSING, ROLE, OTHER
     }
 
     public enum AllowanceStatus {

@@ -86,7 +86,7 @@ public class Bonus {
     }
 
     public enum BonusType {
-        PERFORMANCE, STORE_TARGET, HOLIDAY, REFERRAL, SPECIAL
+        PERFORMANCE, ATTENDANCE, STORE_TARGET, HOLIDAY, REFERRAL, SPECIAL, OTHER
     }
 
     public enum BonusStatus {

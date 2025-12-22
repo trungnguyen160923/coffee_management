@@ -53,7 +53,7 @@ public class AllowanceTemplate {
     LocalDateTime updateAt;
 
     public enum AllowanceType {
-        MEAL, TRANSPORT, PHONE, ROLE, OTHER
+        MEAL, TRANSPORT, PHONE, HOUSING, ROLE, OTHER
     }
 
     /**

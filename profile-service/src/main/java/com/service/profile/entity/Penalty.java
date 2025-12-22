@@ -90,7 +90,7 @@ public class Penalty {
     }
 
     public enum PenaltyType {
-        LATE, NO_SHOW, EARLY_LEAVE, VIOLATION, UNPAID_LEAVE, OTHER
+        LATE, NO_SHOW, EARLY_LEAVE, MISTAKE, VIOLATION, UNPAID_LEAVE, OTHER
     }
 
     public enum PenaltyStatus {

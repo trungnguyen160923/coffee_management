@@ -56,7 +56,7 @@ public class BonusTemplate {
     LocalDateTime updateAt;
 
     public enum BonusType {
-        PERFORMANCE, STORE_TARGET, HOLIDAY, REFERRAL, SPECIAL
+        PERFORMANCE, ATTENDANCE, STORE_TARGET, HOLIDAY, REFERRAL, SPECIAL, OTHER
     }
 
     /**

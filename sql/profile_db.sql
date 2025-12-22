@@ -452,7 +452,7 @@ CREATE TABLE bonuses (
     COMMENT 'Kỳ lương: Format YYYY-MM',
   
   -- Thông tin thưởng
-  bonus_type ENUM('PERFORMANCE', 'STORE_TARGET', 'HOLIDAY', 'REFERRAL', 'SPECIAL') NOT NULL 
+  bonus_type ENUM('PERFORMANCE', 'ATTENDANCE', 'STORE_TARGET', 'HOLIDAY', 'REFERRAL', 'SPECIAL', 'OTHER') NOT NULL 
     COMMENT 'Loại thưởng: PERFORMANCE (hiệu suất), STORE_TARGET (đạt chỉ tiêu), HOLIDAY (lễ tết), REFERRAL (giới thiệu), SPECIAL (đặc biệt)',
   amount DECIMAL(12,2) NOT NULL 
     COMMENT 'Số tiền thưởng',
@@ -506,7 +506,7 @@ CREATE TABLE penalties (
     COMMENT 'Kỳ lương: Format YYYY-MM',
   
   -- Thông tin phạt
-  penalty_type ENUM('LATE', 'NO_SHOW', 'EARLY_LEAVE', 'VIOLATION', 'UNPAID_LEAVE', 'OTHER') NOT NULL 
+  penalty_type ENUM('LATE', 'NO_SHOW', 'EARLY_LEAVE', 'MISTAKE', 'VIOLATION', 'UNPAID_LEAVE', 'OTHER') NOT NULL 
     COMMENT 'Loại phạt: LATE (đi muộn), NO_SHOW (không đi làm), EARLY_LEAVE (về sớm), VIOLATION (vi phạm), UNPAID_LEAVE (nghỉ không phép), OTHER (khác)',
   amount DECIMAL(12,2) NOT NULL 
     COMMENT 'Số tiền phạt',
@@ -564,7 +564,7 @@ CREATE TABLE allowances (
     COMMENT 'Kỳ lương: Format YYYY-MM',
   
   -- Thông tin phụ cấp
-  allowance_type ENUM('MEAL', 'TRANSPORT', 'PHONE', 'ROLE', 'OTHER') NOT NULL 
+  allowance_type ENUM('MEAL', 'TRANSPORT', 'PHONE', 'HOUSING', 'ROLE', 'OTHER') NOT NULL 
     COMMENT 'Loại phụ cấp: MEAL (ăn trưa), TRANSPORT (đi lại), PHONE (điện thoại), ROLE (chức vụ), OTHER (khác)',
   amount DECIMAL(12,2) NOT NULL 
     COMMENT 'Số tiền phụ cấp',
@@ -635,7 +635,7 @@ CREATE TABLE allowance_templates (
     COMMENT 'NULL = SYSTEM scope (toàn bộ), có giá trị = BRANCH scope (chi nhánh cụ thể)',
   name VARCHAR(100) NOT NULL 
     COMMENT 'Tên template (ví dụ: Phụ cấp ăn trưa)',
-  allowance_type ENUM('MEAL', 'TRANSPORT', 'PHONE', 'ROLE', 'OTHER') NOT NULL,
+  allowance_type ENUM('MEAL', 'TRANSPORT', 'PHONE', 'HOUSING', 'ROLE', 'OTHER') NOT NULL,
   amount DECIMAL(12,2) NOT NULL 
     COMMENT 'Số tiền mẫu',
   description TEXT,
@@ -657,7 +657,7 @@ CREATE TABLE bonus_templates (
   branch_id INT DEFAULT NULL 
     COMMENT 'NULL = SYSTEM scope (toàn bộ), có giá trị = BRANCH scope (chi nhánh cụ thể)',
   name VARCHAR(100) NOT NULL,
-  bonus_type ENUM('PERFORMANCE', 'STORE_TARGET', 'HOLIDAY', 'REFERRAL', 'SPECIAL') NOT NULL,
+  bonus_type ENUM('PERFORMANCE', 'ATTENDANCE', 'STORE_TARGET', 'HOLIDAY', 'REFERRAL', 'SPECIAL', 'OTHER') NOT NULL,
   amount DECIMAL(12,2) NOT NULL,
   description TEXT,
   criteria_ref VARCHAR(255),
