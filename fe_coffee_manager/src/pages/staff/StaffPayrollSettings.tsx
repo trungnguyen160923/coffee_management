@@ -7,3 +7,6 @@ const StaffPayrollSettings: React.FC = () => {
 
 export default StaffPayrollSettings;
 
+
+
+

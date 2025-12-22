@@ -19,6 +19,7 @@ import com.service.profile.repository.http_client.BranchClient;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 import jakarta.transaction.Transactional;
@@ -220,13 +221,21 @@ public class StaffProfileService {
 
         // Update staff_role_assignments
         if (request.getStaffBusinessRoleIds() != null) {
-            staffRoleAssignmentRepository.deleteByStaffProfile(staffProfile);
+            // Defensive: request payload may contain duplicate roleIds (e.g. [5,5]),
+            // which would violate UNIQUE KEY ux_staff_role (staff_user_id, role_id).
+            List<Integer> distinctRoleIds = request.getStaffBusinessRoleIds().stream()
+                    .filter(Objects::nonNull)
+                    .distinct()
+                    .toList();
 
-            if (!request.getStaffBusinessRoleIds().isEmpty()) {
+            // Delete by userId for robustness
+            staffRoleAssignmentRepository.deleteByStaffUserId(userId);
+
+            if (!distinctRoleIds.isEmpty()) {
                 String level = request.getProficiencyLevel() != null
                         ? request.getProficiencyLevel()
                         : "INTERMEDIATE";
-                request.getStaffBusinessRoleIds().forEach(roleId -> {
+                distinctRoleIds.forEach(roleId -> {
                     StaffRoleAssignment assignment = StaffRoleAssignment.builder()
                             .staffProfile(staffProfile)
                             .roleId(roleId)

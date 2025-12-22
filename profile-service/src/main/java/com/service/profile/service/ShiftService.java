@@ -13,7 +13,6 @@ import com.service.profile.entity.ShiftTemplate;
 import com.service.profile.entity.ShiftTemplateRoleRequirement;
 import com.service.profile.exception.AppException;
 import com.service.profile.exception.ErrorCode;
-import com.service.profile.repository.HolidayRepository;
 import com.service.profile.repository.ShiftAssignmentRepository;
 import com.service.profile.repository.ShiftRepository;
 import com.service.profile.repository.ShiftRoleRequirementRepository;
@@ -50,7 +49,6 @@ public class ShiftService {
     ShiftRoleRequirementRepository shiftRoleRequirementRepository;
     BranchClosureClient branchClosureClient;
     ShiftValidationService shiftValidationService;
-    HolidayRepository holidayRepository;
     StaffProfileService staffProfileService; // For getting staff list to notify
     ShiftNotificationService shiftNotificationService; // For sending notifications
     EntityManager entityManager;
@@ -151,7 +149,7 @@ public class ShiftService {
             existing.setShiftDate(request.getShiftDate());
             
             // Tự động cập nhật shiftType khi shiftDate thay đổi
-            String shiftType = determineShiftType(request.getShiftDate());
+            String shiftType = determineShiftType(branchIdToCheck, request.getShiftDate());
             existing.setShiftType(shiftType);
         }
         if (request.getStartTime() != null) {
@@ -638,7 +636,7 @@ public class ShiftService {
         
         // Tự động xác định shiftType (NORMAL/WEEKEND/HOLIDAY/OVERTIME) dựa trên shift_date
         if (request.getShiftDate() != null) {
-            String shiftType = determineShiftType(request.getShiftDate());
+            String shiftType = determineShiftType(request.getBranchId(), request.getShiftDate());
             shift.setShiftType(shiftType);
         } else {
             // Fallback nếu không có shiftDate
@@ -662,7 +660,7 @@ public class ShiftService {
         // Tự động xác định shiftType (NORMAL/WEEKEND/HOLIDAY/OVERTIME) dựa trên shift_date
         String shiftType = "NORMAL";
         if (request.getShiftDate() != null) {
-            shiftType = determineShiftType(request.getShiftDate());
+            shiftType = determineShiftType(request.getBranchId(), request.getShiftDate());
         }
         
         Shift shift = Shift.builder()
@@ -864,19 +862,18 @@ public class ShiftService {
 
     /**
      * Xác định shiftType (NORMAL/WEEKEND/HOLIDAY/OVERTIME) dựa trên shift_date
-     * HOLIDAY: nếu là ngày lễ (từ bảng holidays)
-     * WEEKEND: nếu là thứ 7 hoặc chủ nhật (và không phải ngày lễ)
+     * HOLIDAY: nếu là ngày đóng cửa (từ branch_closures - global hoặc theo branch)
+     * WEEKEND: nếu là thứ 7 hoặc chủ nhật (và không phải ngày đóng cửa)
      * NORMAL: các ngày còn lại
      * OVERTIME: có thể được set thủ công hoặc dựa trên logic khác (hiện tại chưa implement)
      */
-    private String determineShiftType(LocalDate shiftDate) {
+    private String determineShiftType(Integer branchId, LocalDate shiftDate) {
         if (shiftDate == null) {
             return "NORMAL";
         }
         
-        // Kiểm tra xem có phải ngày lễ không
-        boolean isHoliday = holidayRepository.findByHolidayDateAndIsActiveTrue(shiftDate).isPresent();
-        if (isHoliday) {
+        // Kiểm tra xem có phải ngày đóng cửa không (global closure hoặc closure của branch)
+        if (isBranchClosedOnDate(branchId, shiftDate)) {
             return "HOLIDAY";
         }
         
@@ -888,6 +885,18 @@ public class ShiftService {
         
         // Mặc định là NORMAL
         return "NORMAL";
+    }
+
+    private boolean isBranchClosedOnDate(Integer branchId, LocalDate date) {
+        try {
+            var resp = branchClosureClient.listClosures(branchId, date, date);
+            var closures = resp != null ? resp.getResult() : null;
+            return closures != null && !closures.isEmpty();
+        } catch (Exception e) {
+            // Fail-open: avoid blocking shift flows if order-service is temporarily unavailable.
+            log.warn("Failed to check branch closures for branchId={} date={}: {}", branchId, date, e.getMessage());
+            return false;
+        }
     }
 
     private ShiftResponse toShiftResponse(Shift shift) {

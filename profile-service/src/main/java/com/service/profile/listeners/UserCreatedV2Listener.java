@@ -153,7 +153,10 @@ public class UserCreatedV2Listener {
                         var staffProfileOpt = staffProfileRepository.findById(evt.userId);
                         staffProfileOpt.ifPresent(staffProfile -> {
                             String level = evt.proficiencyLevel != null ? evt.proficiencyLevel : "INTERMEDIATE";
-                            evt.staffBusinessRoleIds.forEach(roleId -> {
+                            evt.staffBusinessRoleIds.stream()
+                                    .filter(Objects::nonNull)
+                                    .distinct()
+                                    .forEach(roleId -> {
                                 var assignment = com.service.profile.entity.StaffRoleAssignment.builder()
                                         .staffProfile(staffProfile)
                                         .roleId(roleId)

@@ -688,26 +688,6 @@ ALTER TABLE penalties
     COMMENT 'ID của template/penalty_config được sử dụng (NULL = custom)',
   ADD KEY idx_source_template (source_template_id);
 
--- Bảng HOLIDAYS - Ngày lễ (Tùy chọn - để tính OT)
-DROP TABLE IF EXISTS holidays;
-CREATE TABLE holidays (
-  holiday_id INT PRIMARY KEY AUTO_INCREMENT,
-  holiday_date DATE NOT NULL 
-    COMMENT 'Ngày lễ',
-  holiday_name VARCHAR(255) NOT NULL 
-    COMMENT 'Tên ngày lễ',
-  is_national BOOLEAN DEFAULT TRUE 
-    COMMENT 'Có phải ngày lễ quốc gia không',
-  is_active BOOLEAN DEFAULT TRUE 
-    COMMENT 'Có đang áp dụng không',
-  create_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  update_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY ux_holiday_date (holiday_date),
-  KEY idx_holiday_date (holiday_date),
-  KEY idx_is_active (is_active)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-COMMENT='Bảng ngày lễ - Lưu các ngày lễ để tính OT hệ số cao';
-
 -- Bảng PAYROLL_CONFIGURATIONS - Cấu hình tính lương hệ thống
 DROP TABLE IF EXISTS payroll_configurations;
 CREATE TABLE payroll_configurations (
@@ -765,14 +745,3 @@ INSERT INTO payroll_configurations (config_key, config_value, config_type, displ
 ('tax_bracket_6_rate', 0.30, 'RATE', 'Thuế suất bậc 6 (52-80M)', 'Thuế suất cho thu nhập chịu thuế từ 52-80 triệu VNĐ', '%', 0, 0.5, TRUE),
 ('tax_bracket_6_max', 80000000, 'AMOUNT', 'Mức tối đa bậc thuế 6', 'Mức thu nhập chịu thuế tối đa của bậc 6 (VNĐ)', 'VNĐ', 52000000, 100000000, TRUE),
 ('tax_bracket_7_rate', 0.35, 'RATE', 'Thuế suất bậc 7 (>80M)', 'Thuế suất cho thu nhập chịu thuế trên 80 triệu VNĐ', '%', 0, 0.5, TRUE);
-
--- Insert một số ngày lễ mẫu (2024)
-INSERT INTO holidays (holiday_date, holiday_name, is_national, is_active) VALUES
-('2024-01-01', 'Tết Dương lịch', TRUE, TRUE),
-('2024-02-10', 'Tết Nguyên Đán (Mùng 1)', TRUE, TRUE),
-('2024-02-11', 'Tết Nguyên Đán (Mùng 2)', TRUE, TRUE),
-('2024-02-12', 'Tết Nguyên Đán (Mùng 3)', TRUE, TRUE),
-('2024-04-18', 'Giỗ Tổ Hùng Vương', TRUE, TRUE),
-('2024-04-30', 'Ngày Giải phóng miền Nam', TRUE, TRUE),
-('2024-05-01', 'Ngày Quốc tế Lao động', TRUE, TRUE),
-('2024-09-02', 'Quốc khánh', TRUE, TRUE);

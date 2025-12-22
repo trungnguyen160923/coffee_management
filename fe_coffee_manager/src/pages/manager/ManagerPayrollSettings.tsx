@@ -7,3 +7,6 @@ const ManagerPayrollSettings: React.FC = () => {
 
 export default ManagerPayrollSettings;
 
+
+
+

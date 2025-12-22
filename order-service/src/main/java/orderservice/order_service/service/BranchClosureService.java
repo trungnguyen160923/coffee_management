@@ -2,11 +2,13 @@ package orderservice.order_service.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import orderservice.order_service.client.AuthServiceClient;
 import orderservice.order_service.dto.request.CreateBranchClosureRequest;
 import orderservice.order_service.dto.request.UpdateBranchClosureRequest;
 import orderservice.order_service.dto.request.UpdateBranchClosureGroupRequest;
 import orderservice.order_service.dto.request.DeleteBranchClosureGroupRequest;
 import orderservice.order_service.dto.response.BranchClosureResponse;
+import orderservice.order_service.dto.response.UserResponse;
 import orderservice.order_service.entity.Branch;
 import orderservice.order_service.entity.BranchClosure;
 import orderservice.order_service.exception.AppException;
@@ -18,7 +20,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -29,11 +34,39 @@ public class BranchClosureService {
 
     private final BranchClosureRepository branchClosureRepository;
     private final BranchRepository branchRepository;
+    private final AuthServiceClient authServiceClient;
 
     @Transactional
     public BranchClosureResponse createClosure(CreateBranchClosureRequest request) {
         log.info("Creating branch closure for branchId={} from {} to {}", request.getBranchId(),
                 request.getStartDate(), request.getEndDate());
+
+        Integer currentUserId = SecurityUtils.getCurrentUserId();
+        String currentUserRole = normalizeRole(SecurityUtils.getCurrentUserRole());
+        if (currentUserId == null) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED);
+        }
+
+        // Permission rules:
+        // - ADMIN can create global (branchId=null) and any branch-specific closures
+        // - MANAGER can ONLY create closures for their own branch(es), never global
+        List<Branch> managerBranches = branchRepository.findByManagerUserId(currentUserId);
+        boolean isManager = !managerBranches.isEmpty() || "MANAGER".equalsIgnoreCase(currentUserRole);
+        boolean isAdmin = "ADMIN".equalsIgnoreCase(currentUserRole);
+
+        if (!isAdmin && !isManager) {
+            throw new AppException(ErrorCode.UNAUTHORIZED);
+        }
+        if (isManager) {
+            if (request.getBranchId() == null) {
+                throw new AppException(ErrorCode.UNAUTHORIZED); // manager cannot create global closures
+            }
+            boolean managesBranch = managerBranches.stream()
+                    .anyMatch(b -> Objects.equals(b.getBranchId(), request.getBranchId()));
+            if (!managesBranch) {
+                throw new AppException(ErrorCode.UNAUTHORIZED);
+            }
+        }
 
         // Validate branch if provided
         if (request.getBranchId() != null && !branchRepository.existsById(request.getBranchId())) {
@@ -44,8 +77,6 @@ public class BranchClosureService {
         if (end.isBefore(start)) {
             throw new AppException(ErrorCode.BRANCH_CLOSURE_INVALID_DATE);
         }
-
-        Integer currentUserId = SecurityUtils.getCurrentUserId();
 
         BranchClosure closure = BranchClosure.builder()
                 .branchId(request.getBranchId())
@@ -66,21 +97,24 @@ public class BranchClosureService {
         BranchClosure closure = branchClosureRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.BRANCH_CLOSURE_NOT_FOUND));
 
-        // Check permission: manager can only update closures for their branch or global closures
-        checkManagerPermission(closure);
+        // Enforce write rules (ADMIN vs MANAGER-created records)
+        checkWritePermission(closure);
 
         if (request.getBranchId() != null) {
             if (!branchRepository.existsById(request.getBranchId())) {
                 throw new AppException(ErrorCode.BRANCH_NOT_FOUND);
             }
-            // Check permission for new branchId if manager
+            // If manager: cannot move a record to another branch, and cannot set global
             Integer currentUserId = SecurityUtils.getCurrentUserId();
-            String currentUserRole = SecurityUtils.getCurrentUserRole();
+            String currentUserRole = normalizeRole(SecurityUtils.getCurrentUserRole());
             List<Branch> managerBranches = branchRepository.findByManagerUserId(currentUserId);
             boolean isManager = !managerBranches.isEmpty() || "MANAGER".equalsIgnoreCase(currentUserRole);
-            if (isManager && request.getBranchId() != null) {
+            if (isManager) {
+                if (request.getBranchId() == null) {
+                    throw new AppException(ErrorCode.UNAUTHORIZED);
+                }
                 boolean managesBranch = managerBranches.stream()
-                        .anyMatch(b -> b.getBranchId().equals(request.getBranchId()));
+                        .anyMatch(b -> Objects.equals(b.getBranchId(), request.getBranchId()));
                 if (!managesBranch) {
                     throw new AppException(ErrorCode.UNAUTHORIZED);
                 }
@@ -110,8 +144,8 @@ public class BranchClosureService {
         BranchClosure closure = branchClosureRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.BRANCH_CLOSURE_NOT_FOUND));
         
-        // Check permission: manager can only delete closures for their branch or global closures
-        checkManagerPermission(closure);
+        // Enforce write rules (ADMIN vs MANAGER-created records)
+        checkWritePermission(closure);
         
         // Validate: Only allow delete if start_date is in the future (not past, not today)
         LocalDate today = LocalDate.now();
@@ -150,7 +184,7 @@ public class BranchClosureService {
         
         // Check permission for each closure: manager can only update closures for their branch or global
         for (BranchClosure closure : closures) {
-            checkManagerPermission(closure);
+            checkWritePermission(closure);
         }
         
         // Get old branch IDs
@@ -173,9 +207,13 @@ public class BranchClosureService {
                 !oldBranchIds.equals(newBranchIds);
         
         // Check permission for new branch IDs if manager
-        String currentUserRole = SecurityUtils.getCurrentUserRole();
+        String currentUserRole = normalizeRole(SecurityUtils.getCurrentUserRole());
         List<Branch> managerBranches = branchRepository.findByManagerUserId(currentUserId);
         boolean isManager = !managerBranches.isEmpty() || "MANAGER".equalsIgnoreCase(currentUserRole);
+        if (isManager && newHasGlobal) {
+            // Manager cannot create/update to global closures
+            throw new AppException(ErrorCode.UNAUTHORIZED);
+        }
         if (isManager && !newHasGlobal && !newBranchIds.isEmpty()) {
             // Manager can only set closures for their branch(es)
             for (Integer branchId : newBranchIds) {
@@ -276,7 +314,7 @@ public class BranchClosureService {
         
         // Check permission for each closure: manager can only delete closures for their branch or global
         for (BranchClosure closure : closures) {
-            checkManagerPermission(closure);
+            checkWritePermission(closure);
         }
         
         // Validate: Only allow delete if ALL closures have start_date in the future
@@ -293,6 +331,7 @@ public class BranchClosureService {
     public BranchClosureResponse getClosure(Integer id) {
         BranchClosure closure = branchClosureRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.BRANCH_CLOSURE_NOT_FOUND));
+        checkReadPermission(closure);
         return toResponse(closure);
     }
 
@@ -303,7 +342,7 @@ public class BranchClosureService {
 
         // Get current user ID and role from JWT token
         Integer currentUserId = SecurityUtils.getCurrentUserId();
-        String currentUserRole = SecurityUtils.getCurrentUserRole();
+        String currentUserRole = normalizeRole(SecurityUtils.getCurrentUserRole());
 
         List<BranchClosure> closures;
         if (currentUserId != null) {
@@ -312,9 +351,13 @@ public class BranchClosureService {
             List<Branch> managerBranches = branchRepository.findByManagerUserId(currentUserId);
             boolean isManager = !managerBranches.isEmpty() || "MANAGER".equalsIgnoreCase(currentUserRole);
             boolean isStaff = "STAFF".equalsIgnoreCase(currentUserRole);
+            boolean isAdmin = "ADMIN".equalsIgnoreCase(currentUserRole);
+
+            // Cache userId -> roleName to avoid repeated calls to auth-service
+            final Map<Integer, String> creatorRoleCache = new HashMap<>();
             
             if (isStaff && branchId != null) {
-                // Staff: get closures for their branch (branchId from request) + global closures
+                // STAFF: can view ONLY ADMIN-created closures for their branch + global ADMIN closures
                 closures = new java.util.ArrayList<>();
                 List<BranchClosure> branchClosures;
                 if (effectiveFrom != null && effectiveTo != null) {
@@ -323,16 +366,21 @@ public class BranchClosureService {
                 } else {
                     branchClosures = branchClosureRepository.findByBranchId(branchId);
                 }
-                closures.addAll(branchClosures);
+                // Keep only ADMIN-created for branch
+                closures.addAll(branchClosures.stream()
+                        .filter(c -> "ADMIN".equals(roleOfUser(c.getUserId(), creatorRoleCache)))
+                        .toList());
                 
-                // Add global closures (branch_id = null)
+                // Add global ADMIN closures (branch_id = null)
                 List<BranchClosure> global;
                 if (effectiveFrom != null && effectiveTo != null) {
                     global = branchClosureRepository.findByBranchIdIsNullAndDateOverlap(effectiveFrom, effectiveTo);
                 } else {
                     global = branchClosureRepository.findByBranchIdIsNull();
                 }
-                closures.addAll(global);
+                closures.addAll(global.stream()
+                        .filter(c -> "ADMIN".equals(roleOfUser(c.getUserId(), creatorRoleCache)))
+                        .toList());
                 
                 // Remove duplicates
                 closures = closures.stream()
@@ -346,14 +394,20 @@ public class BranchClosureService {
                         .collect(Collectors.toList());
                 log.info("Staff {} found {} closures for branch {}", currentUserId, closures.size(), branchId);
             } else if (isManager) {
-                // Manager: get closures for their branch + global closures (regardless of who created them)
+                // MANAGER view rules:
+                // - Can see ADMIN-created global closures (branch_id = null)
+                // - Can see ADMIN-created closures for their branch(es)
+                // - Can see their own MANAGER-created closures for their branch(es)
                 if (managerBranches.isEmpty()) {
-                    // Manager has no branch assigned, only show global closures
+                    // Manager has no branch assigned: only show global ADMIN closures
                     if (effectiveFrom != null && effectiveTo != null) {
                         closures = branchClosureRepository.findByBranchIdIsNullAndDateOverlap(effectiveFrom, effectiveTo);
                     } else {
                         closures = branchClosureRepository.findByBranchIdIsNull();
                     }
+                    closures = closures.stream()
+                            .filter(c -> "ADMIN".equals(roleOfUser(c.getUserId(), creatorRoleCache)))
+                            .collect(Collectors.toList());
                     log.debug("Manager {} has no branch assigned, showing {} global closures", currentUserId, closures.size());
                 } else {
                     // Get closures for all branches this manager manages + global closures
@@ -366,7 +420,11 @@ public class BranchClosureService {
                         } else {
                             branchClosures = branchClosureRepository.findByBranchId(branch.getBranchId());
                         }
-                        closures.addAll(branchClosures);
+                        // Keep only admin-created OR owned by current manager
+                        closures.addAll(branchClosures.stream()
+                                .filter(c -> Objects.equals(c.getUserId(), currentUserId)
+                                        || "ADMIN".equals(roleOfUser(c.getUserId(), creatorRoleCache)))
+                                .toList());
                         log.debug("Manager {} manages branch {}, found {} closures", currentUserId, branch.getBranchId(), branchClosures.size());
                     }
                     // Add global closures (branch_id = null)
@@ -376,7 +434,10 @@ public class BranchClosureService {
                     } else {
                         global = branchClosureRepository.findByBranchIdIsNull();
                     }
-                    closures.addAll(global);
+                    // Only ADMIN-created global closures should be visible to managers
+                    closures.addAll(global.stream()
+                            .filter(c -> "ADMIN".equals(roleOfUser(c.getUserId(), creatorRoleCache)))
+                            .toList());
                     log.debug("Manager {} found {} global closures", currentUserId, global.size());
                     // Remove duplicates (in case of overlapping date ranges)
                     closures = closures.stream()
@@ -390,41 +451,62 @@ public class BranchClosureService {
                             .collect(Collectors.toList());
                     log.info("Manager {} total closures after deduplication: {}", currentUserId, closures.size());
                 }
-            } else {
-                // Admin: filter by userId (only see closures they created)
+            } else if (isAdmin) {
+                // ADMIN view rules:
+                // - Can see ONLY ADMIN-created closures (global + branch-specific)
                 if (branchId != null) {
-                    // Closures specific to branch + global ones, created by current user
-                    List<BranchClosure> branchSpecific;
+                    closures = new java.util.ArrayList<>();
+
+                    List<BranchClosure> branchClosures;
+                    if (effectiveFrom != null && effectiveTo != null) {
+                        branchClosures = branchClosureRepository
+                                .findByBranchIdAndDateOverlap(branchId, effectiveFrom, effectiveTo);
+                    } else {
+                        branchClosures = branchClosureRepository.findByBranchId(branchId);
+                    }
+                    closures.addAll(branchClosures.stream()
+                            .filter(c -> "ADMIN".equals(roleOfUser(c.getUserId(), creatorRoleCache)))
+                            .toList());
+
+                    // Add global closures (branch_id = null)
                     List<BranchClosure> global;
                     if (effectiveFrom != null && effectiveTo != null) {
-                        branchSpecific = branchClosureRepository
-                                .findByUserIdAndBranchIdAndDateOverlap(currentUserId, branchId, effectiveFrom, effectiveTo);
-                        global = branchClosureRepository
-                                .findByUserIdAndBranchIdIsNullAndDateOverlap(currentUserId, effectiveFrom, effectiveTo);
+                        global = branchClosureRepository.findByBranchIdIsNullAndDateOverlap(effectiveFrom, effectiveTo);
                     } else {
-                        // Need to filter by userId manually since old methods don't have userId filter
-                        branchSpecific = branchClosureRepository.findByBranchId(branchId).stream()
-                                .filter(c -> currentUserId.equals(c.getUserId()))
-                                .collect(Collectors.toList());
-                        global = branchClosureRepository.findByBranchIdIsNull().stream()
-                                .filter(c -> currentUserId.equals(c.getUserId()))
-                                .collect(Collectors.toList());
+                        global = branchClosureRepository.findByBranchIdIsNull();
                     }
-                    branchSpecific.addAll(global);
-                    closures = branchSpecific;
+                    closures.addAll(global.stream()
+                            .filter(c -> "ADMIN".equals(roleOfUser(c.getUserId(), creatorRoleCache)))
+                            .toList());
+
+                    // Dedup by id
+                    closures = closures.stream()
+                            .collect(Collectors.toMap(
+                                    BranchClosure::getId,
+                                    closure -> closure,
+                                    (existing, replacement) -> existing
+                            ))
+                            .values()
+                            .stream()
+                            .collect(Collectors.toList());
                 } else {
-                    // When branchId is null: get ALL closures created by current user
-                    // (both global closures and closures for specific branches)
+                    // No branch filter: return all ADMIN-created closures, optionally filtered by overlap.
                     if (effectiveFrom != null && effectiveTo != null) {
-                        closures = branchClosureRepository.findByUserIdAndDateOverlap(currentUserId, effectiveFrom, effectiveTo);
-                    } else {
-                        // Need to get all closures and filter by userId
                         closures = branchClosureRepository.findAll().stream()
-                                .filter(c -> currentUserId.equals(c.getUserId()))
+                                .filter(c -> c.getStartDate() != null && c.getEndDate() != null)
+                                .filter(c -> !c.getStartDate().isAfter(effectiveTo) && !c.getEndDate().isBefore(effectiveFrom))
+                                .filter(c -> "ADMIN".equals(roleOfUser(c.getUserId(), creatorRoleCache)))
+                                .collect(Collectors.toList());
+                    } else {
+                        closures = branchClosureRepository.findAll().stream()
+                                .filter(c -> "ADMIN".equals(roleOfUser(c.getUserId(), creatorRoleCache)))
                                 .collect(Collectors.toList());
                     }
                 }
-                log.info("Admin {} found {} closures (filtered by userId)", currentUserId, closures.size());
+                log.info("Admin {} found {} closures", currentUserId, closures.size());
+            } else {
+                // Other roles: no access
+                closures = List.of();
             }
         } else {
             // Fallback: if no userId in JWT, return empty list (should not happen with proper auth)
@@ -436,44 +518,101 @@ public class BranchClosureService {
         return closures.stream().map(this::toResponse).collect(Collectors.toList());
     }
 
+    // NOTE: old checkManagerPermission removed in favor of checkReadPermission/checkWritePermission
+
     /**
-     * Check if current user (manager) has permission to modify/delete this closure.
-     * Manager can only modify/delete closures they created (userId matches) AND
-     * the closure must be for their branch or global.
-     * Admin can modify/delete any closure.
+     * Read rules (per user request):
+     * 1) ADMIN-created + branch_id=null: everyone can view
+     * 2) ADMIN-created + branch_id=X: ADMIN and branch X can view
+     * 3) MANAGER-created + branch_id=managerBranch: only that manager can CRUD/view
      */
-    private void checkManagerPermission(BranchClosure closure) {
+    private void checkReadPermission(BranchClosure closure) {
         Integer currentUserId = SecurityUtils.getCurrentUserId();
-        if (currentUserId == null) {
-            throw new AppException(ErrorCode.UNAUTHENTICATED);
+        if (currentUserId == null) throw new AppException(ErrorCode.UNAUTHENTICATED);
+        String currentUserRole = normalizeRole(SecurityUtils.getCurrentUserRole());
+
+        final Map<Integer, String> roleCache = new HashMap<>();
+        String creatorRole = roleOfUser(closure.getUserId(), roleCache);
+        if (creatorRole == null) throw new AppException(ErrorCode.UNAUTHORIZED);
+
+        if ("ADMIN".equals(creatorRole)) {
+            // Global admin closure is visible to all authenticated roles (controller already restricts to ADMIN/MANAGER here).
+            if (closure.getBranchId() == null) return;
+
+            // Branch-specific admin closure: visible to ADMIN and managers of that branch
+            if ("ADMIN".equalsIgnoreCase(currentUserRole)) return;
+
+            List<Branch> managerBranches = branchRepository.findByManagerUserId(currentUserId);
+            boolean managesBranch = managerBranches.stream().anyMatch(b -> Objects.equals(b.getBranchId(), closure.getBranchId()));
+            if (!managesBranch) throw new AppException(ErrorCode.UNAUTHORIZED);
+            return;
         }
-        
-        String currentUserRole = SecurityUtils.getCurrentUserRole();
-        List<Branch> managerBranches = branchRepository.findByManagerUserId(currentUserId);
-        boolean isManager = !managerBranches.isEmpty() || "MANAGER".equalsIgnoreCase(currentUserRole);
-        
-        if (isManager) {
-            // Manager can only modify closures they created (userId must match)
-            if (!currentUserId.equals(closure.getUserId())) {
-                log.warn("Manager {} attempted to modify closure {} created by user {}", 
-                        currentUserId, closure.getId(), closure.getUserId());
-                throw new AppException(ErrorCode.UNAUTHORIZED);
-            }
-            
-            // Additionally, the closure must be for their branch or global
+
+        if ("MANAGER".equals(creatorRole)) {
+            // Only the same manager can view
+            if (!Objects.equals(currentUserId, closure.getUserId())) throw new AppException(ErrorCode.UNAUTHORIZED);
+            return;
+        }
+
+        throw new AppException(ErrorCode.UNAUTHORIZED);
+    }
+
+    /**
+     * Write rules (update/delete):
+     * - If record created by ADMIN: only ADMIN can update/delete.
+     * - If record created by MANAGER: only that manager can update/delete, and only for their branch(es).
+     */
+    private void checkWritePermission(BranchClosure closure) {
+        Integer currentUserId = SecurityUtils.getCurrentUserId();
+        if (currentUserId == null) throw new AppException(ErrorCode.UNAUTHENTICATED);
+        String currentUserRole = normalizeRole(SecurityUtils.getCurrentUserRole());
+
+        final Map<Integer, String> roleCache = new HashMap<>();
+        String creatorRole = roleOfUser(closure.getUserId(), roleCache);
+        if (creatorRole == null) throw new AppException(ErrorCode.UNAUTHORIZED);
+
+        if ("ADMIN".equals(creatorRole)) {
+            if (!"ADMIN".equalsIgnoreCase(currentUserRole)) throw new AppException(ErrorCode.UNAUTHORIZED);
+            return;
+        }
+
+        if ("MANAGER".equals(creatorRole)) {
+            if (!"MANAGER".equalsIgnoreCase(currentUserRole)) throw new AppException(ErrorCode.UNAUTHORIZED);
+            if (!Objects.equals(currentUserId, closure.getUserId())) throw new AppException(ErrorCode.UNAUTHORIZED);
+            // Must be within manager's branch scope
             if (closure.getBranchId() != null) {
-                // Check if manager manages this branch
-                boolean managesBranch = managerBranches.stream()
-                        .anyMatch(b -> b.getBranchId().equals(closure.getBranchId()));
-                if (!managesBranch) {
-                    log.warn("Manager {} attempted to modify closure {} for branch {} which they don't manage", 
-                            currentUserId, closure.getId(), closure.getBranchId());
-                    throw new AppException(ErrorCode.UNAUTHORIZED);
-                }
+                List<Branch> managerBranches = branchRepository.findByManagerUserId(currentUserId);
+                boolean managesBranch = managerBranches.stream().anyMatch(b -> Objects.equals(b.getBranchId(), closure.getBranchId()));
+                if (!managesBranch) throw new AppException(ErrorCode.UNAUTHORIZED);
             }
-            // If branchId is null (global closure), manager can modify it if they created it
+            return;
         }
-        // Admin can modify any closure (no restriction)
+
+        throw new AppException(ErrorCode.UNAUTHORIZED);
+    }
+
+    private String roleOfUser(Integer userId, Map<Integer, String> cache) {
+        if (userId == null) return null;
+        if (cache.containsKey(userId)) return cache.get(userId);
+        try {
+            String token = SecurityUtils.getCurrentJwtToken();
+            var resp = authServiceClient.getUserById(userId, token);
+            UserResponse user = resp != null ? resp.getResult() : null;
+            String roleName = user != null && user.getRole() != null ? user.getRole().getName() : null;
+            String normalized = normalizeRole(roleName);
+            cache.put(userId, normalized);
+            return normalized;
+        } catch (Exception e) {
+            log.warn("Failed to resolve role for userId={}: {}", userId, e.getMessage());
+            cache.put(userId, null);
+            return null;
+        }
+    }
+
+    private String normalizeRole(String role) {
+        if (role == null) return null;
+        String r = role.trim().toUpperCase();
+        return r.startsWith("ROLE_") ? r.substring(5) : r;
     }
 
     /**

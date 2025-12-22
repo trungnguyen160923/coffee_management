@@ -10,6 +10,7 @@ import com.service.profile.mapper.PayrollMapper;
 import com.service.profile.repository.*;
 import com.service.profile.repository.http_client.AuthClient;
 import com.service.profile.repository.http_client.BranchClient;
+import com.service.profile.repository.http_client.BranchClosureClient;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -43,12 +44,12 @@ public class PayrollService {
     StaffProfileRepository staffProfileRepository;
     ManagerProfileRepository managerProfileRepository;
     ShiftAssignmentRepository shiftAssignmentRepository;
-    HolidayRepository holidayRepository;
     PayrollMapper payrollMapper;
     PayrollProperties payrollProperties; // Fallback nếu config không có trong DB
     PayrollConfigurationService payrollConfigurationService;
     AuthClient authClient;
     BranchClient branchClient;
+    BranchClosureClient branchClosureClient;
 
     /**
      * Tính lương cho nhân viên
@@ -118,7 +119,7 @@ public class PayrollService {
         if (userRole == Payroll.UserRole.STAFF) {
             // Chỉ tính OT cho Staff (có shift assignments)
             overtimeHours = calculateOvertimeHoursForPeriod(userId, period);
-            overtimePay = calculateOvertimePay(userId, period, calculatedBaseSalary, hourlyRate, overtimeRate);
+            overtimePay = calculateOvertimePay(userId, branchId, period, calculatedBaseSalary, hourlyRate, overtimeRate);
         }
         // Manager: overtimeHours = 0, overtimePay = 0 (không có điểm danh, không tính OT)
 
@@ -422,14 +423,20 @@ public class PayrollService {
                 return "WEEKEND".equals(shiftType) || "HOLIDAY".equals(shiftType);
             });
 
-        // Ngoài ra, kiểm tra ngày có phải lễ không (từ bảng holidays)
-        boolean isHolidayDate = isHoliday(date);
+        // Ngoài ra, kiểm tra ngày có phải ngày đóng cửa không (từ branch_closures)
+        // (Nếu staff vẫn làm trong ngày đóng cửa, coi như HOLIDAY rate)
+        Integer shiftBranchId = checkedOutShifts.stream()
+                .map(sa -> sa.getShift() != null ? sa.getShift().getBranchId() : null)
+                .filter(bid -> bid != null)
+                .findFirst()
+                .orElse(null);
+        boolean isClosedDate = isBranchClosedOnDate(shiftBranchId, date);
 
         // Kiểm tra ngày có phải cuối tuần không
         java.time.DayOfWeek dayOfWeek = date.getDayOfWeek();
         boolean isWeekend = dayOfWeek == java.time.DayOfWeek.SATURDAY || dayOfWeek == java.time.DayOfWeek.SUNDAY;
 
-        if (hasWeekendOrHolidayShift || isHolidayDate || isWeekend) {
+        if (hasWeekendOrHolidayShift || isClosedDate || isWeekend) {
             // Làm ngày nghỉ/lễ: Toàn bộ giờ làm là OT
             return totalHoursInDay;
         } else {
@@ -443,7 +450,7 @@ public class PayrollService {
     /**
      * Tính overtime pay với hệ số theo từng ngày
      */
-    private BigDecimal calculateOvertimePay(Integer userId, String period, BigDecimal baseSalary, 
+    private BigDecimal calculateOvertimePay(Integer userId, Integer branchId, String period, BigDecimal baseSalary, 
                                            BigDecimal hourlyRate, BigDecimal overtimeRate) {
         // Tính hourly rate
         BigDecimal calculatedHourlyRate;
@@ -469,13 +476,16 @@ public class PayrollService {
 
         BigDecimal totalOvertimePay = BigDecimal.ZERO;
         LocalDate currentDate = startDate;
+
+        // Cache closures per day to avoid N remote calls
+        final Map<LocalDate, Boolean> closedCache = new HashMap<>();
         
         while (!currentDate.isAfter(endDate)) {
             BigDecimal dayOvertimeHours = calculateOvertimeHoursForDay(userId, currentDate);
             
             if (dayOvertimeHours.compareTo(BigDecimal.ZERO) > 0) {
                 // Lấy hệ số multiplier cho ngày này
-                BigDecimal multiplier = getOvertimeMultiplier(currentDate, overtimeRate);
+                BigDecimal multiplier = getOvertimeMultiplier(branchId, currentDate, overtimeRate, closedCache);
                 
                 // Tính OT pay cho ngày này
                 BigDecimal dayOvertimePay = dayOvertimeHours
@@ -1022,20 +1032,14 @@ public class PayrollService {
     }
 
     /**
-     * Kiểm tra ngày có phải lễ không
-     */
-    private boolean isHoliday(LocalDate date) {
-        return holidayRepository.findByHolidayDateAndIsActiveTrue(date).isPresent();
-    }
-
-    /**
      * Lấy hệ số OT multiplier theo ngày
      */
-    private BigDecimal getOvertimeMultiplier(LocalDate date, BigDecimal baseRate) {
-        // Kiểm tra ngày lễ
-        if (isHoliday(date)) {
-            BigDecimal holidayMultiplier = getConfigValue("holiday_overtime_multiplier", 
-                payrollProperties.getHolidayOvertimeMultiplier());
+    private BigDecimal getOvertimeMultiplier(Integer branchId, LocalDate date, BigDecimal baseRate, Map<LocalDate, Boolean> closedCache) {
+        // Kiểm tra ngày đóng cửa (treat as HOLIDAY multiplier)
+        boolean isClosed = closedCache.computeIfAbsent(date, d -> isBranchClosedOnDate(branchId, d));
+        if (isClosed) {
+            BigDecimal holidayMultiplier = getConfigValue("holiday_overtime_multiplier",
+                    payrollProperties.getHolidayOvertimeMultiplier());
             return baseRate.multiply(holidayMultiplier);
         }
         
@@ -1049,6 +1053,19 @@ public class PayrollService {
         
         // Ngày thường
         return baseRate; // defaultOvertimeRate (1.5x)
+    }
+
+    private boolean isBranchClosedOnDate(Integer branchId, LocalDate date) {
+        if (date == null) return false;
+        try {
+            var resp = branchClosureClient.listClosures(branchId, date, date);
+            var closures = resp != null ? resp.getResult() : null;
+            return closures != null && !closures.isEmpty();
+        } catch (Exception e) {
+            // Fail-open: don't break payroll calculation if order-service is temporarily unavailable
+            log.warn("Failed to check branch closures for branchId={} date={}: {}", branchId, date, e.getMessage());
+            return false;
+        }
     }
 
     /**

@@ -251,3 +251,9 @@ CREATE TABLE order_tables (
   UNIQUE KEY uq_order_table (order_id, table_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+INSERT INTO branch_closures (branch_id, start_date, end_date, user_id, reason) VALUES
+(NULL, '2026-01-01', '2026-01-01', NULL, 'Tết Dương lịch'),
+(NULL, '2026-02-17', '2026-02-19', NULL, 'Tết Nguyên Đán (Mùng 1-3)'),
+(NULL, '2026-04-26', '2026-04-26', NULL, 'Giỗ Tổ Hùng Vương'),
+(NULL, '2026-04-30', '2026-05-01', NULL, '30/4 - 1/5'),
+(NULL, '2026-09-02', '2026-09-02', NULL, 'Quốc khánh');
