@@ -20,23 +20,35 @@ class TestAIAgentConfidenceIntegration:
     @pytest.mark.asyncio
     async def test_collect_data_includes_confidence_scores(self):
         """Test collect_three_json_data có tính confidence scores"""
-        # Mock các API calls
-        with patch.object(self.service.order_client, 'get_revenue_metrics', new_callable=AsyncMock) as mock_revenue, \
-             patch.object(self.service.order_client, 'get_customer_metrics', new_callable=AsyncMock) as mock_customer, \
-             patch.object(self.service.order_client, 'get_product_metrics', new_callable=AsyncMock) as mock_product, \
-             patch.object(self.service.order_client, 'get_review_metrics', new_callable=AsyncMock) as mock_review, \
-             patch.object(self.service.catalog_client, 'get_inventory_metrics', new_callable=AsyncMock) as mock_inventory, \
-             patch.object(self.service.catalog_client, 'get_material_cost_metrics', new_callable=AsyncMock) as mock_material, \
+        # Mock DB row + ML calls
+        fake_row = Mock()
+        fake_row.branch_id = 1
+        fake_row.report_date = self.today
+        fake_row.total_revenue = 1000000
+        fake_row.order_count = 50
+        fake_row.avg_order_value = 20000
+        fake_row.customer_count = 100
+        fake_row.new_customers = 20
+        fake_row.repeat_customers = 80
+        fake_row.unique_products_sold = 30
+        fake_row.product_diversity_score = 0.8
+        fake_row.top_selling_product_id = 10
+        fake_row.avg_review_score = 4.5
+        fake_row.material_cost = 200000
+        fake_row.low_stock_products = 2
+        fake_row.out_of_stock_products = 1
+        fake_row.peak_hour = 10
+        fake_row.day_of_week = 4
+        fake_row.is_weekend = False
+        fake_row.avg_preparation_time_seconds = None
+        fake_row.staff_efficiency_score = None
+        fake_row.waste_percentage = None
+        fake_row.created_at = None
+
+        with patch.object(self.service, '_get_daily_branch_metrics_row', return_value=fake_row) as _mock_row, \
              patch.object(self.service, 'get_isolation_forest_json') as mock_isolation, \
              patch.object(self.service, 'get_prophet_forecast_json') as mock_prophet:
             
-            # Setup mock responses
-            mock_revenue.return_value = {"totalRevenue": 1000000, "orderCount": 50}
-            mock_customer.return_value = {"customerCount": 100}
-            mock_product.return_value = {"uniqueProductsSold": 30}
-            mock_review.return_value = {"avgReviewScore": 4.5, "totalReviews": 50}
-            mock_inventory.return_value = {"totalIngredients": 50}
-            mock_material.return_value = {"totalMaterialCost": 200000}
             mock_isolation.return_value = {"co_bat_thuong": False, "confidence": 0.85}
             mock_prophet.return_value = {"do_tin_cay": {"phan_tram": 88}}
             
@@ -80,18 +92,29 @@ class TestAIAgentConfidenceIntegration:
             
             aggregated_data = {
                 "branch_id": 1,
-                "date": self.today.isoformat(),
-                "revenue_metrics": {
-                    "totalRevenue": 1000000,
-                    "orderCount": 50
+                "report_date": self.today.isoformat(),
+                "daily_branch_metrics": {
+                    "branch_id": 1,
+                    "report_date": self.today.isoformat(),
+                    "total_revenue": 1000000,
+                    "order_count": 50,
+                    "avg_order_value": 20000,
+                    "customer_count": 100,
+                    "repeat_customers": 80,
+                    "new_customers": 20,
+                    "unique_products_sold": 30,
+                    "product_diversity_score": 0.8,
+                    "avg_review_score": 4.5,
+                    "material_cost": 200000,
+                    "low_stock_products": 2,
+                    "out_of_stock_products": 1,
+                    "peak_hour": 10
                 },
-                "customer_metrics": {
-                    "customerCount": 100
+                "derived_kpis": {
+                    "profit": 800000,
+                    "profit_margin": 0.8,
+                    "customer_retention_rate": 0.8
                 },
-                "product_metrics": {},
-                "review_metrics": {},
-                "inventory_metrics": {},
-                "material_cost_metrics": {},
                 "isolation_forest_anomaly": {},
                 "prophet_forecast": {},
                 "data_quality_score": 0.85,
@@ -130,22 +153,34 @@ class TestAIAgentConfidenceIntegration:
         
         try:
             # Mock tất cả dependencies
-            with patch.object(self.service.order_client, 'get_revenue_metrics', new_callable=AsyncMock) as mock_revenue, \
-                 patch.object(self.service.order_client, 'get_customer_metrics', new_callable=AsyncMock) as mock_customer, \
-                 patch.object(self.service.order_client, 'get_product_metrics', new_callable=AsyncMock) as mock_product, \
-                 patch.object(self.service.order_client, 'get_review_metrics', new_callable=AsyncMock) as mock_review, \
-                 patch.object(self.service.catalog_client, 'get_inventory_metrics', new_callable=AsyncMock) as mock_inventory, \
-                 patch.object(self.service.catalog_client, 'get_material_cost_metrics', new_callable=AsyncMock) as mock_material, \
+            fake_row = Mock()
+            fake_row.branch_id = 1
+            fake_row.report_date = self.today
+            fake_row.total_revenue = 1000000
+            fake_row.order_count = 50
+            fake_row.avg_order_value = 20000
+            fake_row.customer_count = 100
+            fake_row.new_customers = 20
+            fake_row.repeat_customers = 80
+            fake_row.unique_products_sold = 30
+            fake_row.product_diversity_score = 0.8
+            fake_row.top_selling_product_id = 10
+            fake_row.avg_review_score = 4.5
+            fake_row.material_cost = 200000
+            fake_row.low_stock_products = 2
+            fake_row.out_of_stock_products = 1
+            fake_row.peak_hour = 10
+            fake_row.day_of_week = 4
+            fake_row.is_weekend = False
+            fake_row.avg_preparation_time_seconds = None
+            fake_row.staff_efficiency_score = None
+            fake_row.waste_percentage = None
+            fake_row.created_at = None
+
+            with patch.object(self.service, '_get_daily_branch_metrics_row', return_value=fake_row) as _mock_row, \
                  patch.object(self.service, 'get_isolation_forest_json') as mock_isolation, \
                  patch.object(self.service, 'get_prophet_forecast_json') as mock_prophet:
                 
-                # Setup mocks
-                mock_revenue.return_value = {"totalRevenue": 1000000, "orderCount": 50}
-                mock_customer.return_value = {"customerCount": 100}
-                mock_product.return_value = {"uniqueProductsSold": 30}
-                mock_review.return_value = {"avgReviewScore": 4.5}
-                mock_inventory.return_value = {"totalIngredients": 50}
-                mock_material.return_value = {"totalMaterialCost": 200000}
                 mock_isolation.return_value = {"confidence": 0.85}
                 mock_prophet.return_value = {"do_tin_cay": {"phan_tram": 88}}
                 
@@ -193,10 +228,11 @@ class TestAIAgentConfidenceIntegration:
             }
             
             # Should not crash, should use default values
-            result = await self.service.collect_three_json_data(
-                branch_id=1,
-                target_date=self.today
-            )
+            with patch.object(self.service, '_get_daily_branch_metrics_row', return_value=None):
+                result = await self.service.collect_three_json_data(
+                    branch_id=1,
+                    target_date=self.today
+                )
             
             # Verify có default values
             assert "data_quality_score" in result

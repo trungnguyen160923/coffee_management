@@ -1,6 +1,6 @@
 """
 API Routes for AI Agent
-Tổng hợp 3 JSON từ các service và xử lý với AI
+Thống kê từ bảng `daily_branch_metrics` + (tuỳ chọn) phát hiện bất thường và dự báo tương lai, sau đó xử lý với AI
 """
 from fastapi import APIRouter, HTTPException, Query, Depends
 from sqlalchemy.orm import Session
@@ -37,8 +37,8 @@ async def analyze_with_ai(
 ):
     """
     Phân tích dữ liệu với AI Agent
-    - Thu thập 6 API từ order-service và catalog-service
-    - Tổng hợp thành context
+    - Lấy dữ liệu thống kê từ bảng `analytics_db.daily_branch_metrics`
+    - (Tuỳ chọn) kèm phát hiện bất thường + dự báo tương lai (TOOL2)
     - Xử lý với LangChain + OpenAI GPT-4o
     - Lưu báo cáo vào database (nếu save_to_db=True)
     """
@@ -151,7 +151,9 @@ async def collect_data_only(
     date: date = Query(..., description="Date to collect data")
 ):
     """
-    Chỉ thu thập dữ liệu từ các service cho 1 chi nhánh (6 API + 2 ML predictions, không xử lý AI)
+    Chỉ thu thập dữ liệu cho 1 chi nhánh từ `daily_branch_metrics`
+    + phát hiện bất thường và dự báo tương lai (nếu có model/đủ dữ liệu),
+    không xử lý AI.
     Dùng để test hoặc debug
     """
     try:
@@ -170,16 +172,26 @@ async def collect_data_only(
 
 @router.get("/collect-all-data")
 async def collect_all_branches_data_only(
-    date: date = Query(..., description="Date to collect data for all branches")
+    date: date = Query(..., description="Date to collect data for all branches"),
+    include_ml: bool = Query(True, description="Include anomaly detection + forecast (may be expensive)"),
+    ml_branch_limit: int = Query(10, ge=1, le=200, description="Number of branches to run ML for (top by revenue)"),
+    ml_concurrency: int = Query(4, ge=1, le=20, description="Concurrent ML jobs"),
 ):
     """
-    Chỉ thu thập dữ liệu từ các service cho TẤT CẢ chi nhánh (6 API mới, không xử lý AI)
+    Chỉ thu thập dữ liệu cho TẤT CẢ chi nhánh từ `daily_branch_metrics`.
+    Có thể bật `include_ml` để enrich một phần chi nhánh (top theo doanh thu) với:
+    - phát hiện bất thường (`isolation_forest_anomaly`)
+    - dự báo tương lai (`prophet_forecast`)
+    Không xử lý AI.
     Dùng để test hoặc debug
     Trả về thống kê tổng hợp của tất cả chi nhánh
     """
     try:
         aggregated_data = await ai_agent_service.collect_all_branches_data(
-            target_date=date
+            target_date=date,
+            include_ml=include_ml,
+            ml_branch_limit=ml_branch_limit,
+            ml_concurrency=ml_concurrency,
         )
         return {
             "success": True,
@@ -232,14 +244,17 @@ async def analyze_all_branches_with_ai(
     query: Optional[str] = Query(None, description="Optional specific query/question (alternative to body)"),
     db: Session = Depends(get_db),
     save_to_db: bool = Query(True, description="Save report to database"),
-    force_refresh: bool = Query(False, description="Force refresh - ignore existing report in database")
+    force_refresh: bool = Query(False, description="Force refresh - ignore existing report in database"),
+    include_ml: bool = Query(True, description="Include anomaly detection + forecast (may be expensive)"),
+    ml_branch_limit: int = Query(10, ge=1, le=200, description="Number of branches to run ML for (top by revenue)"),
+    ml_concurrency: int = Query(4, ge=1, le=20, description="Concurrent ML jobs"),
 ):
     """
     Phân tích dữ liệu TẤT CẢ chi nhánh với AI Agent (dành cho Admin)
     - Kiểm tra database trước, nếu có report thì trả về luôn (tránh gọi AI nhiều lần)
     - Nếu force_refresh=True hoặc không có trong DB thì mới gọi AI
-    - Thu thập 6 API từ order-service cho tất cả chi nhánh
-    - Tổng hợp thành context
+    - Thu thập dữ liệu từ `daily_branch_metrics` cho tất cả chi nhánh
+    - (Tuỳ chọn) enrich một phần chi nhánh với bất thường + dự báo (include_ml + ml_branch_limit)
     - Xử lý với LangChain + OpenAI GPT-4o
     - Đánh giá tình hình từng chi nhánh và so sánh giữa các chi nhánh
     
@@ -282,7 +297,10 @@ async def analyze_all_branches_with_ai(
         
         # Thu thập 6 API từ các service cho tất cả chi nhánh
         aggregated_data = await ai_agent_service.collect_all_branches_data(
-            target_date=target_date
+            target_date=target_date,
+            include_ml=include_ml,
+            ml_branch_limit=ml_branch_limit,
+            ml_concurrency=ml_concurrency,
         )
         
         # 2. Xử lý với AI
@@ -363,6 +381,9 @@ async def analyze_all_branches_with_ai_get(
     query: Optional[str] = Query(None, description="Optional specific query/question"),
     save_to_db: bool = Query(True, description="Save report to database"),
     force_refresh: bool = Query(False, description="Force refresh - ignore existing report in database"),
+    include_ml: bool = Query(True, description="Include anomaly detection + forecast (may be expensive)"),
+    ml_branch_limit: int = Query(10, ge=1, le=200, description="Number of branches to run ML for (top by revenue)"),
+    ml_concurrency: int = Query(4, ge=1, le=20, description="Concurrent ML jobs"),
     db: Session = Depends(get_db)
 ):
     """
@@ -373,5 +394,13 @@ async def analyze_all_branches_with_ai_get(
         date=date,
         query=query
     )
-    return await analyze_all_branches_with_ai(request, db=db, save_to_db=save_to_db, force_refresh=force_refresh)
+    return await analyze_all_branches_with_ai(
+        request,
+        db=db,
+        save_to_db=save_to_db,
+        force_refresh=force_refresh,
+        include_ml=include_ml,
+        ml_branch_limit=ml_branch_limit,
+        ml_concurrency=ml_concurrency,
+    )
 

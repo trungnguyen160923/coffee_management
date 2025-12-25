@@ -41,36 +41,44 @@ class ConfidenceService:
         - Data Freshness (30%): Độ mới của dữ liệu
         """
         try:
-            # Danh sách 8 sources cần kiểm tra
-            data_sources = [
-                "revenue_metrics",
-                "customer_metrics",
-                "product_metrics",
-                "review_metrics",
-                "inventory_metrics",
-                "material_cost_metrics",
-                "isolation_forest_anomaly",
-                "prophet_forecast"
-            ]
+            # Support both legacy (6 API) and new (daily_branch_metrics) payloads.
+            if "daily_branch_metrics" in aggregated_data:
+                data_sources = [
+                    "daily_branch_metrics",
+                    "isolation_forest_anomaly",
+                    "prophet_forecast",
+                ]
+            else:
+                # Legacy: 6 API + 2 ML
+                data_sources = [
+                    "revenue_metrics",
+                    "customer_metrics",
+                    "product_metrics",
+                    "review_metrics",
+                    "inventory_metrics",
+                    "material_cost_metrics",
+                    "isolation_forest_anomaly",
+                    "prophet_forecast",
+                ]
             
             # 1. Tính API Success Rate (40%)
             successful_apis = 0
-            total_non_null_ratios = []
+            # Completeness should reflect missing/empty sources too (treat as 0.0)
+            total_non_null_ratios: List[float] = []
             
             for source_key in data_sources:
                 source_data = aggregated_data.get(source_key, {})
                 
-                # Kiểm tra API thành công (không phải empty dict và không có error)
-                if source_data and isinstance(source_data, dict):
-                    # Không phải empty dict
-                    if len(source_data) > 0:
-                        # Không có error field
-                        if "error" not in source_data:
-                            successful_apis += 1
-                            
-                            # Tính non-null ratio cho source này
-                            non_null_ratio = self._calculate_non_null_ratio(source_data)
-                            total_non_null_ratios.append(non_null_ratio)
+                # Completeness: always contribute a ratio per source (0.0 if missing/empty)
+                if isinstance(source_data, dict) and len(source_data) > 0:
+                    non_null_ratio = self._calculate_non_null_ratio(source_data)
+                else:
+                    non_null_ratio = 0.0
+                total_non_null_ratios.append(non_null_ratio)
+
+                # Kiểm tra source thành công (không empty dict và không có error)
+                if isinstance(source_data, dict) and len(source_data) > 0 and "error" not in source_data:
+                    successful_apis += 1
             
             api_success_rate = successful_apis / len(data_sources) if len(data_sources) > 0 else 0.0
             
@@ -175,7 +183,7 @@ class ConfidenceService:
         try:
             # Lấy target_date từ aggregated_data nếu không có
             if target_date is None:
-                date_str = aggregated_data.get("date")
+                date_str = aggregated_data.get("report_date") or aggregated_data.get("date")
                 if date_str:
                     if isinstance(date_str, str):
                         target_date = datetime.fromisoformat(date_str).date()
@@ -782,10 +790,17 @@ class ConfidenceService:
         }
         
         # 1. Tính Metrics Coverage
-        important_metrics = {
-            "totalRevenue", "orderCount", "customerCount",
-            "avgReviewScore", "uniqueProductsSold"
-        }
+        if "daily_branch_metrics" in aggregated_data:
+            important_metrics = {
+                "totalRevenue", "orderCount", "customerCount",
+                "avgReviewScore", "uniqueProductsSold", "materialCost",
+                "lowStockProducts", "outOfStockProducts"
+            }
+        else:
+            important_metrics = {
+                "totalRevenue", "orderCount", "customerCount",
+                "avgReviewScore", "uniqueProductsSold"
+            }
         
         metrics_mentioned = parsed_info.get("metrics_mentioned", set())
         if important_metrics:
@@ -825,10 +840,29 @@ class ConfidenceService:
                 result["anomalies_coverage"] = 0.5  # Đề cập anomalies nhưng không có thực tế
         
         # 3. Tính Fact Accuracy - So sánh số liệu AI với dữ liệu thực tế
-        revenue_data = aggregated_data.get("revenue_metrics", {})
-        customer_data = aggregated_data.get("customer_metrics", {})
-        review_data = aggregated_data.get("review_metrics", {})
-        product_data = aggregated_data.get("product_metrics", {})
+        if "daily_branch_metrics" in aggregated_data:
+            dm = aggregated_data.get("daily_branch_metrics", {}) or {}
+            revenue_data = {
+                "totalRevenue": dm.get("total_revenue", 0),
+                "orderCount": dm.get("order_count", 0),
+                "avgOrderValue": dm.get("avg_order_value", 0),
+            }
+            customer_data = {
+                "customerCount": dm.get("customer_count", 0),
+                "newCustomers": dm.get("new_customers", 0),
+                "repeatCustomers": dm.get("repeat_customers", 0),
+            }
+            review_data = {
+                "avgReviewScore": dm.get("avg_review_score", 0),
+            }
+            product_data = {
+                "uniqueProductsSold": dm.get("unique_products_sold", 0),
+            }
+        else:
+            revenue_data = aggregated_data.get("revenue_metrics", {})
+            customer_data = aggregated_data.get("customer_metrics", {})
+            review_data = aggregated_data.get("review_metrics", {})
+            product_data = aggregated_data.get("product_metrics", {})
         
         accuracy_checks = 0
         accurate_checks = 0

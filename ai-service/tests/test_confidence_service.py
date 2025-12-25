@@ -18,31 +18,22 @@ class TestDataQualityScore:
     def test_full_data_high_score(self):
         """Test với dữ liệu đầy đủ → score cao"""
         aggregated_data = {
-            "revenue_metrics": {
-                "totalRevenue": 1000000,
-                "orderCount": 50,
-                "avgOrderValue": 20000
-            },
-            "customer_metrics": {
-                "customerCount": 100,
-                "newCustomers": 20,
-                "repeatCustomers": 80
-            },
-            "product_metrics": {
-                "uniqueProductsSold": 30,
-                "productDiversityScore": 0.8
-            },
-            "review_metrics": {
-                "avgReviewScore": 4.5,
-                "totalReviews": 50
-            },
-            "inventory_metrics": {
-                "totalIngredients": 50,
-                "totalInventoryValue": 500000
-            },
-            "material_cost_metrics": {
-                "totalMaterialCost": 200000,
-                "totalTransactions": 10
+            "report_date": self.today.isoformat(),
+            "daily_branch_metrics": {
+                "branch_id": 1,
+                "report_date": self.today.isoformat(),
+                "total_revenue": 1000000,
+                "order_count": 50,
+                "avg_order_value": 20000,
+                "customer_count": 100,
+                "new_customers": 20,
+                "repeat_customers": 80,
+                "unique_products_sold": 30,
+                "product_diversity_score": 0.8,
+                "avg_review_score": 4.5,
+                "material_cost": 200000,
+                "low_stock_products": 2,
+                "out_of_stock_products": 1
             },
             "isolation_forest_anomaly": {
                 "co_bat_thuong": False,
@@ -63,12 +54,8 @@ class TestDataQualityScore:
     def test_missing_data_low_score(self):
         """Test với dữ liệu thiếu → score thấp"""
         aggregated_data = {
-            "revenue_metrics": {},
-            "customer_metrics": {},
-            "product_metrics": {},
-            "review_metrics": {},
-            "inventory_metrics": {},
-            "material_cost_metrics": {},
+            "report_date": self.today.isoformat(),
+            "daily_branch_metrics": {},
             "isolation_forest_anomaly": {},
             "prophet_forecast": {}
         }
@@ -83,12 +70,13 @@ class TestDataQualityScore:
     def test_partial_data_medium_score(self):
         """Test với dữ liệu một phần → score trung bình"""
         aggregated_data = {
-            "revenue_metrics": {"totalRevenue": 1000000},
-            "customer_metrics": {"customerCount": 100},
-            "product_metrics": {},
-            "review_metrics": {},
-            "inventory_metrics": {},
-            "material_cost_metrics": {},
+            "report_date": self.today.isoformat(),
+            "daily_branch_metrics": {
+                "branch_id": 1,
+                "report_date": self.today.isoformat(),
+                "total_revenue": 1000000,
+                "customer_count": 100
+            },
             "isolation_forest_anomaly": {},
             "prophet_forecast": {}
         }
@@ -105,12 +93,16 @@ class TestDataQualityScore:
         old_date = self.today - timedelta(days=5)
         
         aggregated_data = {
-            "revenue_metrics": {"totalRevenue": 1000000},
-            "customer_metrics": {"customerCount": 100},
-            "product_metrics": {"uniqueProductsSold": 30},
-            "review_metrics": {"avgReviewScore": 4.5},
-            "inventory_metrics": {"totalIngredients": 50},
-            "material_cost_metrics": {"totalMaterialCost": 200000},
+            "report_date": old_date.isoformat(),
+            "daily_branch_metrics": {
+                "branch_id": 1,
+                "report_date": old_date.isoformat(),
+                "total_revenue": 1000000,
+                "customer_count": 100,
+                "unique_products_sold": 30,
+                "avg_review_score": 4.5,
+                "material_cost": 200000
+            },
             "isolation_forest_anomaly": {"co_bat_thuong": False},
             "prophet_forecast": {"do_tin_cay": {"phan_tram": 88}}
         }
@@ -125,12 +117,8 @@ class TestDataQualityScore:
     def test_api_error_handling(self):
         """Test xử lý khi API có error"""
         aggregated_data = {
-            "revenue_metrics": {"error": "API failed"},
-            "customer_metrics": {"customerCount": 100},
-            "product_metrics": {},
-            "review_metrics": {},
-            "inventory_metrics": {},
-            "material_cost_metrics": {},
+            "report_date": self.today.isoformat(),
+            "daily_branch_metrics": {},
             "isolation_forest_anomaly": {},
             "prophet_forecast": {}
         }

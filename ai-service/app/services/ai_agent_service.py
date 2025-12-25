@@ -1,6 +1,11 @@
 """
 AI Agent Service using LangChain + OpenAI GPT-4o
-Tổng hợp dữ liệu từ các service (Tool 1: Revenue, Inventory, Material Cost; Tool 3: Review Metrics) và xử lý với AI
+
+IMPORTANT (Dec 2025):
+- Thay vì gọi 6 API (order-service + catalog-service) để lấy số liệu thống kê,
+  service này sẽ ưu tiên đọc trực tiếp từ bảng `daily_branch_metrics` trong `analytics_db`.
+- Để tránh phá vỡ các phần còn lại (ConfidenceService, summary extraction, prompt),
+  payload vẫn giữ shape `revenue_metrics/customer_metrics/...` nhưng dữ liệu được map từ DB.
 """
 import json
 import sys
@@ -14,6 +19,8 @@ from app.config import settings
 from app.clients.order_client import OrderServiceClient
 from app.clients.catalog_client import CatalogServiceClient
 from app.services.confidence_service import ConfidenceService
+from app.database import SessionLocal
+from app.models.daily_metrics import DailyBranchMetrics
 import logging
 
 logger = logging.getLogger(__name__)
@@ -44,6 +51,95 @@ class AIAgentService:
         else:
             logger.warning("OpenAI API key not configured. AI features will be disabled.")
             self.llm = None
+
+    @staticmethod
+    def _safe_float(value: Any, default: float = 0.0) -> float:
+        """Convert Decimal/Numeric/None to float safely."""
+        if value is None:
+            return default
+        if isinstance(value, (int, float)):
+            return float(value)
+        if hasattr(value, "__float__"):
+            try:
+                return float(value)
+            except Exception:
+                return default
+        return default
+
+    def _get_daily_branch_metrics_row(
+        self,
+        branch_id: int,
+        target_date: date,
+    ) -> Optional[DailyBranchMetrics]:
+        """Fetch a single DailyBranchMetrics row for branch/date from analytics_db."""
+        db = SessionLocal()
+        try:
+            return (
+                db.query(DailyBranchMetrics)
+                .filter(
+                    DailyBranchMetrics.branch_id == branch_id,
+                    DailyBranchMetrics.report_date == target_date,
+                )
+                .first()
+            )
+        finally:
+            db.close()
+
+    def _serialize_daily_branch_metrics(
+        self,
+        row: Optional[DailyBranchMetrics],
+    ) -> Dict[str, Any]:
+        """Serialize `daily_branch_metrics` row to JSON-friendly dict (new canonical payload)."""
+        if row is None:
+            return {
+                "branch_id": None,
+                "report_date": None,
+            }
+
+        return {
+            "branch_id": int(row.branch_id),
+            "report_date": row.report_date.isoformat() if row.report_date else None,
+            "total_revenue": self._safe_float(row.total_revenue, 0.0),
+            "order_count": int(row.order_count or 0),
+            "avg_order_value": self._safe_float(row.avg_order_value, 0.0),
+            "customer_count": int(row.customer_count or 0),
+            "repeat_customers": int(row.repeat_customers or 0),
+            "new_customers": int(row.new_customers or 0),
+            "unique_products_sold": int(row.unique_products_sold or 0),
+            "top_selling_product_id": row.top_selling_product_id,
+            "product_diversity_score": self._safe_float(row.product_diversity_score, 0.0),
+            "peak_hour": int(row.peak_hour or 0),
+            "day_of_week": int(row.day_of_week or 0) if row.day_of_week is not None else None,
+            "is_weekend": bool(row.is_weekend) if row.is_weekend is not None else None,
+            "avg_preparation_time_seconds": int(row.avg_preparation_time_seconds or 0) if row.avg_preparation_time_seconds is not None else None,
+            "staff_efficiency_score": self._safe_float(row.staff_efficiency_score, 0.0) if row.staff_efficiency_score is not None else None,
+            "avg_review_score": float(row.avg_review_score or 0.0),
+            "material_cost": self._safe_float(row.material_cost, 0.0),
+            "waste_percentage": self._safe_float(row.waste_percentage, 0.0) if row.waste_percentage is not None else None,
+            "low_stock_products": int(row.low_stock_products or 0),
+            "out_of_stock_products": int(row.out_of_stock_products or 0),
+            "created_at": row.created_at.isoformat() if getattr(row, "created_at", None) else None,
+        }
+
+    def _derive_branch_kpis(self, metrics: Dict[str, Any]) -> Dict[str, Any]:
+        """Compute common KPIs from daily_branch_metrics row (profit, retention, etc.)."""
+        total_revenue = self._safe_float(metrics.get("total_revenue"), 0.0)
+        material_cost = self._safe_float(metrics.get("material_cost"), 0.0)
+        customer_count = int(metrics.get("customer_count") or 0)
+        repeat_customers = int(metrics.get("repeat_customers") or 0)
+        order_count = int(metrics.get("order_count") or 0)
+
+        profit = total_revenue - material_cost
+        profit_margin = (profit / total_revenue) if total_revenue > 0 else 0.0
+        retention_rate = (repeat_customers / customer_count) if customer_count > 0 else 0.0
+        orders_per_customer = (order_count / customer_count) if customer_count > 0 else 0.0
+
+        return {
+            "profit": profit,
+            "profit_margin": profit_margin,
+            "customer_retention_rate": retention_rate,
+            "orders_per_customer": orders_per_customer,
+        }
     
     def get_isolation_forest_json(
         self,
@@ -226,81 +322,31 @@ class AIAgentService:
         target_date: date
     ) -> Dict[str, Any]:
         """
-        Thu thập dữ liệu từ các service (6 API):
-        Order Service (4 API):
-        1. Revenue metrics
-        2. Customer metrics
-        3. Product metrics
-        4. Review metrics
-        Catalog Service (2 API):
-        5. Inventory metrics
-        6. Material cost metrics
+        Thu thập dữ liệu thống kê cho 1 chi nhánh.
+
+        Trước đây dùng 6 API (order-service + catalog-service). Hiện tại ưu tiên đọc từ
+        bảng `analytics_db.daily_branch_metrics` và map sang cùng shape payload cũ
+        (`revenue_metrics/customer_metrics/...`) để tương thích downstream.
         """
         try:
-            # Chạy song song tất cả 6 API để tối ưu thời gian
-            # LƯU Ý: Tất cả các API này HOÀN TOÀN ĐỘC LẬP với nhau:
-            # - Mỗi API chỉ cần branch_id và date, không cần kết quả của API khác
-            # - Không có dependency giữa các API
-            # - Có thể chạy song song an toàn
-            # Order Service APIs (4 API) + Catalog Service APIs (2 API)
-            revenue_data, customer_data, product_data, review_data, inventory_data, material_cost_data = await asyncio.gather(
-                self.order_client.get_revenue_metrics(branch_id, target_date),
-                self.order_client.get_customer_metrics(branch_id, target_date),
-                self.order_client.get_product_metrics(branch_id, target_date),
-                self.order_client.get_review_metrics(branch_id, target_date),
-                self.catalog_client.get_inventory_metrics(branch_id, target_date),
-                self.catalog_client.get_material_cost_metrics(branch_id, target_date, target_date),
-                return_exceptions=True  # Trả về exception thay vì raise
-            )
-            
-            # Xử lý exceptions nếu có
-            if isinstance(revenue_data, Exception):
-                logger.error(f"Error fetching revenue metrics: {revenue_data}")
-                revenue_data = None
-            if isinstance(customer_data, Exception):
-                logger.error(f"Error fetching customer metrics: {customer_data}")
-                customer_data = None
-            if isinstance(product_data, Exception):
-                logger.error(f"Error fetching product metrics: {product_data}")
-                product_data = None
-            if isinstance(review_data, Exception):
-                logger.error(f"Error fetching review metrics: {review_data}")
-                review_data = None
-            if isinstance(inventory_data, Exception):
-                logger.error(f"Error fetching inventory metrics: {inventory_data}")
-                inventory_data = None
-            if isinstance(material_cost_data, Exception):
-                logger.error(f"Error fetching material cost metrics: {material_cost_data}")
-                material_cost_data = None
-            
-            # Default structure khi không có data (giống backend Java trả về)
-            if review_data is None:
-                review_data = {
-                    "avgReviewScore": 0.0,
-                    "totalReviews": 0,
-                    "reviewDistribution": {},
-                    "positiveReviews": 0,
-                    "negativeReviews": 0,
-                    "reviewRate": 0.0,
-                    "recentReviews": []
-                }
-            
+            # 1) Load daily metrics row from DB
+            row = self._get_daily_branch_metrics_row(branch_id, target_date)
+            daily_metrics = self._serialize_daily_branch_metrics(row)
+            derived = self._derive_branch_kpis(daily_metrics) if row else {}
+
             # 7. Isolation Forest Anomaly Detection JSON
             isolation_forest_data = self.get_isolation_forest_json(branch_id, target_date)
             
             # 8. Prophet Forecast JSON
             prophet_forecast_data = self.get_prophet_forecast_json(branch_id, target_date)
             
-            # Tổng hợp thành một dictionary với đầy đủ 6 API + 2 ML predictions
+            # Tổng hợp: chỉ dùng dữ liệu daily_branch_metrics (không còn format 6 API)
             aggregated_data = {
+                "source": "daily_branch_metrics",
                 "branch_id": branch_id,
-                "date": target_date.isoformat(),
-                "revenue_metrics": revenue_data or {},
-                "customer_metrics": customer_data or {},
-                "product_metrics": product_data or {},
-                "review_metrics": review_data,
-                "inventory_metrics": inventory_data or {},
-                "material_cost_metrics": material_cost_data or {},
+                "report_date": target_date.isoformat(),
+                "daily_branch_metrics": daily_metrics,
+                "derived_kpis": derived,
                 "isolation_forest_anomaly": isolation_forest_data or {},
                 "prophet_forecast": prophet_forecast_data or {}
             }
@@ -329,21 +375,21 @@ class AIAgentService:
                 aggregated_data["data_quality_score"] = 0.0
                 aggregated_data["ml_confidence_score"] = 0.0
             
-            logger.info(f"Collected data from 6 APIs + 2 ML predictions - Revenue: {bool(revenue_data)}, Customer: {bool(customer_data)}, Product: {bool(product_data)}, Review: {bool(review_data)}, Inventory: {bool(inventory_data)}, Material Cost: {bool(material_cost_data)}, Isolation Forest: {bool(isolation_forest_data)}, Prophet: {bool(prophet_forecast_data)}")
+            logger.info(
+                "Collected data from daily_branch_metrics + 2 ML predictions - "
+                f"HasRow: {bool(row)}, IsolationForest: {bool(isolation_forest_data)}, Prophet: {bool(prophet_forecast_data)}"
+            )
             
             return aggregated_data
             
         except Exception as e:
             logger.error(f"Error collecting data: {e}", exc_info=True)
             return {
+                "source": "daily_branch_metrics",
                 "branch_id": branch_id,
-                "date": target_date.isoformat(),
-                "revenue_metrics": {},
-                "customer_metrics": {},
-                "product_metrics": {},
-                "review_metrics": {},
-                "inventory_metrics": {},
-                "material_cost_metrics": {},
+                "report_date": target_date.isoformat(),
+                "daily_branch_metrics": {},
+                "derived_kpis": {},
                 "isolation_forest_anomaly": {},
                 "prophet_forecast": {},
                 "data_quality_score": 0.0,
@@ -471,15 +517,11 @@ Hãy phân tích toàn diện dữ liệu này và đưa ra:
         return """Bạn là một chuyên gia phân tích dữ liệu cho hệ thống quản lý cà phê.
 Nhiệm vụ của bạn là phân tích dữ liệu thống kê từ các service và đưa ra insights có giá trị.
 
-Dữ liệu bạn nhận được bao gồm (6 API) và 2 ML predictions:
-- Revenue Metrics: Doanh thu, số đơn, giá trị đơn trung bình, giờ cao điểm
-- Customer Metrics: Số lượng khách hàng, khách hàng mới, khách hàng quay lại
-- Product Metrics: Số sản phẩm bán được, sản phẩm bán chạy, đa dạng sản phẩm
-- Review Metrics: Đánh giá khách hàng, điểm trung bình, phản hồi tích cực/tiêu cực
-- Inventory Metrics: Tồn kho, sản phẩm sắp hết, sản phẩm hết hàng
-- Material Cost Metrics: Chi phí nguyên liệu
-- Anomaly Detection: Dự đoán bất thường (chứa danh sách các chỉ tiêu bất thường)
-- Forecast: Dự đoán tương lai
+Dữ liệu bạn nhận được được lấy từ bảng `daily_branch_metrics` (theo ngày) và 2 ML predictions:
+- daily_branch_metrics: tổng doanh thu, số đơn, giá trị đơn trung bình, khách hàng, sản phẩm, tồn kho, chi phí...
+- derived_kpis: các KPI suy ra (profit, profit_margin, retention_rate...)
+- anomaly_detection: dự đoán bất thường (chứa danh sách các chỉ tiêu bất thường)
+- forecast: dự báo tương lai
 
 QUAN TRỌNG: 
 - Khi phân tích các vấn đề bất thường, bạn PHẢI liệt kê TẤT CẢ các chỉ tiêu bất thường, không được bỏ sót bất kỳ chỉ tiêu nào. Format ngắn gọn: chỉ cần tên chỉ tiêu, mức độ thay đổi (tăng/giảm %).
@@ -493,15 +535,11 @@ Trả lời bằng tiếng Việt, rõ ràng và dễ hiểu."""
         return """Bạn là một chuyên gia tư vấn quản lý cho hệ thống quản lý cà phê.
 Nhiệm vụ của bạn là phân tích dữ liệu, đặc biệt tập trung vào phản hồi khách hàng và đưa ra các khuyến nghị chiến lược.
 
-Dữ liệu bạn nhận được bao gồm (6 API) và 2 ML predictions:
-- Revenue Metrics: Doanh thu, số đơn, giá trị đơn trung bình
-- Customer Metrics: Số lượng khách hàng, khách hàng mới, khách hàng quay lại
-- Product Metrics: Số sản phẩm bán được, sản phẩm bán chạy, đa dạng sản phẩm
-- Review Metrics: Đánh giá khách hàng (điểm trung bình, tổng số đánh giá, phân bố điểm, phản hồi tích cực/tiêu cực, tỷ lệ đánh giá, các đánh giá gần đây)
-- Inventory Metrics: Tồn kho, sản phẩm sắp hết, sản phẩm hết hàng
-- Material Cost Metrics: Chi phí nguyên liệu
-- Anomaly Detection: Dự đoán bất thường (chứa danh sách các chỉ tiêu bất thường)
-- Forecast: Dự đoán tương lai
+Dữ liệu bạn nhận được được lấy từ bảng `daily_branch_metrics` (theo ngày) và 2 ML predictions:
+- daily_branch_metrics: doanh thu, đơn, khách, sản phẩm, điểm review, tồn kho, chi phí...
+- derived_kpis: các KPI suy ra (profit, profit_margin, retention_rate...)
+- anomaly_detection: dự đoán bất thường
+- forecast: dự báo tương lai
 
 QUAN TRỌNG: 
 - Khi phân tích các vấn đề bất thường, bạn PHẢI liệt kê TẤT CẢ các chỉ tiêu bất thường, không được bỏ sót bất kỳ chỉ tiêu nào. Format ngắn gọn: chỉ cần tên chỉ tiêu, mức độ thay đổi (tăng/giảm %).
@@ -515,15 +553,11 @@ Trả lời bằng tiếng Việt, chuyên nghiệp và có tính thực tiễn.
         return """Bạn là một chuyên gia phân tích dữ liệu cho hệ thống quản lý cà phê.
 Nhiệm vụ của bạn là phân tích dữ liệu từ các service và đưa ra insights có giá trị.
 
-Dữ liệu bạn nhận được bao gồm (6 API) và 2 ML predictions:
-- Revenue Metrics: Doanh thu, số đơn, giá trị đơn trung bình, giờ cao điểm
-- Customer Metrics: Số lượng khách hàng, khách hàng mới, khách hàng quay lại
-- Product Metrics: Số sản phẩm bán được, sản phẩm bán chạy, đa dạng sản phẩm
-- Review Metrics: Đánh giá khách hàng, điểm trung bình, phản hồi tích cực/tiêu cực
-- Inventory Metrics: Tồn kho, sản phẩm sắp hết, sản phẩm hết hàng
-- Material Cost Metrics: Chi phí nguyên liệu
-- Anomaly Detection: Dự đoán bất thường (chứa danh sách các chỉ tiêu bất thường)
-- Forecast: Dự đoán tương lai
+Dữ liệu bạn nhận được được lấy từ bảng `daily_branch_metrics` (theo ngày) và 2 ML predictions:
+- daily_branch_metrics: tổng doanh thu, số đơn, AOV, khách hàng, sản phẩm, điểm review, tồn kho, chi phí...
+- derived_kpis: các KPI suy ra (profit, profit_margin, retention_rate...)
+- anomaly_detection: dự đoán bất thường
+- forecast: dự báo tương lai
 
 QUAN TRỌNG: 
 - Khi phân tích các vấn đề bất thường, bạn PHẢI liệt kê TẤT CẢ các chỉ tiêu bất thường, không được bỏ sót bất kỳ chỉ tiêu nào. Format ngắn gọn: chỉ cần tên chỉ tiêu, mức độ thay đổi (tăng/giảm %).
@@ -533,57 +567,31 @@ Hãy phân tích một cách chuyên nghiệp, đưa ra các insights cụ thể
 Trả lời bằng tiếng Việt, rõ ràng và dễ hiểu."""
     
     def _extract_summary(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Trích xuất summary từ dữ liệu (6 API)"""
-        revenue = data.get("revenue_metrics", {})
-        customer = data.get("customer_metrics", {})
-        product = data.get("product_metrics", {})
-        review = data.get("review_metrics", {})
-        inventory = data.get("inventory_metrics", {})
-        material_cost = data.get("material_cost_metrics", {})
-        
-        # Convert BigDecimal to float if needed
-        def safe_float(value, default=0):
-            if value is None:
-                return default
-            if isinstance(value, (int, float)):
-                return float(value)
-            if hasattr(value, '__float__'):
-                return float(value)
-            return default
-        
+        """Trích xuất summary từ dữ liệu daily_branch_metrics (không còn 6 API)."""
+        metrics = data.get("daily_branch_metrics", {}) if isinstance(data.get("daily_branch_metrics"), dict) else {}
+        derived = data.get("derived_kpis", {}) if isinstance(data.get("derived_kpis"), dict) else {}
+
+        total_revenue = self._safe_float(metrics.get("total_revenue"), 0.0)
+        material_cost = self._safe_float(metrics.get("material_cost"), 0.0)
+
         return {
-            # Revenue Metrics
-            "total_revenue": safe_float(revenue.get("totalRevenue")),
-            "order_count": revenue.get("orderCount", 0),
-            "avg_order_value": safe_float(revenue.get("avgOrderValue")),
-            "peak_hour": revenue.get("peakHour", 0),
-            # Customer Metrics
-            "customer_count": customer.get("customerCount", 0),
-            "new_customers": customer.get("newCustomers", 0),
-            "repeat_customers": customer.get("repeatCustomers", 0),
-            "customer_retention_rate": safe_float(customer.get("customerRetentionRate")),
-            "unique_customers": customer.get("uniqueCustomers", 0),
-            # Product Metrics
-            "unique_products_sold": product.get("uniqueProductsSold", 0),
-            "product_diversity_score": safe_float(product.get("productDiversityScore")),
-            "top_selling_product_id": product.get("topSellingProductId"),
-            "top_selling_product_name": product.get("topSellingProductName"),
-            # Review Metrics
-            "avg_review_score": safe_float(review.get("avgReviewScore")),
-            "total_reviews": review.get("totalReviews", 0),
-            "positive_reviews": review.get("positiveReviews", 0),
-            "negative_reviews": review.get("negativeReviews", 0),
-            "review_rate": safe_float(review.get("reviewRate")),
-            # Inventory Metrics
-            "low_stock_count": inventory.get("lowStockProducts", 0),
-            "out_of_stock_count": inventory.get("outOfStockProducts", 0),
-            "total_inventory_value": safe_float(inventory.get("totalInventoryValue")),
-            # Material Cost Metrics
-            "total_material_cost": safe_float(material_cost.get("totalMaterialCost")),
-            "profit_margin": (
-                safe_float(revenue.get("totalRevenue")) - safe_float(material_cost.get("totalMaterialCost"))
-                if safe_float(revenue.get("totalRevenue")) > 0 else 0
-            )
+            "total_revenue": total_revenue,
+            "order_count": int(metrics.get("order_count") or 0),
+            "avg_order_value": self._safe_float(metrics.get("avg_order_value"), 0.0),
+            "peak_hour": int(metrics.get("peak_hour") or 0),
+            "customer_count": int(metrics.get("customer_count") or 0),
+            "new_customers": int(metrics.get("new_customers") or 0),
+            "repeat_customers": int(metrics.get("repeat_customers") or 0),
+            "customer_retention_rate": self._safe_float(derived.get("customer_retention_rate"), 0.0),
+            "unique_products_sold": int(metrics.get("unique_products_sold") or 0),
+            "product_diversity_score": self._safe_float(metrics.get("product_diversity_score"), 0.0),
+            "top_selling_product_id": metrics.get("top_selling_product_id"),
+            "avg_review_score": self._safe_float(metrics.get("avg_review_score"), 0.0),
+            "low_stock_products": int(metrics.get("low_stock_products") or 0),
+            "out_of_stock_products": int(metrics.get("out_of_stock_products") or 0),
+            "total_material_cost": material_cost,
+            "profit": self._safe_float(derived.get("profit"), total_revenue - material_cost),
+            "profit_margin": self._safe_float(derived.get("profit_margin"), 0.0),
         }
     
     def _extract_recommendations(self, analysis_text: str) -> list[str]:
@@ -637,93 +645,180 @@ Trả lời bằng tiếng Việt, rõ ràng và dễ hiểu."""
     
     async def collect_all_branches_data(
         self,
-        target_date: date
+        target_date: date,
+        include_ml: bool = True,
+        ml_branch_limit: int = 10,
+        ml_concurrency: int = 4,
     ) -> Dict[str, Any]:
         """
-        Thu thập dữ liệu từ các service cho TẤT CẢ chi nhánh (6 API mới):
-        Order Service (4 API):
-        1. All branches revenue metrics
-        2. All branches customer metrics
-        3. All branches product metrics
-        4. All branches review metrics
-        Order Service (2 API):
-        5. All branches stats (cần date range, dùng target_date làm cả 2)
-        6. All branches revenue (cần date range, dùng target_date làm cả 2)
+        Thu thập dữ liệu thống kê cho TẤT CẢ chi nhánh từ `daily_branch_metrics`.
+
+        Optionally enrich a subset of branches with:
+        - `isolation_forest_anomaly`
+        - `prophet_forecast`
+
+        Notes:
+        - ML enrichment can be expensive; use `ml_branch_limit` + `ml_concurrency` to control cost.
         """
         try:
-            # Chạy song song tất cả 6 API để tối ưu thời gian
-            # LƯU Ý: Tất cả các API này HOÀN TOÀN ĐỘC LẬP với nhau:
-            # - Mỗi API chỉ cần date (hoặc date range), không cần kết quả của API khác
-            # - Không có dependency giữa các API
-            # - Có thể chạy song song an toàn
-            all_revenue_data, all_customer_data, all_product_data, all_review_data, all_stats_data, all_revenue_range_data = await asyncio.gather(
-                self.order_client.get_all_branches_revenue_metrics(target_date),
-                self.order_client.get_all_branches_customer_metrics(target_date),
-                self.order_client.get_all_branches_product_metrics(target_date),
-                self.order_client.get_all_branches_review_metrics(target_date),
-                self.order_client.get_all_branches_stats(target_date, target_date),
-                self.order_client.get_all_branches_revenue(target_date, target_date),
-                return_exceptions=True  # Trả về exception thay vì raise
+            db = SessionLocal()
+            try:
+                rows = (
+                    db.query(DailyBranchMetrics)
+                    .filter(DailyBranchMetrics.report_date == target_date)
+                    .order_by(DailyBranchMetrics.branch_id.asc())
+                    .all()
+                )
+            finally:
+                db.close()
+
+            branches: list[Dict[str, Any]] = []
+            total_revenue = 0.0
+            total_orders = 0
+            total_customers = 0
+            total_new_customers = 0
+            total_repeat_customers = 0
+            total_unique_products_sold = 0
+            sum_product_diversity = 0.0
+            sum_review_score = 0.0
+            review_count = 0
+            total_material_cost = 0.0
+
+            for row in rows:
+                daily_metrics = self._serialize_daily_branch_metrics(row)
+                derived_kpis = self._derive_branch_kpis(daily_metrics)
+
+                branch_total_revenue = self._safe_float(daily_metrics.get("total_revenue"), 0.0)
+                branch_orders = int(daily_metrics.get("order_count") or 0)
+                branch_customers = int(daily_metrics.get("customer_count") or 0)
+                branch_new_customers = int(daily_metrics.get("new_customers") or 0)
+                branch_repeat_customers = int(daily_metrics.get("repeat_customers") or 0)
+                branch_unique_products_sold = int(daily_metrics.get("unique_products_sold") or 0)
+                branch_product_diversity = self._safe_float(daily_metrics.get("product_diversity_score"), 0.0)
+                branch_review_score = self._safe_float(daily_metrics.get("avg_review_score"), 0.0)
+                branch_material_cost = self._safe_float(daily_metrics.get("material_cost"), 0.0)
+
+                total_revenue += branch_total_revenue
+                total_orders += branch_orders
+                total_customers += branch_customers
+                total_new_customers += branch_new_customers
+                total_repeat_customers += branch_repeat_customers
+                total_unique_products_sold += branch_unique_products_sold
+                sum_product_diversity += branch_product_diversity
+                total_material_cost += branch_material_cost
+                if branch_review_score > 0:
+                    sum_review_score += branch_review_score
+                    review_count += 1
+
+                branches.append({
+                    "branch_id": int(row.branch_id),
+                    "report_date": target_date.isoformat(),
+                    "daily_branch_metrics": daily_metrics,
+                    "derived_kpis": derived_kpis,
+                    # ML enrichment is added later (optional)
+                    "isolation_forest_anomaly": {},
+                    "prophet_forecast": {},
+                })
+
+            avg_order_value = (total_revenue / total_orders) if total_orders > 0 else 0.0
+            overall_customer_retention_rate = (total_repeat_customers / total_customers) if total_customers > 0 else 0.0
+            overall_product_diversity_score = (sum_product_diversity / len(rows)) if rows else 0.0
+            overall_avg_review_score = (sum_review_score / review_count) if review_count > 0 else 0.0
+            total_profit = total_revenue - total_material_cost
+            overall_profit_margin = (total_profit / total_revenue) if total_revenue > 0 else 0.0
+
+            active_branches = 0
+            for b in branches:
+                dm = b.get("daily_branch_metrics", {}) or {}
+                if self._safe_float(dm.get("total_revenue"), 0.0) > 0 or int(dm.get("order_count") or 0) > 0:
+                    active_branches += 1
+
+            # Top/Bottom branches by revenue
+            branches_sorted_by_revenue = sorted(
+                branches,
+                key=lambda x: self._safe_float((x.get("daily_branch_metrics", {}) or {}).get("total_revenue"), 0.0),
+                reverse=True
             )
-            
-            # Xử lý exceptions nếu có
-            if isinstance(all_revenue_data, Exception):
-                logger.error(f"Error fetching all branches revenue metrics: {all_revenue_data}")
-                all_revenue_data = None
-            if isinstance(all_customer_data, Exception):
-                logger.error(f"Error fetching all branches customer metrics: {all_customer_data}")
-                all_customer_data = None
-            if isinstance(all_product_data, Exception):
-                logger.error(f"Error fetching all branches product metrics: {all_product_data}")
-                all_product_data = None
-            if isinstance(all_review_data, Exception):
-                logger.error(f"Error fetching all branches review metrics: {all_review_data}")
-                all_review_data = None
-            if isinstance(all_stats_data, Exception):
-                logger.error(f"Error fetching all branches stats: {all_stats_data}")
-                all_stats_data = None
-            if isinstance(all_revenue_range_data, Exception):
-                logger.error(f"Error fetching all branches revenue range: {all_revenue_range_data}")
-                all_revenue_range_data = None
-            
-            # Default structure khi không có data
-            if all_review_data is None:
-                all_review_data = {
-                    "overallAvgReviewScore": 0.0,
-                    "totalReviews": 0,
-                    "reviewDistribution": {},
-                    "totalPositiveReviews": 0,
-                    "totalNegativeReviews": 0,
-                    "overallReviewRate": 0.0,
-                    "recentReviews": [],
-                    "branchReviewStats": []
-                }
-            
-            # Tổng hợp thành một dictionary với đầy đủ 6 API
+
+            # Optional ML enrichment for a subset of branches (default: top N by revenue)
+            enriched_branches_count = 0
+            if include_ml and ml_branch_limit > 0 and branches_sorted_by_revenue:
+                # Bound concurrency to at least 1
+                ml_concurrency = max(1, int(ml_concurrency or 1))
+                limit = max(1, int(ml_branch_limit))
+                targets = branches_sorted_by_revenue[:min(limit, len(branches_sorted_by_revenue))]
+
+                sem = asyncio.Semaphore(ml_concurrency)
+
+                async def enrich_one(branch_obj: Dict[str, Any]) -> None:
+                    nonlocal enriched_branches_count
+                    bid = int(branch_obj.get("branch_id") or 0)
+                    if bid <= 0:
+                        return
+                    async with sem:
+                        # Run sync ML calls in thread to avoid blocking the event loop.
+                        iso = await asyncio.to_thread(self.get_isolation_forest_json, bid, target_date)
+                        fc = await asyncio.to_thread(self.get_prophet_forecast_json, bid, target_date)
+                        branch_obj["isolation_forest_anomaly"] = iso or {}
+                        branch_obj["prophet_forecast"] = fc or {}
+                        enriched_branches_count += 1
+
+                await asyncio.gather(*[enrich_one(b) for b in targets])
+
             aggregated_data = {
-                "date": target_date.isoformat(),
-                "all_branches_revenue_metrics": all_revenue_data or {},
-                "all_branches_customer_metrics": all_customer_data or {},
-                "all_branches_product_metrics": all_product_data or {},
-                "all_branches_review_metrics": all_review_data,
-                "all_branches_stats": all_stats_data or {},
-                "all_branches_revenue": all_revenue_range_data or {}
+                "source": "daily_branch_metrics",
+                "report_date": target_date.isoformat(),
+                "branches": branches,
+                "totals": {
+                    "total_branches": len(branches),
+                    "active_branches": active_branches,
+                    "total_revenue": total_revenue,
+                    "total_order_count": total_orders,
+                    "avg_order_value": avg_order_value,
+                    "total_customer_count": total_customers,
+                    "total_new_customers": total_new_customers,
+                    "total_repeat_customers": total_repeat_customers,
+                    "overall_customer_retention_rate": overall_customer_retention_rate,
+                    "total_unique_products_sold": total_unique_products_sold,
+                    "overall_product_diversity_score": overall_product_diversity_score,
+                    "overall_avg_review_score": overall_avg_review_score,
+                    "total_material_cost": total_material_cost,
+                    "total_profit": total_profit,
+                    "overall_profit_margin": overall_profit_margin,
+                },
+                "ml_enrichment": {
+                    "enabled": bool(include_ml),
+                    "branches_processed": enriched_branches_count,
+                    "ml_branch_limit": int(ml_branch_limit),
+                    "ml_concurrency": int(ml_concurrency),
+                },
+                "rankings": {
+                    "top_revenue_branches": [
+                        {"branch_id": b["branch_id"], "total_revenue": self._safe_float((b.get("daily_branch_metrics", {}) or {}).get("total_revenue"), 0.0)}
+                        for b in branches_sorted_by_revenue[:5]
+                    ],
+                    "bottom_revenue_branches": [
+                        {"branch_id": b["branch_id"], "total_revenue": self._safe_float((b.get("daily_branch_metrics", {}) or {}).get("total_revenue"), 0.0)}
+                        for b in list(reversed(branches_sorted_by_revenue[-5:]))
+                    ] if len(branches_sorted_by_revenue) >= 5 else [
+                        {"branch_id": b["branch_id"], "total_revenue": self._safe_float((b.get("daily_branch_metrics", {}) or {}).get("total_revenue"), 0.0)}
+                        for b in list(reversed(branches_sorted_by_revenue))
+                    ],
+                }
             }
-            
-            logger.info(f"Collected all branches data - Revenue: {bool(all_revenue_data)}, Customer: {bool(all_customer_data)}, Product: {bool(all_product_data)}, Review: {bool(all_review_data)}, Stats: {bool(all_stats_data)}, Revenue Range: {bool(all_revenue_range_data)}")
-            
+
+            logger.info(f"Collected all branches data from daily_branch_metrics - branches={len(branches)}")
             return aggregated_data
             
         except Exception as e:
             logger.error(f"Error collecting all branches data: {e}", exc_info=True)
             return {
-                "date": target_date.isoformat(),
-                "all_branches_revenue_metrics": {},
-                "all_branches_customer_metrics": {},
-                "all_branches_product_metrics": {},
-                "all_branches_review_metrics": {},
-                "all_branches_stats": {},
-                "all_branches_revenue": {},
+                "source": "daily_branch_metrics",
+                "report_date": target_date.isoformat(),
+                "branches": [],
+                "totals": {},
+                "ml_enrichment": {},
+                "rankings": {},
                 "error": str(e)
             }
     
@@ -864,67 +959,47 @@ Hãy trình bày rõ ràng, chi tiết và có cấu trúc để admin dễ dàn
         return """Bạn là một chuyên gia phân tích dữ liệu cấp cao cho hệ thống quản lý cà phê.
 Nhiệm vụ của bạn là đánh giá và phân tích tình hình TẤT CẢ các chi nhánh trong hệ thống.
 
-Dữ liệu bạn nhận được bao gồm 6 API tổng hợp từ tất cả chi nhánh:
-- All Branches Revenue Metrics: Tổng hợp doanh thu, số đơn, giá trị đơn trung bình từ tất cả chi nhánh
-- All Branches Customer Metrics: Tổng hợp số lượng khách hàng, khách hàng mới, khách hàng quay lại từ tất cả chi nhánh
-- All Branches Product Metrics: Tổng hợp sản phẩm bán được, sản phẩm bán chạy từ tất cả chi nhánh
-- All Branches Review Metrics: Tổng hợp đánh giá khách hàng, điểm trung bình từ tất cả chi nhánh (bao gồm branchReviewStats để xem từng chi nhánh)
-- All Branches Stats: Thống kê tổng hợp với branchSummaries cho từng chi nhánh
-- All Branches Revenue: Doanh thu tổng hợp với branchRevenueDetails cho từng chi nhánh
+Dữ liệu bạn nhận được được tổng hợp từ bảng `daily_branch_metrics` và có cấu trúc:
+- `branches`: danh sách từng chi nhánh, mỗi phần tử có `branch_id` và các nhóm chỉ số:
+  - daily_branch_metrics: các cột gốc theo ngày (doanh thu, đơn, khách, sản phẩm, tồn kho, chi phí...)
+  - derived_kpis: KPI suy ra (profit, profit_margin, retention_rate...)
+  - isolation_forest_anomaly: kết quả phát hiện bất thường (nếu có)
+  - prophet_forecast: kết quả dự báo tương lai (nếu có)
+- `totals`: tổng hợp toàn hệ thống
+- `rankings`: top/bottom chi nhánh theo doanh thu
 
 QUAN TRỌNG:
 - Bạn PHẢI đánh giá TỪNG CHI NHÁNH một cách chi tiết, không được bỏ sót
 - So sánh hiệu suất giữa các chi nhánh để xác định chi nhánh tốt nhất và kém nhất
 - Xác định các chi nhánh cần hỗ trợ khẩn cấp
 - Đưa ra khuyến nghị cụ thể cho từng chi nhánh dựa trên dữ liệu thực tế
-- Sử dụng dữ liệu từ branchReviewStats, branchSummaries, branchRevenueDetails để đánh giá từng chi nhánh
+- Ưu tiên dựa vào `branches[]` + `totals` + `rankings` để đánh giá từng chi nhánh
+- Nếu có `isolation_forest_anomaly` hoặc `prophet_forecast`, hãy tận dụng để nêu rủi ro và xu hướng (KHÔNG nhắc tên thuật toán trong báo cáo)
 
 Hãy phân tích một cách chuyên nghiệp, đưa ra các insights cụ thể và khuyến nghị hành động cho admin.
 Trả lời bằng tiếng Việt, rõ ràng, có cấu trúc và dễ hiểu."""
     
     def _extract_all_branches_summary(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Trích xuất summary từ dữ liệu tất cả chi nhánh"""
-        revenue = data.get("all_branches_revenue_metrics", {})
-        customer = data.get("all_branches_customer_metrics", {})
-        product = data.get("all_branches_product_metrics", {})
-        review = data.get("all_branches_review_metrics", {})
-        stats = data.get("all_branches_stats", {})
-        revenue_range = data.get("all_branches_revenue", {})
-        
-        # Convert BigDecimal to float if needed
-        def safe_float(value, default=0):
-            if value is None:
-                return default
-            if isinstance(value, (int, float)):
-                return float(value)
-            if hasattr(value, '__float__'):
-                return float(value)
-            return default
-        
+        totals = data.get("totals", {}) if isinstance(data.get("totals"), dict) else {}
+        rankings = data.get("rankings", {}) if isinstance(data.get("rankings"), dict) else {}
+
         return {
-            # Overall Metrics
-            "total_branches": stats.get("totalBranches", 0),
-            "active_branches": stats.get("activeBranches", 0),
-            "total_revenue": safe_float(revenue.get("totalRevenue")),
-            "total_order_count": revenue.get("totalOrderCount", 0),
-            "avg_order_value": safe_float(revenue.get("avgOrderValue")),
-            # Customer Metrics
-            "total_customer_count": customer.get("totalCustomerCount", 0),
-            "total_new_customers": customer.get("totalNewCustomers", 0),
-            "total_repeat_customers": customer.get("totalRepeatCustomers", 0),
-            "overall_customer_retention_rate": safe_float(customer.get("overallCustomerRetentionRate")),
-            # Product Metrics
-            "total_unique_products_sold": product.get("totalUniqueProductsSold", 0),
-            "overall_product_diversity_score": safe_float(product.get("overallProductDiversityScore")),
-            # Review Metrics
-            "overall_avg_review_score": safe_float(review.get("overallAvgReviewScore")),
-            "total_reviews": review.get("totalReviews", 0),
-            "total_positive_reviews": review.get("totalPositiveReviews", 0),
-            "total_negative_reviews": review.get("totalNegativeReviews", 0),
-            # Stats
-            "average_revenue_per_branch": safe_float(stats.get("averageRevenuePerBranch")),
-            "total_orders": stats.get("totalOrders", 0),
-            "average_orders_per_branch": safe_float(stats.get("averageOrdersPerBranch")),
-            # Revenue Range
-            "total_revenue_range": safe_float(revenue_range.get("totalRevenue"))
+            "total_branches": int(totals.get("total_branches", 0) or 0),
+            "active_branches": int(totals.get("active_branches", 0) or 0),
+            "total_revenue": self._safe_float(totals.get("total_revenue"), 0.0),
+            "total_order_count": int(totals.get("total_order_count", 0) or 0),
+            "avg_order_value": self._safe_float(totals.get("avg_order_value"), 0.0),
+            "total_customer_count": int(totals.get("total_customer_count", 0) or 0),
+            "total_new_customers": int(totals.get("total_new_customers", 0) or 0),
+            "total_repeat_customers": int(totals.get("total_repeat_customers", 0) or 0),
+            "overall_customer_retention_rate": self._safe_float(totals.get("overall_customer_retention_rate"), 0.0),
+            "total_unique_products_sold": int(totals.get("total_unique_products_sold", 0) or 0),
+            "overall_product_diversity_score": self._safe_float(totals.get("overall_product_diversity_score"), 0.0),
+            "overall_avg_review_score": self._safe_float(totals.get("overall_avg_review_score"), 0.0),
+            "total_material_cost": self._safe_float(totals.get("total_material_cost"), 0.0),
+            "total_profit": self._safe_float(totals.get("total_profit"), 0.0),
+            "overall_profit_margin": self._safe_float(totals.get("overall_profit_margin"), 0.0),
+            "top_revenue_branches": rankings.get("top_revenue_branches", []),
+            "bottom_revenue_branches": rankings.get("bottom_revenue_branches", []),
         }

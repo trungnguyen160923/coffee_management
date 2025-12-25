@@ -15,4 +15,8 @@ export default defineConfig({
     css: true,
     testTimeout: 15000, // Increase timeout for complex tests with modals and async operations
   },
+  server: {
+    host:'0.0.0.0',
+    allowedHosts: true,
+  }
 });

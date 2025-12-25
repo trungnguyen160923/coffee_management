@@ -42,9 +42,6 @@ import {
   PieChart,
   Pie,
   Cell,
-  Line,
-  Area,
-  AreaChart,
 } from 'recharts';
 
 // Import service for single branch data
@@ -66,7 +63,7 @@ import {
   SingleBranchYearSkeleton,
 } from './statistics';
 
-// Types for API response
+// Types for API response - Updated for daily_branch_metrics + ML enrichment
 interface AllBranchesAIAnalysisResponse {
   success: boolean;
   date: string;
@@ -91,16 +88,43 @@ interface AllBranchesAIAnalysisResponse {
     total_orders?: number;
     average_orders_per_branch?: number;
     total_revenue_range?: number;
+    total_material_cost?: number;
+    total_profit?: number;
+    overall_profit_margin?: number;
   };
   recommendations?: string[];
   raw_data?: {
     date?: string;
-    all_branches_revenue_metrics?: any;
-    all_branches_customer_metrics?: any;
-    all_branches_product_metrics?: any;
-    all_branches_review_metrics?: any;
-    all_branches_stats?: any;
-    all_branches_revenue?: any;
+    source?: string;
+    report_date?: string;
+    branches?: any[];
+    totals?: {
+      total_branches?: number;
+      active_branches?: number;
+      total_revenue?: number;
+      total_order_count?: number;
+      avg_order_value?: number;
+      total_customer_count?: number;
+      total_new_customers?: number;
+      total_repeat_customers?: number;
+      overall_customer_retention_rate?: number;
+      total_unique_products_sold?: number;
+      overall_product_diversity_score?: number;
+      overall_avg_review_score?: number;
+      total_material_cost?: number;
+      total_profit?: number;
+      overall_profit_margin?: number;
+    };
+    ml_enrichment?: {
+      enabled?: boolean;
+      branches_processed?: number;
+      ml_branch_limit?: number;
+      ml_concurrency?: number;
+    };
+    rankings?: {
+      top_revenue_branches?: any[];
+      bottom_revenue_branches?: any[];
+    };
   };
   message?: string;
 }
@@ -509,50 +533,51 @@ export default function MultiBranchDashboard() {
     }
   };
 
-  // Transform API response to branchesData format
+  // Transform API response to branchesData format - Updated for daily_branch_metrics
   const transformAPIDataToBranches = (data: AllBranchesAIAnalysisResponse): BranchData[] => {
     const rawData = data.raw_data;
-    if (!rawData) return [];
+    if (!rawData || !rawData.branches) return [];
 
-    const branchSummaries = rawData.all_branches_stats?.branchSummaries || [];
-    const branchCustomerStats = rawData.all_branches_customer_metrics?.branchCustomerStats || [];
-    const branchReviewStats = rawData.all_branches_review_metrics?.branchReviewStats || [];
-    const branchProductStats = rawData.all_branches_product_metrics?.branchProductStats || [];
+    return rawData.branches.map((branch: any) => {
+      const branchId = branch.branch_id;
+      const branchName = `Branch ${branchId}`;
 
-    return branchSummaries.map((summary: any) => {
-      const branchId = summary.branchId;
-      const branchName = summary.branchName || `Branch ${branchId}`;
-      
-      const revenue = summary.revenue || 0;
-      const orders = summary.orderCount || 0;
-      const completedOrders = summary.completedOrders || 0;
-      const cancelledOrders = summary.cancelledOrders || 0;
-      const avgOrderValue = orders > 0 ? revenue / orders : 0;
+      // Get data from daily_branch_metrics
+      const dm = branch.daily_branch_metrics || {};
+      const dk = branch.derived_kpis || {};
 
-      // Get customer stats
-      const customerStats = branchCustomerStats.find((c: any) => c.branchId === branchId);
-      const newCustomers = customerStats?.newCustomers || 0;
-      const repeatCustomers = customerStats?.repeatCustomers || 0;
-      const customerRetention = customerStats?.customerRetentionRate || 0;
+      const revenue = dm.total_revenue || 0;
+      const orders = dm.order_count || 0;
+      const avgOrderValue = dm.avg_order_value || 0;
+      const rating = dm.avg_review_score || 0;
 
-      // Get review stats
-      const reviewStats = branchReviewStats.find((r: any) => r.branchId === branchId);
-      const rating = reviewStats?.avgReviewScore || 0;
+      // Get customer data
+      const newCustomers = dm.new_customers || 0;
+      const repeatCustomers = dm.repeat_customers || 0;
+      const customerRetention = dk.customer_retention_rate || 0;
 
-      // Get product stats
-      const productStats = branchProductStats.find((p: any) => p.branchId === branchId);
-      const topProduct = productStats?.topSellingProductName || 'N/A';
+      // Get inventory data
+      const lowStock = dm.low_stock_products || 0;
+      const outOfStock = dm.out_of_stock_products || 0;
 
-      // Determine status
+      // Get profit data
+      const profitMargin = dk.profit_margin || 0;
+
+      // Get ML enrichment data
+      const iso = branch.isolation_forest_anomaly || {};
+
+      // Determine status based on revenue and anomalies
       let status: 'good' | 'warning' | 'critical' = 'good';
+      const hasAnomaly = iso.co_bat_thuong || iso.is_anomaly || iso.is_anomaly_iforest;
+
       if (revenue === 0 && orders === 0) {
         status = 'critical';
-      } else if (revenue < 100000 || customerRetention === 0) {
+      } else if (hasAnomaly || revenue < 100000 || customerRetention === 0 || lowStock > 5 || outOfStock > 0) {
         status = 'warning';
       }
 
-      // Calculate profit margin (simplified - 30% of revenue)
-      const profitMargin = revenue * 0.3;
+      // Top product (if available from product metrics, otherwise use ID)
+      const topProduct = dm.top_selling_product_id ? `Product ${dm.top_selling_product_id}` : 'N/A';
 
       return {
         id: branchId,
@@ -564,14 +589,14 @@ export default function MultiBranchDashboard() {
         customerRetention: Math.round(customerRetention * 100) / 100,
         newCustomers,
         repeatCustomers,
-        lowStock: 0, // Not available in current API
-        outOfStock: 0, // Not available in current API
-        profitMargin,
+        lowStock,
+        outOfStock,
+        profitMargin: Math.round(profitMargin * 100) / 100,
         status,
         trend: revenue > 0 ? 'up' : 'down',
         topProduct,
-        completedOrders,
-        cancelledOrders,
+        completedOrders: orders, // Simplified - assume all orders are completed
+        cancelledOrders: 0,
       };
     });
   };
@@ -580,9 +605,15 @@ export default function MultiBranchDashboard() {
   const topPerformers = [...branchesData]
     .sort((a, b) => b.revenue - a.revenue);
 
-  // Need attention
+  // Need attention - Updated for ML insights
   const needAttention = branchesData.filter(
-    b => b.status === 'critical' || b.status === 'warning'
+    b => b.status === 'critical' || b.status === 'warning' ||
+         // Also include branches with anomalies or low inventory
+         (aiData?.raw_data?.branches?.find((br: any) => br.branch_id === b.id &&
+           (br.isolation_forest_anomaly?.co_bat_thuong ||
+            br.isolation_forest_anomaly?.is_anomaly ||
+            br.isolation_forest_anomaly?.is_anomaly_iforest)
+         ))
   );
 
   // Comparison chart data
@@ -1011,48 +1042,48 @@ export default function MultiBranchDashboard() {
             </div>
           )}
 
-          {/* System Overview Cards */}
+          {/* System Overview Cards - Updated for daily_branch_metrics */}
           {branchesData.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <SystemMetricCard
               title="Total System Revenue"
-              value={`${((aiData?.raw_data?.all_branches_revenue_metrics?.totalRevenue || aiData?.raw_data?.all_branches_stats?.totalRevenue || 0) / 1000000).toFixed(1)}tr`}
-              subtitle={`${aiData?.raw_data?.all_branches_revenue_metrics?.totalOrderCount || aiData?.raw_data?.all_branches_stats?.totalOrders || 0} orders`}
+              value={`${((aiData?.raw_data?.totals?.total_revenue || 0) / 1000000).toFixed(1)}tr`}
+              subtitle={`${aiData?.raw_data?.totals?.total_order_count || 0} orders`}
               icon={DollarSign}
               color="text-green-600"
               bgColor="bg-green-50"
               trend="up"
-              trendValue={`${((aiData?.raw_data?.all_branches_revenue_metrics?.avgOrderValue || 0) / 1000).toFixed(0)}k/order`}
+              trendValue={`${((aiData?.raw_data?.totals?.avg_order_value || 0) / 1000).toFixed(0)}k/order`}
             />
             <SystemMetricCard
-              title="Average Rating"
-              value={`${(aiData?.raw_data?.all_branches_review_metrics?.overallAvgReviewScore || 0).toFixed(1)} ⭐`}
-              subtitle={`${aiData?.raw_data?.all_branches_review_metrics?.totalReviews || 0} reviews`}
-              icon={Star}
-              color="text-amber-600"
-              bgColor="bg-amber-50"
-              trend="stable"
-              trendValue={`${aiData?.raw_data?.all_branches_review_metrics?.totalPositiveReviews || 0} positive`}
-            />
-            <SystemMetricCard
-              title="Branches Need Attention"
-              value={`${((aiData?.raw_data?.all_branches_stats?.totalBranches || 0) - (aiData?.raw_data?.all_branches_stats?.activeBranches || 0))}/${aiData?.raw_data?.all_branches_stats?.totalBranches || 0}`}
-              subtitle={`${(aiData?.raw_data?.all_branches_stats?.totalBranches || 0) - (aiData?.raw_data?.all_branches_stats?.activeBranches || 0)} inactive`}
-              icon={AlertTriangle}
-              color="text-red-600"
-              bgColor="bg-red-50"
-              trend="down"
-              trendValue={`${aiData?.raw_data?.all_branches_stats?.activeBranches || 0} active`}
-            />
-            <SystemMetricCard
-              title="Active Branches"
-              value={`${aiData?.raw_data?.all_branches_stats?.activeBranches || 0}/${aiData?.raw_data?.all_branches_stats?.totalBranches || 0}`}
-              subtitle={`${((aiData?.raw_data?.all_branches_stats?.activeBranches || 0) / (aiData?.raw_data?.all_branches_stats?.totalBranches || 1) * 100).toFixed(0)}% rate`}
+              title="System Profit Margin"
+              value={`${((aiData?.raw_data?.totals?.overall_profit_margin || 0) * 100).toFixed(1)}%`}
+              subtitle={`Profit: ${((aiData?.raw_data?.totals?.total_profit || 0) / 1000000).toFixed(1)}tr`}
               icon={TrendingUp}
               color="text-blue-600"
               bgColor="bg-blue-50"
               trend="up"
-              trendValue={`${((aiData?.raw_data?.all_branches_stats?.averageRevenuePerBranch || 0) / 1000).toFixed(0)}k/branch`}
+              trendValue={`Cost: ${((aiData?.raw_data?.totals?.total_material_cost || 0) / 1000000).toFixed(1)}tr`}
+            />
+            <SystemMetricCard
+              title="ML Enrichment Status"
+              value={`${aiData?.raw_data?.ml_enrichment?.branches_processed || 0}/${aiData?.raw_data?.totals?.total_branches || 0}`}
+              subtitle={`${aiData?.raw_data?.ml_enrichment?.enabled ? 'Active' : 'Disabled'}`}
+              icon={Brain}
+              color="text-purple-600"
+              bgColor="bg-purple-50"
+              trend="stable"
+              trendValue={`Limit: ${aiData?.raw_data?.ml_enrichment?.ml_branch_limit || 0}`}
+            />
+            <SystemMetricCard
+              title="Active Branches"
+              value={`${aiData?.raw_data?.totals?.active_branches || 0}/${aiData?.raw_data?.totals?.total_branches || 0}`}
+              subtitle={`${aiData?.raw_data?.totals?.total_customer_count || 0} customers`}
+              icon={Building2}
+              color="text-emerald-600"
+              bgColor="bg-emerald-50"
+              trend="up"
+              trendValue={`${((aiData?.raw_data?.totals?.overall_customer_retention_rate || 0) * 100).toFixed(0)}% retention`}
             />
           </div>
           )}
@@ -1163,14 +1194,49 @@ export default function MultiBranchDashboard() {
                         <p className="font-semibold text-sm">{(branch.revenue / 1000).toFixed(0)}k</p>
                       </div>
                       <div className="text-center p-2 bg-white rounded">
-                        <p className="text-xs text-gray-500">Orders</p>
-                        <p className="font-semibold text-sm">{branch.orders}</p>
+                        <p className="text-xs text-gray-500">Profit Margin</p>
+                        <p className="font-semibold text-sm">{(branch.profitMargin || 0).toFixed(1)}%</p>
                       </div>
                       <div className="text-center p-2 bg-white rounded">
-                        <p className="text-xs text-gray-500">Profit</p>
-                        <p className="font-semibold text-sm">{(branch.profitMargin / 1000).toFixed(0)}k</p>
+                        <p className="text-xs text-gray-500">Retention</p>
+                        <p className="font-semibold text-sm">{(branch.customerRetention * 100).toFixed(0)}%</p>
                       </div>
                     </div>
+                    {/* ML Insights for Need Attention */}
+                    {(() => {
+                      const branchML = aiData?.raw_data?.branches?.find((b: any) => b.branch_id === branch.id);
+                      const hasAnomaly = branchML?.isolation_forest_anomaly?.co_bat_thuong ||
+                                       branchML?.isolation_forest_anomaly?.is_anomaly ||
+                                       branchML?.isolation_forest_anomaly?.is_anomaly_iforest;
+                      const hasForecast = branchML?.prophet_forecast && Object.keys(branchML.prophet_forecast).length > 0;
+
+                      return (hasAnomaly || hasForecast || branch.lowStock > 0 || branch.outOfStock > 0) ? (
+                        <div className="mt-3 pt-3 border-t border-gray-200">
+                          <div className="flex flex-wrap gap-2">
+                            {hasAnomaly && (
+                              <span className="text-xs px-2 py-1 bg-red-100 text-red-700 rounded">
+                                ⚠️ ML Anomaly Detected
+                              </span>
+                            )}
+                            {hasForecast && (
+                              <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">
+                                📈 Forecast Available
+                              </span>
+                            )}
+                            {branch.lowStock > 0 && (
+                              <span className="text-xs px-2 py-1 bg-yellow-100 text-yellow-700 rounded">
+                                📦 {branch.lowStock} Low Stock
+                              </span>
+                            )}
+                            {branch.outOfStock > 0 && (
+                              <span className="text-xs px-2 py-1 bg-red-100 text-red-700 rounded">
+                                🚫 {branch.outOfStock} Out of Stock
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ) : null;
+                    })()}
                   </div>
                 ))}
               </div>
@@ -1239,15 +1305,15 @@ export default function MultiBranchDashboard() {
           </div>
           )}
 
-          {/* AI System Insights */}
+          {/* AI System Insights - Updated for daily_branch_metrics + ML */}
           {aiData?.analysis && (() => {
             const analysisSections = parseAIAnalysisIntoSections(aiData.analysis);
             const sectionTitles = {
-              overview: '1. Overview of All Branches',
-              branchEvaluation: '2. Branch Evaluation',
-              comparison: '3. Comparison and Analysis',
-              branchRecommendations: '4. Recommendations for Each Branch',
-              conclusion: '5. Conclusion',
+              overview: '1. Tổng Quan Tất Cả Chi Nhánh',
+              branchEvaluation: '2. Đánh Giá Từng Chi Nhánh',
+              comparison: '3. So Sánh Và Phân Tích',
+              branchRecommendations: '4. Khuyến Nghị Cho Từng Chi Nhánh',
+              conclusion: '5. Kết Luận',
             };
             const sectionIcons = {
               overview: Building2,
@@ -1258,15 +1324,19 @@ export default function MultiBranchDashboard() {
             };
             
             return (
-            <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl shadow-sm border border-amber-200 p-6">
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl shadow-sm border border-blue-200 p-6">
                 <div className="flex items-start gap-4 mb-4">
-                <div className="p-3 bg-amber-100 rounded-lg">
-                  <Brain className="h-6 w-6 text-amber-600" />
+                <div className="p-3 bg-blue-100 rounded-lg">
+                  <Brain className="h-6 w-6 text-blue-600" />
                 </div>
                 <div className="flex-1">
                     <h3 className="text-lg font-bold text-gray-800">
-                    AI System Analysis
+                    AI System Analysis (daily_branch_metrics + ML)
                   </h3>
+                  <p className="text-sm text-gray-600 mt-1">
+                    ML Enrichment: {aiData?.raw_data?.ml_enrichment?.enabled ? 'Enabled' : 'Disabled'} |
+                    Processed: {aiData?.raw_data?.ml_enrichment?.branches_processed || 0}/{aiData?.raw_data?.totals?.total_branches || 0} branches
+                  </p>
                   </div>
                 </div>
                 
@@ -1277,7 +1347,7 @@ export default function MultiBranchDashboard() {
                     const isExpanded = expandedAnalysisSections[sectionKey];
                     
                     return (
-                      <div key={key} className="bg-white rounded-lg border border-amber-200 overflow-hidden">
+                      <div key={key} className="bg-white rounded-lg border border-blue-200 overflow-hidden">
                         <button
                           onClick={() => {
                             setExpandedAnalysisSections(prev => ({
@@ -1285,10 +1355,10 @@ export default function MultiBranchDashboard() {
                               [sectionKey]: !prev[sectionKey],
                             }));
                           }}
-                          className="w-full flex items-center justify-between p-4 hover:bg-amber-50 transition-colors"
+                          className="w-full flex items-center justify-between p-4 hover:bg-blue-50 transition-colors"
                         >
                           <div className="flex items-center gap-3">
-                            <Icon className="h-5 w-5 text-amber-600" />
+                            <Icon className="h-5 w-5 text-blue-600" />
                             <h4 className="text-base font-semibold text-gray-800">
                               {sectionTitles[sectionKey]}
                             </h4>
@@ -1300,35 +1370,55 @@ export default function MultiBranchDashboard() {
                           )}
                         </button>
                         {isExpanded && (
-                          <div className="p-4 pt-0 border-t border-amber-100 space-y-4">
-                            {/* Biểu đồ cho từng phần */}
+                          <div className="p-4 pt-0 border-t border-blue-100 space-y-4">
+                            {/* Charts for each section - Updated for new data structure */}
                             {key === 'overview' && branchesData.length > 0 && (
                               <div className="mb-4">
-                                <h5 className="text-sm font-semibold text-gray-700 mb-3">Biểu đồ tổng quan</h5>
+                                <h5 className="text-sm font-semibold text-gray-700 mb-3">System Overview Metrics</h5>
                                 <ResponsiveContainer width="100%" height={250}>
                                   <BarChart data={[
                                     {
                                       name: 'Total Revenue',
-                                      value: (aiData?.raw_data?.all_branches_revenue_metrics?.totalRevenue || aiData?.raw_data?.all_branches_stats?.totalRevenue || 0) / 1000000,
+                                      value: (aiData?.raw_data?.totals?.total_revenue || 0) / 1000000,
+                                      unit: 'tr'
                                     },
                                     {
-                                      name: 'Total Orders',
-                                      value: (aiData?.raw_data?.all_branches_revenue_metrics?.totalOrderCount || aiData?.raw_data?.all_branches_stats?.totalOrders || 0) / 1000,
+                                      name: 'Total Profit',
+                                      value: (aiData?.raw_data?.totals?.total_profit || 0) / 1000000,
+                                      unit: 'tr'
+                                    },
+                                    {
+                                      name: 'Material Cost',
+                                      value: (aiData?.raw_data?.totals?.total_material_cost || 0) / 1000000,
+                                      unit: 'tr'
                                     },
                                     {
                                       name: 'Active Branches',
-                                      value: aiData?.raw_data?.all_branches_stats?.activeBranches || 0,
+                                      value: aiData?.raw_data?.totals?.active_branches || 0,
+                                      unit: ''
                                     },
                                     {
-                                      name: 'Avg Rating',
-                                      value: (aiData?.raw_data?.all_branches_review_metrics?.overallAvgReviewScore || 0) * 20,
+                                      name: 'Customer Retention',
+                                      value: (aiData?.raw_data?.totals?.overall_customer_retention_rate || 0) * 100,
+                                      unit: '%'
                                     },
                                   ]}>
                                     <CartesianGrid strokeDasharray="3 3" />
-                                    <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                                    <XAxis dataKey="name" tick={{ fontSize: 12 }} angle={-45} textAnchor="end" height={80} />
                                     <YAxis tick={{ fontSize: 12 }} />
-                                    <Tooltip />
-                                    <Bar dataKey="value" fill="#f59e0b" radius={[8, 8, 0, 0]} />
+                                    <Tooltip
+                                      formatter={(value: any, name) => {
+                                        const item = [
+                                          { name: 'Total Revenue', value: (aiData?.raw_data?.totals?.total_revenue || 0) / 1000000, unit: 'tr' },
+                                          { name: 'Total Profit', value: (aiData?.raw_data?.totals?.total_profit || 0) / 1000000, unit: 'tr' },
+                                          { name: 'Material Cost', value: (aiData?.raw_data?.totals?.total_material_cost || 0) / 1000000, unit: 'tr' },
+                                          { name: 'Active Branches', value: aiData?.raw_data?.totals?.active_branches || 0, unit: '' },
+                                          { name: 'Customer Retention', value: (aiData?.raw_data?.totals?.overall_customer_retention_rate || 0) * 100, unit: '%' },
+                                        ].find(d => d.name === name);
+                                        return [`${value}${item?.unit}`, name];
+                                      }}
+                                    />
+                                    <Bar dataKey="value" fill="#3b82f6" radius={[8, 8, 0, 0]} />
                                   </BarChart>
                                 </ResponsiveContainer>
                               </div>
@@ -1336,10 +1426,12 @@ export default function MultiBranchDashboard() {
                             
                             {key === 'branchEvaluation' && branchesData.length > 0 && (
                               <div className="mb-4">
-                                <h5 className="text-sm font-semibold text-gray-700 mb-3">Branch Rating Chart</h5>
+                                <h5 className="text-sm font-semibold text-gray-700 mb-3">Branch Performance Matrix</h5>
                                 <ResponsiveContainer width="100%" height={300}>
                                   <BarChart data={branchesData.map(b => ({
-                                    name: b.name.replace('Branch ', '').replace('Chi nhánh ', '').replace('Main Branch', 'Main'),
+                                    name: b.name.replace('Branch ', ''),
+                                    revenue: b.revenue / 1000,
+                                    profitMargin: (b.profitMargin || 0) * 100,
                                     rating: b.rating,
                                     retention: b.customerRetention,
                                   }))}>
@@ -1349,8 +1441,8 @@ export default function MultiBranchDashboard() {
                                     <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12 }} />
                                     <Tooltip />
                                     <Legend />
-                                    <Bar yAxisId="left" dataKey="rating" fill="#f59e0b" name="Rating (⭐)" radius={[8, 8, 0, 0]} />
-                                    <Bar yAxisId="right" dataKey="retention" fill="#10b981" name="Retention (%)" radius={[8, 8, 0, 0]} />
+                                    <Bar yAxisId="left" dataKey="revenue" fill="#10b981" name="Revenue (k)" radius={[8, 8, 0, 0]} />
+                                    <Bar yAxisId="right" dataKey="profitMargin" fill="#f59e0b" name="Profit Margin (%)" radius={[8, 8, 0, 0]} />
                                   </BarChart>
                                 </ResponsiveContainer>
                               </div>
@@ -1358,7 +1450,7 @@ export default function MultiBranchDashboard() {
                             
                             {key === 'comparison' && comparisonData.length > 0 && (
                               <div className="mb-4">
-                                <h5 className="text-sm font-semibold text-gray-700 mb-3">Branch Comparison Chart</h5>
+                                <h5 className="text-sm font-semibold text-gray-700 mb-3">Revenue vs Orders Comparison</h5>
                                 <ResponsiveContainer width="100%" height={300}>
                                   <BarChart data={comparisonData}>
                                     <CartesianGrid strokeDasharray="3 3" />
@@ -1367,8 +1459,8 @@ export default function MultiBranchDashboard() {
                                     <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12 }} />
                                     <Tooltip />
                                     <Legend />
-                                    <Bar yAxisId="left" dataKey="revenue" fill="#f59e0b" name="Revenue (k)" radius={[8, 8, 0, 0]} />
-                                    <Bar yAxisId="right" dataKey="orders" fill="#3b82f6" name="Orders" radius={[8, 8, 0, 0]} />
+                                    <Bar yAxisId="left" dataKey="revenue" fill="#8b5cf6" name="Revenue (k)" radius={[8, 8, 0, 0]} />
+                                    <Bar yAxisId="right" dataKey="orders" fill="#06b6d4" name="Orders" radius={[8, 8, 0, 0]} />
                                   </BarChart>
                                 </ResponsiveContainer>
                               </div>
@@ -1376,7 +1468,7 @@ export default function MultiBranchDashboard() {
                             
                             {key === 'branchRecommendations' && branchesData.length > 0 && (
                               <div className="mb-4">
-                                <h5 className="text-sm font-semibold text-gray-700 mb-3">Branch Status Distribution</h5>
+                                <h5 className="text-sm font-semibold text-gray-700 mb-3">Branch Status & Anomalies</h5>
                                 <ResponsiveContainer width="100%" height={250}>
                                   <PieChart>
                                     <Pie
@@ -1410,37 +1502,40 @@ export default function MultiBranchDashboard() {
                             
                             {key === 'conclusion' && branchesData.length > 0 && (
                               <div className="mb-4">
-                                <h5 className="text-sm font-semibold text-gray-700 mb-3">Performance Summary</h5>
-                                <ResponsiveContainer width="100%" height={250}>
-                                  <AreaChart data={branchesData.map((b, idx) => ({
-                                    name: b.name.replace('Branch ', '').replace('Chi nhánh ', '').replace('Main Branch', 'Main'),
-                                    revenue: b.revenue / 1000,
-                                    orders: b.orders,
-                                    index: idx + 1,
-                                  }))}>
-                                    <defs>
-                                      <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} />
-                                        <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
-                                      </linearGradient>
-                                    </defs>
-                                    <CartesianGrid strokeDasharray="3 3" />
-                                    <XAxis dataKey="name" tick={{ fontSize: 11 }} angle={-45} textAnchor="end" height={80} />
-                                    <YAxis yAxisId="left" tick={{ fontSize: 12 }} />
-                                    <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12 }} />
-                                    <Tooltip />
-                                    <Legend />
-                                    <Area yAxisId="left" type="monotone" dataKey="revenue" stroke="#f59e0b" fillOpacity={1} fill="url(#colorRevenue)" name="Revenue (k)" />
-                                    <Line yAxisId="right" type="monotone" dataKey="orders" stroke="#3b82f6" strokeWidth={2} name="Orders" />
-                                  </AreaChart>
-                                </ResponsiveContainer>
+                                <h5 className="text-sm font-semibold text-gray-700 mb-3">ML Insights Summary</h5>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                  <div className="bg-green-50 p-3 rounded-lg">
+                                    <p className="text-sm font-semibold text-green-800">Anomaly Detection</p>
+                                    <p className="text-lg font-bold text-green-600">
+                                      {aiData?.raw_data?.branches?.filter((b: any) =>
+                                        (b.isolation_forest_anomaly?.co_bat_thuong ||
+                                         b.isolation_forest_anomaly?.is_anomaly ||
+                                         b.isolation_forest_anomaly?.is_anomaly_iforest)
+                                      ).length || 0} branches
+                                    </p>
+                                  </div>
+                                  <div className="bg-blue-50 p-3 rounded-lg">
+                                    <p className="text-sm font-semibold text-blue-800">Forecast Available</p>
+                                    <p className="text-lg font-bold text-blue-600">
+                                      {aiData?.raw_data?.branches?.filter((b: any) =>
+                                        b.prophet_forecast && Object.keys(b.prophet_forecast).length > 0
+                                      ).length || 0} branches
+                                    </p>
+                                  </div>
+                                  <div className="bg-purple-50 p-3 rounded-lg">
+                                    <p className="text-sm font-semibold text-purple-800">ML Processed</p>
+                                    <p className="text-lg font-bold text-purple-600">
+                                      {aiData?.raw_data?.ml_enrichment?.branches_processed || 0}/{aiData?.raw_data?.totals?.total_branches || 0}
+                                    </p>
+                                  </div>
+                                </div>
                               </div>
                             )}
                             
-                            {/* Nội dung text */}
+                            {/* Text content */}
                             {key === 'branchRecommendations' && aiData.recommendations && aiData.recommendations.length > 0 ? (
                               <div>
-                                <h5 className="text-sm font-semibold text-gray-700 mb-3">Recommendations List</h5>
+                                <h5 className="text-sm font-semibold text-gray-700 mb-3">Actionable Recommendations</h5>
                       <ul className="space-y-2">
                         {aiData.recommendations.map((rec, index) => (
                           <li key={index} className="flex items-start gap-2">
@@ -1481,10 +1576,10 @@ export default function MultiBranchDashboard() {
                     <th className="text-left py-3 px-4 font-semibold text-gray-700">Branch</th>
                     <th className="text-right py-3 px-4 font-semibold text-gray-700">Revenue</th>
                     <th className="text-right py-3 px-4 font-semibold text-gray-700">Orders</th>
-                    <th className="text-right py-3 px-4 font-semibold text-gray-700">Avg Value</th>
+                    <th className="text-right py-3 px-4 font-semibold text-gray-700">Profit Margin</th>
                     <th className="text-center py-3 px-4 font-semibold text-gray-700">Rating</th>
                     <th className="text-right py-3 px-4 font-semibold text-gray-700">Retention</th>
-                    <th className="text-center py-3 px-4 font-semibold text-gray-700">Status</th>
+                    <th className="text-center py-3 px-4 font-semibold text-gray-700">ML Status</th>
                     <th className="text-center py-3 px-4 font-semibold text-gray-700">Action</th>
                   </tr>
                 </thead>
@@ -1505,42 +1600,68 @@ export default function MultiBranchDashboard() {
                       </td>
                       <td className="py-3 px-4 text-right">{branch.orders}</td>
                       <td className="py-3 px-4 text-right">
-                        {(branch.avgOrderValue / 1000).toFixed(0)}k
+                        <span
+                          className={`font-semibold ${
+                            (branch.profitMargin || 0) >= 0.3
+                              ? 'text-green-600'
+                              : (branch.profitMargin || 0) >= 0.1
+                              ? 'text-yellow-600'
+                              : 'text-red-600'
+                          }`}
+                        >
+                          {(branch.profitMargin || 0).toFixed(1)}%
+                        </span>
                       </td>
                       <td className="py-3 px-4 text-center">
                         <span className="inline-flex items-center gap-1">
-                          {branch.rating}
+                          {branch.rating.toFixed(1)}
                           <Star className="h-4 w-4 text-amber-400 fill-amber-400" />
                         </span>
                       </td>
                       <td className="py-3 px-4 text-right">
                         <span
                           className={`font-semibold ${
-                            branch.customerRetention === 0
-                              ? 'text-red-600'
-                              : branch.customerRetention < 25
+                            branch.customerRetention >= 0.8
+                              ? 'text-green-600'
+                              : branch.customerRetention >= 0.5
                               ? 'text-yellow-600'
-                              : 'text-green-600'
+                              : 'text-red-600'
                           }`}
                         >
-                          {branch.customerRetention}%
+                          {(branch.customerRetention * 100).toFixed(0)}%
                         </span>
                       </td>
                       <td className="py-3 px-4 text-center">
-                        <span
-                          className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${
-                            branch.status === 'good'
-                              ? 'bg-green-100 text-green-700'
-                              : branch.status === 'warning'
-                              ? 'bg-yellow-100 text-yellow-700'
-                              : 'bg-red-100 text-red-700'
-                          }`}
-                        >
-                          {branch.status === 'good' && <CheckCircle className="h-3 w-3" />}
-                          {branch.status === 'warning' && <AlertTriangle className="h-3 w-3" />}
-                          {branch.status === 'critical' && <AlertTriangle className="h-3 w-3" />}
-                          {branch.status === 'good' ? 'Good' : branch.status === 'warning' ? 'Warning' : 'Critical'}
-                        </span>
+                        {(() => {
+                          const branchML = aiData?.raw_data?.branches?.find((b: any) => b.branch_id === branch.id);
+                          const hasAnomaly = branchML?.isolation_forest_anomaly?.co_bat_thuong ||
+                                           branchML?.isolation_forest_anomaly?.is_anomaly ||
+                                           branchML?.isolation_forest_anomaly?.is_anomaly_iforest;
+                          const hasForecast = branchML?.prophet_forecast && Object.keys(branchML.prophet_forecast).length > 0;
+
+                          return (
+                            <div className="flex flex-col gap-1">
+                              {hasAnomaly && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700">
+                                  <AlertTriangle className="h-3 w-3" />
+                                  Anomaly
+                                </span>
+                              )}
+                              {hasForecast && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">
+                                  <TrendingUp className="h-3 w-3" />
+                                  Forecast
+                                </span>
+                              )}
+                              {!hasAnomaly && !hasForecast && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700">
+                                  <CheckCircle className="h-3 w-3" />
+                                  Normal
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </td>
                       <td className="py-3 px-4 text-center">
                         <button
