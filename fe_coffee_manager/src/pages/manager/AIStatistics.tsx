@@ -1006,62 +1006,7 @@ export default function AIStatistics() {
           >
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               {/* Revenue Chart */}
-              <div className="lg:col-span-2 bg-white rounded-lg border border-gray-200 p-4">
-                <h3 className="text-sm font-semibold text-gray-700 mb-3">
-                  Revenue by Hour ({selectedDate})
-                </h3>
-                {displayData.revenueByHour.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={200}>
-                    <AreaChart data={displayData.revenueByHour}>
-                      <defs>
-                        <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} />
-                          <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                      <XAxis dataKey="hour" stroke="#666" tick={{ fontSize: 12 }} />
-                      <YAxis stroke="#666" tick={{ fontSize: 12 }} />
-                      <Tooltip
-                        formatter={(value: any) => `${formatCurrency(value)} VNĐ`}
-                        contentStyle={{
-                          backgroundColor: '#fff',
-                          border: '1px solid #e2e8f0',
-                          borderRadius: '6px',
-                          fontSize: '12px',
-                        }}
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="revenue"
-                        stroke="#f59e0b"
-                        fillOpacity={1}
-                        fill="url(#colorRevenue)"
-                        name="Revenue"
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="flex items-center justify-center h-[200px] text-gray-400 text-sm">
-                    No hourly revenue data available
-                  </div>
-                )}
-                {/* Order Status Summary */}
-                <div className="mt-4 grid grid-cols-3 gap-2 text-xs">
-                  <div className="bg-green-50 p-2 rounded border border-green-200">
-                    <p className="text-gray-600">Completed</p>
-                    <p className="font-bold text-green-700">{displayData.orderStatus.completed}</p>
-                  </div>
-                  <div className="bg-yellow-50 p-2 rounded border border-yellow-200">
-                    <p className="text-gray-600">Pending</p>
-                    <p className="font-bold text-yellow-700">{displayData.orderStatus.pending}</p>
-                  </div>
-                  <div className="bg-red-50 p-2 rounded border border-red-200">
-                    <p className="text-gray-600">Cancelled</p>
-                    <p className="font-bold text-red-700">{displayData.orderStatus.cancelled}</p>
-                  </div>
-                </div>
-              </div>
+              
 
             {/* Forecast Summary */}
             <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg border border-green-200 p-4">
@@ -1076,7 +1021,7 @@ export default function AIStatistics() {
                     <div>
                       <p className="text-xs text-gray-600">Expected Orders</p>
                       <p className="text-xl font-bold text-gray-800">
-                        {displayData.aiAnalysis.forecast.tomorrow.orders} orders
+                      {Math.floor(displayData.aiAnalysis.forecast.tomorrow.orders)} orders
                       </p>
                     </div>
                     <div className="pt-2 border-t border-green-200">

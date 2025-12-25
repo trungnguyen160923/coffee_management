@@ -13,6 +13,7 @@ import tempfile
 import os
 import re
 from datetime import datetime
+import html as html_lib
 import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend
 import matplotlib.pyplot as plt
@@ -134,7 +135,8 @@ class EmailService:
                 report_date=report_date,
                 analysis=analysis,
                 summary=summary,
-                recommendations=recommendations
+                recommendations=recommendations,
+                raw_data=raw_data
             )
             
             # Add both versions
@@ -225,6 +227,165 @@ class EmailService:
         report_id: Optional[int] = None
     ) -> str:
         """Build HTML email body with improved design"""
+        # daily_branch_metrics + ML preview (from raw_data)
+        data_source_html = ""
+        daily_metrics_html = ""
+        anomaly_html = ""
+        forecast_html = ""
+        analysis_html = ""
+
+        try:
+            if raw_data and isinstance(raw_data, dict):
+                source = raw_data.get("source")
+                if not source and "daily_branch_metrics" in raw_data:
+                    source = "daily_branch_metrics"
+                if source:
+                    data_source_html = f"""
+                    <div class="analysis-section" style="border-left-color:#3498db;">
+                        <h2 style="color:#3498db;">🗄️ Nguồn Dữ Liệu</h2>
+                        <div class="analysis-preview">Nguồn: <strong>{html_lib.escape(str(source))}</strong></div>
+                    </div>
+                    """
+
+                dm = raw_data.get("daily_branch_metrics") or {}
+                dk = raw_data.get("derived_kpis") or {}
+                if isinstance(dm, dict) and dm:
+                    def _fmt_money(v):
+                        if isinstance(v, (int, float)):
+                            return f"{v:,.0f}".replace(",", ".")
+                        return "N/A" if v is None else str(v)
+
+                    def _fmt_float(v, digits=2):
+                        if isinstance(v, (int, float)):
+                            return f"{float(v):.{digits}f}"
+                        return "N/A" if v is None else str(v)
+
+                    def _fmt_pct(v):
+                        if isinstance(v, (int, float)):
+                            x = float(v)
+                            if x <= 1:
+                                x *= 100
+                            return f"{x:.2f}%"
+                        return "N/A" if v is None else str(v)
+
+                    rows = [
+                        ("Doanh thu", _fmt_money(dm.get("total_revenue")), "VNĐ"),
+                        ("Số đơn", dm.get("order_count"), "đơn"),
+                        ("Giá trị TB/đơn", _fmt_money(dm.get("avg_order_value")), "VNĐ"),
+                        ("Giờ cao điểm", dm.get("peak_hour"), "giờ"),
+                        ("Khách hàng", dm.get("customer_count"), "người"),
+                        ("Khách mới", dm.get("new_customers"), "người"),
+                        ("Khách quay lại", dm.get("repeat_customers"), "người"),
+                        ("Tỷ lệ giữ chân", _fmt_pct(dk.get("customer_retention_rate")), ""),
+                        ("Sản phẩm đã bán", dm.get("unique_products_sold"), "sản phẩm"),
+                        ("Độ đa dạng sản phẩm", _fmt_float(dm.get("product_diversity_score"), 4), ""),
+                        ("Điểm đánh giá TB", _fmt_float(dm.get("avg_review_score")), "/5"),
+                        ("Sản phẩm sắp hết", dm.get("low_stock_products"), "sản phẩm"),
+                        ("Sản phẩm hết hàng", dm.get("out_of_stock_products"), "sản phẩm"),
+                        ("Chi phí nguyên liệu", _fmt_money(dm.get("material_cost")), "VNĐ"),
+                        ("Lợi nhuận (ước tính)", _fmt_money(dk.get("profit")), "VNĐ"),
+                        ("Biên lợi nhuận", _fmt_pct(dk.get("profit_margin")), ""),
+                    ]
+
+                    rows_html = ""
+                    for label, value, unit in rows:
+                        label_safe = html_lib.escape(str(label))
+                        value_safe = html_lib.escape(str(value))
+                        unit_safe = html_lib.escape(str(unit))
+                        rows_html += f"""
+                            <tr>
+                                <td style="padding:10px;border-bottom:1px solid #eee;color:#666;width:45%;">{label_safe}</td>
+                                <td style="padding:10px;border-bottom:1px solid #eee;font-weight:600;color:#333;">{value_safe} {unit_safe}</td>
+                            </tr>
+                        """
+
+                    daily_metrics_html = f"""
+                    <div class="analysis-section" style="border-left-color:#2ecc71;">
+                        <h2 style="color:#2ecc71;">📋 Chỉ Số Theo Ngày (daily_branch_metrics)</h2>
+                        <div style="background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
+                            <table style="width:100%;border-collapse:collapse;">
+                                {rows_html}
+                            </table>
+                        </div>
+                    </div>
+                    """
+
+                iso = raw_data.get("isolation_forest_anomaly") or {}
+                if isinstance(iso, dict) and iso:
+                    is_anomaly = bool(
+                        iso.get("co_bat_thuong")
+                        or iso.get("is_anomaly")
+                        or iso.get("is_anomaly_iforest")
+                    )
+                    conf = iso.get("adjusted_confidence") or iso.get("confidence") or iso.get("do_tin_cay")
+                    anomaly_lines = []
+                    chi_tieu = iso.get("chi_tieu_bat_thuong") or iso.get("anomalous_features") or []
+                    if isinstance(chi_tieu, list) and chi_tieu:
+                        # show ALL anomalous metrics (no limit)
+                        for item in chi_tieu:
+                            if isinstance(item, dict):
+                                metric = item.get("metric") or item.get("name") or item.get("chi_tieu")
+                                change = item.get("change_percent") or item.get("phan_tram_thay_doi") or item.get("delta_percent")
+                                sev = item.get("severity") or item.get("muc_do") or item.get("level")
+                                parts = [p for p in [metric, f"{change}%" if change is not None else None, sev] if p]
+                                if parts:
+                                    anomaly_lines.append(" - " + " | ".join([html_lib.escape(str(p)) for p in parts]))
+                    anomaly_html = f"""
+                    <div class="analysis-section" style="border-left-color:#e74c3c;">
+                        <h2 style="color:#e74c3c;">🔍 Phát Hiện Bất Thường</h2>
+                        <div class="analysis-preview">
+                            Trạng thái: <strong>{'CÓ BẤT THƯỜNG' if is_anomaly else 'Không có bất thường'}</strong><br>
+                            Độ tin cậy: <strong>{html_lib.escape(str(conf)) if conf is not None else 'N/A'}</strong><br>
+                            {'<br>'.join(anomaly_lines) if anomaly_lines else 'Chi tiết: (không có danh sách chỉ tiêu bất thường)'}
+                        </div>
+                    </div>
+                    """
+
+                fc = raw_data.get("prophet_forecast") or {}
+                if isinstance(fc, dict) and fc:
+                    do_tin_cay = fc.get("do_tin_cay")
+                    conf_pct = None
+                    if isinstance(do_tin_cay, dict):
+                        conf_pct = do_tin_cay.get("phan_tram") or do_tin_cay.get("percent")
+                    elif do_tin_cay is not None:
+                        conf_pct = do_tin_cay
+                    if conf_pct is None:
+                        conf_pct = fc.get("confidence")
+
+                    target_metric = fc.get("chi_tieu_code") or fc.get("target_metric") or "order_count"
+                    forecast_values = fc.get("forecast_values") or {}
+                    preview_pairs = []
+                    if isinstance(forecast_values, dict):
+                        for k in list(forecast_values.keys())[:3]:
+                            preview_pairs.append(f"{html_lib.escape(str(k))}: {html_lib.escape(str(forecast_values.get(k)))}")
+                    forecast_preview = "<br>".join(preview_pairs) if preview_pairs else "(không có forecast_values)"
+
+                    forecast_html = f"""
+                    <div class="analysis-section" style="border-left-color:#667eea;">
+                        <h2 style="color:#667eea;">🔮 Dự Báo Tương Lai</h2>
+                        <div class="analysis-preview">
+                            Chỉ tiêu: <strong>{html_lib.escape(str(target_metric))}</strong><br>
+                            Độ tin cậy: <strong>{html_lib.escape(str(conf_pct)) if conf_pct is not None else 'N/A'}</strong><br>
+                            {forecast_preview}
+                        </div>
+                    </div>
+                    """
+
+            if analysis:
+                preview = analysis.strip()
+                if len(preview) > 1600:
+                    preview = preview[:1600] + "\n...\n(đã rút gọn, xem PDF để đầy đủ)"
+                preview = html_lib.escape(preview)
+                analysis_html = f"""
+                <div class="analysis-section">
+                    <h2>🧾 Nhận Định & Phân Tích</h2>
+                    <div class="analysis-preview">{preview}</div>
+                </div>
+                """
+        except Exception:
+            # never fail email due to preview blocks
+            pass
+
         # Format summary metrics nicely
         summary_html = ""
         if summary:
@@ -239,12 +400,15 @@ class EmailService:
                 'total_revenue': ('💰 Doanh Thu', 'VNĐ'),
                 'order_count': ('🛒 Số Đơn Hàng', 'đơn'),
                 'avg_order_value': ('📊 Giá Trị TB/Đơn', 'VNĐ'),
+                'peak_hour': ('⏰ Giờ Cao Điểm', 'giờ'),
                 # Customer metrics
                 'customer_count': ('👥 Tổng Khách Hàng', 'người'),
                 'new_customers': ('🆕 Khách Hàng Mới', 'người'),
                 'repeat_customers': ('🔄 Khách Hàng Quay Lại', 'người'),
+                'customer_retention_rate': ('📈 Tỷ Lệ Giữ Chân', '%'),
                 # Product metrics
                 'unique_products_sold': ('📦 Sản Phẩm Đã Bán', 'sản phẩm'),
+                'product_diversity_score': ('🧩 Độ Đa Dạng Sản Phẩm', ''),
                 # Review metrics
                 'avg_review_score': ('⭐ Đánh Giá TB', '/5'),
                 'total_reviews': ('💬 Tổng Đánh Giá', 'đánh giá'),
@@ -253,14 +417,34 @@ class EmailService:
                 'out_of_stock_products': ('🔴 Sản Phẩm Hết Hàng', 'sản phẩm'),
                 'total_inventory_value': ('📊 Giá Trị Tồn Kho', 'VNĐ'),
                 'material_cost': ('💵 Chi Phí Nguyên Liệu', 'VNĐ'),
+                'total_material_cost': ('💵 Tổng Chi Phí Nguyên Liệu', 'VNĐ'),
+                'profit': ('📌 Lợi Nhuận (Ước Tính)', 'VNĐ'),
+                'profit_margin': ('📊 Biên Lợi Nhuận', '%'),
             }
+            currency_keys = {
+                'total_revenue',
+                'avg_order_value',
+                'total_inventory_value',
+                'material_cost',
+                'total_material_cost',
+                'profit',
+            }
+            percent_keys = {'customer_retention_rate', 'profit_margin'}
+            float4_keys = {'product_diversity_score'}
             
             for key, (label, unit) in key_metrics.items():
                 if key in summary and summary[key] is not None:
                     value = summary[key]
                     if isinstance(value, (int, float)):
-                        if key in ['total_revenue', 'avg_order_value', 'total_inventory_value', 'material_cost']:
+                        if key in currency_keys:
                             value = f"{value:,.0f}".replace(',', '.')
+                        elif key in percent_keys:
+                            pct = float(value)
+                            if pct <= 1:
+                                pct *= 100
+                            value = f"{pct:.2f}"
+                        elif key in float4_keys:
+                            value = f"{float(value):.4f}"
                         elif key == 'avg_review_score':
                             value = f"{value:.2f}"
                         elif isinstance(value, float):
@@ -490,6 +674,9 @@ class EmailService:
                 </div>
                 <div class="content">
                     {summary_html}
+
+                    {anomaly_html}
+                    {forecast_html}
                     
                     {recommendations_html}
                     
@@ -512,7 +699,8 @@ class EmailService:
         report_date: str,
         analysis: str,
         summary: Optional[dict] = None,
-        recommendations: Optional[List[str]] = None
+        recommendations: Optional[List[str]] = None,
+        raw_data: Optional[Dict[str, Any]] = None
     ) -> str:
         """Build plain text email body"""
         text = f"""
@@ -521,6 +709,7 @@ Chi Nhánh: {branch_id}
 Ngày: {report_date}
 
 """
+        # Manager email: keep body short. Details (data source / daily metrics / analysis) are in the PDF attachment.
         if summary:
             text += "TÓM TẮT METRICS:\n"
             for key, value in summary.items():
@@ -533,7 +722,7 @@ Ngày: {report_date}
             text += "KHUYẾN NGHỊ:\n"
             for i, rec in enumerate(recommendations, 1):
                 text += f"{i}. {rec}\n"
-        
+
         return text
     
     def _format_ai_analysis(
@@ -1081,12 +1270,15 @@ Ngày: {report_date}
                 'total_revenue': ('Doanh Thu', 'VNĐ', format_currency),
                 'order_count': ('Số Đơn Hàng', 'đơn', str),
                 'avg_order_value': ('Giá Trị TB/Đơn', 'VNĐ', format_currency),
+                'peak_hour': ('Giờ cao điểm', 'giờ', str),
                 # Customer metrics
                 'customer_count': ('Tổng Khách Hàng', 'người', str),
                 'new_customers': ('Khách Hàng Mới', 'người', str),
                 'repeat_customers': ('Khách Hàng Quay Lại', 'người', str),
+                'customer_retention_rate': ('Tỷ lệ giữ chân', '%', lambda x: format_percent((float(x) * 100) if isinstance(x, (int, float)) and float(x) <= 1 else float(x))),
                 # Product metrics
                 'unique_products_sold': ('Sản Phẩm Đã Bán', 'sản phẩm', str),
+                'product_diversity_score': ('Độ đa dạng sản phẩm', '', lambda x: f"{float(x):.4f}" if isinstance(x, (int, float)) else str(x)),
                 # Review metrics
                 'avg_review_score': ('Đánh Giá Trung Bình', '/5', lambda x: f"{x:.2f}" if isinstance(x, float) else str(x)),
                 'total_reviews': ('Tổng Đánh Giá', 'đánh giá', str),
@@ -1095,34 +1287,10 @@ Ngày: {report_date}
                 'out_of_stock_products': ('Sản Phẩm Hết Hàng', 'sản phẩm', str),
                 'total_inventory_value': ('Giá Trị Tồn Kho', 'VNĐ', format_currency),
                 'material_cost': ('Chi Phí Nguyên Liệu', 'VNĐ', format_currency),
+                'total_material_cost': ('Tổng Chi Phí Nguyên Liệu', 'VNĐ', format_currency),
+                'profit': ('Lợi nhuận (ước tính)', 'VNĐ', format_currency),
+                'profit_margin': ('Biên lợi nhuận', '%', lambda x: format_percent((float(x) * 100) if isinstance(x, (int, float)) and float(x) <= 1 else float(x))),
             }
-            
-            # Group metrics by category for better organization
-            revenue_metrics = []
-            customer_metrics = []
-            product_metrics = []
-            review_metrics = []
-            inventory_metrics = []
-            
-            for key, (label, unit, formatter) in metric_labels.items():
-                if key in summary and summary[key] is not None:
-                    value = summary[key]
-                    formatted_value = formatter(value)
-                    value_str = f"{formatted_value} {unit}"
-                    
-                    row = [label, value_str]
-                    
-                    # Categorize metrics
-                    if key in ['total_revenue', 'order_count', 'avg_order_value']:
-                        revenue_metrics.append(row)
-                    elif key in ['customer_count', 'new_customers', 'repeat_customers']:
-                        customer_metrics.append(row)
-                    elif key in ['unique_products_sold']:
-                        product_metrics.append(row)
-                    elif key in ['avg_review_score', 'total_reviews']:
-                        review_metrics.append(row)
-                    elif key in ['low_stock_products', 'out_of_stock_products', 'total_inventory_value', 'material_cost']:
-                        inventory_metrics.append(row)
             
             # Helper function to format table cells with Vietnamese font
             def format_cell(text):
@@ -1131,40 +1299,14 @@ Ngày: {report_date}
                     return ''
                 return Paragraph(str(text), table_normal_style)
             
-            # Convert all data to Paragraph objects for proper font rendering
+            # Convert all data to Paragraph objects for proper font rendering (no legacy grouping)
             formatted_summary_data = [[format_cell('Chỉ Tiêu'), format_cell('Giá Trị')]]
-            
-            # Add metrics by category with section headers
-            if revenue_metrics:
-                formatted_summary_data.append([format_cell(''), format_cell('')])  # Empty row
-                formatted_summary_data.append([format_cell('DOANH THU & ĐƠN HÀNG'), format_cell('')])
-                for row in revenue_metrics:
-                    formatted_summary_data.append([format_cell(row[0]), format_cell(row[1])])
-            
-            if customer_metrics:
-                formatted_summary_data.append([format_cell(''), format_cell('')])  # Empty row
-                formatted_summary_data.append([format_cell('KHÁCH HÀNG'), format_cell('')])
-                for row in customer_metrics:
-                    formatted_summary_data.append([format_cell(row[0]), format_cell(row[1])])
-            
-            if product_metrics:
-                formatted_summary_data.append([format_cell(''), format_cell('')])  # Empty row
-                formatted_summary_data.append([format_cell('SẢN PHẨM'), format_cell('')])
-                for row in product_metrics:
-                    formatted_summary_data.append([format_cell(row[0]), format_cell(row[1])])
-            
-            if review_metrics:
-                formatted_summary_data.append([format_cell(''), format_cell('')])  # Empty row
-                formatted_summary_data.append([format_cell('ĐÁNH GIÁ'), format_cell('')])
-                for row in review_metrics:
-                    formatted_summary_data.append([format_cell(row[0]), format_cell(row[1])])
-            
-            if inventory_metrics:
-                formatted_summary_data.append([format_cell(''), format_cell('')])  # Empty row
-                formatted_summary_data.append([format_cell('TỒN KHO'), format_cell('')])
-                for row in inventory_metrics:
-                    formatted_summary_data.append([format_cell(row[0]), format_cell(row[1])])
-            
+            for key, (label, unit, formatter) in metric_labels.items():
+                if key in summary and summary[key] is not None:
+                    value = summary[key]
+                    formatted_value = formatter(value)
+                    value_str = f"{formatted_value} {unit}"
+                    formatted_summary_data.append([format_cell(label), format_cell(value_str)])
             summary_data = formatted_summary_data
             
             summary_table = Table(summary_data, colWidths=[4*inch, 2*inch])
@@ -1179,21 +1321,9 @@ Ngày: {report_date}
                 ('GRID', (0, 0), (-1, -1), 1, colors.grey),
                 ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
             ])
-            
-            # Style category headers (rows with empty second column)
-            # Note: Font styling is handled by Paragraph objects
-            for i, row in enumerate(summary_data):
-                if isinstance(row[1], Paragraph) and hasattr(row[1], 'text') and row[1].text == '' and i > 0:
-                    # Check if this is a category header
-                    if isinstance(row[0], Paragraph) and hasattr(row[0], 'text') and row[0].text and row[0].text != 'Chỉ Tiêu':
-                        table_style.add('BACKGROUND', (0, i), (-1, i), colors.HexColor('#e8eaf6'))
-                        table_style.add('TEXTCOLOR', (0, i), (-1, i), colors.HexColor('#667eea'))
-                        table_style.add('TOPPADDING', (0, i), (-1, i), 8)
-                        table_style.add('BOTTOMPADDING', (0, i), (-1, i), 8)
-            
-        summary_table.setStyle(table_style)
-        story.append(summary_table)
-        story.append(Spacer(1, 0.3*inch))
+            summary_table.setStyle(table_style)
+            story.append(summary_table)
+            story.append(Spacer(1, 0.3*inch))
         
         # Format and add AI Analysis section
         if analysis:
@@ -1203,38 +1333,85 @@ Ngày: {report_date}
                 story.append(Paragraph("Phân Tích AI", heading_style))
                 story.extend(formatted_analysis)
                 story.append(Spacer(1, 0.3*inch))
-        
-        # Generate charts and add to PDF
-        chart_images = []
-        
-        # Revenue by hour chart
-        if raw_data and raw_data.get('revenue_metrics') and raw_data['revenue_metrics'].get('revenueByHour'):
-            chart_img = self._create_revenue_by_hour_chart(raw_data['revenue_metrics']['revenueByHour'])
-            if chart_img:
-                chart_images.append(('Doanh Thu Theo Giờ', chart_img))
-        
-        # Top products chart
-        if raw_data and raw_data.get('product_metrics') and raw_data['product_metrics'].get('topProducts'):
-            chart_img = self._create_top_products_chart(raw_data['product_metrics']['topProducts'])
-            if chart_img:
-                chart_images.append(('Sản Phẩm Bán Chạy', chart_img))
-        
-        # Forecast chart
-        if raw_data and raw_data.get('prophet_forecast') and raw_data['prophet_forecast'].get('du_bao_theo_ngay'):
-            chart_img = self._create_forecast_chart(raw_data['prophet_forecast']['du_bao_theo_ngay'])
-            if chart_img:
-                chart_images.append(('Dự Báo Tương Lai', chart_img))
-        
-        # Add charts to PDF (keep file paths for cleanup after PDF is built)
-        chart_files_to_cleanup = []
-        for chart_title, chart_path in chart_images:
-            story.append(PageBreak())
-            story.append(Paragraph(f"{chart_title}", heading_style))
-            img = Image(chart_path, width=6*inch, height=4*inch)
-            story.append(img)
-            story.append(Spacer(1, 0.2*inch))
-            # Keep track of files to cleanup after PDF is built
-            chart_files_to_cleanup.append(chart_path)
+
+        # daily_branch_metrics + ML sections (no legacy 6-API raw tables)
+        if raw_data and isinstance(raw_data, dict):
+            dm = raw_data.get("daily_branch_metrics") or {}
+            dk = raw_data.get("derived_kpis") or {}
+            iso = raw_data.get("isolation_forest_anomaly") or {}
+            fc = raw_data.get("prophet_forecast") or {}
+
+            def format_cell(text):
+                if not text:
+                    return ''
+                return Paragraph(str(text), table_normal_style)
+
+            if isinstance(dm, dict) and dm:
+                story.append(PageBreak())
+                story.append(Paragraph("Chỉ Số Theo Ngày (daily_branch_metrics)", heading_style))
+                dm_table = [[format_cell("Chỉ tiêu"), format_cell("Giá trị")]]
+                for k in [
+                    "total_revenue",
+                    "order_count",
+                    "avg_order_value",
+                    "peak_hour",
+                    "customer_count",
+                    "new_customers",
+                    "repeat_customers",
+                    "unique_products_sold",
+                    "product_diversity_score",
+                    "avg_review_score",
+                    "total_reviews",
+                    "low_stock_products",
+                    "out_of_stock_products",
+                    "material_cost",
+                ]:
+                    if k in dm and dm.get(k) is not None:
+                        dm_table.append([format_cell(k), format_cell(dm.get(k))])
+                if isinstance(dk, dict) and dk:
+                    if dk.get("profit") is not None:
+                        dm_table.append([format_cell("profit (ước tính)"), format_cell(format_currency(dk.get("profit")))])
+                    if dk.get("profit_margin") is not None:
+                        dm_table.append([format_cell("profit_margin"), format_cell(format_percent(dk.get("profit_margin"))) ])
+                t = Table(dm_table, colWidths=[3.2*inch, 2.8*inch])
+                t.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#667eea')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                    ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+                    ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                ]))
+                story.append(t)
+                story.append(Spacer(1, 0.2*inch))
+
+            if isinstance(iso, dict) and iso:
+                story.append(Paragraph("Phát Hiện Bất Thường (Isolation Forest)", heading_style))
+                is_anomaly = bool(iso.get("co_bat_thuong") or iso.get("is_anomaly") or iso.get("is_anomaly_iforest"))
+                conf = iso.get("adjusted_confidence") or iso.get("confidence") or iso.get("do_tin_cay")
+                story.append(Paragraph(f"Trạng thái: {'CÓ BẤT THƯỜNG' if is_anomaly else 'Không có bất thường'}", normal_style))
+                story.append(Paragraph(f"Độ tin cậy: {conf if conf is not None else 'N/A'}", normal_style))
+                chi_tieu = iso.get("chi_tieu_bat_thuong") or iso.get("anomalous_features") or []
+                if isinstance(chi_tieu, list) and chi_tieu:
+                    story.append(Spacer(1, 0.1*inch))
+                    for item in chi_tieu:
+                        if isinstance(item, dict):
+                            metric = item.get("metric") or item.get("name") or item.get("chi_tieu")
+                            change = item.get("change_percent") or item.get("phan_tram_thay_doi") or item.get("delta_percent")
+                            sev = item.get("severity") or item.get("muc_do") or item.get("level")
+                            parts = [p for p in [metric, f"{change}%" if change is not None else None, sev] if p]
+                            if parts:
+                                story.append(Paragraph("• " + " | ".join([str(p) for p in parts]), normal_style))
+                story.append(Spacer(1, 0.2*inch))
+
+            if isinstance(fc, dict) and fc:
+                story.append(Paragraph("Dự Báo Tương Lai (Prophet)", heading_style))
+                do_tin_cay = fc.get("do_tin_cay")
+                conf_pct = do_tin_cay.get("phan_tram") if isinstance(do_tin_cay, dict) else do_tin_cay
+                if conf_pct is None:
+                    conf_pct = fc.get("confidence")
+                target_metric = fc.get("chi_tieu_code") or fc.get("target_metric") or "order_count"
+                story.append(Paragraph(f"Chỉ tiêu: {target_metric}", normal_style))
+                story.append(Paragraph(f"Độ tin cậy: {conf_pct if conf_pct is not None else 'N/A'}", normal_style))
+                story.append(Spacer(1, 0.2*inch))
         
         # Recommendations section
         if recommendations:
@@ -1244,289 +1421,7 @@ Ngày: {report_date}
                 story.append(Paragraph(f"{i}. {rec}", normal_style))
                 story.append(Spacer(1, 0.1*inch))
         
-        # Raw data tables
-        if raw_data:
-            story.append(PageBreak())
-            story.append(Paragraph("Dữ Liệu Chi Tiết", heading_style))
-            
-            # Order Status Summary
-            if raw_data.get('revenue_metrics'):
-                rev_metrics = raw_data['revenue_metrics']
-                if rev_metrics.get('completedOrders') is not None or rev_metrics.get('cancelledOrders') is not None:
-                    story.append(Paragraph("Tình Trạng Đơn Hàng", heading3_style))
-                    order_status_data = [
-                        [format_cell('Tình Trạng'), format_cell('Số Lượng')]
-                    ]
-                    if rev_metrics.get('completedOrders') is not None:
-                        order_status_data.append([format_cell('Hoàn thành'), format_cell(str(rev_metrics.get('completedOrders', 0)))])
-                    if rev_metrics.get('pendingOrders') is not None:
-                        order_status_data.append([format_cell('Đang chờ'), format_cell(str(rev_metrics.get('pendingOrders', 0)))])
-                    if rev_metrics.get('cancelledOrders') is not None:
-                        order_status_data.append([format_cell('Đã hủy'), format_cell(str(rev_metrics.get('cancelledOrders', 0)))])
-                    
-                    order_status_table = Table(order_status_data, colWidths=[3*inch, 1*inch])
-                    order_status_table.setStyle(TableStyle([
-                        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#667eea')),
-                        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                        ('FONTSIZE', (0, 0), (-1, 0), 10),
-                        ('FONTSIZE', (0, 1), (-1, -1), 9),
-                        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-                        ('GRID', (0, 0), (-1, -1), 1, colors.grey),
-                    ]))
-                    story.append(order_status_table)
-                    story.append(Spacer(1, 0.3*inch))
-            
-            # Top products table
-            if raw_data.get('product_metrics') and raw_data['product_metrics'].get('topProducts'):
-                story.append(Paragraph("Sản Phẩm Bán Chạy", heading3_style))
-                prod_data = [
-                    [format_cell('STT'), format_cell('Tên Sản Phẩm'), format_cell('Số Lượng'), format_cell('Doanh Thu (VNĐ)')]
-                ]
-                for idx, item in enumerate(raw_data['product_metrics']['topProducts'][:10], 1):
-                    prod_data.append([
-                        format_cell(str(idx)),
-                        format_cell(item.get('productName', 'N/A')[:30]),  # Truncate long names
-                        format_cell(str(item.get('quantitySold', 0))),
-                        format_cell(format_currency(item.get('revenue', 0)))
-                    ])
-                prod_table = Table(prod_data, colWidths=[0.5*inch, 3*inch, 1*inch, 1.5*inch])
-                prod_table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#667eea')),
-                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                    ('FONTSIZE', (0, 0), (-1, 0), 10),
-                    ('FONTSIZE', (0, 1), (-1, -1), 9),
-                    ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                    ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-                    ('GRID', (0, 0), (-1, -1), 1, colors.grey),
-                ]))
-                story.append(prod_table)
-                story.append(Spacer(1, 0.3*inch))
-            
-            # Products by Category
-            if raw_data.get('product_metrics') and raw_data['product_metrics'].get('productsByCategory'):
-                products_by_cat = raw_data['product_metrics']['productsByCategory']
-                if products_by_cat and isinstance(products_by_cat, dict) and len(products_by_cat) > 0:
-                    story.append(Paragraph("Sản Phẩm Theo Danh Mục", heading3_style))
-                    cat_data = [
-                        [format_cell('Danh Mục'), format_cell('Số Lượng')]
-                    ]
-                    for category, count in list(products_by_cat.items())[:10]:
-                        cat_data.append([
-                            format_cell(str(category)[:40]),
-                            format_cell(str(count))
-                        ])
-                    cat_table = Table(cat_data, colWidths=[4*inch, 1*inch])
-                    cat_table.setStyle(TableStyle([
-                        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#667eea')),
-                        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                        ('FONTSIZE', (0, 0), (-1, 0), 10),
-                        ('FONTSIZE', (0, 1), (-1, -1), 9),
-                        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-                        ('GRID', (0, 0), (-1, -1), 1, colors.grey),
-                    ]))
-                    story.append(cat_table)
-                    story.append(Spacer(1, 0.3*inch))
-            
-            # Top Customers
-            if raw_data.get('customer_metrics') and raw_data['customer_metrics'].get('topCustomers'):
-                story.append(Paragraph("Khách Hàng Hàng Đầu", heading3_style))
-                customer_data = [
-                    [format_cell('STT'), format_cell('Tên Khách Hàng'), format_cell('Số Đơn'), format_cell('Tổng Chi Tiêu (VNĐ)')]
-                ]
-                for idx, item in enumerate(raw_data['customer_metrics']['topCustomers'][:10], 1):
-                    customer_data.append([
-                        format_cell(str(idx)),
-                        format_cell((item.get('customerName', 'Khách vãng lai') or 'Khách vãng lai')[:30]),
-                        format_cell(str(item.get('orderCount', 0))),
-                        format_cell(format_currency(item.get('totalSpent', 0)))
-                    ])
-                customer_table = Table(customer_data, colWidths=[0.5*inch, 3*inch, 1*inch, 1.5*inch])
-                customer_table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#667eea')),
-                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                    ('FONTSIZE', (0, 0), (-1, 0), 10),
-                    ('FONTSIZE', (0, 1), (-1, -1), 9),
-                    ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                    ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-                    ('GRID', (0, 0), (-1, -1), 1, colors.grey),
-                ]))
-                story.append(customer_table)
-                story.append(Spacer(1, 0.3*inch))
-            
-            # Revenue by Payment Method
-            if raw_data.get('revenue_metrics') and raw_data['revenue_metrics'].get('revenueByPaymentMethod'):
-                payment_methods = raw_data['revenue_metrics']['revenueByPaymentMethod']
-                if payment_methods and isinstance(payment_methods, dict) and len(payment_methods) > 0:
-                    story.append(Paragraph("Doanh Thu Theo Phương Thức Thanh Toán", heading3_style))
-                    payment_data = [
-                        [format_cell('Phương Thức'), format_cell('Doanh Thu (VNĐ)'), format_cell('Tỷ Lệ (%)')]
-                    ]
-                    total_rev = summary.get('total_revenue', 1) if summary else 1
-                    for method, amount in list(payment_methods.items())[:10]:
-                        method_name = {
-                            'CASH': 'Tiền mặt',
-                            'CARD': 'Thẻ',
-                            'MOMO': 'MoMo',
-                            'ZALOPAY': 'ZaloPay',
-                        }.get(method, method)
-                        percentage = (float(amount) / total_rev * 100) if total_rev > 0 else 0
-                        payment_data.append([
-                            format_cell(method_name),
-                            format_cell(format_currency(float(amount))),
-                            format_cell(f"{percentage:.1f}%")
-                        ])
-                    payment_table = Table(payment_data, colWidths=[2.5*inch, 2*inch, 1*inch])
-                    payment_table.setStyle(TableStyle([
-                        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#667eea')),
-                        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                        ('ALIGN', (1, 1), (-1, -1), 'RIGHT'),
-                        ('FONTSIZE', (0, 0), (-1, 0), 10),
-                        ('FONTSIZE', (0, 1), (-1, -1), 9),
-                        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-                        ('GRID', (0, 0), (-1, -1), 1, colors.grey),
-                    ]))
-                    story.append(payment_table)
-                    story.append(Spacer(1, 0.3*inch))
-            
-            # Top Ingredients by Value
-            if raw_data.get('inventory_metrics') and raw_data['inventory_metrics'].get('topIngredientsByValue'):
-                story.append(Paragraph("Nguyên Liệu Có Giá Trị Cao Nhất", heading3_style))
-                ingredient_value_data = [
-                    [format_cell('STT'), format_cell('Tên Nguyên Liệu'), format_cell('Số Lượng'), format_cell('Giá Trị (VNĐ)')]
-                ]
-                for idx, item in enumerate(raw_data['inventory_metrics']['topIngredientsByValue'][:10], 1):
-                    ingredient_value_data.append([
-                        format_cell(str(idx)),
-                        format_cell(item.get('ingredientName', 'N/A')[:30]),
-                        format_cell(f"{item.get('quantity', 0)} {item.get('unitCode', '')}"),
-                        format_cell(format_currency(item.get('stockValue', 0)))
-                    ])
-                ingredient_value_table = Table(ingredient_value_data, colWidths=[0.5*inch, 2.5*inch, 1.5*inch, 1.5*inch])
-                ingredient_value_table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#667eea')),
-                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                    ('FONTSIZE', (0, 0), (-1, 0), 10),
-                    ('FONTSIZE', (0, 1), (-1, -1), 9),
-                    ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                    ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-                    ('GRID', (0, 0), (-1, -1), 1, colors.grey),
-                ]))
-                story.append(ingredient_value_table)
-                story.append(Spacer(1, 0.3*inch))
-            
-            # Top Cost Ingredients
-            if raw_data.get('material_cost_metrics') and raw_data['material_cost_metrics'].get('topCostIngredients'):
-                story.append(Paragraph("Nguyên Liệu Có Chi Phí Cao Nhất", heading3_style))
-                cost_ingredient_data = [
-                    [format_cell('STT'), format_cell('Tên Nguyên Liệu'), format_cell('Chi Phí (VNĐ)'), format_cell('Tỷ Lệ (%)')]
-                ]
-                for idx, item in enumerate(raw_data['material_cost_metrics']['topCostIngredients'][:10], 1):
-                    cost_ingredient_data.append([
-                        format_cell(str(idx)),
-                        format_cell(item.get('ingredientName', 'N/A')[:30]),
-                        format_cell(format_currency(item.get('totalCost', 0))),
-                        format_cell(f"{item.get('percentage', 0):.1f}%")
-                    ])
-                cost_ingredient_table = Table(cost_ingredient_data, colWidths=[0.5*inch, 2.5*inch, 1.5*inch, 1*inch])
-                cost_ingredient_table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#667eea')),
-                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                    ('ALIGN', (2, 1), (-1, -1), 'RIGHT'),
-                    ('FONTSIZE', (0, 0), (-1, 0), 10),
-                    ('FONTSIZE', (0, 1), (-1, -1), 9),
-                    ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                    ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-                    ('GRID', (0, 0), (-1, -1), 1, colors.grey),
-                ]))
-                story.append(cost_ingredient_table)
-                story.append(Spacer(1, 0.3*inch))
-            
-            # Recent Reviews
-            if raw_data.get('review_metrics') and raw_data['review_metrics'].get('recentReviews'):
-                story.append(Paragraph("Đánh Giá Gần Đây", heading3_style))
-                for idx, review in enumerate(raw_data['review_metrics']['recentReviews'][:5], 1):
-                    rating = review.get('rating', 0)
-                    comment = review.get('comment') or review.get('content', '')
-                    date = review.get('createdAt') or review.get('date', '')
-                    date_str = ''
-                    if date:
-                        try:
-                            from datetime import datetime as dt
-                            if isinstance(date, str):
-                                date_str = dt.fromisoformat(date.replace('Z', '+00:00')).strftime('%d/%m/%Y')
-                            else:
-                                date_str = str(date)
-                        except:
-                            date_str = str(date)
-                    
-                    story.append(Paragraph(
-                        f"{idx}. {int(rating)}/5 sao - {date_str}",
-                        normal_style
-                    ))
-                    if comment:
-                        story.append(Paragraph(f"   {comment[:100]}{'...' if len(comment) > 100 else ''}", normal_style))
-                    story.append(Spacer(1, 0.1*inch))
-                story.append(Spacer(1, 0.2*inch))
-            
-            # Review Distribution
-            if raw_data.get('review_metrics') and raw_data['review_metrics'].get('reviewDistribution'):
-                review_dist = raw_data['review_metrics']['reviewDistribution']
-                if review_dist and isinstance(review_dist, dict) and len(review_dist) > 0:
-                    story.append(Paragraph("Phân Bố Đánh Giá", heading3_style))
-                    review_dist_data = [
-                        [format_cell('Sao'), format_cell('Số Lượng')]
-                    ]
-                    for rating in ['5', '4', '3', '2', '1']:
-                        count = review_dist.get(rating, 0) or review_dist.get(int(rating), 0) or 0
-                        review_dist_data.append([
-                            format_cell(f"{rating} sao"),
-                            format_cell(str(count))
-                        ])
-                    review_dist_table = Table(review_dist_data, colWidths=[3*inch, 2*inch])
-                    review_dist_table.setStyle(TableStyle([
-                        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#667eea')),
-                        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                        ('FONTSIZE', (0, 0), (-1, 0), 10),
-                        ('FONTSIZE', (0, 1), (-1, -1), 9),
-                        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-                        ('GRID', (0, 0), (-1, -1), 1, colors.grey),
-                    ]))
-                    story.append(review_dist_table)
-                    story.append(Spacer(1, 0.3*inch))
-            
-            # Inventory alerts
-            if raw_data.get('inventory_metrics'):
-                inv_metrics = raw_data['inventory_metrics']
-                if inv_metrics.get('lowStockItems') or inv_metrics.get('outOfStockItems'):
-                    story.append(Paragraph("Cảnh Báo Tồn Kho", heading3_style))
-                    if inv_metrics.get('outOfStockItems'):
-                        story.append(Paragraph("Sản phẩm hết hàng:", normal_style))
-                        for item in inv_metrics['outOfStockItems'][:10]:
-                            story.append(Paragraph(
-                                f"• {item.get('ingredientName', 'N/A')} - Còn: {item.get('currentQuantity', 0)} {item.get('unitName', '')}",
-                                normal_style
-                            ))
-                    if inv_metrics.get('lowStockItems'):
-                        story.append(Spacer(1, 0.1*inch))
-                        story.append(Paragraph("Sản phẩm sắp hết:", normal_style))
-                        for item in inv_metrics['lowStockItems'][:10]:
-                            story.append(Paragraph(
-                                f"• {item.get('ingredientName', 'N/A')} - Còn: {item.get('currentQuantity', 0)}/{item.get('threshold', 0)} {item.get('unitName', '')}",
-                                normal_style
-                            ))
-                    story.append(Spacer(1, 0.3*inch))
+        # (legacy 6-API raw tables removed)
         
         # Footer
         story.append(Spacer(1, 0.5*inch))
@@ -1535,14 +1430,6 @@ Ngày: {report_date}
         
         # Build PDF
         doc.build(story)
-        
-        # Clean up chart files after PDF is built (reportlab reads files during build)
-        for chart_path in chart_files_to_cleanup:
-            try:
-                if os.path.exists(chart_path):
-                    os.unlink(chart_path)
-            except Exception as e:
-                logger.warning(f"Failed to cleanup chart file {chart_path}: {e}")
         
         return pdf_path
     
@@ -1730,7 +1617,8 @@ Ngày: {report_date}
                 report_date=report_date,
                 analysis=analysis,
                 summary=summary,
-                recommendations=recommendations
+                recommendations=recommendations,
+                raw_data=raw_data
             )
             
             # Add both versions
@@ -1808,6 +1696,147 @@ Ngày: {report_date}
         raw_data: Optional[Dict[str, Any]] = None
     ) -> str:
         """Build HTML email body for all branches report"""
+        # daily_branch_metrics (all branches) + ML overview (from raw_data)
+        data_source_html = ""
+        ml_overview_html = ""
+        branches_table_html = ""
+        analysis_html = ""
+
+        try:
+            if raw_data and isinstance(raw_data, dict):
+                source = raw_data.get("source") or ("daily_branch_metrics" if "branches" in raw_data else None)
+                if source:
+                    data_source_html = f"""
+                    <div class="analysis-section" style="border-left-color:#3498db;">
+                        <h2 style="color:#3498db;">🗄️ Nguồn Dữ Liệu</h2>
+                        <div class="analysis-preview">Nguồn: <strong>{html_lib.escape(str(source))}</strong></div>
+                    </div>
+                    """
+
+                ml_info = raw_data.get("ml_enrichment") or {}
+                branches = raw_data.get("branches") or []
+                processed = int(ml_info.get("branches_processed") or 0) if isinstance(ml_info, dict) else 0
+
+                anomaly_branch_ids = []
+                if isinstance(branches, list):
+                    for b in branches:
+                        if not isinstance(b, dict):
+                            continue
+                        iso = b.get("isolation_forest_anomaly") or {}
+                        if isinstance(iso, dict) and iso:
+                            is_anomaly = bool(iso.get("co_bat_thuong") or iso.get("is_anomaly") or iso.get("is_anomaly_iforest"))
+                            if is_anomaly:
+                                bid = b.get("branch_id")
+                                if bid is not None:
+                                    anomaly_branch_ids.append(bid)
+                anomaly_preview = ", ".join([str(x) for x in anomaly_branch_ids[:10]]) if anomaly_branch_ids else "Không có"
+
+                if isinstance(ml_info, dict) and ml_info:
+                    ml_overview_html = f"""
+                    <div class="analysis-section" style="border-left-color:#667eea;">
+                        <h2 style="color:#667eea;">🧠 ML (Bất Thường & Dự Báo)</h2>
+                        <div class="analysis-preview">
+                            Bật ML: <strong>{html_lib.escape(str(ml_info.get('enabled')))}</strong><br>
+                            Chi nhánh đã chạy ML: <strong>{processed}</strong><br>
+                            Giới hạn: <strong>{html_lib.escape(str(ml_info.get('ml_branch_limit')))}</strong> | Concurrency: <strong>{html_lib.escape(str(ml_info.get('ml_concurrency')))}</strong><br>
+                            Chi nhánh có bất thường: <strong>{len(anomaly_branch_ids)}</strong><br>
+                            Danh sách (tối đa 10): {html_lib.escape(str(anomaly_preview))}
+                        </div>
+                    </div>
+                    """
+
+                # Top branches table by revenue (best-effort)
+                if isinstance(branches, list) and branches:
+                    def _rev(b):
+                        dm = (b or {}).get("daily_branch_metrics") or {}
+                        v = dm.get("total_revenue")
+                        try:
+                            return float(v) if v is not None else 0.0
+                        except Exception:
+                            return 0.0
+
+                    top = sorted([b for b in branches if isinstance(b, dict)], key=_rev, reverse=True)[:10]
+                    rows_html = ""
+                    for b in top:
+                        dm = b.get("daily_branch_metrics") or {}
+                        dk = b.get("derived_kpis") or {}
+                        iso = b.get("isolation_forest_anomaly") or {}
+                        fc = b.get("prophet_forecast") or {}
+
+                        bid = b.get("branch_id")
+                        rev = dm.get("total_revenue")
+                        orders = dm.get("order_count")
+                        cust = dm.get("customer_count")
+                        pm = dk.get("profit_margin")
+                        is_anom = bool(isinstance(iso, dict) and (iso.get("co_bat_thuong") or iso.get("is_anomaly") or iso.get("is_anomaly_iforest")))
+                        do_tin_cay = fc.get("do_tin_cay") if isinstance(fc, dict) else None
+                        fc_conf = do_tin_cay.get("phan_tram") if isinstance(do_tin_cay, dict) else do_tin_cay
+
+                        # Format for readability
+                        try:
+                            rev_fmt = f"{float(rev):,.0f}".replace(",", ".") if rev is not None else "N/A"
+                        except Exception:
+                            rev_fmt = str(rev)
+                        try:
+                            pm_num = float(pm) if pm is not None else None
+                            pm_fmt = (
+                                f"{(pm_num * 100):.2f}%"
+                                if pm_num is not None and pm_num <= 1
+                                else (f"{pm_num:.2f}%" if pm_num is not None else "N/A")
+                            )
+                        except Exception:
+                            pm_fmt = str(pm)
+
+                        rows_html += f"""
+                            <tr>
+                                <td style="padding:10px;border-bottom:1px solid #eee;">{html_lib.escape(str(bid))}</td>
+                                <td style="padding:10px;border-bottom:1px solid #eee;font-weight:600;">{html_lib.escape(str(rev_fmt))}</td>
+                                <td style="padding:10px;border-bottom:1px solid #eee;">{html_lib.escape(str(orders))}</td>
+                                <td style="padding:10px;border-bottom:1px solid #eee;">{html_lib.escape(str(cust))}</td>
+                                <td style="padding:10px;border-bottom:1px solid #eee;">{html_lib.escape(str(pm_fmt))}</td>
+                                <td style="padding:10px;border-bottom:1px solid #eee;">{'⚠️ Có' if is_anom else '✅ Không'}</td>
+                                <td style="padding:10px;border-bottom:1px solid #eee;">{html_lib.escape(str(fc_conf)) if fc_conf is not None else 'N/A'}</td>
+                            </tr>
+                        """
+
+                    branches_table_html = f"""
+                    <div class="analysis-section" style="border-left-color:#e67e22;">
+                        <h2 style="color:#e67e22;">🏆 Top Chi Nhánh (theo doanh thu)</h2>
+                        <div style="background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
+                            <table style="width:100%;border-collapse:collapse;">
+                                <thead>
+                                    <tr style="background:#fafafa;">
+                                        <th style="text-align:left;padding:10px;border-bottom:1px solid #eee;">Branch</th>
+                                        <th style="text-align:left;padding:10px;border-bottom:1px solid #eee;">Doanh thu</th>
+                                        <th style="text-align:left;padding:10px;border-bottom:1px solid #eee;">Đơn</th>
+                                        <th style="text-align:left;padding:10px;border-bottom:1px solid #eee;">Khách</th>
+                                        <th style="text-align:left;padding:10px;border-bottom:1px solid #eee;">Biên LN</th>
+                                        <th style="text-align:left;padding:10px;border-bottom:1px solid #eee;">Bất thường</th>
+                                        <th style="text-align:left;padding:10px;border-bottom:1px solid #eee;">Tin cậy dự báo</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {rows_html}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    """
+
+            if analysis:
+                preview = analysis.strip()
+                if len(preview) > 1600:
+                    preview = preview[:1600] + "\n...\n(đã rút gọn, xem PDF để đầy đủ)"
+                preview = html_lib.escape(preview)
+                analysis_html = f"""
+                <div class="analysis-section">
+                    <h2>🧾 Nhận Định & Phân Tích</h2>
+                    <div class="analysis-preview">{preview}</div>
+                </div>
+                """
+        except Exception:
+            pass
+
         # Format summary metrics nicely
         summary_html = ""
         if summary:
@@ -1828,21 +1857,29 @@ Ngày: {report_date}
                 'total_repeat_customers': ('🔄 Khách Hàng Quay Lại', 'người'),
                 'overall_customer_retention_rate': ('📈 Tỷ Lệ Giữ Chân', '%'),
                 'total_unique_products_sold': ('📦 Sản Phẩm Đã Bán', 'sản phẩm'),
+                'overall_product_diversity_score': ('🧩 Độ Đa Dạng SP (TB)', ''),
                 'overall_avg_review_score': ('⭐ Đánh Giá TB', '/5'),
                 'total_reviews': ('💬 Tổng Đánh Giá', 'đánh giá'),
                 'average_revenue_per_branch': ('💵 Doanh Thu TB/Chi Nhánh', 'VNĐ'),
+                'total_material_cost': ('💵 Tổng Chi Phí Nguyên Liệu', 'VNĐ'),
+                'total_profit': ('📌 Tổng Lợi Nhuận (Ước Tính)', 'VNĐ'),
+                'overall_profit_margin': ('📊 Biên Lợi Nhuận (TB)', '%'),
             }
             
             for key, (label, unit) in key_metrics.items():
                 if key in summary and summary[key] is not None:
                     value = summary[key]
                     if isinstance(value, (int, float)):
-                        if key in ['total_revenue', 'avg_order_value', 'average_revenue_per_branch']:
+                        if key in ['total_revenue', 'avg_order_value', 'average_revenue_per_branch', 'total_material_cost', 'total_profit']:
                             value = f"{value:,.0f}".replace(',', '.')
                         elif key == 'overall_avg_review_score':
                             value = f"{value:.2f}"
                         elif key == 'overall_customer_retention_rate':
                             value = f"{value * 100:.2f}" if value < 1 else f"{value:.2f}"
+                        elif key == 'overall_profit_margin':
+                            value = f"{value * 100:.2f}" if value < 1 else f"{value:.2f}"
+                        elif key == 'overall_product_diversity_score':
+                            value = f"{value:.4f}"
                         elif isinstance(value, float):
                             value = f"{value:.2f}"
                     summary_html += f"""
@@ -2088,7 +2125,8 @@ Ngày: {report_date}
         report_date: str,
         analysis: str,
         summary: Optional[dict] = None,
-        recommendations: Optional[List[str]] = None
+        recommendations: Optional[List[str]] = None,
+        raw_data: Optional[Dict[str, Any]] = None
     ) -> str:
         """Build plain text email body for all branches"""
         text = f"""
@@ -2096,6 +2134,7 @@ BÁO CÁO PHÂN TÍCH AI - TẤT CẢ CHI NHÁNH
 Ngày: {report_date}
 
 """
+        # Admin email: keep body short. Details (data source / ML / top branches / analysis) are in the PDF attachment.
         if summary:
             text += "TÓM TẮT METRICS TỔNG HỢP:\n"
             for key, value in summary.items():
@@ -2107,7 +2146,7 @@ Ngày: {report_date}
             text += "KHUYẾN NGHỊ:\n"
             for i, rec in enumerate(recommendations, 1):
                 text += f"{i}. {rec}\n"
-        
+
         return text
     
     def _generate_all_branches_pdf_file(
@@ -2204,11 +2243,13 @@ Ngày: {report_date}
                 'total_repeat_customers': ('Khách Hàng Quay Lại', 'người', str),
                 'overall_customer_retention_rate': ('Tỷ Lệ Giữ Chân', '%', lambda x: f"{x * 100:.2f}" if isinstance(x, float) and x < 1 else f"{x:.2f}"),
                 'total_unique_products_sold': ('Sản Phẩm Đã Bán', 'sản phẩm', str),
+                'overall_product_diversity_score': ('Độ Đa Dạng SP (TB)', '', lambda x: f"{float(x):.4f}" if isinstance(x, (int, float)) else str(x)),
                 'overall_avg_review_score': ('Đánh Giá TB', '/5', lambda x: f"{x:.2f}" if isinstance(x, float) else str(x)),
                 'total_reviews': ('Tổng Đánh Giá', 'đánh giá', str),
                 'average_revenue_per_branch': ('Doanh Thu TB/Chi Nhánh', 'VNĐ', format_currency),
-                'total_orders': ('Tổng Đơn Hàng', 'đơn', str),
-                'average_orders_per_branch': ('Đơn TB/Chi Nhánh', 'đơn', lambda x: f"{x:.2f}" if isinstance(x, float) else str(x)),
+                'total_material_cost': ('Tổng Chi Phí Nguyên Liệu', 'VNĐ', format_currency),
+                'total_profit': ('Tổng Lợi Nhuận (Ước Tính)', 'VNĐ', format_currency),
+                'overall_profit_margin': ('Biên Lợi Nhuận (TB)', '%', lambda x: f"{(float(x) * 100):.2f}" if isinstance(x, (int, float)) and float(x) <= 1 else f"{float(x):.2f}"),
             }
             
             def format_cell(text):
@@ -2248,99 +2289,63 @@ Ngày: {report_date}
                 story.append(Paragraph("Phân Tích AI - Đánh Giá Tất Cả Chi Nhánh", heading_style))
                 story.extend(formatted_analysis)
                 story.append(Spacer(1, 0.3*inch))
-        
-        # Branch comparison table (if available in raw_data)
-        if raw_data and raw_data.get('all_branches_stats') and raw_data['all_branches_stats'].get('branchSummaries'):
+
+        # Branch table (from daily_branch_metrics payload)
+        if raw_data and isinstance(raw_data, dict) and isinstance(raw_data.get("branches"), list) and raw_data.get("branches"):
             story.append(PageBreak())
-            story.append(Paragraph("So Sánh Chi Nhánh", heading_style))
-            
-            branch_data = [
-                [format_cell('STT'), format_cell('Tên Chi Nhánh'), format_cell('Doanh Thu'), format_cell('Số Đơn'), format_cell('Đơn Hoàn Thành'), format_cell('Đơn Hủy')]
-            ]
-            
-            for idx, branch in enumerate(raw_data['all_branches_stats']['branchSummaries'][:20], 1):
+            story.append(Paragraph("Top Chi Nhánh (theo doanh thu) - daily_branch_metrics", heading_style))
+
+            branches = [b for b in raw_data.get("branches") if isinstance(b, dict)]
+
+            def _rev(b):
+                dm = (b or {}).get("daily_branch_metrics") or {}
+                v = dm.get("total_revenue")
+                try:
+                    return float(v) if v is not None else 0.0
+                except Exception:
+                    return 0.0
+
+            top = sorted(branches, key=_rev, reverse=True)[:20]
+
+            def format_cell(text):
+                if not text:
+                    return ''
+                return Paragraph(str(text), table_normal_style)
+
+            branch_data = [[
+                format_cell("STT"),
+                format_cell("Branch"),
+                format_cell("Doanh thu"),
+                format_cell("Đơn"),
+                format_cell("Khách"),
+                format_cell("Biên LN"),
+                format_cell("Bất thường"),
+            ]]
+
+            for idx, b in enumerate(top, 1):
+                dm = b.get("daily_branch_metrics") or {}
+                dk = b.get("derived_kpis") or {}
+                iso = b.get("isolation_forest_anomaly") or {}
+                is_anom = bool(isinstance(iso, dict) and (iso.get("co_bat_thuong") or iso.get("is_anomaly") or iso.get("is_anomaly_iforest")))
                 branch_data.append([
-                    format_cell(str(idx)),
-                    format_cell(branch.get('branchName', f"Chi nhánh {branch.get('branchId', 'N/A')}")[:25]),
-                    format_cell(format_currency(branch.get('revenue', 0))),
-                    format_cell(str(branch.get('orderCount', 0))),
-                    format_cell(str(branch.get('completedOrders', 0))),
-                    format_cell(str(branch.get('cancelledOrders', 0)))
+                    format_cell(idx),
+                    format_cell(b.get("branch_id")),
+                    format_cell(format_currency(dm.get("total_revenue") or 0)),
+                    format_cell(dm.get("order_count") or 0),
+                    format_cell(dm.get("customer_count") or 0),
+                    format_cell(f"{(float(dk.get('profit_margin')) * 100):.2f}%" if isinstance(dk.get("profit_margin"), (int, float)) and float(dk.get("profit_margin")) <= 1 else dk.get("profit_margin")),
+                    format_cell("Có" if is_anom else "Không"),
                 ])
-            
-            branch_table = Table(branch_data, colWidths=[0.5*inch, 2*inch, 1.2*inch, 0.8*inch, 1*inch, 0.8*inch])
+
+            branch_table = Table(branch_data, colWidths=[0.5*inch, 0.8*inch, 1.2*inch, 0.7*inch, 0.7*inch, 0.9*inch, 0.9*inch])
             branch_table.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e74c3c')),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                ('FONTSIZE', (0, 0), (-1, 0), 9),
-                ('FONTSIZE', (0, 1), (-1, -1), 8),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
                 ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                ('FONTSIZE', (0, 0), (-1, -1), 8),
             ]))
             story.append(branch_table)
-            story.append(Spacer(1, 0.3*inch))
-        
-        # Top performing branches
-        if raw_data and raw_data.get('all_branches_stats') and raw_data['all_branches_stats'].get('topPerformingBranches'):
-            story.append(Paragraph("Top Chi Nhánh Hoạt Động Tốt Nhất", heading3_style))
-            top_branches_data = [
-                [format_cell('Hạng'), format_cell('Tên Chi Nhánh'), format_cell('Doanh Thu'), format_cell('Số Đơn')]
-            ]
-            
-            for idx, branch in enumerate(raw_data['all_branches_stats']['topPerformingBranches'][:10], 1):
-                top_branches_data.append([
-                    format_cell(str(idx)),
-                    format_cell(branch.get('branchName', f"Chi nhánh {branch.get('branchId', 'N/A')}")[:30]),
-                    format_cell(format_currency(branch.get('revenue', 0))),
-                    format_cell(str(branch.get('orderCount', 0)))
-                ])
-            
-            top_branches_table = Table(top_branches_data, colWidths=[0.5*inch, 3*inch, 1.5*inch, 1*inch])
-            top_branches_table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#27ae60')),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                ('FONTSIZE', (0, 0), (-1, 0), 10),
-                ('FONTSIZE', (0, 1), (-1, -1), 9),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-                ('GRID', (0, 0), (-1, -1), 1, colors.grey),
-            ]))
-            story.append(top_branches_table)
-            story.append(Spacer(1, 0.3*inch))
-        
-        # Branch review stats
-        if raw_data and raw_data.get('all_branches_review_metrics') and raw_data['all_branches_review_metrics'].get('branchReviewStats'):
-            story.append(PageBreak())
-            story.append(Paragraph("Đánh Giá Theo Chi Nhánh", heading_style))
-            
-            review_data = [
-                [format_cell('Chi Nhánh'), format_cell('Điểm TB'), format_cell('Tổng Đánh Giá'), format_cell('Tích Cực'), format_cell('Tiêu Cực')]
-            ]
-            
-            for branch in raw_data['all_branches_review_metrics']['branchReviewStats'][:20]:
-                review_data.append([
-                    format_cell(branch.get('branchName', f"Chi nhánh {branch.get('branchId', 'N/A')}")[:25]),
-                    format_cell(f"{branch.get('avgReviewScore', 0):.2f}"),
-                    format_cell(str(branch.get('totalReviews', 0))),
-                    format_cell(str(branch.get('positiveReviews', 0))),
-                    format_cell(str(branch.get('negativeReviews', 0)))
-                ])
-            
-            review_table = Table(review_data, colWidths=[2.5*inch, 1*inch, 1*inch, 1*inch, 1*inch])
-            review_table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e74c3c')),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                ('FONTSIZE', (0, 0), (-1, 0), 9),
-                ('FONTSIZE', (0, 1), (-1, -1), 8),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-                ('GRID', (0, 0), (-1, -1), 1, colors.grey),
-            ]))
-            story.append(review_table)
             story.append(Spacer(1, 0.3*inch))
         
         # Recommendations section
