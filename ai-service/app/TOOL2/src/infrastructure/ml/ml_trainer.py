@@ -293,7 +293,16 @@ class MLTrainer:
             hyperparameters=json.dumps({
                 'n_estimators': model.n_estimators,
                 'contamination': model.contamination,
-                'random_state': model.random_state
+                'random_state': model.random_state,
+                # Quality log (audit) - stored alongside hyperparams for easy inspection in admin UI
+                'quality_log': metadata.get('quality_log'),
+                'training_summary': {
+                    'training_samples': metadata.get('training_samples'),
+                    'training_date_start': metadata.get('training_date_start'),
+                    'training_date_end': metadata.get('training_date_end'),
+                    'anomaly_rate': metadata.get('anomaly_rate'),
+                    'threshold_score': metadata.get('threshold_score'),
+                }
             }),
             feature_list=json.dumps(self.FEATURES),
             training_data_start_date=date.fromisoformat(metadata['training_date_start']),

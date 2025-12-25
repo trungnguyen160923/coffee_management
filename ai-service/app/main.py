@@ -4,7 +4,7 @@ Main FastAPI Application
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
-from app.routers import analytics, ai_agent, reports, distribution, scheduler
+from app.routers import analytics, ai_agent, reports, distribution, scheduler, admin_models
 from app.database import init_db
 from app.services.scheduler_service import SchedulerService
 import logging
@@ -44,6 +44,7 @@ app.include_router(ai_agent.router)
 app.include_router(reports.router)
 app.include_router(distribution.router)
 app.include_router(scheduler.router)
+app.include_router(admin_models.router)
 
 
 @app.on_event("startup")

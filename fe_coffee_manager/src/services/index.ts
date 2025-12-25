@@ -11,6 +11,7 @@ export { default as tableService } from './tableService';
 export { default as discountService } from './discountService';
 export { default as posService } from './posService';
 export { default as aiStatisticsService } from './aiStatisticsService';
+export { default as aiModelAdminService } from './aiModelAdminService';
 export { analyticsService } from './analyticsService';
 export { exportAIStatisticsToPDF } from './pdfExportService';
 export { shiftTemplateService } from './shiftTemplateService';

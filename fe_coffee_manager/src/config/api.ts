@@ -171,7 +171,9 @@ class ApiClient {
           }
         } else {
           // Tạo error object với thông tin chi tiết
-          const error = new Error(errorData.message || `HTTP error! status: ${response.status}`);
+          // FastAPI thường trả { detail: "..." } thay vì { message: "..." }
+          const errMsg = errorData?.message || errorData?.detail || `HTTP error! status: ${response.status}`;
+          const error = new Error(errMsg);
           (error as any).status = response.status;
           (error as any).code = errorData.code;
           (error as any).response = errorData;

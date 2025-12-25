@@ -62,16 +62,24 @@ class ForecastPredictor:
         external_regressors = []
         if metadata and metadata.get('use_external_regressors', False):
             external_regressors = metadata.get('external_regressors', [])
+        day_of_week_format = None
+        if metadata:
+            day_of_week_format = metadata.get('day_of_week_format')  # "0-6" or "1-7"
         
         if external_regressors and len(external_regressors) > 0:
             # Tính giá trị cho external regressors trong future dates
             for regressor in external_regressors:
-                if regressor in ['day_of_week', 'is_weekend']:
+                if regressor in ['day_of_week', 'is_weekend', 'month']:
                     # Tính từ date
                     if regressor == 'day_of_week':
-                        future_df[regressor] = future_df['ds'].dt.dayofweek + 1  # 1-7
+                        if str(day_of_week_format or "").strip() == "0-6":
+                            future_df[regressor] = future_df['ds'].dt.dayofweek  # 0-6
+                        else:
+                            future_df[regressor] = future_df['ds'].dt.dayofweek + 1  # 1-7 (default)
                     elif regressor == 'is_weekend':
                         future_df[regressor] = (future_df['ds'].dt.dayofweek >= 5).astype(int)
+                    elif regressor == 'month':
+                        future_df[regressor] = future_df['ds'].dt.month.astype(int)
                 elif regressor == 'peak_hour':
                     # Sử dụng giá trị trung bình từ training data
                     if training_df is not None and 'peak_hour' in training_df.columns:

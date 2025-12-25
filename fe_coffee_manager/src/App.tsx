@@ -21,6 +21,8 @@ import AdminPayrollManagement from './pages/admin/AdminPayrollManagement';
 import AdminPayrollTemplates from './pages/admin/AdminPayrollTemplates';
 import AdminPayrollReports from './pages/admin/AdminPayrollReports';
 import AdminPayrollSettings from './pages/admin/AdminPayrollSettings';
+import AdminModelTraining from './pages/admin/AdminModelTraining';
+import AdminModelTrainingNew from './pages/admin/AdminModelTrainingNew';
 import { ManagerDashboard } from './pages/manager/ManagerDashboard';
 import StaffManagement from './pages/manager/StaffManagement';
 import ManagerSupplierManagement from './pages/manager/SupplierManagement';
@@ -128,6 +130,10 @@ function AppRoutes() {
             <Route path="payroll-reports" element={<Layout><AdminPayrollReports /></Layout>} />
             <Route path="payroll-settings" element={<Layout><AdminPayrollSettings /></Layout>} />
             <Route path="account" element={<Layout><AccountSettingsPage /></Layout>} />
+            {/* Hidden admin route for ML training/testing (no menu link) */}
+            <Route path="ml-models" element={<Layout><AdminModelTraining /></Layout>} />
+            {/* Hidden admin route for NEW_METHOD pipelines testing (no menu link) */}
+            <Route path="ml-models_new" element={<Layout><AdminModelTrainingNew /></Layout>} />
             {/* Unknown admin subroute: show 404 without Layout */}
             <Route path="*" element={<NotFoundPage showLoginButton={false} />} />
           </Routes>

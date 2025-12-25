@@ -1,0 +1,30 @@
+{
+  "name": "branch_1_order_count_ops_no_month",
+  "rows_total": 181,
+  "rows_train": 151,
+  "rows_test": 30,
+  "horizon": 30,
+  "config": {
+    "changepoint_prior_scale": 0.05,
+    "seasonality_prior_scale": 1.0,
+    "seasonality_mode": "additive",
+    "changepoint_range": 0.9,
+    "interval_width": 0.8
+  },
+  "regressors": [
+    "is_weekend",
+    "day_of_week",
+    "staff_count",
+    "avg_prep_time",
+    "new_ratio",
+    "waste_ratio",
+    "product_diversity_score",
+    "peak_hour",
+    "avg_review_score"
+  ],
+  "rmse": 42.106576823005696,
+  "mae": 33.97073128386782,
+  "mape": 0.09323251105192434,
+  "smape": 0.0869655759176342,
+  "coverage": 0.7
+}

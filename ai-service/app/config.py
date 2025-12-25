@@ -62,6 +62,20 @@ class Settings:
     TUNING_TIMEOUT_SECONDS: Optional[int] = int(os.getenv("TUNING_TIMEOUT_SECONDS", "300")) if os.getenv("TUNING_TIMEOUT_SECONDS") else None
     TUNING_VALIDATION_RATIO: float = float(os.getenv("TUNING_VALIDATION_RATIO", "0.2"))
     MODEL_COMPARISON_THRESHOLD: float = float(os.getenv("MODEL_COMPARISON_THRESHOLD", "0.0"))  # % improvement required (0.0 = chỉ cần >=)
+
+    # ============================================
+    # "Production readiness" thresholds (quality gates)
+    # ============================================
+    # Forecast (Prophet) gates
+    FORECAST_MIN_TEST_SAMPLES: int = int(os.getenv("FORECAST_MIN_TEST_SAMPLES", "10"))
+    # MAPE (%) lower is better. Typical reasonable default for order_count.
+    FORECAST_MAX_MAPE_PERCENT: float = float(os.getenv("FORECAST_MAX_MAPE_PERCENT", "30.0"))
+    # Optional MAE absolute cap (0 disables). Useful if you want strict absolute error bound.
+    FORECAST_MAX_MAE: float = float(os.getenv("FORECAST_MAX_MAE", "0.0"))
+
+    # Isolation Forest gates
+    # Separation score computed on validation slice (20% tail). Higher is better.
+    IFOREST_MIN_VALIDATION_SEPARATION: float = float(os.getenv("IFOREST_MIN_VALIDATION_SEPARATION", "0.01"))
     
     # AI Provider Settings (OpenAI or Gemini)
     AI_PROVIDER: str = os.getenv("AI_PROVIDER", "openai")
