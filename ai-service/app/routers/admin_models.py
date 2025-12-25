@@ -508,6 +508,9 @@ async def predict_bundle_by_date(
                 any_anom = False
                 max_score = -1.0
                 max_group = None
+                max_confidence = -1.0
+                confidence_sum = 0.0
+                confidence_count = 0
                 for g, ent in group_models.items():
                     is_anom, anom_score, conf, used_feats = _predict_iforest_safe(
                         predictor=predictor,
@@ -521,9 +524,10 @@ async def predict_bundle_by_date(
                         metric_dict=(metric.to_dict() if hasattr(metric, "to_dict") else {}),
                         used_features=list(used_feats or []),
                     )
+                    confidence_val = float(conf)
                     per_group[g] = {
                         "model": {"id": ent.id, "name": ent.model_name, "version": ent.model_version},
-                        "result": {"is_anomaly": bool(is_anom), "anomaly_score": float(anom_score), "confidence": float(conf)},
+                        "result": {"is_anomaly": bool(is_anom), "anomaly_score": float(anom_score), "confidence": confidence_val},
                         "used_features": used_feats,
                         "explanation": explanation,
                     }
@@ -532,6 +536,14 @@ async def predict_bundle_by_date(
                     if float(anom_score) > max_score:
                         max_score = float(anom_score)
                         max_group = g
+                        max_confidence = confidence_val
+                    confidence_sum += confidence_val
+                    confidence_count += 1
+
+                # Calculate average confidence across all groups
+                avg_confidence = confidence_sum / confidence_count if confidence_count > 0 else 0.0
+                # Use max confidence from the group with highest anomaly score, or average if no anomaly
+                final_confidence = max_confidence if max_group else avg_confidence
 
                 final_explanation = None
                 try:
@@ -548,6 +560,8 @@ async def predict_bundle_by_date(
                         "is_anomaly": bool(any_anom),
                         "max_anomaly_score": float(max_score),
                         "max_group": max_group,
+                        "confidence": float(final_confidence),
+                        "avg_confidence": float(avg_confidence),
                         "aggregation": "any_group_anomaly",
                     },
                     "final_explanation": final_explanation,
@@ -751,6 +765,10 @@ async def predict_bundle_by_date(
 
             confidence_metrics = calculate_confidence_score(forecast_values, confidence_intervals) or None
             confidence_percent = calculate_confidence_percentage(confidence_metrics) if confidence_metrics else None
+            
+            # Calculate overall confidence score (0.0 to 1.0) from confidence_percent for consistency with IForest
+            overall_confidence = (confidence_percent / 100.0) if confidence_percent is not None else None
+            
             forecast_block = {
                 "success": True,
                 "model": {
@@ -766,6 +784,7 @@ async def predict_bundle_by_date(
                 "confidence_intervals": confidence_intervals,
                 "confidence_metrics": confidence_metrics,
                 "confidence_percent": confidence_percent,
+                "confidence": overall_confidence,  # Added: overall confidence score (0.0-1.0) for consistency with IForest
                 "warning": warning,
             }
 

@@ -1045,7 +1045,7 @@ export default function MultiBranchDashboard() {
           {/* System Overview Cards - Updated for daily_branch_metrics */}
           {branchesData.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <SystemMetricCard
+            {/* <SystemMetricCard
               title="Total System Revenue"
               value={`${((aiData?.raw_data?.totals?.total_revenue || 0) / 1000000).toFixed(1)}tr`}
               subtitle={`${aiData?.raw_data?.totals?.total_order_count || 0} orders`}
@@ -1054,7 +1054,7 @@ export default function MultiBranchDashboard() {
               bgColor="bg-green-50"
               trend="up"
               trendValue={`${((aiData?.raw_data?.totals?.avg_order_value || 0) / 1000).toFixed(0)}k/order`}
-            />
+            /> */}
             <SystemMetricCard
               title="System Profit Margin"
               value={`${((aiData?.raw_data?.totals?.overall_profit_margin || 0) * 100).toFixed(1)}%`}
